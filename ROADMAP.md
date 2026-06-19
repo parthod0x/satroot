@@ -64,6 +64,8 @@ Current status:
 
 - `SATROOT-MACHINE-1` draft exists in this repo.
 - `APICREDIT1` examples are included as the first machine-credit implementation artifact.
+- `SATROOT-RECEIPT-1` draft exists in this repo.
+- `RECEIPT1` examples are included as the first receipt-object implementation artifact.
 
 ## Core architectural rule
 

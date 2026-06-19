@@ -1,0 +1,66 @@
+[
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "genesis",
+    "profile": "SATROOT-RECEIPT-1",
+    "profile_mode": "single-receipt",
+    "document_type": "invoice-receipt",
+    "reference_id": "INV-2026-0001",
+    "issuer_entity": "issuer-co",
+    "counterparty_entity": "buyer-co",
+    "settlement_unit": "USD",
+    "intended_use": "invoice-receipt-ledger",
+    "root_id": "3333333333333333333333333333333333333333333333333333333333333333:0",
+    "sequence": 0,
+    "symbol": "RECEIPT1",
+    "name": "SATROOT Invoice Receipt",
+    "decimals": 0,
+    "max_supply": "1",
+    "mint_authority": "issuer",
+    "transfer_model": "account-ledger",
+    "initial_balances": {
+      "issuer": "1"
+    },
+    "rules_hash": "sha256:receipt1-demo",
+    "nonce": "satroot-receipt-v0.1-demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "3333333333333333333333333333333333333333333333333333333333333333:0",
+    "sequence": 1,
+    "prev_event_id": "sha256:21c4cb500adeef91e33201bcd31ecfac98785b93773912481ed4e7a436fd6e26",
+    "from": "issuer",
+    "to": "buyer",
+    "amount": "1",
+    "signer": "issuer",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "3333333333333333333333333333333333333333333333333333333333333333:0",
+    "sequence": 2,
+    "prev_event_id": "sha256:bfed6e16a6d0d2eb36e330309356eba060d8325d45de29ec7ed1eba7fffec80a",
+    "from": "buyer",
+    "to": "archive",
+    "amount": "1",
+    "signer": "buyer",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "burn",
+    "root_id": "3333333333333333333333333333333333333333333333333333333333333333:0",
+    "sequence": 3,
+    "prev_event_id": "sha256:83f199a0840effc473e2cc343427f3470a1275756a4579c7eb4f6491b9da583f",
+    "from": "archive",
+    "amount": "1",
+    "signer": "archive",
+    "signature": "demo"
+  }
+]

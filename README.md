@@ -29,6 +29,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
 - `profiles/machine/SATROOT-MACHINE-1.md` - prepaid machine-credit profile draft.
+- `profiles/receipt/SATROOT-RECEIPT-1.md` - receipt and invoice object profile draft.
 
 ## SATROOT-1 in one sentence
 
@@ -86,9 +87,14 @@ This repo also now includes the first machine-credit profile draft:
 - `examples/genesis_apicredit1.json` for an `APICREDIT1` genesis record,
 - `examples/events_apicredit1.json` for a runnable machine-credit ledger flow.
 
+This repo also now includes the first receipt-object profile draft:
+
+- `SATROOT-RECEIPT-1` for invoice and receipt state objects,
+- `examples/genesis_receipt1.json` for a `RECEIPT1` genesis record,
+- `examples/events_receipt1.json` for a runnable receipt lifecycle ledger flow.
+
 Future profile work can extend that pattern for:
 
-- receipt and invoice profiles,
 - license and rights profiles,
 - identity or authority object profiles.
 
@@ -101,7 +107,7 @@ python -m pytest
 Expected result:
 
 ```text
-7 passed
+8 passed
 ```
 
 ## Run the demo ledger
@@ -120,6 +126,12 @@ Machine-credit profile demo:
 
 ```bash
 python src/satroot1.py examples/events_apicredit1.json
+```
+
+Receipt profile demo:
+
+```bash
+python src/satroot1.py examples/events_receipt1.json
 ```
 
 ## Important demo note

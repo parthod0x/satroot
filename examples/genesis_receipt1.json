@@ -1,0 +1,26 @@
+{
+  "protocol": "SATROOT-1",
+  "version": "0.1",
+  "action": "genesis",
+  "profile": "SATROOT-RECEIPT-1",
+  "profile_mode": "single-receipt",
+  "document_type": "invoice-receipt",
+  "reference_id": "INV-2026-0001",
+  "issuer_entity": "issuer-co",
+  "counterparty_entity": "buyer-co",
+  "settlement_unit": "USD",
+  "intended_use": "invoice-receipt-ledger",
+  "root_id": "3333333333333333333333333333333333333333333333333333333333333333:0",
+  "sequence": 0,
+  "symbol": "RECEIPT1",
+  "name": "SATROOT Invoice Receipt",
+  "decimals": 0,
+  "max_supply": "1",
+  "mint_authority": "issuer",
+  "transfer_model": "account-ledger",
+  "initial_balances": {
+    "issuer": "1"
+  },
+  "rules_hash": "sha256:receipt1-demo",
+  "nonce": "satroot-receipt-v0.1-demo"
+}

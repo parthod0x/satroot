@@ -79,3 +79,13 @@ def test_replay_machine_profile_demo():
     assert state.balances["issuer"] == 95_000_000
     assert state.balances["tenant_a"] == 3_800_000
     assert state.balances["worker_node"] == 1_000_000
+
+
+def test_replay_receipt_profile_demo():
+    state = replay(load_events("events_receipt1.json"))
+    assert state.symbol == "RECEIPT1"
+    assert state.decimals == 0
+    assert state.supply == 0
+    assert state.balances["issuer"] == 0
+    assert state.balances["buyer"] == 0
+    assert state.balances["archive"] == 0
