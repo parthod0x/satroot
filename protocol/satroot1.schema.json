@@ -24,6 +24,10 @@
     "issuer_entity": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
     "counterparty_entity": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
     "settlement_unit": {"type": "string", "pattern": "^[A-Z0-9]{2,16}$"},
+    "identity_type": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
+    "subject_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "controller_entity": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
+    "authority_scope": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
     "intended_use": {"type": "string", "minLength": 1},
     "symbol": {"type": "string", "pattern": "^[A-Z0-9]{1,16}$"},
     "name": {"type": "string", "minLength": 1},
@@ -70,6 +74,15 @@
           "profile_mode": {"const": "single-receipt"}
         },
         "required": ["profile_mode", "document_type", "reference_id", "issuer_entity", "counterparty_entity", "settlement_unit", "intended_use"]
+      }
+    },
+    {
+      "if": {"properties": {"profile": {"const": "SATROOT-IDENTITY-1"}}},
+      "then": {
+        "properties": {
+          "profile_mode": {"const": "single-identity"}
+        },
+        "required": ["profile_mode", "identity_type", "subject_id", "controller_entity", "authority_scope", "intended_use"]
       }
     },
     {

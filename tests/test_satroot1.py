@@ -89,3 +89,13 @@ def test_replay_receipt_profile_demo():
     assert state.balances["issuer"] == 0
     assert state.balances["buyer"] == 0
     assert state.balances["archive"] == 0
+
+
+def test_replay_identity_profile_demo():
+    state = replay(load_events("events_identity1.json"))
+    assert state.symbol == "IDENTITY1"
+    assert state.decimals == 0
+    assert state.supply == 0
+    assert state.balances["issuer"] == 0
+    assert state.balances["node_alpha"] == 0
+    assert state.balances["rotated_controller"] == 0

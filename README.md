@@ -30,6 +30,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
 - `profiles/machine/SATROOT-MACHINE-1.md` - prepaid machine-credit profile draft.
 - `profiles/receipt/SATROOT-RECEIPT-1.md` - receipt and invoice object profile draft.
+- `profiles/identity/SATROOT-IDENTITY-1.md` - identity and authority object profile draft.
 
 ## SATROOT-1 in one sentence
 
@@ -93,10 +94,16 @@ This repo also now includes the first receipt-object profile draft:
 - `examples/genesis_receipt1.json` for a `RECEIPT1` genesis record,
 - `examples/events_receipt1.json` for a runnable receipt lifecycle ledger flow.
 
+This repo also now includes the first identity-object profile draft:
+
+- `SATROOT-IDENTITY-1` for identity and authority state objects,
+- `examples/genesis_identity1.json` for an `IDENTITY1` genesis record,
+- `examples/events_identity1.json` for a runnable identity lifecycle ledger flow.
+
 Future profile work can extend that pattern for:
 
 - license and rights profiles,
-- identity or authority object profiles.
+- additional authority object profiles.
 
 ## Run tests
 
@@ -107,7 +114,7 @@ python -m pytest
 Expected result:
 
 ```text
-8 passed
+9 passed
 ```
 
 ## Run the demo ledger
@@ -132,6 +139,12 @@ Receipt profile demo:
 
 ```bash
 python src/satroot1.py examples/events_receipt1.json
+```
+
+Identity profile demo:
+
+```bash
+python src/satroot1.py examples/events_identity1.json
 ```
 
 ## Important demo note

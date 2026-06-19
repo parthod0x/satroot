@@ -1,0 +1,65 @@
+[
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "genesis",
+    "profile": "SATROOT-IDENTITY-1",
+    "profile_mode": "single-identity",
+    "identity_type": "service-identity",
+    "subject_id": "node-alpha",
+    "controller_entity": "issuer-co",
+    "authority_scope": "api-signing",
+    "intended_use": "machine-identity-ledger",
+    "root_id": "4444444444444444444444444444444444444444444444444444444444444444:0",
+    "sequence": 0,
+    "symbol": "IDENTITY1",
+    "name": "SATROOT Service Identity",
+    "decimals": 0,
+    "max_supply": "1",
+    "mint_authority": "issuer",
+    "transfer_model": "account-ledger",
+    "initial_balances": {
+      "issuer": "1"
+    },
+    "rules_hash": "sha256:identity1-demo",
+    "nonce": "satroot-identity-v0.1-demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "4444444444444444444444444444444444444444444444444444444444444444:0",
+    "sequence": 1,
+    "prev_event_id": "sha256:211366e6425c90cd9aaa398cbc8b52131d57a87709634d40e28790cb6bee1bf6",
+    "from": "issuer",
+    "to": "node_alpha",
+    "amount": "1",
+    "signer": "issuer",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "4444444444444444444444444444444444444444444444444444444444444444:0",
+    "sequence": 2,
+    "prev_event_id": "sha256:f2cf2028a28246f54160cead69e3b1b288b1d5f05bf2615d78308fc49844c89c",
+    "from": "node_alpha",
+    "to": "rotated_controller",
+    "amount": "1",
+    "signer": "node_alpha",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "burn",
+    "root_id": "4444444444444444444444444444444444444444444444444444444444444444:0",
+    "sequence": 3,
+    "prev_event_id": "sha256:13e2158273a42e6def65d9082c370f7fb63dcb96e2edc7e8459a982931893545",
+    "from": "rotated_controller",
+    "amount": "1",
+    "signer": "rotated_controller",
+    "signature": "demo"
+  }
+]

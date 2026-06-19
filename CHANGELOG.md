@@ -8,9 +8,11 @@
 - Adds `APICREDIT1` machine-credit example genesis and event ledgers.
 - Adds the first `SATROOT-RECEIPT-1` single-receipt profile draft.
 - Adds `RECEIPT1` receipt-object example genesis and event ledgers.
+- Adds the first `SATROOT-IDENTITY-1` single-identity profile draft.
+- Adds `IDENTITY1` identity-object example genesis and event ledgers.
 - Extends the schema to describe optional stable-profile metadata.
 - Generalizes profile metadata so non-stable profiles can define their own modes.
-- Adds replay tests for the `USDROOT1`, `APICREDIT1`, and `RECEIPT1` demo ledgers.
+- Adds replay tests for the `USDROOT1`, `APICREDIT1`, `RECEIPT1`, and `IDENTITY1` demo ledgers.
 
 ## v0.1.0 - 2026-06-19
 
