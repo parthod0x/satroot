@@ -60,6 +60,11 @@ Goal: show that the root is more than a token anchor.
 - Define machine-credit balances.
 - Define rights, license, or identity records.
 
+Current status:
+
+- `SATROOT-MACHINE-1` draft exists in this repo.
+- `APICREDIT1` examples are included as the first machine-credit implementation artifact.
+
 ## Core architectural rule
 
 SATROOT does not merely mint tokens from one satoshi.

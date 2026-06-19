@@ -4,8 +4,11 @@
 
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
+- Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.
+- Adds `APICREDIT1` machine-credit example genesis and event ledgers.
 - Extends the schema to describe optional stable-profile metadata.
-- Adds a replay test for the `USDROOT1` demo ledger.
+- Generalizes profile metadata so non-stable profiles can define their own modes.
+- Adds replay tests for the `USDROOT1` and `APICREDIT1` demo ledgers.
 
 ## v0.1.0 - 2026-06-19
 

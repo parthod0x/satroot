@@ -1,0 +1,24 @@
+{
+  "protocol": "SATROOT-1",
+  "version": "0.1",
+  "action": "genesis",
+  "profile": "SATROOT-MACHINE-1",
+  "profile_mode": "prepaid-credit",
+  "service_scope": "api-compute",
+  "billing_unit": "request",
+  "consumption_model": "burn-on-use",
+  "intended_use": "machine-api-credit",
+  "root_id": "2222222222222222222222222222222222222222222222222222222222222222:0",
+  "sequence": 0,
+  "symbol": "APICREDIT1",
+  "name": "SATROOT API Credit",
+  "decimals": 0,
+  "max_supply": "100000000",
+  "mint_authority": "issuer",
+  "transfer_model": "account-ledger",
+  "initial_balances": {
+    "issuer": "100000000"
+  },
+  "rules_hash": "sha256:apicredit1-demo",
+  "nonce": "satroot-machine-v0.1-demo"
+}

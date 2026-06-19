@@ -69,3 +69,13 @@ def test_replay_stable_profile_demo():
     assert state.balances["issuer"] == 23_500_000
     assert state.balances["merchant"] == 1_245_000
     assert state.balances["api_node"] == 250_000
+
+
+def test_replay_machine_profile_demo():
+    state = replay(load_events("events_apicredit1.json"))
+    assert state.symbol == "APICREDIT1"
+    assert state.decimals == 0
+    assert state.supply == 99_800_000
+    assert state.balances["issuer"] == 95_000_000
+    assert state.balances["tenant_a"] == 3_800_000
+    assert state.balances["worker_node"] == 1_000_000

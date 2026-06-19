@@ -1,0 +1,64 @@
+[
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "genesis",
+    "profile": "SATROOT-MACHINE-1",
+    "profile_mode": "prepaid-credit",
+    "service_scope": "api-compute",
+    "billing_unit": "request",
+    "consumption_model": "burn-on-use",
+    "intended_use": "machine-api-credit",
+    "root_id": "2222222222222222222222222222222222222222222222222222222222222222:0",
+    "sequence": 0,
+    "symbol": "APICREDIT1",
+    "name": "SATROOT API Credit",
+    "decimals": 0,
+    "max_supply": "100000000",
+    "mint_authority": "issuer",
+    "transfer_model": "account-ledger",
+    "initial_balances": {
+      "issuer": "100000000"
+    },
+    "rules_hash": "sha256:apicredit1-demo",
+    "nonce": "satroot-machine-v0.1-demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "2222222222222222222222222222222222222222222222222222222222222222:0",
+    "sequence": 1,
+    "prev_event_id": "sha256:a797c3cb991db21e961b154608f318dc67cd773d86bbbfb9f5cdadad4145fb30",
+    "from": "issuer",
+    "to": "tenant_a",
+    "amount": "5000000",
+    "signer": "issuer",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "2222222222222222222222222222222222222222222222222222222222222222:0",
+    "sequence": 2,
+    "prev_event_id": "sha256:82228cbd25a9b2c0388a47db9b4af742073ab839e82e9ed7daf756d46515b14f",
+    "from": "tenant_a",
+    "to": "worker_node",
+    "amount": "1200000",
+    "signer": "tenant_a",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "burn",
+    "root_id": "2222222222222222222222222222222222222222222222222222222222222222:0",
+    "sequence": 3,
+    "prev_event_id": "sha256:f88c7c8099c658552555423e6daf598a464e9483b3f591dc3a16d3d729682119",
+    "from": "worker_node",
+    "amount": "200000",
+    "signer": "worker_node",
+    "signature": "demo"
+  }
+]

@@ -28,6 +28,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/` - the `FLOOR1` demo token ledger.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
+- `profiles/machine/SATROOT-MACHINE-1.md` - prepaid machine-credit profile draft.
 
 ## SATROOT-1 in one sentence
 
@@ -79,11 +80,16 @@ This repo now includes the first stable-value profile draft:
 - `examples/genesis_usdroot1.json` for a `USDROOT1` genesis record,
 - `examples/events_usdroot1.json` for a runnable reference-only ledger flow.
 
+This repo also now includes the first machine-credit profile draft:
+
+- `SATROOT-MACHINE-1` for prepaid machine-native service credits,
+- `examples/genesis_apicredit1.json` for an `APICREDIT1` genesis record,
+- `examples/events_apicredit1.json` for a runnable machine-credit ledger flow.
+
 Future profile work can extend that pattern for:
 
 - receipt and invoice profiles,
 - license and rights profiles,
-- machine-credit and machine-event profiles,
 - identity or authority object profiles.
 
 ## Run tests
@@ -95,7 +101,7 @@ python -m pytest
 Expected result:
 
 ```text
-5 passed
+7 passed
 ```
 
 ## Run the demo ledger
@@ -110,9 +116,15 @@ Reference-only stable profile demo:
 python src/satroot1.py examples/events_usdroot1.json
 ```
 
+Machine-credit profile demo:
+
+```bash
+python src/satroot1.py examples/events_apicredit1.json
+```
+
 ## Important demo note
 
-The example `root_id` is a placeholder:
+The example `root_id` values in `examples/` are placeholders:
 
 ```text
 0000000000000000000000000000000000000000000000000000000000000000:0
