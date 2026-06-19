@@ -24,6 +24,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `BOUNDARIES.md` - claim discipline, non-goals, and legal boundary language.
 - `ROADMAP.md` - project scope, deliverables, and planned protocol profiles.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
+- `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser and deterministic replay engine.
 - `examples/` - the `FLOOR1` demo token ledger.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
@@ -44,7 +45,9 @@ The v0.1 kernel defines:
 - `mint`, `transfer`, and `burn` events,
 - strict sequencing with `prev_event_id`,
 - deterministic replay and balance computation,
-- a supply invariant.
+- a supply invariant,
+- profile compatibility checks for known profiles,
+- optional `event_id` and `state_hash` verification.
 
 ## Current demo
 
@@ -121,7 +124,7 @@ python -m pytest
 Expected result:
 
 ```text
-10 passed
+15 passed
 ```
 
 ## Run the demo ledger

@@ -1,0 +1,66 @@
+{
+  "protocol": "SATROOT-1",
+  "version": "0.1",
+  "profiles": [
+    {
+      "profile": "SATROOT-STABLE-1",
+      "profile_mode": "reference-only",
+      "required_genesis_fields": [
+        "reference_unit",
+        "redemption",
+        "reserve_model",
+        "intended_use"
+      ],
+      "summary": "Reference-value accounting units anchored to a SATROOT-1 root."
+    },
+    {
+      "profile": "SATROOT-MACHINE-1",
+      "profile_mode": "prepaid-credit",
+      "required_genesis_fields": [
+        "service_scope",
+        "billing_unit",
+        "consumption_model",
+        "intended_use"
+      ],
+      "summary": "Machine-native service credits and usage balances."
+    },
+    {
+      "profile": "SATROOT-RECEIPT-1",
+      "profile_mode": "single-receipt",
+      "required_genesis_fields": [
+        "document_type",
+        "reference_id",
+        "issuer_entity",
+        "counterparty_entity",
+        "settlement_unit",
+        "intended_use"
+      ],
+      "summary": "Receipt and invoice state objects with deterministic lifecycle tracking."
+    },
+    {
+      "profile": "SATROOT-IDENTITY-1",
+      "profile_mode": "single-identity",
+      "required_genesis_fields": [
+        "identity_type",
+        "subject_id",
+        "controller_entity",
+        "authority_scope",
+        "intended_use"
+      ],
+      "summary": "Identity and authority objects with deterministic controller rotation."
+    },
+    {
+      "profile": "SATROOT-LICENSE-1",
+      "profile_mode": "single-license",
+      "required_genesis_fields": [
+        "license_type",
+        "asset_id",
+        "licensor_entity",
+        "licensee_entity",
+        "usage_scope",
+        "intended_use"
+      ],
+      "summary": "License and usage-right objects with deterministic assignment history."
+    }
+  ]
+}

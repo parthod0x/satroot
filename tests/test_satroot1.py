@@ -109,3 +109,41 @@ def test_replay_license_profile_demo():
     assert state.balances["issuer"] == 0
     assert state.balances["customer"] == 0
     assert state.balances["archive"] == 0
+
+
+def test_reject_unknown_profile():
+    events = load_events()
+    events[0]["profile"] = "SATROOT-UNKNOWN-1"
+    events[0]["profile_mode"] = "unknown-mode"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_bad_profile_mode():
+    events = load_events("events_usdroot1.json")
+    events[0]["profile_mode"] = "wrong-mode"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_event_id_mismatch():
+    events = load_events()
+    events[1]["event_id"] = "sha256:" + ("0" * 64)
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_state_hash_mismatch():
+    events = load_events()
+    events[1]["state_hash"] = "sha256:" + ("0" * 64)
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_accept_matching_event_id_and_state_hash():
+    events = load_events()
+    probe = replay(events[:2])
+    events[1]["state_hash"] = probe.state_hash()
+    events[1]["event_id"] = event_id(events[1])
+    final_state = replay(events)
+    assert final_state.symbol == "FLOOR1"

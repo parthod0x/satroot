@@ -11,6 +11,7 @@
     "root_id": {"type": "string", "pattern": "^[a-fA-F0-9]{64}:[0-9]+$"},
     "sequence": {"type": "integer", "minimum": 0},
     "prev_event_id": {"type": ["string", "null"], "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+    "event_id": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
     "profile": {"type": "string", "pattern": "^[A-Z0-9-]{1,32}$"},
     "profile_mode": {"type": "string", "pattern": "^[a-z0-9-]{1,32}$"},
     "reference_unit": {"type": "string", "pattern": "^[A-Z0-9]{2,16}$"},

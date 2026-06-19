@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardens the SATROOT-1 replay engine with root ID, profile, and account-name validation.
+- Adds optional `event_id` and `state_hash` verification during replay.
+- Adds an explicit profile compatibility registry in `protocol/satroot1.profile-registry.json`.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.
@@ -14,7 +17,7 @@
 - Adds `LICENSE1` license-object example genesis and event ledgers.
 - Extends the schema to describe optional stable-profile metadata.
 - Generalizes profile metadata so non-stable profiles can define their own modes.
-- Adds replay tests for the `USDROOT1`, `APICREDIT1`, `RECEIPT1`, `IDENTITY1`, and `LICENSE1` demo ledgers.
+- Adds replay tests for the `USDROOT1`, `APICREDIT1`, `RECEIPT1`, `IDENTITY1`, and `LICENSE1` demo ledgers plus new validation failures.
 
 ## v0.1.0 - 2026-06-19
 

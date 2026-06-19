@@ -11,12 +11,38 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, Optional
 
 
 class SatRootError(ValueError):
     pass
+
+
+ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
+PROFILE_RULES: Dict[str, Dict[str, Any]] = {
+    "SATROOT-STABLE-1": {
+        "profile_mode": "reference-only",
+        "required_fields": ["reference_unit", "redemption", "reserve_model", "intended_use"],
+    },
+    "SATROOT-MACHINE-1": {
+        "profile_mode": "prepaid-credit",
+        "required_fields": ["service_scope", "billing_unit", "consumption_model", "intended_use"],
+    },
+    "SATROOT-RECEIPT-1": {
+        "profile_mode": "single-receipt",
+        "required_fields": ["document_type", "reference_id", "issuer_entity", "counterparty_entity", "settlement_unit", "intended_use"],
+    },
+    "SATROOT-IDENTITY-1": {
+        "profile_mode": "single-identity",
+        "required_fields": ["identity_type", "subject_id", "controller_entity", "authority_scope", "intended_use"],
+    },
+    "SATROOT-LICENSE-1": {
+        "profile_mode": "single-license",
+        "required_fields": ["license_type", "asset_id", "licensor_entity", "licensee_entity", "usage_scope", "intended_use"],
+    },
+}
 
 
 def canonical_json(obj: Any) -> str:
@@ -30,9 +56,10 @@ def sha256_hex(data: str) -> str:
 def event_id(event: Dict[str, Any]) -> str:
     """Return the canonical event hash.
 
-    The event_id excludes `event_id` if present so records can carry their own ID.
+    The event_id excludes `event_id` and `state_hash` if present so records can
+    carry their own ID while still attaching a post-application state commitment.
     """
-    cleaned = {k: v for k, v in event.items() if k != "event_id"}
+    cleaned = {k: v for k, v in event.items() if k not in {"event_id", "state_hash"}}
     return "sha256:" + sha256_hex(canonical_json(cleaned))
 
 
@@ -64,6 +91,49 @@ def parse_positive_amount(value: str) -> int:
     return amount
 
 
+def validate_root_id(root_id: str) -> None:
+    if not isinstance(root_id, str) or not ROOT_ID_RE.fullmatch(root_id):
+        raise SatRootError(f"invalid root_id: {root_id!r}")
+
+
+def parse_decimals(value: Any) -> int:
+    if not isinstance(value, int) or value < 0 or value > 18:
+        raise SatRootError(f"invalid decimals: {value!r}")
+    return value
+
+
+def require_account_name(name: Any, field_name: str) -> str:
+    if not isinstance(name, str) or not name.strip():
+        raise SatRootError(f"invalid account name for {field_name}: {name!r}")
+    return name
+
+
+def validate_stated_event_id(event: Dict[str, Any]) -> None:
+    stated = event.get("event_id")
+    if stated is not None and stated != event_id(event):
+        raise SatRootError("event_id mismatch")
+
+
+def validate_profile_genesis(event: Dict[str, Any]) -> None:
+    profile = event.get("profile")
+    if profile is None:
+        return
+
+    rules = PROFILE_RULES.get(profile)
+    if rules is None:
+        raise SatRootError(f"unsupported profile: {profile}")
+
+    require_fields(event, ["profile_mode", *rules["required_fields"]])
+    if event.get("profile_mode") != rules["profile_mode"]:
+        raise SatRootError(f"bad profile_mode for {profile}")
+
+
+def validate_state_hash(event: Dict[str, Any], state: "SatRootState") -> None:
+    stated = event.get("state_hash")
+    if stated is not None and stated != state.state_hash():
+        raise SatRootError("state_hash mismatch")
+
+
 @dataclass
 class SatRootState:
     root_id: str
@@ -72,6 +142,8 @@ class SatRootState:
     decimals: int
     max_supply: Optional[int]
     mint_authority: str
+    profile: Optional[str] = None
+    profile_mode: Optional[str] = None
     balances: Dict[str, int] = field(default_factory=dict)
     supply: int = 0
     sequence: int = 0
@@ -85,6 +157,8 @@ class SatRootState:
             "decimals": self.decimals,
             "max_supply": str(self.max_supply) if self.max_supply is not None else None,
             "mint_authority": self.mint_authority,
+            "profile": self.profile,
+            "profile_mode": self.profile_mode,
             "balances": {k: str(v) for k, v in sorted(self.balances.items()) if v != 0},
             "supply": str(self.supply),
             "sequence": self.sequence,
@@ -118,8 +192,16 @@ def apply_genesis(event: Dict[str, Any]) -> SatRootState:
         raise SatRootError("first event must be genesis")
     if event.get("sequence") != 0:
         raise SatRootError("genesis sequence must be 0")
+    validate_root_id(event["root_id"])
+    validate_stated_event_id(event)
+    validate_profile_genesis(event)
+    if event.get("transfer_model") != "account-ledger":
+        raise SatRootError("unsupported transfer_model")
 
-    initial = {acct: parse_amount(amount) for acct, amount in event.get("initial_balances", {}).items()}
+    initial = {
+        require_account_name(acct, "initial_balances"): parse_amount(amount)
+        for acct, amount in event.get("initial_balances", {}).items()
+    }
     supply = sum(initial.values())
     max_supply = parse_amount(event["max_supply"]) if event.get("max_supply") is not None else None
     if max_supply is not None and supply > max_supply:
@@ -129,14 +211,17 @@ def apply_genesis(event: Dict[str, Any]) -> SatRootState:
         root_id=event["root_id"],
         symbol=event["symbol"],
         name=event["name"],
-        decimals=int(event.get("decimals", 0)),
+        decimals=parse_decimals(event.get("decimals", 0)),
         max_supply=max_supply,
         mint_authority=event["mint_authority"],
+        profile=event.get("profile"),
+        profile_mode=event.get("profile_mode"),
         balances=initial,
         supply=supply,
         sequence=0,
         last_event_id=event_id(event),
     )
+    validate_state_hash(event, state)
     return state
 
 
@@ -150,6 +235,11 @@ def require_next_event(state: SatRootState, event: Dict[str, Any]) -> None:
         raise SatRootError("bad sequence")
     if event.get("prev_event_id") != state.last_event_id:
         raise SatRootError("bad prev_event_id")
+    validate_stated_event_id(event)
+    if event.get("profile") not in (None, state.profile):
+        raise SatRootError("profile mismatch")
+    if event.get("profile_mode") not in (None, state.profile_mode):
+        raise SatRootError("profile_mode mismatch")
     if not verify_signature_placeholder(event):
         raise SatRootError("signature verification failed")
 
@@ -165,7 +255,7 @@ def apply_event(state: SatRootState, event: Dict[str, Any]) -> SatRootState:
         require_fields(event, ["to", "amount"])
         if event.get("signer") != next_state.mint_authority:
             raise SatRootError("unauthorized mint")
-        to = event["to"]
+        to = require_account_name(event["to"], "to")
         if next_state.max_supply is not None and next_state.supply + amount > next_state.max_supply:
             raise SatRootError("mint exceeds max supply")
         next_state.balances[to] = next_state.balances.get(to, 0) + amount
@@ -173,8 +263,8 @@ def apply_event(state: SatRootState, event: Dict[str, Any]) -> SatRootState:
 
     elif action == "transfer":
         require_fields(event, ["from", "to", "amount"])
-        sender = event["from"]
-        recipient = event["to"]
+        sender = require_account_name(event["from"], "from")
+        recipient = require_account_name(event["to"], "to")
         # v0.1 placeholder: signer must equal sender account string.
         if event.get("signer") != sender:
             raise SatRootError("unauthorized transfer")
@@ -185,7 +275,7 @@ def apply_event(state: SatRootState, event: Dict[str, Any]) -> SatRootState:
 
     elif action == "burn":
         require_fields(event, ["from", "amount"])
-        burner = event["from"]
+        burner = require_account_name(event["from"], "from")
         if event.get("signer") != burner:
             raise SatRootError("unauthorized burn")
         if next_state.balances.get(burner, 0) < amount:
@@ -198,6 +288,7 @@ def apply_event(state: SatRootState, event: Dict[str, Any]) -> SatRootState:
 
     next_state.sequence = event["sequence"]
     next_state.last_event_id = event_id(event)
+    validate_state_hash(event, next_state)
     return next_state
 
 

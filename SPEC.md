@@ -75,6 +75,8 @@ Every non-genesis event must reference:
 - `signer`
 - `signature`
 
+Known profiles and their required genesis metadata are listed in `protocol/satroot1.profile-registry.json`. Unknown profiles should be rejected by strict SATROOT-1 replay engines until explicitly supported.
+
 ## 3. Boundary rule
 
 A SATROOT-1 event MUST NOT claim that tokens are sub-satoshis.
@@ -178,6 +180,8 @@ sha256(canonical_json({balances, supply, sequence, prev_event_id}))
 
 This lets lightweight clients check that independent indexers agree on the same state.
 
+An event MAY also carry an `event_id`. If present, it MUST equal the canonical event hash calculated from the record content excluding the `event_id` and `state_hash` fields. This avoids a circular dependency between event identity and post-application state commitment.
+
 ## 8. Minimal validity conditions
 
 A SATROOT-1 indexer MUST reject a ledger if:
@@ -188,7 +192,9 @@ A SATROOT-1 indexer MUST reject a ledger if:
 4. a mint exceeds max supply,
 5. an event uses a different root_id,
 6. a required signature check fails,
-7. canonical JSON hashing does not match the stated event ID.
+7. canonical JSON hashing does not match the stated event ID,
+8. a stated `state_hash` does not match replayed state,
+9. an unknown profile or invalid profile mode is used.
 
 ## 9. Claim discipline
 
