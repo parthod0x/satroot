@@ -47,6 +47,11 @@ Goal: add reference-value accounting without changing the base primitive.
 - Include `USDROOT1` or `INRROOT1` example records.
 - Keep claims reference-only unless a later legal/compliance layer exists.
 
+Current status:
+
+- `SATROOT-STABLE-1` draft exists in this repo.
+- `USDROOT1` reference-only examples are included as the first profile implementation artifact.
+
 ### v0.3 Namespace expansion
 
 Goal: show that the root is more than a token anchor.

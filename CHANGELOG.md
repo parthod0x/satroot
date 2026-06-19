@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Adds the first `SATROOT-STABLE-1` reference-only profile draft.
+- Adds `USDROOT1` stable-value example genesis and event ledgers.
+- Extends the schema to describe optional stable-profile metadata.
+- Adds a replay test for the `USDROOT1` demo ledger.
+
 ## v0.1.0 - 2026-06-19
 
 Genesis draft of SATROOT-1.

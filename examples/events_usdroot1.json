@@ -1,0 +1,64 @@
+[
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "genesis",
+    "profile": "SATROOT-STABLE-1",
+    "profile_mode": "reference-only",
+    "reference_unit": "USD",
+    "redemption": "none",
+    "reserve_model": "none",
+    "intended_use": "invoice-credit-accounting",
+    "root_id": "1111111111111111111111111111111111111111111111111111111111111111:0",
+    "sequence": 0,
+    "symbol": "USDROOT1",
+    "name": "SATROOT Reference Dollar",
+    "decimals": 2,
+    "max_supply": "1000000000",
+    "mint_authority": "issuer",
+    "transfer_model": "account-ledger",
+    "initial_balances": {
+      "issuer": "25000000"
+    },
+    "rules_hash": "sha256:usdroot1-demo",
+    "nonce": "satroot-stable-v0.1-demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "1111111111111111111111111111111111111111111111111111111111111111:0",
+    "sequence": 1,
+    "prev_event_id": "sha256:752f0efd1199affbb6db02df8f576474bc0bdbaacb0a7e3c3377792a641a8b52",
+    "from": "issuer",
+    "to": "merchant",
+    "amount": "1250000",
+    "signer": "issuer",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "1111111111111111111111111111111111111111111111111111111111111111:0",
+    "sequence": 2,
+    "prev_event_id": "sha256:80daa59ea5c72069029916c29f4724d2c837d40b35f12bf550d74d67443fc243",
+    "from": "issuer",
+    "to": "api_node",
+    "amount": "250000",
+    "signer": "issuer",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "burn",
+    "root_id": "1111111111111111111111111111111111111111111111111111111111111111:0",
+    "sequence": 3,
+    "prev_event_id": "sha256:500976ad44487c1198fd95b0b464f97a63887b6be6f64d15517da319413604fc",
+    "from": "merchant",
+    "amount": "5000",
+    "signer": "merchant",
+    "signature": "demo"
+  }
+]

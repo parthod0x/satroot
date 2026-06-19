@@ -10,8 +10,8 @@ from satroot1 import SatRootError, event_id, replay
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_events():
-    return json.loads((ROOT / "examples" / "events_floor1.json").read_text())
+def load_events(name="events_floor1.json"):
+    return json.loads((ROOT / "examples" / name).read_text())
 
 
 def test_replay_demo_ledger():
@@ -59,3 +59,13 @@ def test_reject_missing_signature():
     events[1] = bad
     with pytest.raises(SatRootError):
         replay(events)
+
+
+def test_replay_stable_profile_demo():
+    state = replay(load_events("events_usdroot1.json"))
+    assert state.symbol == "USDROOT1"
+    assert state.decimals == 2
+    assert state.supply == 24_995_000
+    assert state.balances["issuer"] == 23_500_000
+    assert state.balances["merchant"] == 1_245_000
+    assert state.balances["api_node"] == 250_000

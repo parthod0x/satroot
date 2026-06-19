@@ -1,0 +1,24 @@
+{
+  "protocol": "SATROOT-1",
+  "version": "0.1",
+  "action": "genesis",
+  "profile": "SATROOT-STABLE-1",
+  "profile_mode": "reference-only",
+  "reference_unit": "USD",
+  "redemption": "none",
+  "reserve_model": "none",
+  "intended_use": "invoice-credit-accounting",
+  "root_id": "1111111111111111111111111111111111111111111111111111111111111111:0",
+  "sequence": 0,
+  "symbol": "USDROOT1",
+  "name": "SATROOT Reference Dollar",
+  "decimals": 2,
+  "max_supply": "1000000000",
+  "mint_authority": "issuer",
+  "transfer_model": "account-ledger",
+  "initial_balances": {
+    "issuer": "25000000"
+  },
+  "rules_hash": "sha256:usdroot1-demo",
+  "nonce": "satroot-stable-v0.1-demo"
+}

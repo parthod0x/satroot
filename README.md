@@ -27,7 +27,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `src/satroot1.py` - reference parser and deterministic replay engine.
 - `examples/` - the `FLOOR1` demo token ledger.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
-- `profiles/stable/SATROOT-STABLE-1.md` - future stable-value profile sketch.
+- `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
 
 ## SATROOT-1 in one sentence
 
@@ -71,9 +71,16 @@ SATROOT-1 does not claim to be:
 
 ## Future direction
 
-The base protocol stays intentionally small. Future work belongs in separate profiles, for example:
+The base protocol stays intentionally small. Expansion belongs in separate profiles.
+
+This repo now includes the first stable-value profile draft:
 
 - `SATROOT-STABLE-1` for reference-value accounting units,
+- `examples/genesis_usdroot1.json` for a `USDROOT1` genesis record,
+- `examples/events_usdroot1.json` for a runnable reference-only ledger flow.
+
+Future profile work can extend that pattern for:
+
 - receipt and invoice profiles,
 - license and rights profiles,
 - machine-credit and machine-event profiles,
@@ -95,6 +102,12 @@ Expected result:
 
 ```bash
 python src/satroot1.py examples/events_floor1.json
+```
+
+Reference-only stable profile demo:
+
+```bash
+python src/satroot1.py examples/events_usdroot1.json
 ```
 
 ## Important demo note
