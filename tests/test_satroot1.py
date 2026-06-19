@@ -99,3 +99,13 @@ def test_replay_identity_profile_demo():
     assert state.balances["issuer"] == 0
     assert state.balances["node_alpha"] == 0
     assert state.balances["rotated_controller"] == 0
+
+
+def test_replay_license_profile_demo():
+    state = replay(load_events("events_license1.json"))
+    assert state.symbol == "LICENSE1"
+    assert state.decimals == 0
+    assert state.supply == 0
+    assert state.balances["issuer"] == 0
+    assert state.balances["customer"] == 0
+    assert state.balances["archive"] == 0

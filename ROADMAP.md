@@ -68,6 +68,8 @@ Current status:
 - `RECEIPT1` examples are included as the first receipt-object implementation artifact.
 - `SATROOT-IDENTITY-1` draft exists in this repo.
 - `IDENTITY1` examples are included as the first identity-object implementation artifact.
+- `SATROOT-LICENSE-1` draft exists in this repo.
+- `LICENSE1` examples are included as the first license-object implementation artifact.
 
 ## Core architectural rule
 

@@ -1,0 +1,26 @@
+{
+  "protocol": "SATROOT-1",
+  "version": "0.1",
+  "action": "genesis",
+  "profile": "SATROOT-LICENSE-1",
+  "profile_mode": "single-license",
+  "license_type": "software-license",
+  "asset_id": "sdk-pro-2026",
+  "licensor_entity": "issuer-co",
+  "licensee_entity": "customer-co",
+  "usage_scope": "production-api",
+  "intended_use": "software-license-ledger",
+  "root_id": "5555555555555555555555555555555555555555555555555555555555555555:0",
+  "sequence": 0,
+  "symbol": "LICENSE1",
+  "name": "SATROOT Software License",
+  "decimals": 0,
+  "max_supply": "1",
+  "mint_authority": "issuer",
+  "transfer_model": "account-ledger",
+  "initial_balances": {
+    "issuer": "1"
+  },
+  "rules_hash": "sha256:license1-demo",
+  "nonce": "satroot-license-v0.1-demo"
+}

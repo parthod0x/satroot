@@ -1,0 +1,66 @@
+[
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "genesis",
+    "profile": "SATROOT-LICENSE-1",
+    "profile_mode": "single-license",
+    "license_type": "software-license",
+    "asset_id": "sdk-pro-2026",
+    "licensor_entity": "issuer-co",
+    "licensee_entity": "customer-co",
+    "usage_scope": "production-api",
+    "intended_use": "software-license-ledger",
+    "root_id": "5555555555555555555555555555555555555555555555555555555555555555:0",
+    "sequence": 0,
+    "symbol": "LICENSE1",
+    "name": "SATROOT Software License",
+    "decimals": 0,
+    "max_supply": "1",
+    "mint_authority": "issuer",
+    "transfer_model": "account-ledger",
+    "initial_balances": {
+      "issuer": "1"
+    },
+    "rules_hash": "sha256:license1-demo",
+    "nonce": "satroot-license-v0.1-demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "5555555555555555555555555555555555555555555555555555555555555555:0",
+    "sequence": 1,
+    "prev_event_id": "sha256:481924092f15d1e539ebf79d32df77f546fc7febe8dda2bcff703e09394eb82f",
+    "from": "issuer",
+    "to": "customer",
+    "amount": "1",
+    "signer": "issuer",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "transfer",
+    "root_id": "5555555555555555555555555555555555555555555555555555555555555555:0",
+    "sequence": 2,
+    "prev_event_id": "sha256:015dc674bbe5ba4e6b4eab8d8c3c85f70f2bdb9a20ff94325828b7958470abcb",
+    "from": "customer",
+    "to": "archive",
+    "amount": "1",
+    "signer": "customer",
+    "signature": "demo"
+  },
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "burn",
+    "root_id": "5555555555555555555555555555555555555555555555555555555555555555:0",
+    "sequence": 3,
+    "prev_event_id": "sha256:109632acc15d30aaac0b9eb80658bb094d4e03e79d9b5fc47c28b0e2d3503237",
+    "from": "archive",
+    "amount": "1",
+    "signer": "archive",
+    "signature": "demo"
+  }
+]
