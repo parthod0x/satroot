@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "satroot"
+version = "0.1.0"
+description = "SATROOT-1: one native satoshi as root witness for unbounded semantic token state."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "PARTH MAURIA SAXENA", email = "parthms.id@gmail.com" }
+]
+keywords = ["bsv", "bitcoin", "satoshi", "tokens", "semantic-ledger", "machine-native"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Libraries :: Python Modules"
+]
+
+[tool.setuptools]
+py-modules = ["satroot1"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"

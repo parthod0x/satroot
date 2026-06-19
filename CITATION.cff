@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: "SATROOT-1: One-Satoshi Root Token Primitive"
+message: "If you use this protocol draft, please cite it using the metadata from this file."
+type: software
+authors:
+  - given-names: "PARTH MAURIA"
+    family-names: "SAXENA"
+    email: "parthms.id@gmail.com"
+version: "0.1.0"
+date-released: "2026-06-19"
+license: "Apache-2.0"
+abstract: "SATROOT-1 defines a minimal one-satoshi-root token primitive: one native satoshi anchors unbounded protocol-defined semantic token state without subdividing Bitcoin below one satoshi."
+keywords:
+  - Bitcoin
+  - BSV
+  - satoshi
+  - semantic tokens
+  - machine-native ledgers

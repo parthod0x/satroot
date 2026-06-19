@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/satroot1.schema.json",
+  "title": "SATROOT-1 Record",
+  "type": "object",
+  "required": ["protocol", "version", "action", "root_id", "sequence"],
+  "properties": {
+    "protocol": {"const": "SATROOT-1"},
+    "version": {"const": "0.1"},
+    "action": {"enum": ["genesis", "mint", "transfer", "burn"]},
+    "root_id": {"type": "string", "pattern": "^[a-fA-F0-9]{64}:[0-9]+$"},
+    "sequence": {"type": "integer", "minimum": 0},
+    "prev_event_id": {"type": ["string", "null"], "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+    "symbol": {"type": "string", "pattern": "^[A-Z0-9]{1,16}$"},
+    "name": {"type": "string", "minLength": 1},
+    "decimals": {"type": "integer", "minimum": 0, "maximum": 18},
+    "max_supply": {"type": "string", "pattern": "^[0-9]+$"},
+    "mint_authority": {"type": "string", "minLength": 1},
+    "transfer_model": {"enum": ["account-ledger"]},
+    "initial_balances": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9]+$"}
+    },
+    "from": {"type": "string", "minLength": 1},
+    "to": {"type": "string", "minLength": 1},
+    "amount": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "signer": {"type": "string", "minLength": 1},
+    "signature": {"type": "string", "minLength": 1},
+    "nonce": {"type": "string"},
+    "rules_hash": {"type": "string"},
+    "state_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"action": {"const": "genesis"}}},
+      "then": {
+        "required": ["symbol", "name", "decimals", "max_supply", "mint_authority", "transfer_model", "initial_balances", "rules_hash", "nonce"],
+        "not": {"required": ["prev_event_id"]}
+      }
+    },
+    {
+      "if": {"properties": {"action": {"const": "mint"}}},
+      "then": {"required": ["prev_event_id", "to", "amount", "signer", "signature"]}
+    },
+    {
+      "if": {"properties": {"action": {"const": "transfer"}}},
+      "then": {"required": ["prev_event_id", "from", "to", "amount", "signer", "signature"]}
+    },
+    {
+      "if": {"properties": {"action": {"const": "burn"}}},
+      "then": {"required": ["prev_event_id", "from", "amount", "signer", "signature"]}
+    }
+  ],
+  "additionalProperties": false
+}

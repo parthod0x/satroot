@@ -1,0 +1,108 @@
+# SATROOT
+
+**SATROOT** is a one-satoshi-rooted semantic asset protocol.
+
+Its base primitive, **SATROOT-1**, treats one native BSV satoshi UTXO as the irreducible accounting floor and uses that UTXO as a root witness, authority handle, and namespace anchor for deterministic protocol state.
+
+The core rule is simple:
+
+> The satoshi is not subdivided. The satoshi anchors a protocol-defined state space.
+
+## Project thesis
+
+SATROOT starts from one idea:
+
+> A satoshi is the floor of value; it is not the ceiling of meaning.
+
+That means one satoshi can anchor a replayable semantic ledger without pretending to create sub-satoshis. Token units, credits, receipts, rights, and other objects live as protocol-defined state above the native chain unit.
+
+## What this repo delivers
+
+This repository currently ships the `SATROOT-1` genesis implementation:
+
+- `SPEC.md` - human-readable v0.1 specification.
+- `BOUNDARIES.md` - claim discipline, non-goals, and legal boundary language.
+- `ROADMAP.md` - project scope, deliverables, and planned protocol profiles.
+- `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
+- `src/satroot1.py` - reference parser and deterministic replay engine.
+- `examples/` - the `FLOOR1` demo token ledger.
+- `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
+- `profiles/stable/SATROOT-STABLE-1.md` - future stable-value profile sketch.
+
+## SATROOT-1 in one sentence
+
+`SATROOT-1` turns one satoshi into a root-bound namespace for deterministic semantic token state.
+
+The v0.1 kernel defines:
+
+- a `root_id` bound to a one-satoshi UTXO,
+- a genesis record,
+- `mint`, `transfer`, and `burn` events,
+- strict sequencing with `prev_event_id`,
+- deterministic replay and balance computation,
+- a supply invariant.
+
+## Current demo
+
+`FLOOR1` is the proof token in this repo.
+
+It demonstrates:
+
+- one root satoshi,
+- `1,000,000,000` semantic units,
+- deterministic balance updates through signed protocol events,
+- no claim that the satoshi itself has been subdivided.
+
+## Intended use
+
+SATROOT-1 is meant for prototypes, timestamped proof-of-concept work, and machine-native ledgers where balances are semantic protocol state anchored to a satoshi rather than native chain assets.
+
+## Non-goals
+
+SATROOT-1 does not claim to be:
+
+- a new blockchain,
+- a BSV consensus change,
+- a sub-satoshi mechanism,
+- a stablecoin by default,
+- a redemption or reserve framework,
+- a security token framework,
+- an exchange-listing or universal wallet standard.
+
+## Future direction
+
+The base protocol stays intentionally small. Future work belongs in separate profiles, for example:
+
+- `SATROOT-STABLE-1` for reference-value accounting units,
+- receipt and invoice profiles,
+- license and rights profiles,
+- machine-credit and machine-event profiles,
+- identity or authority object profiles.
+
+## Run tests
+
+```bash
+python -m pytest
+```
+
+Expected result:
+
+```text
+5 passed
+```
+
+## Run the demo ledger
+
+```bash
+python src/satroot1.py examples/events_floor1.json
+```
+
+## Important demo note
+
+The example `root_id` is a placeholder:
+
+```text
+0000000000000000000000000000000000000000000000000000000000000000:0
+```
+
+Replace it only when intentionally anchoring to a real one-satoshi UTXO.
