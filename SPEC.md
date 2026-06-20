@@ -75,6 +75,14 @@ Every non-genesis event must reference:
 - `signer`
 - `signature`
 
+The canonical signing payload is the canonical JSON form of the event excluding:
+
+- `signature`
+- `event_id`
+- `state_hash`
+
+This keeps the signed content stable while allowing transport metadata and post-application state commitments to be attached separately.
+
 Known profiles and their required genesis metadata are listed in `protocol/satroot1.profile-registry.json`. Strict SATROOT-1 replay engines should treat that registry as the compatibility source of truth and reject unknown profiles until explicitly supported.
 
 ## 3. Boundary rule
@@ -169,6 +177,16 @@ It is valid only if:
 - burner has sufficient balance,
 - amount is a positive integer string,
 - signer controls burner account.
+
+### 6.4 Signature verification interface
+
+The reference engine exposes a pluggable signature verifier interface:
+
+```text
+verifier(event, signing_payload) -> bool
+```
+
+The demo verifier accepts `signature="demo"` for test records. Production deployments should replace it with a verifier that checks a real signature scheme against the canonical signing payload.
 
 ## 7. State commitment
 

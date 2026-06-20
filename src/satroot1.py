@@ -15,7 +15,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 
 
 class SatRootError(ValueError):
@@ -24,6 +24,7 @@ class SatRootError(ValueError):
 
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
+SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 
 
 def canonical_json(obj: Any) -> str:
@@ -73,17 +74,27 @@ def event_id(event: Dict[str, Any]) -> str:
     return "sha256:" + sha256_hex(canonical_json(cleaned))
 
 
+def signing_payload(event: Dict[str, Any]) -> str:
+    """Return the canonical payload that should be signed for an event.
+
+    Signature material excludes fields that are either transport metadata or
+    post-application commitments.
+    """
+    cleaned = {k: v for k, v in event.items() if k not in {"signature", "event_id", "state_hash"}}
+    return canonical_json(cleaned)
+
+
 def parse_amount(value: str) -> int:
     if not isinstance(value, str) or not value.isdigit():
         raise SatRootError(f"invalid amount: {value!r}")
     return int(value)
 
 
-def verify_signature_placeholder(event: Dict[str, Any]) -> bool:
-    """Placeholder for real signature checks.
+def demo_signature_verifier(event: Dict[str, Any], payload: str) -> bool:
+    """Default demo verifier used by the reference engine.
 
     v0.1 test records may use signature='demo'. Production records must use
-    a real signature scheme over canonical_json(event without signature).
+    a real signature scheme over `signing_payload(event)`.
     """
     return event.get("signature") == "demo"
 
@@ -235,7 +246,13 @@ def apply_genesis(event: Dict[str, Any]) -> SatRootState:
     return state
 
 
-def require_next_event(state: SatRootState, event: Dict[str, Any]) -> None:
+def verify_signature(event: Dict[str, Any], verifier: SignatureVerifier) -> None:
+    payload = signing_payload(event)
+    if not verifier(event, payload):
+        raise SatRootError("signature verification failed")
+
+
+def require_next_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureVerifier) -> None:
     require_fields(event, ["protocol", "version", "action", "root_id", "sequence", "prev_event_id", "signer", "signature"])
     if event.get("protocol") != "SATROOT-1" or event.get("version") != "0.1":
         raise SatRootError("unsupported protocol/version")
@@ -250,13 +267,12 @@ def require_next_event(state: SatRootState, event: Dict[str, Any]) -> None:
         raise SatRootError("profile mismatch")
     if event.get("profile_mode") not in (None, state.profile_mode):
         raise SatRootError("profile_mode mismatch")
-    if not verify_signature_placeholder(event):
-        raise SatRootError("signature verification failed")
+    verify_signature(event, verifier)
 
 
-def apply_event(state: SatRootState, event: Dict[str, Any]) -> SatRootState:
+def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureVerifier = demo_signature_verifier) -> SatRootState:
     next_state = copy.deepcopy(state)
-    require_next_event(next_state, event)
+    require_next_event(next_state, event, verifier)
 
     action = event.get("action")
     amount = parse_positive_amount(event.get("amount", "0"))
@@ -302,7 +318,7 @@ def apply_event(state: SatRootState, event: Dict[str, Any]) -> SatRootState:
     return next_state
 
 
-def replay(events: Iterable[Dict[str, Any]]) -> SatRootState:
+def replay(events: Iterable[Dict[str, Any]], verifier: SignatureVerifier = demo_signature_verifier) -> SatRootState:
     iterator = iter(events)
     try:
         first = next(iterator)
@@ -311,7 +327,7 @@ def replay(events: Iterable[Dict[str, Any]]) -> SatRootState:
 
     state = apply_genesis(first)
     for event in iterator:
-        state = apply_event(state, event)
+        state = apply_event(state, event, verifier=verifier)
     return state
 
 

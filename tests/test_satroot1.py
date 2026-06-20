@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from satroot1 import SatRootError, event_id, load_profile_registry, replay
+from satroot1 import SatRootError, event_id, load_profile_registry, replay, sha256_hex, signing_payload
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,3 +160,30 @@ def test_reject_missing_required_profile_field():
     del events[0]["subject_id"]
     with pytest.raises(SatRootError):
         replay(events)
+
+
+def test_signing_payload_excludes_unsigned_fields():
+    event = copy.deepcopy(load_events()[1])
+    event["event_id"] = "sha256:" + ("1" * 64)
+    event["state_hash"] = "sha256:" + ("2" * 64)
+    payload = signing_payload(event)
+    parsed = json.loads(payload)
+    assert "signature" not in parsed
+    assert "event_id" not in parsed
+    assert "state_hash" not in parsed
+    assert parsed["action"] == "transfer"
+
+
+def test_replay_with_custom_signature_verifier():
+    events = load_events()
+    prev = event_id(events[0])
+    for event in events[1:]:
+        event["prev_event_id"] = prev
+        event["signature"] = "sha256:" + sha256_hex(signing_payload(event))
+        prev = event_id(event)
+
+    def hash_verifier(event, payload):
+        return event["signature"] == "sha256:" + sha256_hex(payload)
+
+    state = replay(events, verifier=hash_verifier)
+    assert state.symbol == "FLOOR1"

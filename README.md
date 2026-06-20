@@ -47,6 +47,7 @@ The v0.1 kernel defines:
 - deterministic replay and balance computation,
 - a supply invariant,
 - registry-backed profile compatibility checks,
+- a canonical signing payload model,
 - optional `event_id` and `state_hash` verification.
 
 ## Current demo
@@ -124,7 +125,7 @@ python -m pytest
 Expected result:
 
 ```text
-17 passed
+19 passed
 ```
 
 ## Run the demo ledger
