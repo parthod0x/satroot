@@ -75,7 +75,7 @@ Every non-genesis event must reference:
 - `signer`
 - `signature`
 
-Known profiles and their required genesis metadata are listed in `protocol/satroot1.profile-registry.json`. Unknown profiles should be rejected by strict SATROOT-1 replay engines until explicitly supported.
+Known profiles and their required genesis metadata are listed in `protocol/satroot1.profile-registry.json`. Strict SATROOT-1 replay engines should treat that registry as the compatibility source of truth and reject unknown profiles until explicitly supported.
 
 ## 3. Boundary rule
 

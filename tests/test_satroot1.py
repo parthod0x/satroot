@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from satroot1 import SatRootError, event_id, replay
+from satroot1 import SatRootError, event_id, load_profile_registry, replay
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -147,3 +147,16 @@ def test_accept_matching_event_id_and_state_hash():
     events[1]["event_id"] = event_id(events[1])
     final_state = replay(events)
     assert final_state.symbol == "FLOOR1"
+
+
+def test_profile_registry_contains_supported_profiles():
+    registry = load_profile_registry()
+    assert registry["SATROOT-STABLE-1"]["profile_mode"] == "reference-only"
+    assert registry["SATROOT-LICENSE-1"]["required_fields"][-1] == "intended_use"
+
+
+def test_reject_missing_required_profile_field():
+    events = load_events("events_identity1.json")
+    del events[0]["subject_id"]
+    with pytest.raises(SatRootError):
+        replay(events)

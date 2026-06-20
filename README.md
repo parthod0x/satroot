@@ -46,7 +46,7 @@ The v0.1 kernel defines:
 - strict sequencing with `prev_event_id`,
 - deterministic replay and balance computation,
 - a supply invariant,
-- profile compatibility checks for known profiles,
+- registry-backed profile compatibility checks,
 - optional `event_id` and `state_hash` verification.
 
 ## Current demo
@@ -124,7 +124,7 @@ python -m pytest
 Expected result:
 
 ```text
-15 passed
+17 passed
 ```
 
 ## Run the demo ledger

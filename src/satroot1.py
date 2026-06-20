@@ -9,10 +9,12 @@ and basic authority placeholders. Real deployments must replace
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 
@@ -21,28 +23,7 @@ class SatRootError(ValueError):
 
 
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
-PROFILE_RULES: Dict[str, Dict[str, Any]] = {
-    "SATROOT-STABLE-1": {
-        "profile_mode": "reference-only",
-        "required_fields": ["reference_unit", "redemption", "reserve_model", "intended_use"],
-    },
-    "SATROOT-MACHINE-1": {
-        "profile_mode": "prepaid-credit",
-        "required_fields": ["service_scope", "billing_unit", "consumption_model", "intended_use"],
-    },
-    "SATROOT-RECEIPT-1": {
-        "profile_mode": "single-receipt",
-        "required_fields": ["document_type", "reference_id", "issuer_entity", "counterparty_entity", "settlement_unit", "intended_use"],
-    },
-    "SATROOT-IDENTITY-1": {
-        "profile_mode": "single-identity",
-        "required_fields": ["identity_type", "subject_id", "controller_entity", "authority_scope", "intended_use"],
-    },
-    "SATROOT-LICENSE-1": {
-        "profile_mode": "single-license",
-        "required_fields": ["license_type", "asset_id", "licensor_entity", "licensee_entity", "usage_scope", "intended_use"],
-    },
-}
+PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
 
 
 def canonical_json(obj: Any) -> str:
@@ -51,6 +32,35 @@ def canonical_json(obj: Any) -> str:
 
 def sha256_hex(data: str) -> str:
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+@functools.lru_cache(maxsize=1)
+def load_profile_registry() -> Dict[str, Dict[str, Any]]:
+    with PROFILE_REGISTRY_PATH.open("r", encoding="utf-8") as f:
+        registry = json.load(f)
+
+    if registry.get("protocol") != "SATROOT-1" or registry.get("version") != "0.1":
+        raise SatRootError("unsupported profile registry version")
+
+    profiles = registry.get("profiles")
+    if not isinstance(profiles, list):
+        raise SatRootError("invalid profile registry format")
+
+    loaded: Dict[str, Dict[str, Any]] = {}
+    for entry in profiles:
+        if not isinstance(entry, dict):
+            raise SatRootError("invalid profile registry entry")
+        require_fields(entry, ["profile", "profile_mode", "required_genesis_fields"])
+        profile = entry["profile"]
+        profile_mode = entry["profile_mode"]
+        required_fields = entry["required_genesis_fields"]
+        if not isinstance(required_fields, list) or not all(isinstance(field, str) for field in required_fields):
+            raise SatRootError(f"invalid required_genesis_fields for {profile!r}")
+        loaded[profile] = {
+            "profile_mode": profile_mode,
+            "required_fields": required_fields,
+        }
+    return loaded
 
 
 def event_id(event: Dict[str, Any]) -> str:
@@ -119,7 +129,7 @@ def validate_profile_genesis(event: Dict[str, Any]) -> None:
     if profile is None:
         return
 
-    rules = PROFILE_RULES.get(profile)
+    rules = load_profile_registry().get(profile)
     if rules is None:
         raise SatRootError(f"unsupported profile: {profile}")
 
