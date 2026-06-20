@@ -53,7 +53,8 @@ The v0.1 kernel defines:
 - explicit `signature_scheme` and `signature_key_id` protocol metadata,
 - optional `event_id` and `state_hash` verification,
 - reference helpers for signing a single event or a whole ledger,
-- a `satroot1` CLI entry point for replay and signing workflows.
+- a `satroot1` CLI entry point for replay and signing workflows,
+- replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
 

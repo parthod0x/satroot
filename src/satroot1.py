@@ -30,6 +30,20 @@ PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satr
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
+CORE_GENESIS_FIELDS = {
+    "protocol",
+    "version",
+    "action",
+    "root_id",
+    "sequence",
+    "symbol",
+    "name",
+    "decimals",
+    "max_supply",
+    "mint_authority",
+    "transfer_model",
+    "initial_balances",
+}
 
 
 def canonical_json(obj: Any) -> str:
@@ -305,6 +319,10 @@ def validate_state_hash(event: Dict[str, Any], state: "SatRootState") -> None:
         raise SatRootError("state_hash mismatch")
 
 
+def extract_genesis_metadata(event: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: copy.deepcopy(value) for key, value in event.items() if key not in CORE_GENESIS_FIELDS}
+
+
 @dataclass
 class SatRootState:
     root_id: str
@@ -313,14 +331,16 @@ class SatRootState:
     decimals: int
     max_supply: Optional[int]
     mint_authority: str
+    transfer_model: str
     profile: Optional[str] = None
     profile_mode: Optional[str] = None
+    genesis_metadata: Dict[str, Any] = field(default_factory=dict)
     balances: Dict[str, int] = field(default_factory=dict)
     supply: int = 0
     sequence: int = 0
     last_event_id: Optional[str] = None
 
-    def snapshot(self) -> Dict[str, Any]:
+    def commitment_snapshot(self) -> Dict[str, Any]:
         return {
             "root_id": self.root_id,
             "symbol": self.symbol,
@@ -336,8 +356,14 @@ class SatRootState:
             "last_event_id": self.last_event_id,
         }
 
+    def snapshot(self) -> Dict[str, Any]:
+        snapshot = self.commitment_snapshot()
+        snapshot["transfer_model"] = self.transfer_model
+        snapshot["genesis_metadata"] = copy.deepcopy(self.genesis_metadata)
+        return snapshot
+
     def state_hash(self) -> str:
-        return "sha256:" + sha256_hex(canonical_json(self.snapshot()))
+        return "sha256:" + sha256_hex(canonical_json(self.commitment_snapshot()))
 
 
 def apply_genesis(event: Dict[str, Any]) -> SatRootState:
@@ -385,8 +411,10 @@ def apply_genesis(event: Dict[str, Any]) -> SatRootState:
         decimals=parse_decimals(event.get("decimals", 0)),
         max_supply=max_supply,
         mint_authority=event["mint_authority"],
+        transfer_model=event["transfer_model"],
         profile=event.get("profile"),
         profile_mode=event.get("profile_mode"),
+        genesis_metadata=extract_genesis_metadata(event),
         balances=initial,
         supply=supply,
         sequence=0,

@@ -216,6 +216,8 @@ This lets lightweight clients check that independent indexers agree on the same 
 
 An event MAY also carry an `event_id`. If present, it MUST equal the canonical event hash calculated from the record content excluding the `event_id` and `state_hash` fields. This avoids a circular dependency between event identity and post-application state commitment.
 
+The reference implementation may expose richer replay snapshots for developer tooling, including preserved genesis/profile metadata, but the state commitment hash should remain derived from a stable deterministic subset of protocol state.
+
 ## 8. Minimal validity conditions
 
 A SATROOT-1 indexer MUST reject a ledger if:

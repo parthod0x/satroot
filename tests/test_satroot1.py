@@ -36,6 +36,9 @@ def test_replay_demo_ledger():
     assert state.balances["issuer"] == 750_000_000
     assert state.balances["alice"] == 150_000_000
     assert state.balances["bob"] == 99_000_000
+    assert state.transfer_model == "account-ledger"
+    assert state.genesis_metadata["rules_hash"] == "sha256:demo"
+    assert state.genesis_metadata["nonce"] == "satroot-v0.1-demo"
 
 
 def test_reject_overspend():
@@ -99,6 +102,10 @@ def test_replay_stable_profile_demo():
     assert state.balances["issuer"] == 23_500_000
     assert state.balances["merchant"] == 1_245_000
     assert state.balances["api_node"] == 250_000
+    assert state.genesis_metadata["reference_unit"] == "USD"
+    assert state.genesis_metadata["redemption"] == "none"
+    assert state.genesis_metadata["reserve_model"] == "none"
+    assert state.snapshot()["genesis_metadata"]["intended_use"] == "invoice-credit-accounting"
 
 
 def test_replay_machine_profile_demo():
@@ -177,6 +184,11 @@ def test_accept_matching_event_id_and_state_hash():
     events[1]["event_id"] = event_id(events[1])
     final_state = replay(events)
     assert final_state.symbol == "FLOOR1"
+
+
+def test_floor1_state_hash_regression():
+    state = replay(load_events())
+    assert state.state_hash() == "sha256:5e57031b9c736b6d3d6f73c07e9df5d6d86123af032119e16148859080797721"
 
 
 def test_profile_registry_contains_supported_profiles():
