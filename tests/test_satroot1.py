@@ -12,10 +12,12 @@ from satroot1 import (
     event_id,
     hmac_sha256_sign,
     load_profile_registry,
+    main,
     make_ed25519_verifier,
     make_hmac_sha256_verifier,
     replay,
     sha256_hex,
+    sign_ledger_events,
     signing_payload,
 )
 
@@ -319,3 +321,51 @@ def test_ed25519_verifier_rejects_wrong_key_when_available():
     verifier = make_ed25519_verifier(wrong_public_keys)
     with pytest.raises(SatRootError):
         replay(events, verifier=verifier)
+
+
+def test_sign_ledger_events_demo_helper():
+    events = load_events()
+    signed = sign_ledger_events(events, scheme="demo")
+    assert signed[1]["signature_scheme"] == "demo"
+    assert signed[1]["signature"] == "demo"
+    assert signed[1]["prev_event_id"] == event_id(signed[0])
+    assert replay(signed).symbol == "FLOOR1"
+
+
+def test_cli_sign_ledger_hmac_output(tmp_path):
+    events_path = tmp_path / "events.json"
+    signer_key_map_path = tmp_path / "signers.json"
+    secrets_path = tmp_path / "secrets.json"
+    output_path = tmp_path / "signed.json"
+
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    signer_key_map_path.write_text(
+        json.dumps({"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}),
+        encoding="utf-8",
+    )
+    secrets_path.write_text(
+        json.dumps({"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "sign-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--signer-key-map-json",
+            str(signer_key_map_path),
+            "--secrets-json",
+            str(secrets_path),
+            "--include-state-hash",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    signed_events = json.loads(output_path.read_text(encoding="utf-8"))
+    verifier = make_hmac_sha256_verifier({"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"})
+    state = replay(signed_events, verifier=verifier)
+    assert state.symbol == "FLOOR1"

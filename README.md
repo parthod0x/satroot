@@ -25,7 +25,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `ROADMAP.md` - project scope, deliverables, and planned protocol profiles.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
-- `src/satroot1.py` - reference parser and deterministic replay engine.
+- `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
@@ -51,7 +51,9 @@ The v0.1 kernel defines:
 - a built-in `hmac-sha256` reference verifier path for shared-secret environments,
 - an optional `ed25519` verifier path behind the `crypto` extra,
 - explicit `signature_scheme` and `signature_key_id` protocol metadata,
-- optional `event_id` and `state_hash` verification.
+- optional `event_id` and `state_hash` verification,
+- reference helpers for signing a single event or a whole ledger,
+- a `satroot1` CLI entry point for replay and signing workflows.
 
 ## Current demo
 
@@ -128,43 +130,87 @@ python -m pytest
 Expected result:
 
 ```text
-26 passed
+28 passed
 ```
 
-## Run the demo ledger
+## Signing utilities
+
+Install the package in editable mode to expose the `satroot1` command:
+
+```bash
+pip install -e .
+```
+
+Install the optional crypto path when you want Ed25519 support:
+
+```bash
+pip install -e .[crypto]
+```
+
+Replay a ledger:
+
+```bash
+satroot1 replay examples/events_floor1.json
+```
+
+Sign a full demo ledger with the built-in demo signature mode:
+
+```bash
+satroot1 sign-ledger examples/events_floor1.json --scheme demo
+```
+
+Sign a ledger with shared-secret HMAC verification metadata:
+
+```bash
+satroot1 sign-ledger examples/events_floor1.json --scheme hmac-sha256 --signer-key-map-json signer_keys.json --secrets-json secrets.json --include-state-hash --output signed_events.json
+```
+
+Sign a single event record:
+
+```bash
+satroot1 sign-event event.json --scheme hmac-sha256 --key-id issuer-key --secret issuer-secret
+```
+
+The legacy direct script flow still works:
 
 ```bash
 python src/satroot1.py examples/events_floor1.json
 ```
 
+## Run the demo ledgers
+
+```bash
+satroot1 replay examples/events_floor1.json
+```
+
 Reference-only stable profile demo:
 
 ```bash
-python src/satroot1.py examples/events_usdroot1.json
+satroot1 replay examples/events_usdroot1.json
 ```
 
 Machine-credit profile demo:
 
 ```bash
-python src/satroot1.py examples/events_apicredit1.json
+satroot1 replay examples/events_apicredit1.json
 ```
 
 Receipt profile demo:
 
 ```bash
-python src/satroot1.py examples/events_receipt1.json
+satroot1 replay examples/events_receipt1.json
 ```
 
 Identity profile demo:
 
 ```bash
-python src/satroot1.py examples/events_identity1.json
+satroot1 replay examples/events_identity1.json
 ```
 
 License profile demo:
 
 ```bash
-python src/satroot1.py examples/events_license1.json
+satroot1 replay examples/events_license1.json
 ```
 
 ## Important demo note

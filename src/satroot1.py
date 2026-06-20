@@ -15,9 +15,10 @@ import hmac
 import importlib
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 
 
 class SatRootError(ValueError):
@@ -27,6 +28,7 @@ class SatRootError(ValueError):
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
+SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
 
 
@@ -210,6 +212,26 @@ def make_ed25519_verifier(public_keys: Mapping[str, str]) -> SignatureVerifier:
             return False
 
     return verifier
+
+
+def make_hmac_sha256_signer(shared_secrets: Mapping[str, str | bytes]) -> SignerFunction:
+    def signer(payload: str, key_id: str) -> str:
+        secret = shared_secrets.get(key_id)
+        if secret is None:
+            raise SatRootError(f"missing secret for key_id: {key_id}")
+        return hmac_sha256_sign(payload, secret)
+
+    return signer
+
+
+def make_ed25519_signer(private_keys: Mapping[str, str]) -> SignerFunction:
+    def signer(payload: str, key_id: str) -> str:
+        private_key_hex = private_keys.get(key_id)
+        if private_key_hex is None:
+            raise SatRootError(f"missing private key for key_id: {key_id}")
+        return ed25519_sign(payload, private_key_hex)
+
+    return signer
 
 
 def require_fields(event: Dict[str, Any], fields: Iterable[str]) -> None:
@@ -460,13 +482,212 @@ def replay(events: Iterable[Dict[str, Any]], verifier: SignatureVerifier = demo_
     return state
 
 
-if __name__ == "__main__":
+def sign_event_record(
+    event: Dict[str, Any],
+    *,
+    scheme: str,
+    key_id: Optional[str] = None,
+    signer: Optional[SignerFunction] = None,
+) -> Dict[str, Any]:
+    signed = copy.deepcopy(event)
+    if scheme == "demo":
+        signed.pop("signature_key_id", None)
+        signed["signature_scheme"] = "demo"
+        signed["signature"] = "demo"
+    else:
+        if signer is None:
+            raise SatRootError("signer function is required for non-demo signatures")
+        if not isinstance(key_id, str) or not key_id.strip():
+            raise SatRootError("key_id is required for non-demo signatures")
+        signed["signature_scheme"] = scheme
+        signed["signature_key_id"] = key_id
+        signed["signature"] = signer(signing_payload(signed), key_id)
+    signed["event_id"] = event_id(signed)
+    return signed
+
+
+def sign_ledger_events(
+    events: Sequence[Dict[str, Any]],
+    *,
+    scheme: str,
+    signer_key_ids: Optional[Mapping[str, str]] = None,
+    signer: Optional[SignerFunction] = None,
+    verifier: SignatureVerifier = demo_signature_verifier,
+    include_state_hash: bool = False,
+) -> list[Dict[str, Any]]:
+    if not events:
+        raise SatRootError("empty ledger")
+
+    signed_events = copy.deepcopy(list(events))
+    state = apply_genesis(signed_events[0])
+    previous_event_id = state.last_event_id
+
+    for event in signed_events[1:]:
+        event["prev_event_id"] = previous_event_id
+        if scheme == "demo":
+            signed = sign_event_record(event, scheme="demo")
+        else:
+            signer_name = event.get("signer")
+            if not isinstance(signer_name, str) or not signer_name:
+                raise SatRootError("signer is required for non-demo signatures")
+            if signer_key_ids is None:
+                raise SatRootError("signer_key_ids are required for non-demo signatures")
+            key_id = signer_key_ids.get(signer_name)
+            if key_id is None:
+                raise SatRootError(f"missing signer_key_id for signer: {signer_name}")
+            signed = sign_event_record(event, scheme=scheme, key_id=key_id, signer=signer)
+
+        next_state = apply_event(state, signed, verifier=verifier)
+        if include_state_hash:
+            signed["state_hash"] = next_state.state_hash()
+        event.clear()
+        event.update(signed)
+        state = next_state
+        previous_event_id = state.last_event_id
+
+    return signed_events
+
+
+def _load_json_file(path: str) -> Any:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _dump_json(data: Any) -> str:
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def _write_output(data: Any, output_path: Optional[str]) -> None:
+    rendered = _dump_json(data)
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(rendered)
+    else:
+        sys.stdout.write(rendered)
+
+
+def build_cli_parser() -> Any:
     import argparse
-    parser = argparse.ArgumentParser(description="Replay a SATROOT-1 JSON event file")
-    parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
-    args = parser.parse_args()
-    with open(args.events_json, "r", encoding="utf-8") as f:
-        events = json.load(f)
-    result = replay(events)
-    print(canonical_json(result.snapshot()))
-    print("state_hash=" + result.state_hash())
+
+    parser = argparse.ArgumentParser(description="SATROOT-1 utilities")
+    subparsers = parser.add_subparsers(dest="command")
+
+    replay_parser = subparsers.add_parser("replay", help="Replay a SATROOT-1 JSON event file")
+    replay_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
+
+    sign_event_parser = subparsers.add_parser("sign-event", help="Sign a single SATROOT-1 event record")
+    sign_event_parser.add_argument("event_json", help="Path to a JSON event object")
+    sign_event_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], required=True)
+    sign_event_parser.add_argument("--key-id", help="Signature key identifier for non-demo schemes")
+    sign_event_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    sign_event_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    sign_event_parser.add_argument("--output", help="Optional output path")
+
+    sign_ledger_parser = subparsers.add_parser("sign-ledger", help="Sign a SATROOT-1 ledger array")
+    sign_ledger_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
+    sign_ledger_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], required=True)
+    sign_ledger_parser.add_argument("--signer-key-map-json", help="Path to JSON mapping signer -> key_id")
+    sign_ledger_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret")
+    sign_ledger_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex")
+    sign_ledger_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to each signed event")
+    sign_ledger_parser.add_argument("--output", help="Optional output path")
+
+    return parser
+
+
+def _signer_and_verifier_from_args(args: Any) -> tuple[Optional[SignerFunction], SignatureVerifier, Optional[Mapping[str, str]]]:
+    if args.scheme == "demo":
+        return None, demo_signature_verifier, None
+    if args.scheme == "hmac-sha256":
+        if not args.secrets_json:
+            raise SatRootError("--secrets-json is required for hmac-sha256")
+        secrets = _load_json_file(args.secrets_json)
+        if not isinstance(secrets, dict):
+            raise SatRootError("secrets-json must contain an object")
+        return make_hmac_sha256_signer(secrets), make_hmac_sha256_verifier(secrets), secrets
+    if args.scheme == "ed25519":
+        if not args.private_keys_json:
+            raise SatRootError("--private-keys-json is required for ed25519")
+        private_keys = _load_json_file(args.private_keys_json)
+        if not isinstance(private_keys, dict):
+            raise SatRootError("private-keys-json must contain an object")
+        public_keys = {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in private_keys.items()}
+        return make_ed25519_signer(private_keys), make_ed25519_verifier(public_keys), private_keys
+    raise SatRootError(f"unsupported scheme: {args.scheme}")
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = build_cli_parser()
+    args = parser.parse_args(argv)
+
+    if args.command is None:
+        if argv is None and len(sys.argv) == 2:
+            args = parser.parse_args(["replay", sys.argv[1]])
+        else:
+            parser.print_help()
+            return 2
+
+    if args.command == "replay":
+        events = _load_json_file(args.events_json)
+        result = replay(events)
+        print(canonical_json(result.snapshot()))
+        print("state_hash=" + result.state_hash())
+        return 0
+
+    if args.command == "sign-event":
+        event = _load_json_file(args.event_json)
+        if not isinstance(event, dict):
+            raise SatRootError("event_json must contain a JSON object")
+        if args.scheme == "demo":
+            signed = sign_event_record(event, scheme="demo")
+        elif args.scheme == "hmac-sha256":
+            if not args.secret or not args.key_id:
+                raise SatRootError("--secret and --key-id are required for hmac-sha256")
+            signed = sign_event_record(
+                event,
+                scheme="hmac-sha256",
+                key_id=args.key_id,
+                signer=make_hmac_sha256_signer({args.key_id: args.secret}),
+            )
+        elif args.scheme == "ed25519":
+            if not args.private_key_hex or not args.key_id:
+                raise SatRootError("--private-key-hex and --key-id are required for ed25519")
+            signed = sign_event_record(
+                event,
+                scheme="ed25519",
+                key_id=args.key_id,
+                signer=make_ed25519_signer({args.key_id: args.private_key_hex}),
+            )
+        else:
+            raise SatRootError(f"unsupported scheme: {args.scheme}")
+        _write_output(signed, args.output)
+        return 0
+
+    if args.command == "sign-ledger":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        signer, verifier, _ = _signer_and_verifier_from_args(args)
+        signer_key_ids = None
+        if args.scheme != "demo":
+            if not args.signer_key_map_json:
+                raise SatRootError("--signer-key-map-json is required for non-demo ledger signing")
+            signer_key_ids = _load_json_file(args.signer_key_map_json)
+            if not isinstance(signer_key_ids, dict):
+                raise SatRootError("signer-key-map-json must contain an object")
+        signed_ledger = sign_ledger_events(
+            events,
+            scheme=args.scheme,
+            signer_key_ids=signer_key_ids,
+            signer=signer,
+            verifier=verifier,
+            include_state_hash=args.include_state_hash,
+        )
+        _write_output(signed_ledger, args.output)
+        return 0
+
+    raise SatRootError(f"unsupported command: {args.command}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

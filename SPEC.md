@@ -196,6 +196,8 @@ The reference engine also includes a built-in `hmac-sha256` verifier constructor
 
 An optional `ed25519` reference path is also exposed when the `cryptography` package is installed. This gives the reference engine a concrete public-key verification model without making the base package depend on extra crypto libraries by default.
 
+The reference implementation also exposes helper functions and a small CLI for replaying ledgers plus signing single events or whole event arrays against those reference schemes.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

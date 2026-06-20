@@ -24,6 +24,9 @@ classifiers = [
 [project.optional-dependencies]
 crypto = ["cryptography>=42"]
 
+[project.scripts]
+satroot1 = "satroot1:main"
+
 [tool.setuptools]
 py-modules = ["satroot1"]
 
