@@ -11,11 +11,12 @@ from __future__ import annotations
 import copy
 import functools
 import hashlib
+import hmac
 import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 
 class SatRootError(ValueError):
@@ -96,7 +97,44 @@ def demo_signature_verifier(event: Dict[str, Any], payload: str) -> bool:
     v0.1 test records may use signature='demo'. Production records must use
     a real signature scheme over `signing_payload(event)`.
     """
-    return event.get("signature") == "demo"
+    return event.get("signature_scheme", "demo") == "demo" and event.get("signature") == "demo"
+
+
+def _coerce_secret(secret: str | bytes) -> bytes:
+    if isinstance(secret, bytes):
+        return secret
+    if isinstance(secret, str):
+        return secret.encode("utf-8")
+    raise SatRootError("unsupported secret type")
+
+
+def hmac_sha256_sign(payload: str, secret: str | bytes) -> str:
+    secret_bytes = _coerce_secret(secret)
+    digest = hmac.new(secret_bytes, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return "hmac-sha256:" + digest
+
+
+def make_hmac_sha256_verifier(shared_secrets: Mapping[str, str | bytes]) -> SignatureVerifier:
+    """Build a reference verifier for shared-secret HMAC signatures.
+
+    This is useful for controlled environments and integration testing.
+    It is not a public-key signature scheme.
+    """
+
+    def verifier(event: Dict[str, Any], payload: str) -> bool:
+        if event.get("signature_scheme") != "hmac-sha256":
+            return False
+        key_id = event.get("signature_key_id")
+        if not isinstance(key_id, str) or not key_id:
+            return False
+        secret = shared_secrets.get(key_id)
+        if secret is None:
+            return False
+        expected = hmac_sha256_sign(payload, secret)
+        signature = event.get("signature")
+        return isinstance(signature, str) and hmac.compare_digest(signature, expected)
+
+    return verifier
 
 
 def require_fields(event: Dict[str, Any], fields: Iterable[str]) -> None:

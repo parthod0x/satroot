@@ -7,6 +7,7 @@
 - Adds an explicit profile compatibility registry in `protocol/satroot1.profile-registry.json`.
 - Makes the replay engine load supported profile rules from the registry instead of a hardcoded table.
 - Adds a canonical signing payload function and a pluggable signature verifier interface.
+- Adds a concrete built-in `hmac-sha256` reference verifier for shared-secret event authentication.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.

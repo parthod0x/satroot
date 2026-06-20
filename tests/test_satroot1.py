@@ -4,7 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from satroot1 import SatRootError, event_id, load_profile_registry, replay, sha256_hex, signing_payload
+from satroot1 import (
+    SatRootError,
+    event_id,
+    hmac_sha256_sign,
+    load_profile_registry,
+    make_hmac_sha256_verifier,
+    replay,
+    sha256_hex,
+    signing_payload,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -187,3 +196,37 @@ def test_replay_with_custom_signature_verifier():
 
     state = replay(events, verifier=hash_verifier)
     assert state.symbol == "FLOOR1"
+
+
+def test_replay_with_hmac_sha256_verifier():
+    events = load_events()
+    secrets = {"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}
+    signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    prev = event_id(events[0])
+    for event in events[1:]:
+        event["prev_event_id"] = prev
+        event["signature_scheme"] = "hmac-sha256"
+        event["signature_key_id"] = signer_keys[event["signer"]]
+        event["signature"] = hmac_sha256_sign(signing_payload(event), secrets[event["signature_key_id"]])
+        prev = event_id(event)
+
+    verifier = make_hmac_sha256_verifier(secrets)
+    state = replay(events, verifier=verifier)
+    assert state.symbol == "FLOOR1"
+
+
+def test_hmac_sha256_verifier_rejects_wrong_secret():
+    events = load_events()
+    secrets = {"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}
+    signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    prev = event_id(events[0])
+    for event in events[1:]:
+        event["prev_event_id"] = prev
+        event["signature_scheme"] = "hmac-sha256"
+        event["signature_key_id"] = signer_keys[event["signer"]]
+        event["signature"] = hmac_sha256_sign(signing_payload(event), secrets[event["signature_key_id"]])
+        prev = event_id(event)
+
+    bad_verifier = make_hmac_sha256_verifier({"issuer-key": "wrong", "alice-key": "wrong", "bob-key": "wrong"})
+    with pytest.raises(SatRootError):
+        replay(events, verifier=bad_verifier)

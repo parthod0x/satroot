@@ -83,6 +83,8 @@ The canonical signing payload is the canonical JSON form of the event excluding:
 
 This keeps the signed content stable while allowing transport metadata and post-application state commitments to be attached separately.
 
+The payload may still include fields such as `signature_scheme` or `signature_key_id` when those fields are part of the verification model in use.
+
 Known profiles and their required genesis metadata are listed in `protocol/satroot1.profile-registry.json`. Strict SATROOT-1 replay engines should treat that registry as the compatibility source of truth and reject unknown profiles until explicitly supported.
 
 ## 3. Boundary rule
@@ -187,6 +189,8 @@ verifier(event, signing_payload) -> bool
 ```
 
 The demo verifier accepts `signature="demo"` for test records. Production deployments should replace it with a verifier that checks a real signature scheme against the canonical signing payload.
+
+The reference engine also includes a built-in `hmac-sha256` verifier constructor for controlled environments using shared secrets plus key identifiers. This is a concrete authenticated-event reference path, but it is not a public-key signature scheme.
 
 ## 7. State commitment
 

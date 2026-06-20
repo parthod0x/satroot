@@ -48,6 +48,7 @@ The v0.1 kernel defines:
 - a supply invariant,
 - registry-backed profile compatibility checks,
 - a canonical signing payload model,
+- a built-in `hmac-sha256` reference verifier path for shared-secret environments,
 - optional `event_id` and `state_hash` verification.
 
 ## Current demo
@@ -125,7 +126,7 @@ python -m pytest
 Expected result:
 
 ```text
-19 passed
+21 passed
 ```
 
 ## Run the demo ledger
