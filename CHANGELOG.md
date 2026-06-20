@@ -13,6 +13,7 @@
 - Adds signing helpers for single events and full ledgers in the reference implementation.
 - Exposes a `satroot1` CLI entry point for replay, `sign-event`, and `sign-ledger` workflows.
 - Preserves genesis/profile metadata in replay snapshots while keeping state-hash commitments stable.
+- Adds first-class `rotate-authority` events for explicit mint-authority handoff.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.

@@ -29,6 +29,37 @@ def load_events(name="events_floor1.json"):
     return json.loads((ROOT / "examples" / name).read_text())
 
 
+def build_rotation_ledger():
+    genesis = copy.deepcopy(load_events()[0])
+    genesis["max_supply"] = "1000000000"
+    genesis["initial_balances"] = {"issuer": "900000000"}
+
+    rotate = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "action": "rotate-authority",
+        "root_id": genesis["root_id"],
+        "sequence": 1,
+        "prev_event_id": event_id(genesis),
+        "new_mint_authority": "issuer_v2",
+        "signer": "issuer",
+        "signature": "demo",
+    }
+    mint = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "action": "mint",
+        "root_id": genesis["root_id"],
+        "sequence": 2,
+        "prev_event_id": event_id(rotate),
+        "to": "alice",
+        "amount": "50000000",
+        "signer": "issuer_v2",
+        "signature": "demo",
+    }
+    return [genesis, rotate, mint]
+
+
 def test_replay_demo_ledger():
     state = replay(load_events())
     assert state.symbol == "FLOOR1"
@@ -146,6 +177,28 @@ def test_replay_license_profile_demo():
     assert state.balances["issuer"] == 0
     assert state.balances["customer"] == 0
     assert state.balances["archive"] == 0
+
+
+def test_rotate_authority_allows_new_minter():
+    state = replay(build_rotation_ledger())
+    assert state.mint_authority == "issuer_v2"
+    assert state.supply == 950_000_000
+    assert state.balances["issuer"] == 900_000_000
+    assert state.balances["alice"] == 50_000_000
+
+
+def test_reject_unauthorized_rotate_authority():
+    events = build_rotation_ledger()
+    events[1]["signer"] = "alice"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_mint_by_old_authority_after_rotation():
+    events = build_rotation_ledger()
+    events[2]["signer"] = "issuer"
+    with pytest.raises(SatRootError):
+        replay(events)
 
 
 def test_reject_unknown_profile():

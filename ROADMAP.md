@@ -23,7 +23,7 @@ Current scope:
 
 - root-bound namespace via `root_id`
 - token genesis
-- `mint`, `transfer`, and `burn`
+- `mint`, `transfer`, `burn`, and `rotate-authority`
 - sequence enforcement
 - deterministic replay
 - supply invariants

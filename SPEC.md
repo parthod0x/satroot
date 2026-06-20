@@ -62,6 +62,7 @@ Token balances are computed by replaying signed SATROOT-1 events:
 - `mint`
 - `transfer`
 - `burn`
+- `rotate-authority`
 - `freeze` optional in future versions
 - `delegate` optional in future versions
 
@@ -182,7 +183,19 @@ It is valid only if:
 - amount is a positive integer string,
 - signer controls burner account.
 
-### 6.4 Signature verification interface
+### 6.4 Rotate authority
+
+A `rotate-authority` event changes the active mint authority for the root namespace.
+
+It is valid only if:
+
+- signer matches the current mint authority,
+- `new_mint_authority` is a valid non-empty authority identifier,
+- sequence is exactly previous sequence + 1.
+
+This event changes control over future authority-gated actions such as `mint`. It does not move balances by itself and should not be confused with a token transfer.
+
+### 6.5 Signature verification interface
 
 The reference engine exposes a pluggable signature verifier interface:
 
@@ -227,10 +240,11 @@ A SATROOT-1 indexer MUST reject a ledger if:
 3. a transfer spends unavailable balance,
 4. a mint exceeds max supply,
 5. an event uses a different root_id,
-6. a required signature check fails,
-7. canonical JSON hashing does not match the stated event ID,
-8. a stated `state_hash` does not match replayed state,
-9. an unknown profile or invalid profile mode is used.
+6. an authority rotation is attempted by a non-authority signer,
+7. a required signature check fails,
+8. canonical JSON hashing does not match the stated event ID,
+9. a stated `state_hash` does not match replayed state,
+10. an unknown profile or invalid profile mode is used.
 
 ## 9. Claim discipline
 

@@ -454,10 +454,10 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
     require_next_event(next_state, event, verifier)
 
     action = event.get("action")
-    amount = parse_positive_amount(event.get("amount", "0"))
 
     if action == "mint":
         require_fields(event, ["to", "amount"])
+        amount = parse_positive_amount(event["amount"])
         if event.get("signer") != next_state.mint_authority:
             raise SatRootError("unauthorized mint")
         to = require_account_name(event["to"], "to")
@@ -468,6 +468,7 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
 
     elif action == "transfer":
         require_fields(event, ["from", "to", "amount"])
+        amount = parse_positive_amount(event["amount"])
         sender = require_account_name(event["from"], "from")
         recipient = require_account_name(event["to"], "to")
         # v0.1 placeholder: signer must equal sender account string.
@@ -480,6 +481,7 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
 
     elif action == "burn":
         require_fields(event, ["from", "amount"])
+        amount = parse_positive_amount(event["amount"])
         burner = require_account_name(event["from"], "from")
         if event.get("signer") != burner:
             raise SatRootError("unauthorized burn")
@@ -487,6 +489,12 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
             raise SatRootError("insufficient balance")
         next_state.balances[burner] -= amount
         next_state.supply -= amount
+
+    elif action == "rotate-authority":
+        require_fields(event, ["new_mint_authority"])
+        if event.get("signer") != next_state.mint_authority:
+            raise SatRootError("unauthorized authority rotation")
+        next_state.mint_authority = require_account_name(event["new_mint_authority"], "new_mint_authority")
 
     else:
         raise SatRootError(f"unsupported action: {action}")
