@@ -50,6 +50,7 @@ The v0.1 kernel defines:
 - a canonical signing payload model,
 - a built-in `hmac-sha256` reference verifier path for shared-secret environments,
 - an optional `ed25519` verifier path behind the `crypto` extra,
+- explicit `signature_scheme` and `signature_key_id` protocol metadata,
 - optional `event_id` and `state_hash` verification.
 
 ## Current demo
@@ -127,7 +128,7 @@ python -m pytest
 Expected result:
 
 ```text
-23 passed
+26 passed
 ```
 
 ## Run the demo ledger

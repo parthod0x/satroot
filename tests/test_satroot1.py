@@ -74,6 +74,21 @@ def test_reject_missing_signature():
         replay(events)
 
 
+def test_reject_unsupported_signature_scheme():
+    events = load_events()
+    events[1]["signature_scheme"] = "rsa2048"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_demo_signature_with_key_id():
+    events = load_events()
+    events[1]["signature_scheme"] = "demo"
+    events[1]["signature_key_id"] = "demo-key"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
 def test_replay_stable_profile_demo():
     state = replay(load_events("events_usdroot1.json"))
     assert state.symbol == "USDROOT1"
@@ -234,6 +249,19 @@ def test_hmac_sha256_verifier_rejects_wrong_secret():
     bad_verifier = make_hmac_sha256_verifier({"issuer-key": "wrong", "alice-key": "wrong", "bob-key": "wrong"})
     with pytest.raises(SatRootError):
         replay(events, verifier=bad_verifier)
+
+
+def test_reject_hmac_signature_without_key_id():
+    events = load_events()
+    prev = event_id(events[0])
+    for event in events[1:]:
+        event["prev_event_id"] = prev
+        event["signature_scheme"] = "hmac-sha256"
+        event["signature"] = hmac_sha256_sign(signing_payload(event), "shared-secret")
+        prev = event_id(event)
+
+    with pytest.raises(SatRootError):
+        replay(events, verifier=make_hmac_sha256_verifier({"issuer-key": "shared-secret"}))
 
 
 def test_ed25519_availability_or_sign_verify_roundtrip():

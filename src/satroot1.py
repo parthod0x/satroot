@@ -27,6 +27,7 @@ class SatRootError(ValueError):
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
+SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
 
 
 def canonical_json(obj: Any) -> str:
@@ -241,6 +242,21 @@ def require_account_name(name: Any, field_name: str) -> str:
     return name
 
 
+def validate_signature_metadata(event: Dict[str, Any]) -> None:
+    scheme = event.get("signature_scheme", "demo")
+    if not isinstance(scheme, str) or scheme not in SUPPORTED_SIGNATURE_SCHEMES:
+        raise SatRootError(f"unsupported signature_scheme: {scheme!r}")
+
+    key_id = event.get("signature_key_id")
+    if scheme == "demo":
+        if key_id is not None:
+            raise SatRootError("signature_key_id is not allowed for demo signatures")
+        return
+
+    if not isinstance(key_id, str) or not key_id.strip():
+        raise SatRootError(f"signature_key_id is required for {scheme}")
+
+
 def validate_stated_event_id(event: Dict[str, Any]) -> None:
     stated = event.get("event_id")
     if stated is not None and stated != event_id(event):
@@ -375,6 +391,7 @@ def require_next_event(state: SatRootState, event: Dict[str, Any], verifier: Sig
     if event.get("prev_event_id") != state.last_event_id:
         raise SatRootError("bad prev_event_id")
     validate_stated_event_id(event)
+    validate_signature_metadata(event)
     if event.get("profile") not in (None, state.profile):
         raise SatRootError("profile mismatch")
     if event.get("profile_mode") not in (None, state.profile_mode):

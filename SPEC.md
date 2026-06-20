@@ -75,6 +75,8 @@ Every non-genesis event must reference:
 - `signer`
 - `signature`
 
+When present, `signature_scheme` and `signature_key_id` describe how the signature should be interpreted.
+
 The canonical signing payload is the canonical JSON form of the event excluding:
 
 - `signature`
@@ -193,6 +195,12 @@ The demo verifier accepts `signature="demo"` for test records. Production deploy
 The reference engine also includes a built-in `hmac-sha256` verifier constructor for controlled environments using shared secrets plus key identifiers. This is a concrete authenticated-event reference path, but it is not a public-key signature scheme.
 
 An optional `ed25519` reference path is also exposed when the `cryptography` package is installed. This gives the reference engine a concrete public-key verification model without making the base package depend on extra crypto libraries by default.
+
+The reference engine currently recognizes these signature metadata rules:
+
+- `demo`: `signature` must be `demo` and `signature_key_id` must be absent.
+- `hmac-sha256`: `signature_key_id` is required and the signature must use the `hmac-sha256:` prefix.
+- `ed25519`: `signature_key_id` is required and the signature must use the `ed25519:` prefix.
 
 ## 7. State commitment
 
