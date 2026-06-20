@@ -21,6 +21,9 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules"
 ]
 
+[project.optional-dependencies]
+crypto = ["cryptography>=42"]
+
 [tool.setuptools]
 py-modules = ["satroot1"]
 

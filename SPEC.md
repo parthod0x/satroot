@@ -192,6 +192,8 @@ The demo verifier accepts `signature="demo"` for test records. Production deploy
 
 The reference engine also includes a built-in `hmac-sha256` verifier constructor for controlled environments using shared secrets plus key identifiers. This is a concrete authenticated-event reference path, but it is not a public-key signature scheme.
 
+An optional `ed25519` reference path is also exposed when the `cryptography` package is installed. This gives the reference engine a concrete public-key verification model without making the base package depend on extra crypto libraries by default.
+
 ## 7. State commitment
 
 Each event SHOULD include a `state_hash` after application:

@@ -12,6 +12,7 @@ import copy
 import functools
 import hashlib
 import hmac
+import importlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -133,6 +134,79 @@ def make_hmac_sha256_verifier(shared_secrets: Mapping[str, str | bytes]) -> Sign
         expected = hmac_sha256_sign(payload, secret)
         signature = event.get("signature")
         return isinstance(signature, str) and hmac.compare_digest(signature, expected)
+
+    return verifier
+
+
+def ed25519_available() -> bool:
+    return importlib.util.find_spec("cryptography") is not None
+
+
+def _load_ed25519_primitives() -> tuple[Any, Any, Any]:
+    if not ed25519_available():
+        raise SatRootError("cryptography package is required for ed25519 support")
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
+    return Ed25519PrivateKey, Ed25519PublicKey, serialization
+
+
+def _coerce_hex_bytes(value: str, label: str, expected_length: Optional[int] = None) -> bytes:
+    if not isinstance(value, str):
+        raise SatRootError(f"{label} must be a hex string")
+    try:
+        raw = bytes.fromhex(value)
+    except ValueError as exc:
+        raise SatRootError(f"invalid hex for {label}") from exc
+    if expected_length is not None and len(raw) != expected_length:
+        raise SatRootError(f"invalid byte length for {label}")
+    return raw
+
+
+def ed25519_public_key_hex(private_key_hex: str) -> str:
+    Ed25519PrivateKey, _, serialization = _load_ed25519_primitives()
+    private_key = Ed25519PrivateKey.from_private_bytes(_coerce_hex_bytes(private_key_hex, "private_key_hex", 32))
+    public_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    return public_bytes.hex()
+
+
+def ed25519_sign(payload: str, private_key_hex: str) -> str:
+    Ed25519PrivateKey, _, _ = _load_ed25519_primitives()
+    private_key = Ed25519PrivateKey.from_private_bytes(_coerce_hex_bytes(private_key_hex, "private_key_hex", 32))
+    signature = private_key.sign(payload.encode("utf-8"))
+    return "ed25519:" + signature.hex()
+
+
+def make_ed25519_verifier(public_keys: Mapping[str, str]) -> SignatureVerifier:
+    """Build a reference verifier for Ed25519 signatures.
+
+    This path requires the optional `cryptography` dependency and uses raw
+    32-byte public keys encoded as lowercase hex strings.
+    """
+    _, Ed25519PublicKey, _ = _load_ed25519_primitives()
+
+    def verifier(event: Dict[str, Any], payload: str) -> bool:
+        if event.get("signature_scheme") != "ed25519":
+            return False
+        key_id = event.get("signature_key_id")
+        if not isinstance(key_id, str) or not key_id:
+            return False
+        public_key_hex = public_keys.get(key_id)
+        if public_key_hex is None:
+            return False
+        signature = event.get("signature")
+        if not isinstance(signature, str) or not signature.startswith("ed25519:"):
+            return False
+        try:
+            public_key = Ed25519PublicKey.from_public_bytes(_coerce_hex_bytes(public_key_hex, "public_key_hex", 32))
+            signature_bytes = _coerce_hex_bytes(signature.split(":", 1)[1], "signature", 64)
+            public_key.verify(signature_bytes, payload.encode("utf-8"))
+            return True
+        except Exception:
+            return False
 
     return verifier
 

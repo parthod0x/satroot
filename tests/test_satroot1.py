@@ -6,9 +6,13 @@ import pytest
 
 from satroot1 import (
     SatRootError,
+    ed25519_available,
+    ed25519_public_key_hex,
+    ed25519_sign,
     event_id,
     hmac_sha256_sign,
     load_profile_registry,
+    make_ed25519_verifier,
     make_hmac_sha256_verifier,
     replay,
     sha256_hex,
@@ -230,3 +234,60 @@ def test_hmac_sha256_verifier_rejects_wrong_secret():
     bad_verifier = make_hmac_sha256_verifier({"issuer-key": "wrong", "alice-key": "wrong", "bob-key": "wrong"})
     with pytest.raises(SatRootError):
         replay(events, verifier=bad_verifier)
+
+
+def test_ed25519_availability_or_sign_verify_roundtrip():
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            ed25519_sign("payload", "00" * 32)
+        return
+
+    secrets = {
+        "issuer-key": "11" * 32,
+        "alice-key": "22" * 32,
+        "bob-key": "33" * 32,
+    }
+    public_keys = {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in secrets.items()}
+    events = load_events()
+    signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    prev = event_id(events[0])
+    for event in events[1:]:
+        event["prev_event_id"] = prev
+        event["signature_scheme"] = "ed25519"
+        event["signature_key_id"] = signer_keys[event["signer"]]
+        event["signature"] = ed25519_sign(signing_payload(event), secrets[event["signature_key_id"]])
+        prev = event_id(event)
+
+    verifier = make_ed25519_verifier(public_keys)
+    state = replay(events, verifier=verifier)
+    assert state.symbol == "FLOOR1"
+
+
+def test_ed25519_verifier_rejects_wrong_key_when_available():
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            make_ed25519_verifier({"issuer-key": "00" * 32})
+        return
+
+    secrets = {
+        "issuer-key": "11" * 32,
+        "alice-key": "22" * 32,
+        "bob-key": "33" * 32,
+    }
+    public_keys = {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in secrets.items()}
+    events = load_events()
+    signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    prev = event_id(events[0])
+    for event in events[1:]:
+        event["prev_event_id"] = prev
+        event["signature_scheme"] = "ed25519"
+        event["signature_key_id"] = signer_keys[event["signer"]]
+        event["signature"] = ed25519_sign(signing_payload(event), secrets[event["signature_key_id"]])
+        prev = event_id(event)
+
+    wrong_public_keys = {"issuer-key": "44" * 32, "alice-key": "55" * 32, "bob-key": "66" * 32}
+    verifier = make_ed25519_verifier(wrong_public_keys)
+    with pytest.raises(SatRootError):
+        replay(events, verifier=verifier)

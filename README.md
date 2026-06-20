@@ -49,6 +49,7 @@ The v0.1 kernel defines:
 - registry-backed profile compatibility checks,
 - a canonical signing payload model,
 - a built-in `hmac-sha256` reference verifier path for shared-secret environments,
+- an optional `ed25519` verifier path behind the `crypto` extra,
 - optional `event_id` and `state_hash` verification.
 
 ## Current demo
@@ -126,7 +127,7 @@ python -m pytest
 Expected result:
 
 ```text
-21 passed
+23 passed
 ```
 
 ## Run the demo ledger
