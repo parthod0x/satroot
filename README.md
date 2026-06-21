@@ -55,6 +55,7 @@ The v0.1 kernel defines:
 - optional `event_id` and `state_hash` verification,
 - reference helpers for signing a single event or a whole ledger,
 - a `satroot1` CLI entry point for replay and signing workflows,
+- verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -132,7 +133,7 @@ python -m pytest
 Expected result:
 
 ```text
-32 passed
+33 passed
 ```
 
 ## Signing utilities
@@ -155,6 +156,12 @@ Replay a ledger:
 satroot1 replay examples/events_floor1.json
 ```
 
+Replay an HMAC-signed ledger with verifier material:
+
+```bash
+satroot1 replay signed_events.json --scheme hmac-sha256 --secrets-json secrets.json
+```
+
 Sign a full demo ledger with the built-in demo signature mode:
 
 ```bash
@@ -165,6 +172,12 @@ Sign a ledger with shared-secret HMAC verification metadata:
 
 ```bash
 satroot1 sign-ledger examples/events_floor1.json --scheme hmac-sha256 --signer-key-map-json signer_keys.json --secrets-json secrets.json --include-state-hash --output signed_events.json
+```
+
+Replay an Ed25519-signed ledger with public keys:
+
+```bash
+satroot1 replay signed_events.json --scheme ed25519 --public-keys-json public_keys.json
 ```
 
 Sign a single event record:

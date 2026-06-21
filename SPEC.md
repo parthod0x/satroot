@@ -211,6 +211,8 @@ An optional `ed25519` reference path is also exposed when the `cryptography` pac
 
 The reference implementation also exposes helper functions and a small CLI for replaying ledgers plus signing single events or whole event arrays against those reference schemes.
 
+CLI replay may be configured against the same reference verification models, so signed ledgers can be validated end to end without dropping into the Python API.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

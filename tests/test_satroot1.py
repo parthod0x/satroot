@@ -434,3 +434,52 @@ def test_cli_sign_ledger_hmac_output(tmp_path):
     verifier = make_hmac_sha256_verifier({"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"})
     state = replay(signed_events, verifier=verifier)
     assert state.symbol == "FLOOR1"
+
+
+def test_cli_replay_hmac_signed_ledger(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    signer_key_map_path = tmp_path / "signers.json"
+    secrets_path = tmp_path / "secrets.json"
+    signed_path = tmp_path / "signed.json"
+
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    signer_key_map_path.write_text(
+        json.dumps({"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}),
+        encoding="utf-8",
+    )
+    secrets_path.write_text(
+        json.dumps({"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}),
+        encoding="utf-8",
+    )
+
+    sign_exit_code = main(
+        [
+            "sign-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--signer-key-map-json",
+            str(signer_key_map_path),
+            "--secrets-json",
+            str(secrets_path),
+            "--output",
+            str(signed_path),
+        ]
+    )
+    assert sign_exit_code == 0
+
+    replay_exit_code = main(
+        [
+            "replay",
+            str(signed_path),
+            "--scheme",
+            "hmac-sha256",
+            "--secrets-json",
+            str(secrets_path),
+        ]
+    )
+    assert replay_exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"symbol":"FLOOR1"' in captured.out
+    assert "state_hash=sha256:" in captured.out

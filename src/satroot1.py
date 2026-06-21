@@ -589,6 +589,13 @@ def _load_json_file(path: str) -> Any:
         return json.load(f)
 
 
+def _load_json_object_file(path: str, *, label: str) -> Dict[str, Any]:
+    data = _load_json_file(path)
+    if not isinstance(data, dict):
+        raise SatRootError(f"{label} must contain an object")
+    return data
+
+
 def _dump_json(data: Any) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
@@ -610,6 +617,10 @@ def build_cli_parser() -> Any:
 
     replay_parser = subparsers.add_parser("replay", help="Replay a SATROOT-1 JSON event file")
     replay_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
+    replay_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], default="demo")
+    replay_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 replay")
+    replay_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for replay")
+    replay_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for replay")
 
     sign_event_parser = subparsers.add_parser("sign-event", help="Sign a single SATROOT-1 event record")
     sign_event_parser.add_argument("event_json", help="Path to a JSON event object")
@@ -631,24 +642,41 @@ def build_cli_parser() -> Any:
     return parser
 
 
+def _verifier_from_args(args: Any, *, allow_private_keys_for_ed25519: bool = False) -> SignatureVerifier:
+    if args.scheme == "demo":
+        return demo_signature_verifier
+    if args.scheme == "hmac-sha256":
+        if not args.secrets_json:
+            raise SatRootError("--secrets-json is required for hmac-sha256")
+        secrets = _load_json_object_file(args.secrets_json, label="secrets-json")
+        return make_hmac_sha256_verifier(secrets)
+    if args.scheme == "ed25519":
+        public_keys_json = getattr(args, "public_keys_json", None)
+        if public_keys_json:
+            public_keys = _load_json_object_file(public_keys_json, label="public-keys-json")
+            return make_ed25519_verifier(public_keys)
+        if allow_private_keys_for_ed25519:
+            private_keys_json = getattr(args, "private_keys_json", None)
+            if not private_keys_json:
+                raise SatRootError("--public-keys-json or --private-keys-json is required for ed25519")
+            private_keys = _load_json_object_file(private_keys_json, label="private-keys-json")
+            public_keys = {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in private_keys.items()}
+            return make_ed25519_verifier(public_keys)
+        raise SatRootError("--public-keys-json is required for ed25519 replay")
+    raise SatRootError(f"unsupported scheme: {args.scheme}")
+
+
 def _signer_and_verifier_from_args(args: Any) -> tuple[Optional[SignerFunction], SignatureVerifier, Optional[Mapping[str, str]]]:
     if args.scheme == "demo":
         return None, demo_signature_verifier, None
     if args.scheme == "hmac-sha256":
-        if not args.secrets_json:
-            raise SatRootError("--secrets-json is required for hmac-sha256")
-        secrets = _load_json_file(args.secrets_json)
-        if not isinstance(secrets, dict):
-            raise SatRootError("secrets-json must contain an object")
-        return make_hmac_sha256_signer(secrets), make_hmac_sha256_verifier(secrets), secrets
+        secrets = _load_json_object_file(args.secrets_json, label="secrets-json")
+        return make_hmac_sha256_signer(secrets), _verifier_from_args(args), secrets
     if args.scheme == "ed25519":
         if not args.private_keys_json:
             raise SatRootError("--private-keys-json is required for ed25519")
-        private_keys = _load_json_file(args.private_keys_json)
-        if not isinstance(private_keys, dict):
-            raise SatRootError("private-keys-json must contain an object")
-        public_keys = {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in private_keys.items()}
-        return make_ed25519_signer(private_keys), make_ed25519_verifier(public_keys), private_keys
+        private_keys = _load_json_object_file(args.private_keys_json, label="private-keys-json")
+        return make_ed25519_signer(private_keys), _verifier_from_args(args, allow_private_keys_for_ed25519=True), private_keys
     raise SatRootError(f"unsupported scheme: {args.scheme}")
 
 
@@ -665,7 +693,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "replay":
         events = _load_json_file(args.events_json)
-        result = replay(events)
+        result = replay(events, verifier=_verifier_from_args(args))
         print(canonical_json(result.snapshot()))
         print("state_hash=" + result.state_hash())
         return 0
