@@ -278,6 +278,7 @@ def test_load_bundle_manifest_schema_supports_signed_ledger_bundles():
     schema = load_bundle_manifest_schema()
     assert schema["properties"]["bundle_type"]["const"] == "signed-ledger"
     assert "hmac-sha256" in schema["properties"]["scheme"]["enum"]
+    assert "verification_material_scope" in schema["properties"]
 
 
 def test_validate_instance_against_schema_accepts_demo_ledger():
@@ -575,6 +576,7 @@ def test_build_signed_ledger_bundle_manifest_summarizes_bundle():
     assert manifest["protocol"] == "SATROOT-1"
     assert manifest["bundle_type"] == "signed-ledger"
     assert manifest["scheme"] == "hmac-sha256"
+    assert manifest["verification_material_scope"] == "shared-secret"
     assert manifest["record_count"] == 4
     assert manifest["symbol"] == "FLOOR1"
     assert manifest["final_state_snapshot"] == bundle["final_state_snapshot"]
@@ -654,8 +656,38 @@ def test_verify_signed_ledger_bundle_accepts_hmac_bundle(tmp_path):
 
     summary = verify_signed_ledger_bundle(tmp_path)
     assert summary["scheme"] == "hmac-sha256"
+    assert summary["verification_material_scope"] == "shared-secret"
     assert summary["symbol"] == "FLOOR1"
     assert summary["annotated_verified"] is True
+
+
+def test_validate_instance_against_bundle_manifest_schema_accepts_public_only_ed25519_manifest():
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            bootstrap_signed_ledger_bundle(load_events(), scheme="ed25519")
+        return
+
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="ed25519")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "public_keys": "public_keys.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "public_keys": rendered_json_sha256(bundle["material"]["public_keys"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    assert manifest["verification_material_scope"] == "public-only"
+    count = validate_instance_against_schema(manifest, load_bundle_manifest_schema())
+    assert count == 1
 
 
 def test_verify_signed_ledger_bundle_rejects_manifest_mismatch(tmp_path):
@@ -1175,6 +1207,7 @@ def test_cli_bootstrap_signed_ledger_hmac_bundle(tmp_path, capsys):
     assert replay(annotated_events, verifier=verifier).symbol == "FLOOR1"
     assert annotated_events[0]["event_id"].startswith("sha256:")
     assert manifest["scheme"] == "hmac-sha256"
+    assert manifest["verification_material_scope"] == "shared-secret"
     assert manifest["files"]["signed_events"] == "signed_events.json"
     assert manifest["files"]["bundle_manifest"] == "bundle_manifest.json"
     assert manifest["final_state_hash"].startswith("sha256:")
@@ -1216,6 +1249,70 @@ def test_cli_bootstrap_signed_ledger_ed25519_unavailable(tmp_path):
     assert not output_dir.exists()
 
 
+def test_cli_bootstrap_signed_ledger_ed25519_verifier_only(tmp_path):
+    events_path = tmp_path / "events.json"
+    output_dir = tmp_path / "bundle"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(
+                [
+                    "bootstrap-signed-ledger",
+                    str(events_path),
+                    "--scheme",
+                    "ed25519",
+                    "--output-dir",
+                    str(output_dir),
+                    "--verifier-only",
+                ]
+            )
+        return
+
+    exit_code = main(
+        [
+            "bootstrap-signed-ledger",
+            str(events_path),
+            "--scheme",
+            "ed25519",
+            "--output-dir",
+            str(output_dir),
+            "--verifier-only",
+        ]
+    )
+    assert exit_code == 0
+    assert not (output_dir / "private_keys.json").exists()
+    assert (output_dir / "public_keys.json").exists()
+
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["verification_material_scope"] == "public-only"
+    assert "private_keys" not in manifest["files"]
+    assert "private_keys" not in manifest["file_hashes"]
+
+    verify_exit_code = main(["verify-bundle", str(output_dir)])
+    assert verify_exit_code == 0
+
+
+def test_cli_bootstrap_signed_ledger_rejects_verifier_only_hmac(tmp_path):
+    events_path = tmp_path / "events.json"
+    output_dir = tmp_path / "bundle"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    with pytest.raises(SatRootError):
+        main(
+            [
+                "bootstrap-signed-ledger",
+                str(events_path),
+                "--scheme",
+                "hmac-sha256",
+                "--output-dir",
+                str(output_dir),
+                "--verifier-only",
+            ]
+        )
+
+
 def test_cli_verify_bundle_hmac_bundle(tmp_path, capsys):
     events_path = tmp_path / "events.json"
     output_dir = tmp_path / "bundle"
@@ -1239,6 +1336,7 @@ def test_cli_verify_bundle_hmac_bundle(tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert '"scheme":"hmac-sha256"' in captured.out
+    assert '"verification_material_scope":"shared-secret"' in captured.out
     assert '"symbol":"FLOOR1"' in captured.out
     assert '"annotated_verified":true' in captured.out
 

@@ -66,7 +66,7 @@ The v0.1 kernel defines:
 - Ed25519 key-derivation helpers for producing replay-ready public key maps from private key maps,
 - one-shot Ed25519 workflow bootstrapping for signer maps plus private/public key material,
 - one-shot signed-ledger bundle generation for HMAC and Ed25519 workflows,
-- machine-readable signed bundle manifests describing artifacts, per-file hashes, and the full final replay snapshot,
+- machine-readable signed bundle manifests describing artifacts, verifier-material scope, per-file hashes, and the full final replay snapshot,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -146,7 +146,7 @@ python -m pytest
 Expected result:
 
 ```text
-75 passed
+78 passed
 ```
 
 ## Signing utilities
@@ -224,6 +224,12 @@ satroot1 bootstrap-signed-ledger examples/events_floor1.json --scheme hmac-sha25
 ```
 
 That bundle now includes `bundle_manifest.json` alongside the emitted signer/key material and ledger files, with per-file SHA-256 hashes for the exported artifacts and the full final SATROOT replay snapshot for downstream inspection.
+
+For Ed25519 workflows, you can also emit a verifier-only bundle that excludes `private_keys.json` and records `verification_material_scope="public-only"` in the manifest:
+
+```bash
+satroot1 bootstrap-signed-ledger examples/events_floor1.json --scheme ed25519 --output-dir signed_ed25519_bundle --verifier-only
+```
 
 Verify a signed bundle directory end to end:
 

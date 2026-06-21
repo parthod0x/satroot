@@ -8,6 +8,7 @@
     "version",
     "bundle_type",
     "scheme",
+    "verification_material_scope",
     "record_count",
     "root_id",
     "symbol",
@@ -23,6 +24,7 @@
     "version": {"const": "0.1"},
     "bundle_type": {"const": "signed-ledger"},
     "scheme": {"enum": ["hmac-sha256", "ed25519"]},
+    "verification_material_scope": {"enum": ["shared-secret", "public-only", "private-and-public"]},
     "record_count": {"type": "integer", "minimum": 1},
     "root_id": {"type": "string", "pattern": "^[a-fA-F0-9]{64}:[0-9]+$"},
     "symbol": {"type": "string", "pattern": "^[A-Z0-9]{1,16}$"},
@@ -127,6 +129,7 @@
       },
       "then": {
         "properties": {
+          "verification_material_scope": {"const": "shared-secret"},
           "files": {
             "required": ["secrets"]
           },
@@ -143,11 +146,28 @@
       },
       "then": {
         "properties": {
+          "verification_material_scope": {"enum": ["public-only", "private-and-public"]},
           "files": {
-            "required": ["private_keys", "public_keys"]
+            "required": ["public_keys"]
           },
           "file_hashes": {
-            "required": ["private_keys", "public_keys"]
+            "required": ["public_keys"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"verification_material_scope": {"const": "private-and-public"}},
+        "required": ["verification_material_scope"]
+      },
+      "then": {
+        "properties": {
+          "files": {
+            "required": ["private_keys"]
+          },
+          "file_hashes": {
+            "required": ["private_keys"]
           }
         }
       }

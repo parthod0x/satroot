@@ -396,11 +396,15 @@ def build_signed_ledger_bundle_manifest(
     output_file_hashes: Mapping[str, str],
 ) -> Dict[str, Any]:
     final_snapshot = bundle["final_state_snapshot"]
+    verification_material_scope = "shared-secret"
+    if bundle["scheme"] == "ed25519":
+        verification_material_scope = "private-and-public" if "private_keys" in output_files else "public-only"
     return {
         "protocol": "SATROOT-1",
         "version": "0.1",
         "bundle_type": "signed-ledger",
         "scheme": bundle["scheme"],
+        "verification_material_scope": verification_material_scope,
         "record_count": len(bundle["signed_events"]),
         "root_id": final_snapshot["root_id"],
         "symbol": final_snapshot["symbol"],
@@ -489,6 +493,7 @@ def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
 
     return {
         "scheme": scheme,
+        "verification_material_scope": manifest.get("verification_material_scope"),
         "record_count": len(signed_events),
         "root_id": final_snapshot["root_id"],
         "symbol": final_snapshot["symbol"],
@@ -970,6 +975,7 @@ def build_cli_parser() -> Any:
     bootstrap_signed_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
     bootstrap_signed_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during the signing step")
     bootstrap_signed_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_signed_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
 
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
@@ -1121,6 +1127,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-signed-ledger":
+        if args.verifier_only and args.scheme != "ed25519":
+            raise SatRootError("--verifier-only is only supported for ed25519 bundles")
         events = _load_json_file(args.events_json)
         if not isinstance(events, list):
             raise SatRootError("events_json must contain a JSON array")
@@ -1146,10 +1154,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_files["secrets"] = "secrets.json"
             output_payloads["secrets"] = bundle["material"]["shared_secrets"]
         elif args.scheme == "ed25519":
-            output_files["private_keys"] = "private_keys.json"
             output_files["public_keys"] = "public_keys.json"
-            output_payloads["private_keys"] = bundle["material"]["private_keys"]
             output_payloads["public_keys"] = bundle["material"]["public_keys"]
+            if not args.verifier_only:
+                output_files["private_keys"] = "private_keys.json"
+                output_payloads["private_keys"] = bundle["material"]["private_keys"]
         if bundle["annotated_events"] is not None:
             output_files["annotated_signed_events"] = "annotated_signed_events.json"
             output_payloads["annotated_signed_events"] = bundle["annotated_events"]
