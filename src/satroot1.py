@@ -417,14 +417,42 @@ def build_signed_ledger_bundle_manifest(
     }
 
 
-def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
-    bundle_path = Path(bundle_dir)
+def _load_validated_bundle_manifest(bundle_path: Path) -> Dict[str, Any]:
     manifest_path = bundle_path / "bundle_manifest.json"
     if not manifest_path.exists():
-        raise SatRootError("bundle_manifest.json is required for bundle verification")
-
+        raise SatRootError("bundle_manifest.json is required for bundle operations")
     manifest = _load_json_object_file(str(manifest_path), label="bundle_manifest")
     validate_instance_against_schema(manifest, load_bundle_manifest_schema())
+    return manifest
+
+
+def summarize_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
+    bundle_path = Path(bundle_dir)
+    manifest = _load_validated_bundle_manifest(bundle_path)
+    final_snapshot = manifest.get("final_state_snapshot")
+    if not isinstance(final_snapshot, dict):
+        raise SatRootError("bundle manifest final_state_snapshot must be an object")
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise SatRootError("bundle manifest files must be an object")
+
+    return {
+        "scheme": manifest.get("scheme"),
+        "verification_material_scope": manifest.get("verification_material_scope"),
+        "record_count": manifest.get("record_count"),
+        "root_id": manifest.get("root_id"),
+        "symbol": manifest.get("symbol"),
+        "final_event_id": manifest.get("final_event_id"),
+        "final_state_hash": manifest.get("final_state_hash"),
+        "annotated_output": bool(manifest.get("annotated_output")),
+        "final_state_snapshot": copy.deepcopy(final_snapshot),
+        "files": copy.deepcopy(files),
+    }
+
+
+def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
+    bundle_path = Path(bundle_dir)
+    manifest = _load_validated_bundle_manifest(bundle_path)
 
     scheme = manifest.get("scheme")
 
@@ -977,6 +1005,9 @@ def build_cli_parser() -> Any:
     bootstrap_signed_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
     bootstrap_signed_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
 
+    bundle_summary_parser = subparsers.add_parser("bundle-summary", help="Read bundle_manifest.json and print a manifest-level bundle summary without replaying")
+    bundle_summary_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
+
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
@@ -1169,6 +1200,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for key, data in output_payloads.items():
             _write_json_file(output_dir / output_files[key], data)
         print(f"wrote signed SATROOT-1 {args.scheme} bundle to {output_dir}")
+        return 0
+
+    if args.command == "bundle-summary":
+        summary = summarize_signed_ledger_bundle(args.bundle_dir)
+        print(canonical_json(summary))
         return 0
 
     if args.command == "verify-bundle":

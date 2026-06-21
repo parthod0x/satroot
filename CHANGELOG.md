@@ -28,6 +28,7 @@
 - Adds a dedicated signed bundle manifest schema plus CLI validation support, including per-file bundle hashes.
 - Extends signed bundle manifests with full final replay snapshots and verifies them during bundle validation.
 - Adds verifier-only Ed25519 bundle export with explicit manifest scope metadata.
+- Adds a manifest-only `bundle-summary` CLI path for fast bundle inspection without replay.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.

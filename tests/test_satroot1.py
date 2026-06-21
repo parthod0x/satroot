@@ -31,6 +31,7 @@ from satroot1 import (
     sha256_hex,
     sign_ledger_events,
     signing_payload,
+    summarize_signed_ledger_bundle,
     validate_instance_against_schema,
     verify_signed_ledger_bundle,
 )
@@ -659,6 +660,34 @@ def test_verify_signed_ledger_bundle_accepts_hmac_bundle(tmp_path):
     assert summary["verification_material_scope"] == "shared-secret"
     assert summary["symbol"] == "FLOOR1"
     assert summary["annotated_verified"] is True
+
+
+def test_summarize_signed_ledger_bundle_reads_manifest_only(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(tmp_path / "bundle_manifest.json", manifest)
+
+    summary = summarize_signed_ledger_bundle(tmp_path)
+    assert summary["scheme"] == "hmac-sha256"
+    assert summary["verification_material_scope"] == "shared-secret"
+    assert summary["annotated_output"] is True
+    assert summary["final_state_snapshot"] == bundle["final_state_snapshot"]
+    assert summary["files"]["signed_events"] == "signed_events.json"
 
 
 def test_validate_instance_against_bundle_manifest_schema_accepts_public_only_ed25519_manifest():
@@ -1339,6 +1368,36 @@ def test_cli_verify_bundle_hmac_bundle(tmp_path, capsys):
     assert '"verification_material_scope":"shared-secret"' in captured.out
     assert '"symbol":"FLOOR1"' in captured.out
     assert '"annotated_verified":true' in captured.out
+
+
+def test_cli_bundle_summary_reads_manifest_without_replay(tmp_path, capsys):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(tmp_path / "bundle_manifest.json", manifest)
+
+    exit_code = main(["bundle-summary", str(tmp_path)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"scheme":"hmac-sha256"' in captured.out
+    assert '"verification_material_scope":"shared-secret"' in captured.out
+    assert '"annotated_output":true' in captured.out
+    assert '"symbol":"FLOOR1"' in captured.out
 
 
 def test_cli_validate_bundle_manifest(tmp_path, capsys):

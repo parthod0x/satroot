@@ -237,6 +237,8 @@ The reference implementation also exposes bundle-verification helpers so a signe
 
 The signed bundle manifest format is also described by its own JSON Schema so bundle producers and consumers can validate the exported metadata contract independently of replay.
 
+When replay is unnecessary, the reference CLI may also expose manifest-only inspection helpers that summarize bundle metadata and the embedded final replay snapshot directly from `bundle_manifest.json`.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.
