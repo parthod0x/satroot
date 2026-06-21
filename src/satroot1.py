@@ -295,6 +295,22 @@ def build_signer_key_map(
     return signer_key_map
 
 
+def bootstrap_ed25519_workflow(
+    events: Sequence[Dict[str, Any]],
+    *,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+) -> Dict[str, Dict[str, str]]:
+    signer_key_map = build_signer_key_map(events, key_prefix=key_prefix, key_suffix=key_suffix)
+    private_keys = generate_ed25519_private_keys(signer_key_map.values())
+    public_keys = derive_ed25519_public_keys(private_keys)
+    return {
+        "signer_key_map": signer_key_map,
+        "private_keys": private_keys,
+        "public_keys": public_keys,
+    }
+
+
 def require_fields(event: Dict[str, Any], fields: Iterable[str]) -> None:
     missing = [field for field in fields if field not in event]
     if missing:
@@ -685,6 +701,10 @@ def _write_output(data: Any, output_path: Optional[str]) -> None:
         sys.stdout.write(rendered)
 
 
+def _write_json_file(path: Path, data: Any) -> None:
+    path.write_text(_dump_json(data), encoding="utf-8")
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -739,6 +759,12 @@ def build_cli_parser() -> Any:
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
     generate_keys_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id")
     generate_keys_parser.add_argument("--output", help="Optional output path")
+
+    bootstrap_ed25519_parser = subparsers.add_parser("bootstrap-ed25519-workflow", help="Generate signer map plus Ed25519 private and public key material for a SATROOT-1 ledger")
+    bootstrap_ed25519_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
+    bootstrap_ed25519_parser.add_argument("--output-dir", required=True, help="Directory where signer_key_map.json, private_keys.json, and public_keys.json will be written")
+    bootstrap_ed25519_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_ed25519_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
 
     derive_keys_parser = subparsers.add_parser("derive-ed25519-public-keys", help="Derive Ed25519 public keys from private key hex mappings")
     derive_keys_parser.add_argument("private_keys_json", help="Path to JSON mapping key_id -> Ed25519 private key hex")
@@ -843,6 +869,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             raise SatRootError("events_json must contain a JSON array")
         signer_key_map = build_signer_key_map(events, key_prefix=args.key_prefix, key_suffix=args.key_suffix)
         _write_output(signer_key_map, args.output)
+        return 0
+
+    if args.command == "bootstrap-ed25519-workflow":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        material = bootstrap_ed25519_workflow(events, key_prefix=args.key_prefix, key_suffix=args.key_suffix)
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        _write_json_file(output_dir / "signer_key_map.json", material["signer_key_map"])
+        _write_json_file(output_dir / "private_keys.json", material["private_keys"])
+        _write_json_file(output_dir / "public_keys.json", material["public_keys"])
+        print(f"wrote Ed25519 workflow files to {output_dir}")
         return 0
 
     if args.command == "generate-ed25519-private-keys":

@@ -6,6 +6,7 @@ import pytest
 
 from satroot1 import (
     annotate_ledger_events,
+    bootstrap_ed25519_workflow,
     build_signer_key_map,
     derive_ed25519_public_keys,
     generate_ed25519_private_keys,
@@ -488,6 +489,20 @@ def test_build_signer_key_map_rejects_missing_signer():
         build_signer_key_map(events)
 
 
+def test_bootstrap_ed25519_workflow_when_available():
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            bootstrap_ed25519_workflow(load_events())
+        return
+
+    material = bootstrap_ed25519_workflow(load_events())
+    assert material["signer_key_map"] == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    assert set(material["private_keys"]) == {"issuer-key", "alice-key", "bob-key"}
+    assert set(material["public_keys"]) == {"issuer-key", "alice-key", "bob-key"}
+    assert material["public_keys"]["issuer-key"] == ed25519_public_key_hex(material["private_keys"]["issuer-key"])
+
+
 def test_sign_ledger_events_demo_helper():
     events = load_events()
     signed = sign_ledger_events(events, scheme="demo")
@@ -770,3 +785,27 @@ def test_cli_init_signer_key_map_with_prefix_and_suffix(tmp_path):
     assert signer_key_map["issuer"] == "satroot-issuer-ed25519"
     assert signer_key_map["alice"] == "satroot-alice-ed25519"
     assert signer_key_map["bob"] == "satroot-bob-ed25519"
+
+
+def test_cli_bootstrap_ed25519_workflow(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    output_dir = tmp_path / "bootstrap"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(["bootstrap-ed25519-workflow", str(events_path), "--output-dir", str(output_dir)])
+        assert not output_dir.exists()
+        return
+
+    exit_code = main(["bootstrap-ed25519-workflow", str(events_path), "--output-dir", str(output_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote Ed25519 workflow files to" in captured.out
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    private_keys = json.loads((output_dir / "private_keys.json").read_text(encoding="utf-8"))
+    public_keys = json.loads((output_dir / "public_keys.json").read_text(encoding="utf-8"))
+    assert signer_key_map == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    assert public_keys["issuer-key"] == ed25519_public_key_hex(private_keys["issuer-key"])
