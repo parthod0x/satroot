@@ -274,6 +274,19 @@ def generate_ed25519_private_keys(key_ids: Iterable[str]) -> Dict[str, str]:
     return generated
 
 
+def generate_hmac_shared_secrets(key_ids: Iterable[str]) -> Dict[str, str]:
+    generated: Dict[str, str] = {}
+    for key_id in key_ids:
+        if not isinstance(key_id, str) or not key_id.strip():
+            raise SatRootError(f"invalid key_id: {key_id!r}")
+        if key_id in generated:
+            raise SatRootError(f"duplicate key_id: {key_id}")
+        generated[key_id] = secrets.token_hex(32)
+    if not generated:
+        raise SatRootError("at least one key_id is required")
+    return generated
+
+
 def build_signer_key_map(
     events: Sequence[Dict[str, Any]],
     *,
@@ -308,6 +321,20 @@ def bootstrap_ed25519_workflow(
         "signer_key_map": signer_key_map,
         "private_keys": private_keys,
         "public_keys": public_keys,
+    }
+
+
+def bootstrap_hmac_workflow(
+    events: Sequence[Dict[str, Any]],
+    *,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+) -> Dict[str, Dict[str, str]]:
+    signer_key_map = build_signer_key_map(events, key_prefix=key_prefix, key_suffix=key_suffix)
+    shared_secrets = generate_hmac_shared_secrets(signer_key_map.values())
+    return {
+        "signer_key_map": signer_key_map,
+        "shared_secrets": shared_secrets,
     }
 
 
@@ -755,6 +782,17 @@ def build_cli_parser() -> Any:
     signer_map_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
     signer_map_parser.add_argument("--output", help="Optional output path")
 
+    generate_hmac_parser = subparsers.add_parser("generate-hmac-secrets", help="Generate HMAC shared-secret mappings")
+    generate_hmac_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
+    generate_hmac_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id")
+    generate_hmac_parser.add_argument("--output", help="Optional output path")
+
+    bootstrap_hmac_parser = subparsers.add_parser("bootstrap-hmac-workflow", help="Generate signer map plus HMAC shared secrets for a SATROOT-1 ledger")
+    bootstrap_hmac_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
+    bootstrap_hmac_parser.add_argument("--output-dir", required=True, help="Directory where signer_key_map.json and secrets.json will be written")
+    bootstrap_hmac_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_hmac_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+
     generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
     generate_keys_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id")
@@ -869,6 +907,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             raise SatRootError("events_json must contain a JSON array")
         signer_key_map = build_signer_key_map(events, key_prefix=args.key_prefix, key_suffix=args.key_suffix)
         _write_output(signer_key_map, args.output)
+        return 0
+
+    if args.command == "generate-hmac-secrets":
+        key_ids = list(args.key_ids or [])
+        if args.signer_key_map_json:
+            signer_key_map = _load_json_object_file(args.signer_key_map_json, label="signer-key-map-json")
+            for key_id in signer_key_map.values():
+                if key_id not in key_ids:
+                    key_ids.append(key_id)
+        shared_secrets = generate_hmac_shared_secrets(key_ids)
+        _write_output(shared_secrets, args.output)
+        return 0
+
+    if args.command == "bootstrap-hmac-workflow":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        material = bootstrap_hmac_workflow(events, key_prefix=args.key_prefix, key_suffix=args.key_suffix)
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        _write_json_file(output_dir / "signer_key_map.json", material["signer_key_map"])
+        _write_json_file(output_dir / "secrets.json", material["shared_secrets"])
+        print(f"wrote HMAC workflow files to {output_dir}")
         return 0
 
     if args.command == "bootstrap-ed25519-workflow":

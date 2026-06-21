@@ -59,7 +59,9 @@ The v0.1 kernel defines:
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
 - commitment-aware CLI annotation for adding deterministic `event_id` and `state_hash` fields,
 - signer-map bootstrapping helpers for deriving `signer -> key_id` mappings from ledgers,
+- HMAC secret generation helpers for controlled shared-secret workflows,
 - Ed25519 private-key generation helpers for bootstrapping SATROOT signing workflows,
+- one-shot HMAC workflow bootstrapping for signer maps plus shared-secret material,
 - Ed25519 key-derivation helpers for producing replay-ready public key maps from private key maps,
 - one-shot Ed25519 workflow bootstrapping for signer maps plus private/public key material,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -139,7 +141,7 @@ python -m pytest
 Expected result:
 
 ```text
-55 passed
+61 passed
 ```
 
 ## Signing utilities
@@ -204,6 +206,12 @@ Bootstrap the full Ed25519 workflow from a ledger in one step:
 satroot1 bootstrap-ed25519-workflow examples/events_floor1.json --output-dir ed25519_bootstrap
 ```
 
+Bootstrap the full HMAC workflow from a ledger in one step:
+
+```bash
+satroot1 bootstrap-hmac-workflow examples/events_floor1.json --output-dir hmac_bootstrap
+```
+
 Sign a full demo ledger with the built-in demo signature mode:
 
 ```bash
@@ -226,6 +234,12 @@ Generate an Ed25519 private-key map for SATROOT key IDs:
 
 ```bash
 satroot1 generate-ed25519-private-keys --key-id issuer-key --key-id alice-key --output private_keys.json
+```
+
+Generate HMAC shared secrets for SATROOT key IDs:
+
+```bash
+satroot1 generate-hmac-secrets --key-id issuer-key --key-id alice-key --output secrets.json
 ```
 
 Derive an Ed25519 public-key map from SATROOT private keys:

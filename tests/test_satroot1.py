@@ -7,9 +7,11 @@ import pytest
 from satroot1 import (
     annotate_ledger_events,
     bootstrap_ed25519_workflow,
+    bootstrap_hmac_workflow,
     build_signer_key_map,
     derive_ed25519_public_keys,
     generate_ed25519_private_keys,
+    generate_hmac_shared_secrets,
     SatRootError,
     ed25519_available,
     ed25519_public_key_hex,
@@ -503,6 +505,28 @@ def test_bootstrap_ed25519_workflow_when_available():
     assert material["public_keys"]["issuer-key"] == ed25519_public_key_hex(material["private_keys"]["issuer-key"])
 
 
+def test_generate_hmac_shared_secrets_creates_hex_map():
+    shared_secrets = generate_hmac_shared_secrets(["issuer-key", "alice-key"])
+    assert set(shared_secrets) == {"issuer-key", "alice-key"}
+    assert len(shared_secrets["issuer-key"]) == 64
+    assert len(shared_secrets["alice-key"]) == 64
+    assert shared_secrets["issuer-key"] != shared_secrets["alice-key"]
+    int(shared_secrets["issuer-key"], 16)
+    int(shared_secrets["alice-key"], 16)
+
+
+def test_generate_hmac_shared_secrets_rejects_duplicate_key_ids():
+    with pytest.raises(SatRootError):
+        generate_hmac_shared_secrets(["issuer-key", "issuer-key"])
+
+
+def test_bootstrap_hmac_workflow_from_ledger():
+    material = bootstrap_hmac_workflow(load_events())
+    assert material["signer_key_map"] == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    assert set(material["shared_secrets"]) == {"issuer-key", "alice-key", "bob-key"}
+    assert len(material["shared_secrets"]["issuer-key"]) == 64
+
+
 def test_sign_ledger_events_demo_helper():
     events = load_events()
     signed = sign_ledger_events(events, scheme="demo")
@@ -728,6 +752,50 @@ def test_cli_generate_ed25519_private_keys(tmp_path):
     assert len(private_keys["alice-key"]) == 64
 
 
+def test_cli_generate_hmac_secrets(tmp_path):
+    output_path = tmp_path / "secrets.json"
+    exit_code = main(
+        [
+            "generate-hmac-secrets",
+            "--key-id",
+            "issuer-key",
+            "--key-id",
+            "alice-key",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    shared_secrets = json.loads(output_path.read_text(encoding="utf-8"))
+    assert set(shared_secrets) == {"issuer-key", "alice-key"}
+    assert len(shared_secrets["issuer-key"]) == 64
+    assert len(shared_secrets["alice-key"]) == 64
+
+
+def test_cli_generate_hmac_secrets_from_signer_map(tmp_path):
+    signer_key_map_path = tmp_path / "signers.json"
+    output_path = tmp_path / "secrets.json"
+    signer_key_map_path.write_text(
+        json.dumps({"issuer": "issuer-key", "alice": "alice-key", "bob": "alice-key"}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "generate-hmac-secrets",
+            "--signer-key-map-json",
+            str(signer_key_map_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    shared_secrets = json.loads(output_path.read_text(encoding="utf-8"))
+    assert set(shared_secrets) == {"issuer-key", "alice-key"}
+
+
 def test_cli_generate_ed25519_private_keys_from_signer_map(tmp_path):
     signer_key_map_path = tmp_path / "signers.json"
     output_path = tmp_path / "private_keys.json"
@@ -809,3 +877,39 @@ def test_cli_bootstrap_ed25519_workflow(tmp_path, capsys):
     public_keys = json.loads((output_dir / "public_keys.json").read_text(encoding="utf-8"))
     assert signer_key_map == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
     assert public_keys["issuer-key"] == ed25519_public_key_hex(private_keys["issuer-key"])
+
+
+def test_cli_bootstrap_hmac_workflow_and_sign_replay(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    output_dir = tmp_path / "bootstrap"
+    signed_path = tmp_path / "signed.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    bootstrap_exit_code = main(["bootstrap-hmac-workflow", str(events_path), "--output-dir", str(output_dir)])
+    assert bootstrap_exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote HMAC workflow files to" in captured.out
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    shared_secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
+    assert signer_key_map == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+
+    sign_exit_code = main(
+        [
+            "sign-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--signer-key-map-json",
+            str(output_dir / "signer_key_map.json"),
+            "--secrets-json",
+            str(output_dir / "secrets.json"),
+            "--output",
+            str(signed_path),
+        ]
+    )
+    assert sign_exit_code == 0
+
+    signed_events = json.loads(signed_path.read_text(encoding="utf-8"))
+    verifier = make_hmac_sha256_verifier(shared_secrets)
+    assert replay(signed_events, verifier=verifier).symbol == "FLOOR1"

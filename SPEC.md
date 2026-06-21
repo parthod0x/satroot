@@ -225,6 +225,8 @@ For multi-signer ledgers, the reference implementation also exposes signer-map b
 
 For convenience workflows, those pieces can also be composed into a one-shot Ed25519 bootstrap path that emits signer maps plus private/public key material for a ledger without additional glue code.
 
+The same pattern is exposed for controlled shared-secret deployments, where signer maps and HMAC verifier material can be bootstrapped directly from a ledger for reference and test workflows.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.
