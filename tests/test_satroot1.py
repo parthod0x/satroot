@@ -6,6 +6,7 @@ import pytest
 
 from satroot1 import (
     annotate_ledger_events,
+    derive_ed25519_public_keys,
     SatRootError,
     ed25519_available,
     ed25519_public_key_hex,
@@ -385,6 +386,8 @@ def test_ed25519_availability_or_sign_verify_roundtrip():
         assert ed25519_available() is False
         with pytest.raises(SatRootError):
             ed25519_sign("payload", "00" * 32)
+        with pytest.raises(SatRootError):
+            derive_ed25519_public_keys({"issuer-key": "00" * 32})
         return
 
     secrets = {
@@ -435,6 +438,18 @@ def test_ed25519_verifier_rejects_wrong_key_when_available():
     verifier = make_ed25519_verifier(wrong_public_keys)
     with pytest.raises(SatRootError):
         replay(events, verifier=verifier)
+
+
+def test_derive_ed25519_public_keys_when_available():
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            derive_ed25519_public_keys({"issuer-key": "00" * 32})
+        return
+
+    public_keys = derive_ed25519_public_keys({"issuer-key": "11" * 32, "alice-key": "22" * 32})
+    assert public_keys["issuer-key"] == ed25519_public_key_hex("11" * 32)
+    assert public_keys["alice-key"] == ed25519_public_key_hex("22" * 32)
 
 
 def test_sign_ledger_events_demo_helper():
@@ -620,3 +635,22 @@ def test_cli_annotate_hmac_signed_ledger(tmp_path):
     verifier = make_hmac_sha256_verifier({"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"})
     assert annotated_events[-1]["state_hash"].startswith("sha256:")
     assert replay(annotated_events, verifier=verifier).symbol == "FLOOR1"
+
+
+def test_cli_derive_ed25519_public_keys(tmp_path):
+    private_keys_path = tmp_path / "private_keys.json"
+    output_path = tmp_path / "public_keys.json"
+    private_keys_path.write_text(json.dumps({"issuer-key": "11" * 32, "alice-key": "22" * 32}), encoding="utf-8")
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(["derive-ed25519-public-keys", str(private_keys_path), "--output", str(output_path)])
+        return
+
+    exit_code = main(["derive-ed25519-public-keys", str(private_keys_path), "--output", str(output_path)])
+    assert exit_code == 0
+
+    public_keys = json.loads(output_path.read_text(encoding="utf-8"))
+    assert public_keys["issuer-key"] == ed25519_public_key_hex("11" * 32)
+    assert public_keys["alice-key"] == ed25519_public_key_hex("22" * 32)

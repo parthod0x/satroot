@@ -17,6 +17,7 @@
 - Extends CLI replay so HMAC- and Ed25519-signed ledgers can be verified from the command line.
 - Adds `satroot1 validate` plus optional `validation` extras for JSON Schema checks against SATROOT-1 records.
 - Adds `annotate-ledger` helpers and CLI support for deterministic `event_id` and `state_hash` attachment.
+- Adds Ed25519 public-key derivation helpers and CLI support for producing verifier key maps from private key maps.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.

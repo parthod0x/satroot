@@ -256,6 +256,10 @@ def make_ed25519_signer(private_keys: Mapping[str, str]) -> SignerFunction:
     return signer
 
 
+def derive_ed25519_public_keys(private_keys: Mapping[str, str]) -> Dict[str, str]:
+    return {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in private_keys.items()}
+
+
 def require_fields(event: Dict[str, Any], fields: Iterable[str]) -> None:
     missing = [field for field in fields if field not in event]
     if missing:
@@ -690,6 +694,10 @@ def build_cli_parser() -> Any:
     validate_parser.add_argument("input_json", help="Path to a JSON object or array of SATROOT-1 records")
     validate_parser.add_argument("--schema-json", help="Optional path to a JSON Schema file")
 
+    derive_keys_parser = subparsers.add_parser("derive-ed25519-public-keys", help="Derive Ed25519 public keys from private key hex mappings")
+    derive_keys_parser.add_argument("private_keys_json", help="Path to JSON mapping key_id -> Ed25519 private key hex")
+    derive_keys_parser.add_argument("--output", help="Optional output path")
+
     annotate_parser = subparsers.add_parser("annotate-ledger", help="Add event_id and state_hash commitments to a SATROOT-1 ledger")
     annotate_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
     annotate_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], default="demo")
@@ -781,6 +789,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_protocol_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(instance, schema)
         print(f"valid SATROOT-1 JSON: {count} record(s)")
+        return 0
+
+    if args.command == "derive-ed25519-public-keys":
+        private_keys = _load_json_object_file(args.private_keys_json, label="private-keys-json")
+        public_keys = derive_ed25519_public_keys(private_keys)
+        _write_output(public_keys, args.output)
         return 0
 
     if args.command == "annotate-ledger":

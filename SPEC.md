@@ -217,6 +217,8 @@ The reference implementation also exposes schema validation helpers and a CLI va
 
 It also exposes ledger-annotation helpers so deterministic `event_id` and `state_hash` commitments can be attached to an already valid ledger without changing the signed payload model.
 
+For Ed25519 workflows, the reference implementation also exposes public-key derivation helpers so replay-ready verifier key maps can be produced from private-key maps without custom glue code.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

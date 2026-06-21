@@ -58,6 +58,7 @@ The v0.1 kernel defines:
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
 - commitment-aware CLI annotation for adding deterministic `event_id` and `state_hash` fields,
+- Ed25519 key-derivation helpers for producing replay-ready public key maps from private key maps,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -135,7 +136,7 @@ python -m pytest
 Expected result:
 
 ```text
-42 passed
+44 passed
 ```
 
 ## Signing utilities
@@ -204,6 +205,12 @@ Replay an Ed25519-signed ledger with public keys:
 
 ```bash
 satroot1 replay signed_events.json --scheme ed25519 --public-keys-json public_keys.json
+```
+
+Derive an Ed25519 public-key map from SATROOT private keys:
+
+```bash
+satroot1 derive-ed25519-public-keys private_keys.json --output public_keys.json
 ```
 
 Annotate a signed HMAC ledger without changing its signed payload:
