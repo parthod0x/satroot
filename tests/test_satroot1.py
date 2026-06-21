@@ -20,6 +20,7 @@ from satroot1 import (
     ed25519_sign,
     event_id,
     hmac_sha256_sign,
+    load_bundle_manifest_schema,
     load_protocol_schema,
     load_profile_registry,
     main,
@@ -265,6 +266,12 @@ def test_profile_registry_contains_supported_profiles():
 def test_load_protocol_schema_supports_rotate_authority():
     schema = load_protocol_schema()
     assert "rotate-authority" in schema["properties"]["action"]["enum"]
+
+
+def test_load_bundle_manifest_schema_supports_signed_ledger_bundles():
+    schema = load_bundle_manifest_schema()
+    assert schema["properties"]["bundle_type"]["const"] == "signed-ledger"
+    assert "hmac-sha256" in schema["properties"]["scheme"]["enum"]
 
 
 def test_validate_instance_against_schema_accepts_demo_ledger():
@@ -560,6 +567,39 @@ def test_build_signed_ledger_bundle_manifest_summarizes_bundle():
     assert manifest["symbol"] == "FLOOR1"
     assert manifest["files"]["bundle_manifest"] == "bundle_manifest.json"
     assert manifest["final_state_hash"].startswith("sha256:")
+
+
+def test_validate_instance_against_bundle_manifest_schema_accepts_generated_manifest():
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+    )
+    count = validate_instance_against_schema(manifest, load_bundle_manifest_schema())
+    assert count == 1
+
+
+def test_validate_instance_against_bundle_manifest_schema_rejects_bad_scheme():
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+    )
+    manifest["scheme"] = "demo"
+    with pytest.raises(SatRootError):
+        validate_instance_against_schema(manifest, load_bundle_manifest_schema())
 
 
 def test_verify_signed_ledger_bundle_accepts_hmac_bundle(tmp_path):
@@ -1104,3 +1144,25 @@ def test_cli_verify_bundle_hmac_bundle(tmp_path, capsys):
     assert '"scheme":"hmac-sha256"' in captured.out
     assert '"symbol":"FLOOR1"' in captured.out
     assert '"annotated_verified":true' in captured.out
+
+
+def test_cli_validate_bundle_manifest(tmp_path, capsys):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+    )
+    manifest_path = tmp_path / "bundle_manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    exit_code = main(["validate-bundle-manifest", str(manifest_path)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "valid SATROOT-1 bundle manifest: 1 record(s)" in captured.out

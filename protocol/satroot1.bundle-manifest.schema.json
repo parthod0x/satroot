@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/satroot1.bundle-manifest.schema.json",
+  "title": "SATROOT-1 Signed Bundle Manifest",
+  "type": "object",
+  "required": [
+    "protocol",
+    "version",
+    "bundle_type",
+    "scheme",
+    "record_count",
+    "root_id",
+    "symbol",
+    "final_event_id",
+    "final_state_hash",
+    "annotated_output",
+    "files"
+  ],
+  "properties": {
+    "protocol": {"const": "SATROOT-1"},
+    "version": {"const": "0.1"},
+    "bundle_type": {"const": "signed-ledger"},
+    "scheme": {"enum": ["hmac-sha256", "ed25519"]},
+    "record_count": {"type": "integer", "minimum": 1},
+    "root_id": {"type": "string", "pattern": "^[a-fA-F0-9]{64}:[0-9]+$"},
+    "symbol": {"type": "string", "pattern": "^[A-Z0-9]{1,16}$"},
+    "final_event_id": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+    "final_state_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+    "annotated_output": {"type": "boolean"},
+    "files": {
+      "type": "object",
+      "required": ["signer_key_map", "signed_events", "bundle_manifest"],
+      "properties": {
+        "signer_key_map": {"type": "string", "minLength": 1},
+        "signed_events": {"type": "string", "minLength": 1},
+        "annotated_signed_events": {"type": "string", "minLength": 1},
+        "bundle_manifest": {"type": "string", "const": "bundle_manifest.json"},
+        "secrets": {"type": "string", "minLength": 1},
+        "private_keys": {"type": "string", "minLength": 1},
+        "public_keys": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"scheme": {"const": "hmac-sha256"}},
+        "required": ["scheme"]
+      },
+      "then": {
+        "properties": {
+          "files": {
+            "required": ["secrets"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"scheme": {"const": "ed25519"}},
+        "required": ["scheme"]
+      },
+      "then": {
+        "properties": {
+          "files": {
+            "required": ["private_keys", "public_keys"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"annotated_output": {"const": true}},
+        "required": ["annotated_output"]
+      },
+      "then": {
+        "properties": {
+          "files": {
+            "required": ["annotated_signed_events"]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

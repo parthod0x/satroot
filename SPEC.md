@@ -233,6 +233,8 @@ Signed bundle workflows may also emit a machine-readable manifest describing the
 
 The reference implementation also exposes bundle-verification helpers so a signed bundle directory can be checked against its manifest and verifier material before any consumer accepts it.
 
+The signed bundle manifest format is also described by its own JSON Schema so bundle producers and consumers can validate the exported metadata contract independently of replay.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

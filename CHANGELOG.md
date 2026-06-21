@@ -25,6 +25,7 @@
 - Adds a one-shot signed-ledger bundle command for HMAC and Ed25519 workflows.
 - Adds signed bundle manifests describing emitted files and final committed state.
 - Adds signed bundle verification helpers and CLI support.
+- Adds a dedicated signed bundle manifest schema plus CLI validation support.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.

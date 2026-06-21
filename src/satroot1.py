@@ -30,6 +30,7 @@ class SatRootError(ValueError):
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.schema.json"
+BUNDLE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-manifest.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -89,6 +90,12 @@ def load_profile_registry() -> Dict[str, Dict[str, Any]]:
 @functools.lru_cache(maxsize=1)
 def load_protocol_schema() -> Dict[str, Any]:
     with SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_bundle_manifest_schema() -> Dict[str, Any]:
+    with BUNDLE_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -406,16 +413,12 @@ def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
         raise SatRootError("bundle_manifest.json is required for bundle verification")
 
     manifest = _load_json_object_file(str(manifest_path), label="bundle_manifest")
-    if manifest.get("protocol") != "SATROOT-1" or manifest.get("bundle_type") != "signed-ledger":
-        raise SatRootError("unsupported bundle manifest")
+    validate_instance_against_schema(manifest, load_bundle_manifest_schema())
 
     scheme = manifest.get("scheme")
-    if scheme not in {"hmac-sha256", "ed25519"}:
-        raise SatRootError(f"unsupported bundle scheme: {scheme!r}")
 
     files = manifest.get("files")
-    if not isinstance(files, dict):
-        raise SatRootError("bundle manifest files must be an object")
+    assert isinstance(files, dict)
 
     def require_bundle_file(key: str) -> Path:
         relative = files.get(key)
@@ -916,6 +919,10 @@ def build_cli_parser() -> Any:
     validate_parser.add_argument("input_json", help="Path to a JSON object or array of SATROOT-1 records")
     validate_parser.add_argument("--schema-json", help="Optional path to a JSON Schema file")
 
+    validate_bundle_manifest_parser = subparsers.add_parser("validate-bundle-manifest", help="Validate a SATROOT-1 signed bundle manifest against the bundle-manifest schema")
+    validate_bundle_manifest_parser.add_argument("bundle_manifest_json", help="Path to bundle_manifest.json")
+    validate_bundle_manifest_parser.add_argument("--schema-json", help="Optional path to a bundle-manifest JSON Schema file")
+
     signer_map_parser = subparsers.add_parser("init-signer-key-map", help="Build signer -> key_id mappings from a SATROOT-1 ledger")
     signer_map_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
     signer_map_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
@@ -1051,6 +1058,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_protocol_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(instance, schema)
         print(f"valid SATROOT-1 JSON: {count} record(s)")
+        return 0
+
+    if args.command == "validate-bundle-manifest":
+        manifest = _load_json_file(args.bundle_manifest_json)
+        schema = load_bundle_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(manifest, schema)
+        print(f"valid SATROOT-1 bundle manifest: {count} record(s)")
         return 0
 
     if args.command == "init-signer-key-map":

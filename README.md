@@ -24,6 +24,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `BOUNDARIES.md` - claim discipline, non-goals, and legal boundary language.
 - `ROADMAP.md` - project scope, deliverables, and planned protocol profiles.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
+- `protocol/satroot1.bundle-manifest.schema.json` - JSON schema for signed bundle manifests.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
@@ -67,6 +68,7 @@ The v0.1 kernel defines:
 - one-shot signed-ledger bundle generation for HMAC and Ed25519 workflows,
 - machine-readable signed bundle manifests describing artifacts and final committed state,
 - signed bundle verification against manifest and verifier material,
+- bundle-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -144,7 +146,7 @@ python -m pytest
 Expected result:
 
 ```text
-69 passed
+73 passed
 ```
 
 ## Signing utilities
@@ -227,6 +229,12 @@ Verify a signed bundle directory end to end:
 
 ```bash
 satroot1 verify-bundle signed_hmac_bundle
+```
+
+Validate a bundle manifest directly against the SATROOT manifest schema:
+
+```bash
+satroot1 validate-bundle-manifest signed_hmac_bundle/bundle_manifest.json
 ```
 
 Sign a full demo ledger with the built-in demo signature mode:
