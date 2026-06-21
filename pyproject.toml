@@ -23,6 +23,7 @@ classifiers = [
 
 [project.optional-dependencies]
 crypto = ["cryptography>=42"]
+validation = ["jsonschema>=4.23"]
 
 [project.scripts]
 satroot1 = "satroot1:main"

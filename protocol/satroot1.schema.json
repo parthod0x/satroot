@@ -59,7 +59,10 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"profile": {"const": "SATROOT-STABLE-1"}}},
+      "if": {
+        "properties": {"profile": {"const": "SATROOT-STABLE-1"}},
+        "required": ["profile"]
+      },
       "then": {
         "properties": {
           "profile_mode": {"const": "reference-only"}
@@ -68,7 +71,10 @@
       }
     },
     {
-      "if": {"properties": {"profile": {"const": "SATROOT-MACHINE-1"}}},
+      "if": {
+        "properties": {"profile": {"const": "SATROOT-MACHINE-1"}},
+        "required": ["profile"]
+      },
       "then": {
         "properties": {
           "profile_mode": {"const": "prepaid-credit"}
@@ -77,7 +83,10 @@
       }
     },
     {
-      "if": {"properties": {"profile": {"const": "SATROOT-RECEIPT-1"}}},
+      "if": {
+        "properties": {"profile": {"const": "SATROOT-RECEIPT-1"}},
+        "required": ["profile"]
+      },
       "then": {
         "properties": {
           "profile_mode": {"const": "single-receipt"}
@@ -86,7 +95,10 @@
       }
     },
     {
-      "if": {"properties": {"profile": {"const": "SATROOT-IDENTITY-1"}}},
+      "if": {
+        "properties": {"profile": {"const": "SATROOT-IDENTITY-1"}},
+        "required": ["profile"]
+      },
       "then": {
         "properties": {
           "profile_mode": {"const": "single-identity"}
@@ -95,7 +107,10 @@
       }
     },
     {
-      "if": {"properties": {"profile": {"const": "SATROOT-LICENSE-1"}}},
+      "if": {
+        "properties": {"profile": {"const": "SATROOT-LICENSE-1"}},
+        "required": ["profile"]
+      },
       "then": {
         "properties": {
           "profile_mode": {"const": "single-license"}
@@ -104,7 +119,10 @@
       }
     },
     {
-      "if": {"properties": {"signature_scheme": {"const": "hmac-sha256"}}},
+      "if": {
+        "properties": {"signature_scheme": {"const": "hmac-sha256"}},
+        "required": ["signature_scheme"]
+      },
       "then": {
         "required": ["signature_key_id"],
         "properties": {
@@ -113,7 +131,10 @@
       }
     },
     {
-      "if": {"properties": {"signature_scheme": {"const": "ed25519"}}},
+      "if": {
+        "properties": {"signature_scheme": {"const": "ed25519"}},
+        "required": ["signature_scheme"]
+      },
       "then": {
         "required": ["signature_key_id"],
         "properties": {
@@ -122,7 +143,10 @@
       }
     },
     {
-      "if": {"properties": {"signature_scheme": {"const": "demo"}}},
+      "if": {
+        "properties": {"signature_scheme": {"const": "demo"}},
+        "required": ["signature_scheme"]
+      },
       "then": {
         "properties": {
           "signature": {"const": "demo"}
@@ -130,26 +154,41 @@
       }
     },
     {
-      "if": {"properties": {"action": {"const": "genesis"}}},
+      "if": {
+        "properties": {"action": {"const": "genesis"}},
+        "required": ["action"]
+      },
       "then": {
         "required": ["symbol", "name", "decimals", "max_supply", "mint_authority", "transfer_model", "initial_balances", "rules_hash", "nonce"],
         "not": {"required": ["prev_event_id"]}
       }
     },
     {
-      "if": {"properties": {"action": {"const": "mint"}}},
+      "if": {
+        "properties": {"action": {"const": "mint"}},
+        "required": ["action"]
+      },
       "then": {"required": ["prev_event_id", "to", "amount", "signer", "signature"]}
     },
     {
-      "if": {"properties": {"action": {"const": "transfer"}}},
+      "if": {
+        "properties": {"action": {"const": "transfer"}},
+        "required": ["action"]
+      },
       "then": {"required": ["prev_event_id", "from", "to", "amount", "signer", "signature"]}
     },
     {
-      "if": {"properties": {"action": {"const": "burn"}}},
+      "if": {
+        "properties": {"action": {"const": "burn"}},
+        "required": ["action"]
+      },
       "then": {"required": ["prev_event_id", "from", "amount", "signer", "signature"]}
     },
     {
-      "if": {"properties": {"action": {"const": "rotate-authority"}}},
+      "if": {
+        "properties": {"action": {"const": "rotate-authority"}},
+        "required": ["action"]
+      },
       "then": {"required": ["prev_event_id", "new_mint_authority", "signer", "signature"]}
     }
   ],

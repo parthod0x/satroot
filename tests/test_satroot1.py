@@ -11,6 +11,7 @@ from satroot1 import (
     ed25519_sign,
     event_id,
     hmac_sha256_sign,
+    load_protocol_schema,
     load_profile_registry,
     main,
     make_ed25519_verifier,
@@ -19,6 +20,7 @@ from satroot1 import (
     sha256_hex,
     sign_ledger_events,
     signing_payload,
+    validate_instance_against_schema,
 )
 
 
@@ -248,6 +250,24 @@ def test_profile_registry_contains_supported_profiles():
     registry = load_profile_registry()
     assert registry["SATROOT-STABLE-1"]["profile_mode"] == "reference-only"
     assert registry["SATROOT-LICENSE-1"]["required_fields"][-1] == "intended_use"
+
+
+def test_load_protocol_schema_supports_rotate_authority():
+    schema = load_protocol_schema()
+    assert "rotate-authority" in schema["properties"]["action"]["enum"]
+
+
+def test_validate_instance_against_schema_accepts_demo_ledger():
+    count = validate_instance_against_schema(load_events())
+    assert count == 4
+
+
+def test_validate_instance_against_schema_rejects_bad_signature_shape():
+    events = load_events()
+    events[1]["signature_scheme"] = "hmac-sha256"
+    events[1]["signature"] = "demo"
+    with pytest.raises(SatRootError):
+        validate_instance_against_schema(events)
 
 
 def test_reject_missing_required_profile_field():
@@ -483,3 +503,24 @@ def test_cli_replay_hmac_signed_ledger(tmp_path, capsys):
     captured = capsys.readouterr()
     assert '"symbol":"FLOOR1"' in captured.out
     assert "state_hash=sha256:" in captured.out
+
+
+def test_cli_validate_accepts_demo_ledger(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    exit_code = main(["validate", str(events_path)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "valid SATROOT-1 JSON: 4 record(s)" in captured.out
+
+
+def test_cli_validate_rejects_invalid_ledger(tmp_path):
+    events = load_events()
+    events[1]["signature_scheme"] = "ed25519"
+    events_path = tmp_path / "events.json"
+    events_path.write_text(json.dumps(events), encoding="utf-8")
+
+    with pytest.raises(SatRootError):
+        main(["validate", str(events_path)])

@@ -213,6 +213,8 @@ The reference implementation also exposes helper functions and a small CLI for r
 
 CLI replay may be configured against the same reference verification models, so signed ledgers can be validated end to end without dropping into the Python API.
 
+The reference implementation also exposes schema validation helpers and a CLI validation path so raw event JSON can be checked against `protocol/satroot1.schema.json` before replay.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

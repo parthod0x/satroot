@@ -13,6 +13,7 @@ import functools
 import hashlib
 import hmac
 import importlib
+import importlib.util
 import json
 import re
 import sys
@@ -27,6 +28,7 @@ class SatRootError(ValueError):
 
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
+SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -81,6 +83,12 @@ def load_profile_registry() -> Dict[str, Dict[str, Any]]:
             "required_fields": required_fields,
         }
     return loaded
+
+
+@functools.lru_cache(maxsize=1)
+def load_protocol_schema() -> Dict[str, Any]:
+    with SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def event_id(event: Dict[str, Any]) -> str:
@@ -609,6 +617,33 @@ def _write_output(data: Any, output_path: Optional[str]) -> None:
         sys.stdout.write(rendered)
 
 
+def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
+    if schema is None:
+        schema = load_protocol_schema()
+
+    if importlib.util.find_spec("jsonschema") is None:
+        raise SatRootError("jsonschema package is required for schema validation; install with `pip install -e .[validation]`")
+
+    from jsonschema import validators as jsonschema_validators
+
+    validator_class = getattr(jsonschema_validators, "Draft202012Validator", None)
+    if validator_class is None:
+        validator_class = jsonschema_validators.Draft7Validator
+    validator = validator_class(schema)
+    records = instance if isinstance(instance, list) else [instance]
+    if not all(isinstance(record, dict) for record in records):
+        raise SatRootError("schema validation expects a JSON object or an array of objects")
+
+    for index, record in enumerate(records):
+        errors = sorted(validator.iter_errors(record), key=lambda err: list(err.path))
+        if errors:
+            error = errors[0]
+            location = "$" if not error.path else "$." + ".".join(str(part) for part in error.path)
+            raise SatRootError(f"schema validation failed at record {index} {location}: {error.message}")
+
+    return len(records)
+
+
 def build_cli_parser() -> Any:
     import argparse
 
@@ -621,6 +656,10 @@ def build_cli_parser() -> Any:
     replay_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 replay")
     replay_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for replay")
     replay_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for replay")
+
+    validate_parser = subparsers.add_parser("validate", help="Validate SATROOT-1 JSON against the protocol schema")
+    validate_parser.add_argument("input_json", help="Path to a JSON object or array of SATROOT-1 records")
+    validate_parser.add_argument("--schema-json", help="Optional path to a JSON Schema file")
 
     sign_event_parser = subparsers.add_parser("sign-event", help="Sign a single SATROOT-1 event record")
     sign_event_parser.add_argument("event_json", help="Path to a JSON event object")
@@ -696,6 +735,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         result = replay(events, verifier=_verifier_from_args(args))
         print(canonical_json(result.snapshot()))
         print("state_hash=" + result.state_hash())
+        return 0
+
+    if args.command == "validate":
+        instance = _load_json_file(args.input_json)
+        schema = load_protocol_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(instance, schema)
+        print(f"valid SATROOT-1 JSON: {count} record(s)")
         return 0
 
     if args.command == "sign-event":

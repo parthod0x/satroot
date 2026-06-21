@@ -56,6 +56,7 @@ The v0.1 kernel defines:
 - reference helpers for signing a single event or a whole ledger,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
+- schema-aware CLI validation for raw SATROOT-1 JSON files,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -133,7 +134,7 @@ python -m pytest
 Expected result:
 
 ```text
-33 passed
+38 passed
 ```
 
 ## Signing utilities
@@ -150,6 +151,18 @@ Install the optional crypto path when you want Ed25519 support:
 pip install -e .[crypto]
 ```
 
+Install the optional schema-validation path when you want `satroot1 validate`:
+
+```bash
+pip install -e .[validation]
+```
+
+Install both optional paths together:
+
+```bash
+pip install -e .[crypto,validation]
+```
+
 Replay a ledger:
 
 ```bash
@@ -160,6 +173,12 @@ Replay an HMAC-signed ledger with verifier material:
 
 ```bash
 satroot1 replay signed_events.json --scheme hmac-sha256 --secrets-json secrets.json
+```
+
+Validate a raw SATROOT event file against the protocol schema:
+
+```bash
+satroot1 validate examples/events_floor1.json
 ```
 
 Sign a full demo ledger with the built-in demo signature mode:
