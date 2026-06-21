@@ -229,6 +229,8 @@ The same pattern is exposed for controlled shared-secret deployments, where sign
 
 Those workflow pieces can also be composed into a one-shot signed-ledger bundle path, allowing a ledger plus verifier material and signed/annotated artifacts to be emitted together for reference or testing.
 
+Signed bundle workflows may also emit a machine-readable manifest describing the chosen scheme, generated files, record count, and final committed SATROOT state hash so downstream tooling can inspect bundles without replaying them first.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

@@ -9,6 +9,7 @@ from satroot1 import (
     bootstrap_ed25519_workflow,
     bootstrap_hmac_workflow,
     bootstrap_signed_ledger_bundle,
+    build_signed_ledger_bundle_manifest,
     build_signer_key_map,
     derive_ed25519_public_keys,
     generate_ed25519_private_keys,
@@ -535,6 +536,29 @@ def test_bootstrap_signed_ledger_bundle_hmac_roundtrip():
     assert bundle["annotated_events"] is not None
     assert bundle["annotated_events"][0]["event_id"].startswith("sha256:")
     assert bundle["annotated_events"][-1]["state_hash"].startswith("sha256:")
+    assert bundle["final_state_snapshot"]["symbol"] == "FLOOR1"
+    assert bundle["final_state_hash"].startswith("sha256:")
+
+
+def test_build_signed_ledger_bundle_manifest_summarizes_bundle():
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+    )
+    assert manifest["protocol"] == "SATROOT-1"
+    assert manifest["bundle_type"] == "signed-ledger"
+    assert manifest["scheme"] == "hmac-sha256"
+    assert manifest["record_count"] == 4
+    assert manifest["symbol"] == "FLOOR1"
+    assert manifest["files"]["bundle_manifest"] == "bundle_manifest.json"
+    assert manifest["final_state_hash"].startswith("sha256:")
 
 
 def test_bootstrap_signed_ledger_bundle_ed25519_when_unavailable():
@@ -959,11 +983,16 @@ def test_cli_bootstrap_signed_ledger_hmac_bundle(tmp_path, capsys):
     shared_secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
     signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
     annotated_events = json.loads((output_dir / "annotated_signed_events.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
     verifier = make_hmac_sha256_verifier(shared_secrets)
     assert signer_key_map == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
     assert replay(signed_events, verifier=verifier).symbol == "FLOOR1"
     assert replay(annotated_events, verifier=verifier).symbol == "FLOOR1"
     assert annotated_events[0]["event_id"].startswith("sha256:")
+    assert manifest["scheme"] == "hmac-sha256"
+    assert manifest["files"]["signed_events"] == "signed_events.json"
+    assert manifest["files"]["bundle_manifest"] == "bundle_manifest.json"
+    assert manifest["final_state_hash"].startswith("sha256:")
 
 
 def test_cli_bootstrap_signed_ledger_ed25519_unavailable(tmp_path):

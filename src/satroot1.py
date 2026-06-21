@@ -367,11 +367,35 @@ def bootstrap_signed_ledger_bundle(
         include_state_hash=include_state_hash,
     )
     annotated_events = annotate_ledger_events(signed_events, verifier=verifier) if include_annotation else None
+    final_state = replay(signed_events, verifier=verifier)
     return {
         "scheme": scheme,
         "material": material,
         "signed_events": signed_events,
         "annotated_events": annotated_events,
+        "final_state_snapshot": final_state.snapshot(),
+        "final_state_hash": final_state.state_hash(),
+    }
+
+
+def build_signed_ledger_bundle_manifest(
+    bundle: Mapping[str, Any],
+    *,
+    output_files: Mapping[str, str],
+) -> Dict[str, Any]:
+    final_snapshot = bundle["final_state_snapshot"]
+    return {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "bundle_type": "signed-ledger",
+        "scheme": bundle["scheme"],
+        "record_count": len(bundle["signed_events"]),
+        "root_id": final_snapshot["root_id"],
+        "symbol": final_snapshot["symbol"],
+        "final_event_id": final_snapshot["last_event_id"],
+        "final_state_hash": bundle["final_state_hash"],
+        "annotated_output": bundle["annotated_events"] is not None,
+        "files": dict(output_files),
     }
 
 
@@ -992,15 +1016,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        _write_json_file(output_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+        output_files: Dict[str, str] = {
+            "signer_key_map": "signer_key_map.json",
+            "signed_events": "signed_events.json",
+        }
+        _write_json_file(output_dir / output_files["signer_key_map"], bundle["material"]["signer_key_map"])
         if args.scheme == "hmac-sha256":
-            _write_json_file(output_dir / "secrets.json", bundle["material"]["shared_secrets"])
+            output_files["secrets"] = "secrets.json"
+            _write_json_file(output_dir / output_files["secrets"], bundle["material"]["shared_secrets"])
         elif args.scheme == "ed25519":
-            _write_json_file(output_dir / "private_keys.json", bundle["material"]["private_keys"])
-            _write_json_file(output_dir / "public_keys.json", bundle["material"]["public_keys"])
-        _write_json_file(output_dir / "signed_events.json", bundle["signed_events"])
+            output_files["private_keys"] = "private_keys.json"
+            output_files["public_keys"] = "public_keys.json"
+            _write_json_file(output_dir / output_files["private_keys"], bundle["material"]["private_keys"])
+            _write_json_file(output_dir / output_files["public_keys"], bundle["material"]["public_keys"])
+        _write_json_file(output_dir / output_files["signed_events"], bundle["signed_events"])
         if bundle["annotated_events"] is not None:
-            _write_json_file(output_dir / "annotated_signed_events.json", bundle["annotated_events"])
+            output_files["annotated_signed_events"] = "annotated_signed_events.json"
+            _write_json_file(output_dir / output_files["annotated_signed_events"], bundle["annotated_events"])
+        output_files["bundle_manifest"] = "bundle_manifest.json"
+        manifest = build_signed_ledger_bundle_manifest(bundle, output_files=output_files)
+        _write_json_file(output_dir / output_files["bundle_manifest"], manifest)
         print(f"wrote signed SATROOT-1 {args.scheme} bundle to {output_dir}")
         return 0
 
