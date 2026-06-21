@@ -12,6 +12,7 @@
     "root_id",
     "symbol",
     "final_event_id",
+    "final_state_snapshot",
     "final_state_hash",
     "annotated_output",
     "files",
@@ -26,6 +27,68 @@
     "root_id": {"type": "string", "pattern": "^[a-fA-F0-9]{64}:[0-9]+$"},
     "symbol": {"type": "string", "pattern": "^[A-Z0-9]{1,16}$"},
     "final_event_id": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+    "final_state_snapshot": {
+      "type": "object",
+      "required": [
+        "root_id",
+        "symbol",
+        "name",
+        "decimals",
+        "max_supply",
+        "mint_authority",
+        "profile",
+        "profile_mode",
+        "balances",
+        "supply",
+        "sequence",
+        "last_event_id",
+        "transfer_model",
+        "genesis_metadata"
+      ],
+      "properties": {
+        "root_id": {"type": "string", "pattern": "^[a-fA-F0-9]{64}:[0-9]+$"},
+        "symbol": {"type": "string", "pattern": "^[A-Z0-9]{1,16}$"},
+        "name": {"type": "string", "minLength": 1},
+        "decimals": {"type": "integer", "minimum": 0, "maximum": 18},
+        "max_supply": {
+          "anyOf": [
+            {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
+            {"type": "null"}
+          ]
+        },
+        "mint_authority": {"type": "string", "minLength": 1},
+        "profile": {
+          "anyOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "profile_mode": {
+          "anyOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "balances": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        },
+        "supply": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
+        "sequence": {"type": "integer", "minimum": 0},
+        "last_event_id": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "transfer_model": {"type": "string", "minLength": 1},
+        "genesis_metadata": {
+          "anyOf": [
+            {"type": "object"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "final_state_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
     "annotated_output": {"type": "boolean"},
     "files": {

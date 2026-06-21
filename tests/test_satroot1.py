@@ -577,6 +577,7 @@ def test_build_signed_ledger_bundle_manifest_summarizes_bundle():
     assert manifest["scheme"] == "hmac-sha256"
     assert manifest["record_count"] == 4
     assert manifest["symbol"] == "FLOOR1"
+    assert manifest["final_state_snapshot"] == bundle["final_state_snapshot"]
     assert manifest["files"]["bundle_manifest"] == "bundle_manifest.json"
     assert manifest["file_hashes"]["signed_events"].startswith("sha256:")
     assert manifest["final_state_hash"].startswith("sha256:")
@@ -676,6 +677,35 @@ def test_verify_signed_ledger_bundle_rejects_manifest_mismatch(tmp_path):
         },
     )
     manifest["final_state_hash"] = "sha256:" + ("0" * 64)
+    write_json(tmp_path / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(tmp_path / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(tmp_path / "signed_events.json", bundle["signed_events"])
+    write_json(tmp_path / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(tmp_path / "bundle_manifest.json", manifest)
+
+    with pytest.raises(SatRootError):
+        verify_signed_ledger_bundle(tmp_path)
+
+
+def test_verify_signed_ledger_bundle_rejects_snapshot_mismatch(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    manifest["final_state_snapshot"]["balances"]["issuer"] = "600000001"
     write_json(tmp_path / "signer_key_map.json", bundle["material"]["signer_key_map"])
     write_json(tmp_path / "secrets.json", bundle["material"]["shared_secrets"])
     write_json(tmp_path / "signed_events.json", bundle["signed_events"])

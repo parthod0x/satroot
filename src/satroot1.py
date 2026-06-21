@@ -405,6 +405,7 @@ def build_signed_ledger_bundle_manifest(
         "root_id": final_snapshot["root_id"],
         "symbol": final_snapshot["symbol"],
         "final_event_id": final_snapshot["last_event_id"],
+        "final_state_snapshot": copy.deepcopy(final_snapshot),
         "final_state_hash": bundle["final_state_hash"],
         "annotated_output": bundle["annotated_events"] is not None,
         "files": dict(output_files),
@@ -469,6 +470,8 @@ def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
         raise SatRootError("bundle symbol mismatch")
     if manifest.get("final_event_id") != final_snapshot["last_event_id"]:
         raise SatRootError("bundle final_event_id mismatch")
+    if manifest.get("final_state_snapshot") != final_snapshot:
+        raise SatRootError("bundle final_state_snapshot mismatch")
     if manifest.get("final_state_hash") != final_state.state_hash():
         raise SatRootError("bundle final_state_hash mismatch")
 
