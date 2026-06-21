@@ -27,6 +27,7 @@ from satroot1 import (
     make_ed25519_verifier,
     make_hmac_sha256_verifier,
     replay,
+    rendered_json_sha256,
     sha256_hex,
     sign_ledger_events,
     signing_payload,
@@ -40,6 +41,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def load_events(name="events_floor1.json"):
     return json.loads((ROOT / "examples" / name).read_text())
+
+
+def write_json(path: Path, data):
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def build_rotation_ledger():
@@ -559,6 +565,12 @@ def test_build_signed_ledger_bundle_manifest_summarizes_bundle():
             "annotated_signed_events": "annotated_signed_events.json",
             "bundle_manifest": "bundle_manifest.json",
         },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
     )
     assert manifest["protocol"] == "SATROOT-1"
     assert manifest["bundle_type"] == "signed-ledger"
@@ -566,6 +578,7 @@ def test_build_signed_ledger_bundle_manifest_summarizes_bundle():
     assert manifest["record_count"] == 4
     assert manifest["symbol"] == "FLOOR1"
     assert manifest["files"]["bundle_manifest"] == "bundle_manifest.json"
+    assert manifest["file_hashes"]["signed_events"].startswith("sha256:")
     assert manifest["final_state_hash"].startswith("sha256:")
 
 
@@ -579,6 +592,12 @@ def test_validate_instance_against_bundle_manifest_schema_accepts_generated_mani
             "signed_events": "signed_events.json",
             "annotated_signed_events": "annotated_signed_events.json",
             "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
         },
     )
     count = validate_instance_against_schema(manifest, load_bundle_manifest_schema())
@@ -595,6 +614,12 @@ def test_validate_instance_against_bundle_manifest_schema_rejects_bad_scheme():
             "signed_events": "signed_events.json",
             "annotated_signed_events": "annotated_signed_events.json",
             "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
         },
     )
     manifest["scheme"] = "demo"
@@ -613,12 +638,18 @@ def test_verify_signed_ledger_bundle_accepts_hmac_bundle(tmp_path):
             "annotated_signed_events": "annotated_signed_events.json",
             "bundle_manifest": "bundle_manifest.json",
         },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
     )
-    (tmp_path / "signer_key_map.json").write_text(json.dumps(bundle["material"]["signer_key_map"]), encoding="utf-8")
-    (tmp_path / "secrets.json").write_text(json.dumps(bundle["material"]["shared_secrets"]), encoding="utf-8")
-    (tmp_path / "signed_events.json").write_text(json.dumps(bundle["signed_events"]), encoding="utf-8")
-    (tmp_path / "annotated_signed_events.json").write_text(json.dumps(bundle["annotated_events"]), encoding="utf-8")
-    (tmp_path / "bundle_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    write_json(tmp_path / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(tmp_path / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(tmp_path / "signed_events.json", bundle["signed_events"])
+    write_json(tmp_path / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(tmp_path / "bundle_manifest.json", manifest)
 
     summary = verify_signed_ledger_bundle(tmp_path)
     assert summary["scheme"] == "hmac-sha256"
@@ -637,13 +668,49 @@ def test_verify_signed_ledger_bundle_rejects_manifest_mismatch(tmp_path):
             "annotated_signed_events": "annotated_signed_events.json",
             "bundle_manifest": "bundle_manifest.json",
         },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
     )
     manifest["final_state_hash"] = "sha256:" + ("0" * 64)
-    (tmp_path / "signer_key_map.json").write_text(json.dumps(bundle["material"]["signer_key_map"]), encoding="utf-8")
-    (tmp_path / "secrets.json").write_text(json.dumps(bundle["material"]["shared_secrets"]), encoding="utf-8")
-    (tmp_path / "signed_events.json").write_text(json.dumps(bundle["signed_events"]), encoding="utf-8")
-    (tmp_path / "annotated_signed_events.json").write_text(json.dumps(bundle["annotated_events"]), encoding="utf-8")
-    (tmp_path / "bundle_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    write_json(tmp_path / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(tmp_path / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(tmp_path / "signed_events.json", bundle["signed_events"])
+    write_json(tmp_path / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(tmp_path / "bundle_manifest.json", manifest)
+
+    with pytest.raises(SatRootError):
+        verify_signed_ledger_bundle(tmp_path)
+
+
+def test_verify_signed_ledger_bundle_rejects_file_hash_mismatch(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(tmp_path / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(tmp_path / "secrets.json", bundle["material"]["shared_secrets"])
+    tampered_events = copy.deepcopy(bundle["signed_events"])
+    tampered_events[-1]["signature"] = "hmac-sha256:" + ("0" * 64)
+    write_json(tmp_path / "signed_events.json", tampered_events)
+    write_json(tmp_path / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(tmp_path / "bundle_manifest.json", manifest)
 
     with pytest.raises(SatRootError):
         verify_signed_ledger_bundle(tmp_path)
@@ -1157,9 +1224,15 @@ def test_cli_validate_bundle_manifest(tmp_path, capsys):
             "annotated_signed_events": "annotated_signed_events.json",
             "bundle_manifest": "bundle_manifest.json",
         },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
     )
     manifest_path = tmp_path / "bundle_manifest.json"
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    write_json(manifest_path, manifest)
 
     exit_code = main(["validate-bundle-manifest", str(manifest_path)])
     assert exit_code == 0

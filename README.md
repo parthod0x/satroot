@@ -146,7 +146,7 @@ python -m pytest
 Expected result:
 
 ```text
-73 passed
+74 passed
 ```
 
 ## Signing utilities
@@ -223,7 +223,7 @@ Bootstrap and emit a full signed HMAC ledger bundle in one step:
 satroot1 bootstrap-signed-ledger examples/events_floor1.json --scheme hmac-sha256 --output-dir signed_hmac_bundle
 ```
 
-That bundle now includes `bundle_manifest.json` alongside the emitted signer/key material and ledger files.
+That bundle now includes `bundle_manifest.json` alongside the emitted signer/key material and ledger files, with per-file SHA-256 hashes for the exported artifacts.
 
 Verify a signed bundle directory end to end:
 

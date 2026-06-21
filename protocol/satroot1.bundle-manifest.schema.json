@@ -14,7 +14,8 @@
     "final_event_id",
     "final_state_hash",
     "annotated_output",
-    "files"
+    "files",
+    "file_hashes"
   ],
   "properties": {
     "protocol": {"const": "SATROOT-1"},
@@ -40,6 +41,19 @@
         "public_keys": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false
+    },
+    "file_hashes": {
+      "type": "object",
+      "required": ["signer_key_map", "signed_events"],
+      "properties": {
+        "signer_key_map": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "signed_events": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "annotated_signed_events": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "secrets": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "private_keys": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "public_keys": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"}
+      },
+      "additionalProperties": false
     }
   },
   "allOf": [
@@ -51,6 +65,9 @@
       "then": {
         "properties": {
           "files": {
+            "required": ["secrets"]
+          },
+          "file_hashes": {
             "required": ["secrets"]
           }
         }
@@ -65,6 +82,9 @@
         "properties": {
           "files": {
             "required": ["private_keys", "public_keys"]
+          },
+          "file_hashes": {
+            "required": ["private_keys", "public_keys"]
           }
         }
       }
@@ -77,6 +97,9 @@
       "then": {
         "properties": {
           "files": {
+            "required": ["annotated_signed_events"]
+          },
+          "file_hashes": {
             "required": ["annotated_signed_events"]
           }
         }

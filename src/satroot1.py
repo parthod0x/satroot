@@ -58,6 +58,10 @@ def sha256_hex(data: str) -> str:
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
+def sha256_hex_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
 @functools.lru_cache(maxsize=1)
 def load_profile_registry() -> Dict[str, Dict[str, Any]]:
     with PROFILE_REGISTRY_PATH.open("r", encoding="utf-8") as f:
@@ -389,6 +393,7 @@ def build_signed_ledger_bundle_manifest(
     bundle: Mapping[str, Any],
     *,
     output_files: Mapping[str, str],
+    output_file_hashes: Mapping[str, str],
 ) -> Dict[str, Any]:
     final_snapshot = bundle["final_state_snapshot"]
     return {
@@ -403,6 +408,7 @@ def build_signed_ledger_bundle_manifest(
         "final_state_hash": bundle["final_state_hash"],
         "annotated_output": bundle["annotated_events"] is not None,
         "files": dict(output_files),
+        "file_hashes": dict(output_file_hashes),
     }
 
 
@@ -419,6 +425,9 @@ def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
 
     files = manifest.get("files")
     assert isinstance(files, dict)
+    file_hashes = manifest.get("file_hashes")
+    if not isinstance(file_hashes, dict):
+        raise SatRootError("bundle manifest file_hashes must be an object")
 
     def require_bundle_file(key: str) -> Path:
         relative = files.get(key)
@@ -427,6 +436,11 @@ def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
         path = bundle_path / relative
         if not path.exists():
             raise SatRootError(f"bundle file not found for {key}: {relative}")
+        expected_hash = file_hashes.get(key)
+        if expected_hash is not None:
+            actual_hash = "sha256:" + sha256_hex_bytes(path.read_bytes())
+            if actual_hash != expected_hash:
+                raise SatRootError(f"bundle file hash mismatch for {key}")
         return path
 
     signed_events_path = require_bundle_file("signed_events")
@@ -862,6 +876,10 @@ def _dump_json(data: Any) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
+def rendered_json_sha256(data: Any) -> str:
+    return "sha256:" + sha256_hex_bytes(_dump_json(data).encode("utf-8"))
+
+
 def _write_output(data: Any, output_path: Optional[str]) -> None:
     rendered = _dump_json(data)
     if output_path:
@@ -872,7 +890,8 @@ def _write_output(data: Any, output_path: Optional[str]) -> None:
 
 
 def _write_json_file(path: Path, data: Any) -> None:
-    path.write_text(_dump_json(data), encoding="utf-8")
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(_dump_json(data))
 
 
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
@@ -1116,22 +1135,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "signer_key_map": "signer_key_map.json",
             "signed_events": "signed_events.json",
         }
-        _write_json_file(output_dir / output_files["signer_key_map"], bundle["material"]["signer_key_map"])
+        output_payloads: Dict[str, Any] = {
+            "signer_key_map": bundle["material"]["signer_key_map"],
+            "signed_events": bundle["signed_events"],
+        }
         if args.scheme == "hmac-sha256":
             output_files["secrets"] = "secrets.json"
-            _write_json_file(output_dir / output_files["secrets"], bundle["material"]["shared_secrets"])
+            output_payloads["secrets"] = bundle["material"]["shared_secrets"]
         elif args.scheme == "ed25519":
             output_files["private_keys"] = "private_keys.json"
             output_files["public_keys"] = "public_keys.json"
-            _write_json_file(output_dir / output_files["private_keys"], bundle["material"]["private_keys"])
-            _write_json_file(output_dir / output_files["public_keys"], bundle["material"]["public_keys"])
-        _write_json_file(output_dir / output_files["signed_events"], bundle["signed_events"])
+            output_payloads["private_keys"] = bundle["material"]["private_keys"]
+            output_payloads["public_keys"] = bundle["material"]["public_keys"]
         if bundle["annotated_events"] is not None:
             output_files["annotated_signed_events"] = "annotated_signed_events.json"
-            _write_json_file(output_dir / output_files["annotated_signed_events"], bundle["annotated_events"])
+            output_payloads["annotated_signed_events"] = bundle["annotated_events"]
         output_files["bundle_manifest"] = "bundle_manifest.json"
-        manifest = build_signed_ledger_bundle_manifest(bundle, output_files=output_files)
-        _write_json_file(output_dir / output_files["bundle_manifest"], manifest)
+        output_file_hashes = {key: rendered_json_sha256(data) for key, data in output_payloads.items()}
+        manifest = build_signed_ledger_bundle_manifest(bundle, output_files=output_files, output_file_hashes=output_file_hashes)
+        output_payloads["bundle_manifest"] = manifest
+        for key, data in output_payloads.items():
+            _write_json_file(output_dir / output_files[key], data)
         print(f"wrote signed SATROOT-1 {args.scheme} bundle to {output_dir}")
         return 0
 
