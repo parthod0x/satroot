@@ -8,6 +8,7 @@ from satroot1 import (
     annotate_ledger_events,
     bootstrap_ed25519_workflow,
     bootstrap_hmac_workflow,
+    bootstrap_signed_ledger_bundle,
     build_signer_key_map,
     derive_ed25519_public_keys,
     generate_ed25519_private_keys,
@@ -527,6 +528,26 @@ def test_bootstrap_hmac_workflow_from_ledger():
     assert len(material["shared_secrets"]["issuer-key"]) == 64
 
 
+def test_bootstrap_signed_ledger_bundle_hmac_roundtrip():
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    verifier = make_hmac_sha256_verifier(bundle["material"]["shared_secrets"])
+    assert replay(bundle["signed_events"], verifier=verifier).symbol == "FLOOR1"
+    assert bundle["annotated_events"] is not None
+    assert bundle["annotated_events"][0]["event_id"].startswith("sha256:")
+    assert bundle["annotated_events"][-1]["state_hash"].startswith("sha256:")
+
+
+def test_bootstrap_signed_ledger_bundle_ed25519_when_unavailable():
+    if ed25519_available():
+        bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="ed25519")
+        assert bundle["material"]["public_keys"]
+        return
+
+    assert ed25519_available() is False
+    with pytest.raises(SatRootError):
+        bootstrap_signed_ledger_bundle(load_events(), scheme="ed25519")
+
+
 def test_sign_ledger_events_demo_helper():
     events = load_events()
     signed = sign_ledger_events(events, scheme="demo")
@@ -913,3 +934,69 @@ def test_cli_bootstrap_hmac_workflow_and_sign_replay(tmp_path, capsys):
     signed_events = json.loads(signed_path.read_text(encoding="utf-8"))
     verifier = make_hmac_sha256_verifier(shared_secrets)
     assert replay(signed_events, verifier=verifier).symbol == "FLOOR1"
+
+
+def test_cli_bootstrap_signed_ledger_hmac_bundle(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    output_dir = tmp_path / "bundle"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "bootstrap-signed-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote signed SATROOT-1 hmac-sha256 bundle to" in captured.out
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    shared_secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
+    signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
+    annotated_events = json.loads((output_dir / "annotated_signed_events.json").read_text(encoding="utf-8"))
+    verifier = make_hmac_sha256_verifier(shared_secrets)
+    assert signer_key_map == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    assert replay(signed_events, verifier=verifier).symbol == "FLOOR1"
+    assert replay(annotated_events, verifier=verifier).symbol == "FLOOR1"
+    assert annotated_events[0]["event_id"].startswith("sha256:")
+
+
+def test_cli_bootstrap_signed_ledger_ed25519_unavailable(tmp_path):
+    events_path = tmp_path / "events.json"
+    output_dir = tmp_path / "bundle"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    if ed25519_available():
+        exit_code = main(
+            [
+                "bootstrap-signed-ledger",
+                str(events_path),
+                "--scheme",
+                "ed25519",
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+        assert exit_code == 0
+        assert (output_dir / "private_keys.json").exists()
+        assert (output_dir / "public_keys.json").exists()
+        return
+
+    assert ed25519_available() is False
+    with pytest.raises(SatRootError):
+        main(
+            [
+                "bootstrap-signed-ledger",
+                str(events_path),
+                "--scheme",
+                "ed25519",
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+    assert not output_dir.exists()

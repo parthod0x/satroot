@@ -338,6 +338,43 @@ def bootstrap_hmac_workflow(
     }
 
 
+def bootstrap_signed_ledger_bundle(
+    events: Sequence[Dict[str, Any]],
+    *,
+    scheme: str,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+) -> Dict[str, Any]:
+    if scheme == "hmac-sha256":
+        material = bootstrap_hmac_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
+        verifier = make_hmac_sha256_verifier(material["shared_secrets"])
+        signer = make_hmac_sha256_signer(material["shared_secrets"])
+    elif scheme == "ed25519":
+        material = bootstrap_ed25519_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
+        verifier = make_ed25519_verifier(material["public_keys"])
+        signer = make_ed25519_signer(material["private_keys"])
+    else:
+        raise SatRootError(f"unsupported bootstrap signing scheme: {scheme}")
+
+    signed_events = sign_ledger_events(
+        events,
+        scheme=scheme,
+        signer_key_ids=material["signer_key_map"],
+        signer=signer,
+        verifier=verifier,
+        include_state_hash=include_state_hash,
+    )
+    annotated_events = annotate_ledger_events(signed_events, verifier=verifier) if include_annotation else None
+    return {
+        "scheme": scheme,
+        "material": material,
+        "signed_events": signed_events,
+        "annotated_events": annotated_events,
+    }
+
+
 def require_fields(event: Dict[str, Any], fields: Iterable[str]) -> None:
     missing = [field for field in fields if field not in event]
     if missing:
@@ -793,6 +830,15 @@ def build_cli_parser() -> Any:
     bootstrap_hmac_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
     bootstrap_hmac_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
 
+    bootstrap_signed_parser = subparsers.add_parser("bootstrap-signed-ledger", help="Bootstrap signing material and emit signed SATROOT-1 ledger artifacts")
+    bootstrap_signed_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
+    bootstrap_signed_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_signed_parser.add_argument("--output-dir", required=True, help="Directory where workflow files and signed ledgers will be written")
+    bootstrap_signed_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_signed_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_signed_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during the signing step")
+    bootstrap_signed_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+
     generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
     generate_keys_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id")
@@ -930,6 +976,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_json_file(output_dir / "signer_key_map.json", material["signer_key_map"])
         _write_json_file(output_dir / "secrets.json", material["shared_secrets"])
         print(f"wrote HMAC workflow files to {output_dir}")
+        return 0
+
+    if args.command == "bootstrap-signed-ledger":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        bundle = bootstrap_signed_ledger_bundle(
+            events,
+            scheme=args.scheme,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+        )
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        _write_json_file(output_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+        if args.scheme == "hmac-sha256":
+            _write_json_file(output_dir / "secrets.json", bundle["material"]["shared_secrets"])
+        elif args.scheme == "ed25519":
+            _write_json_file(output_dir / "private_keys.json", bundle["material"]["private_keys"])
+            _write_json_file(output_dir / "public_keys.json", bundle["material"]["public_keys"])
+        _write_json_file(output_dir / "signed_events.json", bundle["signed_events"])
+        if bundle["annotated_events"] is not None:
+            _write_json_file(output_dir / "annotated_signed_events.json", bundle["annotated_events"])
+        print(f"wrote signed SATROOT-1 {args.scheme} bundle to {output_dir}")
         return 0
 
     if args.command == "bootstrap-ed25519-workflow":

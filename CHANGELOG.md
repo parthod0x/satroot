@@ -22,6 +22,7 @@
 - Adds signer-map derivation helpers and CLI support for extracting `signer -> key_id` mappings from ledgers.
 - Adds a one-shot Ed25519 workflow bootstrap command that emits signer maps plus private/public key material from a ledger.
 - Adds HMAC shared-secret generation helpers and a one-shot HMAC workflow bootstrap command for controlled environments.
+- Adds a one-shot signed-ledger bundle command for HMAC and Ed25519 workflows.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.

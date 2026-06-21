@@ -64,6 +64,7 @@ The v0.1 kernel defines:
 - one-shot HMAC workflow bootstrapping for signer maps plus shared-secret material,
 - Ed25519 key-derivation helpers for producing replay-ready public key maps from private key maps,
 - one-shot Ed25519 workflow bootstrapping for signer maps plus private/public key material,
+- one-shot signed-ledger bundle generation for HMAC and Ed25519 workflows,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -141,7 +142,7 @@ python -m pytest
 Expected result:
 
 ```text
-61 passed
+65 passed
 ```
 
 ## Signing utilities
@@ -210,6 +211,12 @@ Bootstrap the full HMAC workflow from a ledger in one step:
 
 ```bash
 satroot1 bootstrap-hmac-workflow examples/events_floor1.json --output-dir hmac_bootstrap
+```
+
+Bootstrap and emit a full signed HMAC ledger bundle in one step:
+
+```bash
+satroot1 bootstrap-signed-ledger examples/events_floor1.json --scheme hmac-sha256 --output-dir signed_hmac_bundle
 ```
 
 Sign a full demo ledger with the built-in demo signature mode:

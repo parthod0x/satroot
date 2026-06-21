@@ -227,6 +227,8 @@ For convenience workflows, those pieces can also be composed into a one-shot Ed2
 
 The same pattern is exposed for controlled shared-secret deployments, where signer maps and HMAC verifier material can be bootstrapped directly from a ledger for reference and test workflows.
 
+Those workflow pieces can also be composed into a one-shot signed-ledger bundle path, allowing a ledger plus verifier material and signed/annotated artifacts to be emitted together for reference or testing.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.
