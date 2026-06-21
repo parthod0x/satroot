@@ -57,6 +57,7 @@ The v0.1 kernel defines:
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
+- commitment-aware CLI annotation for adding deterministic `event_id` and `state_hash` fields,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -134,7 +135,7 @@ python -m pytest
 Expected result:
 
 ```text
-38 passed
+42 passed
 ```
 
 ## Signing utilities
@@ -181,6 +182,12 @@ Validate a raw SATROOT event file against the protocol schema:
 satroot1 validate examples/events_floor1.json
 ```
 
+Annotate a ledger with deterministic event commitments:
+
+```bash
+satroot1 annotate-ledger examples/events_floor1.json --output annotated_events.json
+```
+
 Sign a full demo ledger with the built-in demo signature mode:
 
 ```bash
@@ -197,6 +204,12 @@ Replay an Ed25519-signed ledger with public keys:
 
 ```bash
 satroot1 replay signed_events.json --scheme ed25519 --public-keys-json public_keys.json
+```
+
+Annotate a signed HMAC ledger without changing its signed payload:
+
+```bash
+satroot1 annotate-ledger signed_events.json --scheme hmac-sha256 --secrets-json secrets.json --output annotated_signed_events.json
 ```
 
 Sign a single event record:

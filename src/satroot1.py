@@ -592,6 +592,35 @@ def sign_ledger_events(
     return signed_events
 
 
+def annotate_ledger_events(
+    events: Sequence[Dict[str, Any]],
+    *,
+    verifier: SignatureVerifier = demo_signature_verifier,
+    include_event_id: bool = True,
+    include_state_hash: bool = True,
+) -> list[Dict[str, Any]]:
+    if not events:
+        raise SatRootError("empty ledger")
+
+    annotated_events = copy.deepcopy(list(events))
+    genesis = annotated_events[0]
+    if include_event_id:
+        genesis["event_id"] = event_id(genesis)
+    state = apply_genesis(genesis)
+    if include_state_hash:
+        genesis["state_hash"] = state.state_hash()
+
+    for index in range(1, len(annotated_events)):
+        event = annotated_events[index]
+        if include_event_id:
+            event["event_id"] = event_id(event)
+        state = apply_event(state, event, verifier=verifier)
+        if include_state_hash:
+            event["state_hash"] = state.state_hash()
+
+    return annotated_events
+
+
 def _load_json_file(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -660,6 +689,16 @@ def build_cli_parser() -> Any:
     validate_parser = subparsers.add_parser("validate", help="Validate SATROOT-1 JSON against the protocol schema")
     validate_parser.add_argument("input_json", help="Path to a JSON object or array of SATROOT-1 records")
     validate_parser.add_argument("--schema-json", help="Optional path to a JSON Schema file")
+
+    annotate_parser = subparsers.add_parser("annotate-ledger", help="Add event_id and state_hash commitments to a SATROOT-1 ledger")
+    annotate_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
+    annotate_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], default="demo")
+    annotate_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification")
+    annotate_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
+    annotate_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for verification")
+    annotate_parser.add_argument("--no-event-id", action="store_true", help="Do not attach event_id fields")
+    annotate_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash fields")
+    annotate_parser.add_argument("--output", help="Optional output path")
 
     sign_event_parser = subparsers.add_parser("sign-event", help="Sign a single SATROOT-1 event record")
     sign_event_parser.add_argument("event_json", help="Path to a JSON event object")
@@ -742,6 +781,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_protocol_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(instance, schema)
         print(f"valid SATROOT-1 JSON: {count} record(s)")
+        return 0
+
+    if args.command == "annotate-ledger":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        annotated_ledger = annotate_ledger_events(
+            events,
+            verifier=_verifier_from_args(args),
+            include_event_id=not args.no_event_id,
+            include_state_hash=not args.no_state_hash,
+        )
+        _write_output(annotated_ledger, args.output)
         return 0
 
     if args.command == "sign-event":

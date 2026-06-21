@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from satroot1 import (
+    annotate_ledger_events,
     SatRootError,
     ed25519_available,
     ed25519_public_key_hex,
@@ -270,6 +271,34 @@ def test_validate_instance_against_schema_rejects_bad_signature_shape():
         validate_instance_against_schema(events)
 
 
+def test_annotate_ledger_events_adds_commitments():
+    annotated = annotate_ledger_events(load_events())
+    assert annotated[0]["event_id"].startswith("sha256:")
+    assert annotated[0]["state_hash"].startswith("sha256:")
+    assert annotated[-1]["event_id"].startswith("sha256:")
+    assert annotated[-1]["state_hash"].startswith("sha256:")
+    state = replay(annotated)
+    assert state.symbol == "FLOOR1"
+
+
+def test_annotate_ledger_events_preserves_hmac_replay():
+    events = load_events()
+    secrets = {"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}
+    signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    prev = event_id(events[0])
+    for event in events[1:]:
+        event["prev_event_id"] = prev
+        event["signature_scheme"] = "hmac-sha256"
+        event["signature_key_id"] = signer_keys[event["signer"]]
+        event["signature"] = hmac_sha256_sign(signing_payload(event), secrets[event["signature_key_id"]])
+        prev = event_id(event)
+
+    verifier = make_hmac_sha256_verifier(secrets)
+    annotated = annotate_ledger_events(events, verifier=verifier)
+    state = replay(annotated, verifier=verifier)
+    assert state.symbol == "FLOOR1"
+
+
 def test_reject_missing_required_profile_field():
     events = load_events("events_identity1.json")
     del events[0]["subject_id"]
@@ -524,3 +553,70 @@ def test_cli_validate_rejects_invalid_ledger(tmp_path):
 
     with pytest.raises(SatRootError):
         main(["validate", str(events_path)])
+
+
+def test_cli_annotate_ledger_demo_output(tmp_path):
+    events_path = tmp_path / "events.json"
+    output_path = tmp_path / "annotated.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    exit_code = main(["annotate-ledger", str(events_path), "--output", str(output_path)])
+    assert exit_code == 0
+
+    annotated_events = json.loads(output_path.read_text(encoding="utf-8"))
+    assert annotated_events[0]["event_id"].startswith("sha256:")
+    assert annotated_events[0]["state_hash"].startswith("sha256:")
+    assert replay(annotated_events).symbol == "FLOOR1"
+
+
+def test_cli_annotate_hmac_signed_ledger(tmp_path):
+    events_path = tmp_path / "events.json"
+    signer_key_map_path = tmp_path / "signers.json"
+    secrets_path = tmp_path / "secrets.json"
+    signed_path = tmp_path / "signed.json"
+    annotated_path = tmp_path / "annotated.json"
+
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    signer_key_map_path.write_text(
+        json.dumps({"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}),
+        encoding="utf-8",
+    )
+    secrets_path.write_text(
+        json.dumps({"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}),
+        encoding="utf-8",
+    )
+
+    sign_exit_code = main(
+        [
+            "sign-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--signer-key-map-json",
+            str(signer_key_map_path),
+            "--secrets-json",
+            str(secrets_path),
+            "--output",
+            str(signed_path),
+        ]
+    )
+    assert sign_exit_code == 0
+
+    annotate_exit_code = main(
+        [
+            "annotate-ledger",
+            str(signed_path),
+            "--scheme",
+            "hmac-sha256",
+            "--secrets-json",
+            str(secrets_path),
+            "--output",
+            str(annotated_path),
+        ]
+    )
+    assert annotate_exit_code == 0
+
+    annotated_events = json.loads(annotated_path.read_text(encoding="utf-8"))
+    verifier = make_hmac_sha256_verifier({"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"})
+    assert annotated_events[-1]["state_hash"].startswith("sha256:")
+    assert replay(annotated_events, verifier=verifier).symbol == "FLOOR1"
