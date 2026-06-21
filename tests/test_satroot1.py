@@ -7,6 +7,7 @@ import pytest
 from satroot1 import (
     annotate_ledger_events,
     derive_ed25519_public_keys,
+    generate_ed25519_private_keys,
     SatRootError,
     ed25519_available,
     ed25519_public_key_hex,
@@ -452,6 +453,21 @@ def test_derive_ed25519_public_keys_when_available():
     assert public_keys["alice-key"] == ed25519_public_key_hex("22" * 32)
 
 
+def test_generate_ed25519_private_keys_creates_hex_map():
+    private_keys = generate_ed25519_private_keys(["issuer-key", "alice-key"])
+    assert set(private_keys) == {"issuer-key", "alice-key"}
+    assert len(private_keys["issuer-key"]) == 64
+    assert len(private_keys["alice-key"]) == 64
+    assert private_keys["issuer-key"] != private_keys["alice-key"]
+    int(private_keys["issuer-key"], 16)
+    int(private_keys["alice-key"], 16)
+
+
+def test_generate_ed25519_private_keys_rejects_duplicate_key_ids():
+    with pytest.raises(SatRootError):
+        generate_ed25519_private_keys(["issuer-key", "issuer-key"])
+
+
 def test_sign_ledger_events_demo_helper():
     events = load_events()
     signed = sign_ledger_events(events, scheme="demo")
@@ -654,3 +670,47 @@ def test_cli_derive_ed25519_public_keys(tmp_path):
     public_keys = json.loads(output_path.read_text(encoding="utf-8"))
     assert public_keys["issuer-key"] == ed25519_public_key_hex("11" * 32)
     assert public_keys["alice-key"] == ed25519_public_key_hex("22" * 32)
+
+
+def test_cli_generate_ed25519_private_keys(tmp_path):
+    output_path = tmp_path / "private_keys.json"
+    exit_code = main(
+        [
+            "generate-ed25519-private-keys",
+            "--key-id",
+            "issuer-key",
+            "--key-id",
+            "alice-key",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    private_keys = json.loads(output_path.read_text(encoding="utf-8"))
+    assert set(private_keys) == {"issuer-key", "alice-key"}
+    assert len(private_keys["issuer-key"]) == 64
+    assert len(private_keys["alice-key"]) == 64
+
+
+def test_cli_generate_ed25519_private_keys_from_signer_map(tmp_path):
+    signer_key_map_path = tmp_path / "signers.json"
+    output_path = tmp_path / "private_keys.json"
+    signer_key_map_path.write_text(
+        json.dumps({"issuer": "issuer-key", "alice": "alice-key", "bob": "alice-key"}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "generate-ed25519-private-keys",
+            "--signer-key-map-json",
+            str(signer_key_map_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    private_keys = json.loads(output_path.read_text(encoding="utf-8"))
+    assert set(private_keys) == {"issuer-key", "alice-key"}

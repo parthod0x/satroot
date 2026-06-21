@@ -16,6 +16,7 @@ import importlib
 import importlib.util
 import json
 import re
+import secrets
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -258,6 +259,19 @@ def make_ed25519_signer(private_keys: Mapping[str, str]) -> SignerFunction:
 
 def derive_ed25519_public_keys(private_keys: Mapping[str, str]) -> Dict[str, str]:
     return {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in private_keys.items()}
+
+
+def generate_ed25519_private_keys(key_ids: Iterable[str]) -> Dict[str, str]:
+    generated: Dict[str, str] = {}
+    for key_id in key_ids:
+        if not isinstance(key_id, str) or not key_id.strip():
+            raise SatRootError(f"invalid key_id: {key_id!r}")
+        if key_id in generated:
+            raise SatRootError(f"duplicate key_id: {key_id}")
+        generated[key_id] = secrets.token_bytes(32).hex()
+    if not generated:
+        raise SatRootError("at least one key_id is required")
+    return generated
 
 
 def require_fields(event: Dict[str, Any], fields: Iterable[str]) -> None:
@@ -694,6 +708,11 @@ def build_cli_parser() -> Any:
     validate_parser.add_argument("input_json", help="Path to a JSON object or array of SATROOT-1 records")
     validate_parser.add_argument("--schema-json", help="Optional path to a JSON Schema file")
 
+    generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
+    generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
+    generate_keys_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id")
+    generate_keys_parser.add_argument("--output", help="Optional output path")
+
     derive_keys_parser = subparsers.add_parser("derive-ed25519-public-keys", help="Derive Ed25519 public keys from private key hex mappings")
     derive_keys_parser.add_argument("private_keys_json", help="Path to JSON mapping key_id -> Ed25519 private key hex")
     derive_keys_parser.add_argument("--output", help="Optional output path")
@@ -789,6 +808,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_protocol_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(instance, schema)
         print(f"valid SATROOT-1 JSON: {count} record(s)")
+        return 0
+
+    if args.command == "generate-ed25519-private-keys":
+        key_ids = list(args.key_ids or [])
+        if args.signer_key_map_json:
+            signer_key_map = _load_json_object_file(args.signer_key_map_json, label="signer-key-map-json")
+            for key_id in signer_key_map.values():
+                if key_id not in key_ids:
+                    key_ids.append(key_id)
+        private_keys = generate_ed25519_private_keys(key_ids)
+        _write_output(private_keys, args.output)
         return 0
 
     if args.command == "derive-ed25519-public-keys":
