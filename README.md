@@ -58,6 +58,7 @@ The v0.1 kernel defines:
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
 - commitment-aware CLI annotation for adding deterministic `event_id` and `state_hash` fields,
+- signer-map bootstrapping helpers for deriving `signer -> key_id` mappings from ledgers,
 - Ed25519 private-key generation helpers for bootstrapping SATROOT signing workflows,
 - Ed25519 key-derivation helpers for producing replay-ready public key maps from private key maps,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -137,7 +138,7 @@ python -m pytest
 Expected result:
 
 ```text
-48 passed
+53 passed
 ```
 
 ## Signing utilities
@@ -188,6 +189,12 @@ Annotate a ledger with deterministic event commitments:
 
 ```bash
 satroot1 annotate-ledger examples/events_floor1.json --output annotated_events.json
+```
+
+Build a signer-to-key map directly from a ledger:
+
+```bash
+satroot1 init-signer-key-map examples/events_floor1.json --output signer_keys.json
 ```
 
 Sign a full demo ledger with the built-in demo signature mode:

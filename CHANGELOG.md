@@ -19,6 +19,7 @@
 - Adds `annotate-ledger` helpers and CLI support for deterministic `event_id` and `state_hash` attachment.
 - Adds Ed25519 public-key derivation helpers and CLI support for producing verifier key maps from private key maps.
 - Adds Ed25519 private-key generation helpers and CLI support for bootstrapping SATROOT signer key maps.
+- Adds signer-map derivation helpers and CLI support for extracting `signer -> key_id` mappings from ledgers.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.

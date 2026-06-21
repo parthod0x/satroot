@@ -6,6 +6,7 @@ import pytest
 
 from satroot1 import (
     annotate_ledger_events,
+    build_signer_key_map,
     derive_ed25519_public_keys,
     generate_ed25519_private_keys,
     SatRootError,
@@ -468,6 +469,25 @@ def test_generate_ed25519_private_keys_rejects_duplicate_key_ids():
         generate_ed25519_private_keys(["issuer-key", "issuer-key"])
 
 
+def test_build_signer_key_map_uses_ledger_signers():
+    signer_key_map = build_signer_key_map(load_events())
+    assert signer_key_map == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+
+
+def test_build_signer_key_map_supports_prefix_and_suffix():
+    signer_key_map = build_signer_key_map(load_events(), key_prefix="satroot-", key_suffix="-ed25519")
+    assert signer_key_map["issuer"] == "satroot-issuer-ed25519"
+    assert signer_key_map["alice"] == "satroot-alice-ed25519"
+    assert signer_key_map["bob"] == "satroot-bob-ed25519"
+
+
+def test_build_signer_key_map_rejects_missing_signer():
+    events = load_events()
+    del events[1]["signer"]
+    with pytest.raises(SatRootError):
+        build_signer_key_map(events)
+
+
 def test_sign_ledger_events_demo_helper():
     events = load_events()
     signed = sign_ledger_events(events, scheme="demo")
@@ -714,3 +734,39 @@ def test_cli_generate_ed25519_private_keys_from_signer_map(tmp_path):
 
     private_keys = json.loads(output_path.read_text(encoding="utf-8"))
     assert set(private_keys) == {"issuer-key", "alice-key"}
+
+
+def test_cli_init_signer_key_map(tmp_path):
+    events_path = tmp_path / "events.json"
+    output_path = tmp_path / "signers.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    exit_code = main(["init-signer-key-map", str(events_path), "--output", str(output_path)])
+    assert exit_code == 0
+
+    signer_key_map = json.loads(output_path.read_text(encoding="utf-8"))
+    assert signer_key_map == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+
+
+def test_cli_init_signer_key_map_with_prefix_and_suffix(tmp_path):
+    events_path = tmp_path / "events.json"
+    output_path = tmp_path / "signers.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "init-signer-key-map",
+            str(events_path),
+            "--key-prefix",
+            "satroot-",
+            "--key-suffix=-ed25519",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    signer_key_map = json.loads(output_path.read_text(encoding="utf-8"))
+    assert signer_key_map["issuer"] == "satroot-issuer-ed25519"
+    assert signer_key_map["alice"] == "satroot-alice-ed25519"
+    assert signer_key_map["bob"] == "satroot-bob-ed25519"

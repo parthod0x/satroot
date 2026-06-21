@@ -274,6 +274,27 @@ def generate_ed25519_private_keys(key_ids: Iterable[str]) -> Dict[str, str]:
     return generated
 
 
+def build_signer_key_map(
+    events: Sequence[Dict[str, Any]],
+    *,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+) -> Dict[str, str]:
+    if not events:
+        raise SatRootError("empty ledger")
+
+    signer_key_map: Dict[str, str] = {}
+    for index, event in enumerate(events[1:], start=1):
+        signer = event.get("signer")
+        if not isinstance(signer, str) or not signer.strip():
+            raise SatRootError(f"missing or invalid signer at record {index}")
+        signer_key_map.setdefault(signer, f"{key_prefix}{signer}{key_suffix}")
+
+    if not signer_key_map:
+        raise SatRootError("no non-genesis signer records found")
+    return signer_key_map
+
+
 def require_fields(event: Dict[str, Any], fields: Iterable[str]) -> None:
     missing = [field for field in fields if field not in event]
     if missing:
@@ -708,6 +729,12 @@ def build_cli_parser() -> Any:
     validate_parser.add_argument("input_json", help="Path to a JSON object or array of SATROOT-1 records")
     validate_parser.add_argument("--schema-json", help="Optional path to a JSON Schema file")
 
+    signer_map_parser = subparsers.add_parser("init-signer-key-map", help="Build signer -> key_id mappings from a SATROOT-1 ledger")
+    signer_map_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
+    signer_map_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    signer_map_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    signer_map_parser.add_argument("--output", help="Optional output path")
+
     generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
     generate_keys_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id")
@@ -808,6 +835,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_protocol_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(instance, schema)
         print(f"valid SATROOT-1 JSON: {count} record(s)")
+        return 0
+
+    if args.command == "init-signer-key-map":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        signer_key_map = build_signer_key_map(events, key_prefix=args.key_prefix, key_suffix=args.key_suffix)
+        _write_output(signer_key_map, args.output)
         return 0
 
     if args.command == "generate-ed25519-private-keys":

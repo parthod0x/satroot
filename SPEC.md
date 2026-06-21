@@ -221,6 +221,8 @@ For Ed25519 workflows, the reference implementation also exposes public-key deri
 
 It also exposes private-key generation helpers for reference and test workflows, allowing SATROOT-specific key maps to be bootstrapped directly from the CLI before deriving public verifier material.
 
+For multi-signer ledgers, the reference implementation also exposes signer-map bootstrapping helpers so `signer -> key_id` mappings can be derived from event history before generating or assigning concrete verifier material.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.
