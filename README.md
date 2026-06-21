@@ -66,6 +66,7 @@ The v0.1 kernel defines:
 - one-shot Ed25519 workflow bootstrapping for signer maps plus private/public key material,
 - one-shot signed-ledger bundle generation for HMAC and Ed25519 workflows,
 - machine-readable signed bundle manifests describing artifacts and final committed state,
+- signed bundle verification against manifest and verifier material,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -143,7 +144,7 @@ python -m pytest
 Expected result:
 
 ```text
-66 passed
+69 passed
 ```
 
 ## Signing utilities
@@ -221,6 +222,12 @@ satroot1 bootstrap-signed-ledger examples/events_floor1.json --scheme hmac-sha25
 ```
 
 That bundle now includes `bundle_manifest.json` alongside the emitted signer/key material and ledger files.
+
+Verify a signed bundle directory end to end:
+
+```bash
+satroot1 verify-bundle signed_hmac_bundle
+```
 
 Sign a full demo ledger with the built-in demo signature mode:
 

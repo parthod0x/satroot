@@ -399,6 +399,85 @@ def build_signed_ledger_bundle_manifest(
     }
 
 
+def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
+    bundle_path = Path(bundle_dir)
+    manifest_path = bundle_path / "bundle_manifest.json"
+    if not manifest_path.exists():
+        raise SatRootError("bundle_manifest.json is required for bundle verification")
+
+    manifest = _load_json_object_file(str(manifest_path), label="bundle_manifest")
+    if manifest.get("protocol") != "SATROOT-1" or manifest.get("bundle_type") != "signed-ledger":
+        raise SatRootError("unsupported bundle manifest")
+
+    scheme = manifest.get("scheme")
+    if scheme not in {"hmac-sha256", "ed25519"}:
+        raise SatRootError(f"unsupported bundle scheme: {scheme!r}")
+
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise SatRootError("bundle manifest files must be an object")
+
+    def require_bundle_file(key: str) -> Path:
+        relative = files.get(key)
+        if not isinstance(relative, str) or not relative.strip():
+            raise SatRootError(f"bundle manifest missing file entry for {key}")
+        path = bundle_path / relative
+        if not path.exists():
+            raise SatRootError(f"bundle file not found for {key}: {relative}")
+        return path
+
+    signed_events_path = require_bundle_file("signed_events")
+    signed_events = _load_json_file(str(signed_events_path))
+    if not isinstance(signed_events, list):
+        raise SatRootError("signed_events bundle file must contain a JSON array")
+
+    if scheme == "hmac-sha256":
+        secrets_path = require_bundle_file("secrets")
+        secrets = _load_json_object_file(str(secrets_path), label="secrets")
+        verifier = make_hmac_sha256_verifier(secrets)
+    else:
+        public_keys_path = require_bundle_file("public_keys")
+        public_keys = _load_json_object_file(str(public_keys_path), label="public_keys")
+        verifier = make_ed25519_verifier(public_keys)
+
+    final_state = replay(signed_events, verifier=verifier)
+    final_snapshot = final_state.snapshot()
+
+    record_count = manifest.get("record_count")
+    if not isinstance(record_count, int) or record_count != len(signed_events):
+        raise SatRootError("bundle record_count mismatch")
+    if manifest.get("root_id") != final_snapshot["root_id"]:
+        raise SatRootError("bundle root_id mismatch")
+    if manifest.get("symbol") != final_snapshot["symbol"]:
+        raise SatRootError("bundle symbol mismatch")
+    if manifest.get("final_event_id") != final_snapshot["last_event_id"]:
+        raise SatRootError("bundle final_event_id mismatch")
+    if manifest.get("final_state_hash") != final_state.state_hash():
+        raise SatRootError("bundle final_state_hash mismatch")
+
+    annotated_expected = bool(manifest.get("annotated_output"))
+    annotated_verified = False
+    if annotated_expected:
+        annotated_path = require_bundle_file("annotated_signed_events")
+        annotated_events = _load_json_file(str(annotated_path))
+        if not isinstance(annotated_events, list):
+            raise SatRootError("annotated_signed_events bundle file must contain a JSON array")
+        annotated_state = replay(annotated_events, verifier=verifier)
+        if annotated_state.state_hash() != final_state.state_hash():
+            raise SatRootError("annotated bundle final_state_hash mismatch")
+        annotated_verified = True
+
+    return {
+        "scheme": scheme,
+        "record_count": len(signed_events),
+        "root_id": final_snapshot["root_id"],
+        "symbol": final_snapshot["symbol"],
+        "final_event_id": final_snapshot["last_event_id"],
+        "final_state_hash": final_state.state_hash(),
+        "annotated_verified": annotated_verified,
+    }
+
+
 def require_fields(event: Dict[str, Any], fields: Iterable[str]) -> None:
     missing = [field for field in fields if field not in event]
     if missing:
@@ -863,6 +942,9 @@ def build_cli_parser() -> Any:
     bootstrap_signed_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during the signing step")
     bootstrap_signed_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
 
+    verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
+    verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
+
     generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
     generate_keys_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id")
@@ -1037,6 +1119,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         manifest = build_signed_ledger_bundle_manifest(bundle, output_files=output_files)
         _write_json_file(output_dir / output_files["bundle_manifest"], manifest)
         print(f"wrote signed SATROOT-1 {args.scheme} bundle to {output_dir}")
+        return 0
+
+    if args.command == "verify-bundle":
+        summary = verify_signed_ledger_bundle(args.bundle_dir)
+        print(canonical_json(summary))
         return 0
 
     if args.command == "bootstrap-ed25519-workflow":

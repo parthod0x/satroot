@@ -30,6 +30,7 @@ from satroot1 import (
     sign_ledger_events,
     signing_payload,
     validate_instance_against_schema,
+    verify_signed_ledger_bundle,
 )
 
 
@@ -561,6 +562,53 @@ def test_build_signed_ledger_bundle_manifest_summarizes_bundle():
     assert manifest["final_state_hash"].startswith("sha256:")
 
 
+def test_verify_signed_ledger_bundle_accepts_hmac_bundle(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+    )
+    (tmp_path / "signer_key_map.json").write_text(json.dumps(bundle["material"]["signer_key_map"]), encoding="utf-8")
+    (tmp_path / "secrets.json").write_text(json.dumps(bundle["material"]["shared_secrets"]), encoding="utf-8")
+    (tmp_path / "signed_events.json").write_text(json.dumps(bundle["signed_events"]), encoding="utf-8")
+    (tmp_path / "annotated_signed_events.json").write_text(json.dumps(bundle["annotated_events"]), encoding="utf-8")
+    (tmp_path / "bundle_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    summary = verify_signed_ledger_bundle(tmp_path)
+    assert summary["scheme"] == "hmac-sha256"
+    assert summary["symbol"] == "FLOOR1"
+    assert summary["annotated_verified"] is True
+
+
+def test_verify_signed_ledger_bundle_rejects_manifest_mismatch(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+    )
+    manifest["final_state_hash"] = "sha256:" + ("0" * 64)
+    (tmp_path / "signer_key_map.json").write_text(json.dumps(bundle["material"]["signer_key_map"]), encoding="utf-8")
+    (tmp_path / "secrets.json").write_text(json.dumps(bundle["material"]["shared_secrets"]), encoding="utf-8")
+    (tmp_path / "signed_events.json").write_text(json.dumps(bundle["signed_events"]), encoding="utf-8")
+    (tmp_path / "annotated_signed_events.json").write_text(json.dumps(bundle["annotated_events"]), encoding="utf-8")
+    (tmp_path / "bundle_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(SatRootError):
+        verify_signed_ledger_bundle(tmp_path)
+
+
 def test_bootstrap_signed_ledger_bundle_ed25519_when_unavailable():
     if ed25519_available():
         bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="ed25519")
@@ -1029,3 +1077,30 @@ def test_cli_bootstrap_signed_ledger_ed25519_unavailable(tmp_path):
             ]
         )
     assert not output_dir.exists()
+
+
+def test_cli_verify_bundle_hmac_bundle(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    output_dir = tmp_path / "bundle"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    bootstrap_exit_code = main(
+        [
+            "bootstrap-signed-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert bootstrap_exit_code == 0
+    capsys.readouterr()
+
+    verify_exit_code = main(["verify-bundle", str(output_dir)])
+    assert verify_exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"scheme":"hmac-sha256"' in captured.out
+    assert '"symbol":"FLOOR1"' in captured.out
+    assert '"annotated_verified":true' in captured.out
