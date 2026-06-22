@@ -769,6 +769,48 @@ def test_build_signed_ledger_bundle_index_from_bundle_dir(tmp_path):
     assert index["bundles"][0]["symbol"] == "FLOOR1"
 
 
+def test_build_signed_ledger_bundle_index_includes_release_metadata(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+
+    index = build_signed_ledger_bundle_index(
+        [bundle_dir],
+        base_dir=tmp_path,
+        release_metadata={
+            "channel": "stable",
+            "label": "SATROOT FLOOR1 Demo",
+            "published_at": "2026-06-22T12:00:00Z",
+        },
+    )
+    assert index["release"] == {
+        "channel": "stable",
+        "label": "SATROOT FLOOR1 Demo",
+        "published_at": "2026-06-22T12:00:00Z",
+    }
+
+
 def test_validate_bundle_index_schema_accepts_generated_index(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     bundle_dir = tmp_path / "bundle_a"
@@ -799,6 +841,45 @@ def test_validate_bundle_index_schema_accepts_generated_index(tmp_path):
     count = validate_instance_against_schema(index, load_bundle_index_schema())
     assert count == 1
     validate_bundle_index_consistency(index)
+
+
+def test_validate_bundle_index_schema_accepts_release_metadata(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+
+    index = build_signed_ledger_bundle_index(
+        [bundle_dir],
+        base_dir=tmp_path,
+        release_metadata={
+            "channel": "stable",
+            "label": "SATROOT FLOOR1 Demo",
+            "published_at": "2026-06-22T12:00:00Z",
+        },
+    )
+    count = validate_instance_against_schema(index, load_bundle_index_schema())
+    assert count == 1
 
 
 def test_validate_bundle_index_consistency_rejects_mismatch():
@@ -1652,6 +1733,48 @@ def test_cli_build_bundle_index(tmp_path):
     assert index["bundles"][0]["bundle_path"] == "bundle"
     assert index["bundles"][0]["manifest_path"] == "bundle/bundle_manifest.json"
     assert index["bundles"][0]["scheme"] == "hmac-sha256"
+
+
+def test_cli_build_bundle_index_with_release_metadata(tmp_path):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    bootstrap_exit_code = main(
+        [
+            "bootstrap-signed-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(bundle_dir),
+        ]
+    )
+    assert bootstrap_exit_code == 0
+
+    build_exit_code = main(
+        [
+            "build-bundle-index",
+            str(bundle_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT FLOOR1 Demo",
+            "--published-at",
+            "2026-06-22T12:00:00Z",
+            "--output",
+            str(index_path),
+        ]
+    )
+    assert build_exit_code == 0
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["release"] == {
+        "channel": "stable",
+        "label": "SATROOT FLOOR1 Demo",
+        "published_at": "2026-06-22T12:00:00Z",
+    }
 
 
 def test_cli_validate_bundle_index(tmp_path, capsys):

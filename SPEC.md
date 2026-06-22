@@ -243,6 +243,8 @@ The reference CLI may also expose non-replay lint helpers that check declared bu
 
 For multi-bundle releases, the reference implementation may also emit deterministic bundle-index catalogs that point at one or more `bundle_manifest.json` artifacts, record each manifest hash, and summarize the final committed state for downstream release tooling.
 
+Those bundle indexes may also carry optional release metadata such as channel, human label, and published-at timestamp so the same artifact can serve as a lightweight SATROOT distribution manifest.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

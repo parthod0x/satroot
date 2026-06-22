@@ -513,6 +513,7 @@ def build_signed_ledger_bundle_index(
     bundle_dirs: Sequence[str | Path],
     *,
     base_dir: str | Path = ".",
+    release_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     if not bundle_dirs:
         raise SatRootError("at least one bundle directory is required")
@@ -548,13 +549,16 @@ def build_signed_ledger_bundle_index(
         bundles.append(entry)
 
     bundles.sort(key=lambda entry: (str(entry["symbol"]), str(entry["bundle_path"]), str(entry["manifest_hash"])))
-    return {
+    index = {
         "protocol": "SATROOT-1",
         "version": "0.1",
         "index_type": "bundle-index",
         "bundle_count": len(bundles),
         "bundles": bundles,
     }
+    if release_metadata:
+        index["release"] = {key: value for key, value in release_metadata.items() if isinstance(value, str) and value.strip()}
+    return index
 
 
 def validate_bundle_index_consistency(index: Mapping[str, Any]) -> None:
@@ -1133,6 +1137,9 @@ def build_cli_parser() -> Any:
 
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
     bundle_index_parser.add_argument("bundle_dir", nargs="+", help="Path to a signed SATROOT-1 bundle directory")
+    bundle_index_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    bundle_index_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
     bundle_index_parser.add_argument("--output", help="Optional output path")
 
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
@@ -1352,7 +1359,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-bundle-index":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        index = build_signed_ledger_bundle_index(args.bundle_dir, base_dir=base_dir)
+        release_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        index = build_signed_ledger_bundle_index(args.bundle_dir, base_dir=base_dir, release_metadata=release_metadata)
         _write_output(index, output_path)
         return 0
 

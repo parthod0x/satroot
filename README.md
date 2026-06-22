@@ -71,6 +71,7 @@ The v0.1 kernel defines:
 - manifest-only bundle inspection via `bundle-summary` when replay is unnecessary,
 - structural bundle linting via `bundle-lint` for missing files and manifest layout drift,
 - deterministic bundle-index generation for release catalogs spanning multiple bundles,
+- optional release metadata on bundle indexes for channel, label, and published-at packaging context,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest and bundle-index schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -150,7 +151,7 @@ python -m pytest
 Expected result:
 
 ```text
-90 passed
+93 passed
 ```
 
 ## Signing utilities
@@ -257,6 +258,12 @@ Build a bundle index catalog from one or more bundle directories:
 
 ```bash
 satroot1 build-bundle-index signed_hmac_bundle --output bundle_index.json
+```
+
+Attach lightweight release metadata to a bundle index:
+
+```bash
+satroot1 build-bundle-index signed_hmac_bundle --channel stable --label "SATROOT FLOOR1 Demo" --published-at 2026-06-22T12:00:00Z --output bundle_index.json
 ```
 
 Validate a bundle manifest directly against the SATROOT manifest schema:
