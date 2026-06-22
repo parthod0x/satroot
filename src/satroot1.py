@@ -450,6 +450,58 @@ def summarize_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
     }
 
 
+def lint_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
+    bundle_path = Path(bundle_dir)
+    manifest = _load_validated_bundle_manifest(bundle_path)
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise SatRootError("bundle manifest files must be an object")
+    file_hashes = manifest.get("file_hashes")
+    if not isinstance(file_hashes, dict):
+        raise SatRootError("bundle manifest file_hashes must be an object")
+
+    declared_paths = {
+        key: relative
+        for key, relative in files.items()
+        if isinstance(relative, str) and relative.strip()
+    }
+    path_counts: Dict[str, int] = {}
+    for relative in declared_paths.values():
+        path_counts[relative] = path_counts.get(relative, 0) + 1
+
+    missing_files = sorted(
+        key for key, relative in declared_paths.items() if not (bundle_path / relative).is_file()
+    )
+    unhashed_declared_files = sorted(
+        key for key in declared_paths if key != "bundle_manifest" and key not in file_hashes
+    )
+    dangling_hash_entries = sorted(key for key in file_hashes if key not in declared_paths)
+    duplicate_declared_paths = sorted(relative for relative, count in path_counts.items() if count > 1)
+    actual_files = sorted(path.name for path in bundle_path.iterdir() if path.is_file())
+    extra_files = sorted(name for name in actual_files if name not in set(declared_paths.values()))
+
+    return {
+        "ok": not any(
+            [
+                missing_files,
+                unhashed_declared_files,
+                dangling_hash_entries,
+                duplicate_declared_paths,
+                extra_files,
+            ]
+        ),
+        "scheme": manifest.get("scheme"),
+        "verification_material_scope": manifest.get("verification_material_scope"),
+        "declared_file_count": len(declared_paths),
+        "actual_file_count": len(actual_files),
+        "missing_files": missing_files,
+        "unhashed_declared_files": unhashed_declared_files,
+        "dangling_hash_entries": dangling_hash_entries,
+        "duplicate_declared_paths": duplicate_declared_paths,
+        "extra_files": extra_files,
+    }
+
+
 def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
     bundle_path = Path(bundle_dir)
     manifest = _load_validated_bundle_manifest(bundle_path)
@@ -1008,6 +1060,9 @@ def build_cli_parser() -> Any:
     bundle_summary_parser = subparsers.add_parser("bundle-summary", help="Read bundle_manifest.json and print a manifest-level bundle summary without replaying")
     bundle_summary_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
+    bundle_lint_parser = subparsers.add_parser("bundle-lint", help="Check bundle_manifest.json plus bundle file layout without replaying")
+    bundle_lint_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
+
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
@@ -1206,6 +1261,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         summary = summarize_signed_ledger_bundle(args.bundle_dir)
         print(canonical_json(summary))
         return 0
+
+    if args.command == "bundle-lint":
+        report = lint_signed_ledger_bundle(args.bundle_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
 
     if args.command == "verify-bundle":
         summary = verify_signed_ledger_bundle(args.bundle_dir)

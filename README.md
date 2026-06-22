@@ -68,6 +68,7 @@ The v0.1 kernel defines:
 - one-shot signed-ledger bundle generation for HMAC and Ed25519 workflows,
 - machine-readable signed bundle manifests describing artifacts, verifier-material scope, per-file hashes, and the full final replay snapshot,
 - manifest-only bundle inspection via `bundle-summary` when replay is unnecessary,
+- structural bundle linting via `bundle-lint` for missing files and manifest layout drift,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -147,7 +148,7 @@ python -m pytest
 Expected result:
 
 ```text
-80 passed
+84 passed
 ```
 
 ## Signing utilities
@@ -242,6 +243,12 @@ Read a bundle manifest summary without replaying the ledger:
 
 ```bash
 satroot1 bundle-summary signed_hmac_bundle
+```
+
+Lint bundle structure without replaying the ledger:
+
+```bash
+satroot1 bundle-lint signed_hmac_bundle
 ```
 
 Validate a bundle manifest directly against the SATROOT manifest schema:

@@ -31,6 +31,7 @@ from satroot1 import (
     sha256_hex,
     sign_ledger_events,
     signing_payload,
+    lint_signed_ledger_bundle,
     summarize_signed_ledger_bundle,
     validate_instance_against_schema,
     verify_signed_ledger_bundle,
@@ -688,6 +689,75 @@ def test_summarize_signed_ledger_bundle_reads_manifest_only(tmp_path):
     assert summary["annotated_output"] is True
     assert summary["final_state_snapshot"] == bundle["final_state_snapshot"]
     assert summary["files"]["signed_events"] == "signed_events.json"
+
+
+def test_lint_signed_ledger_bundle_accepts_clean_hmac_bundle(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(tmp_path / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(tmp_path / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(tmp_path / "signed_events.json", bundle["signed_events"])
+    write_json(tmp_path / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(tmp_path / "bundle_manifest.json", manifest)
+
+    report = lint_signed_ledger_bundle(tmp_path)
+    assert report["ok"] is True
+    assert report["missing_files"] == []
+    assert report["extra_files"] == []
+    assert report["unhashed_declared_files"] == []
+    assert report["dangling_hash_entries"] == []
+    assert report["duplicate_declared_paths"] == []
+
+
+def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    manifest["files"]["public_keys"] = "public_keys.json"
+    manifest["files"]["annotated_signed_events"] = "signed_events.json"
+    manifest["file_hashes"]["private_keys"] = "sha256:" + ("1" * 64)
+    write_json(tmp_path / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(tmp_path / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(tmp_path / "signed_events.json", bundle["signed_events"])
+    write_json(tmp_path / "bundle_manifest.json", manifest)
+    write_json(tmp_path / "unexpected.txt", {"note": "extra"})
+
+    report = lint_signed_ledger_bundle(tmp_path)
+    assert report["ok"] is False
+    assert report["missing_files"] == ["public_keys"]
+    assert report["unhashed_declared_files"] == ["public_keys"]
+    assert report["dangling_hash_entries"] == ["private_keys"]
+    assert report["duplicate_declared_paths"] == ["signed_events.json"]
+    assert report["extra_files"] == ["unexpected.txt"]
 
 
 def test_validate_instance_against_bundle_manifest_schema_accepts_public_only_ed25519_manifest():
@@ -1398,6 +1468,72 @@ def test_cli_bundle_summary_reads_manifest_without_replay(tmp_path, capsys):
     assert '"verification_material_scope":"shared-secret"' in captured.out
     assert '"annotated_output":true' in captured.out
     assert '"symbol":"FLOOR1"' in captured.out
+
+
+def test_cli_bundle_lint_accepts_clean_bundle(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    output_dir = tmp_path / "bundle"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    bootstrap_exit_code = main(
+        [
+            "bootstrap-signed-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert bootstrap_exit_code == 0
+    capsys.readouterr()
+
+    lint_exit_code = main(["bundle-lint", str(output_dir)])
+    assert lint_exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"missing_files":[]' in captured.out
+    assert '"extra_files":[]' in captured.out
+
+
+def test_cli_bundle_lint_reports_findings(tmp_path, capsys):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    manifest["files"]["public_keys"] = "public_keys.json"
+    manifest["files"]["annotated_signed_events"] = "signed_events.json"
+    manifest["file_hashes"]["private_keys"] = "sha256:" + ("1" * 64)
+    write_json(tmp_path / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(tmp_path / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(tmp_path / "signed_events.json", bundle["signed_events"])
+    write_json(tmp_path / "bundle_manifest.json", manifest)
+    (tmp_path / "unexpected.txt").write_text("extra", encoding="utf-8")
+
+    lint_exit_code = main(["bundle-lint", str(tmp_path)])
+    assert lint_exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"missing_files":["public_keys"]' in captured.out
+    assert '"unhashed_declared_files":["public_keys"]' in captured.out
+    assert '"dangling_hash_entries":["private_keys"]' in captured.out
+    assert '"duplicate_declared_paths":["signed_events.json"]' in captured.out
+    assert '"extra_files":["unexpected.txt"]' in captured.out
 
 
 def test_cli_validate_bundle_manifest(tmp_path, capsys):

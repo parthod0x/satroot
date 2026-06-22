@@ -239,6 +239,8 @@ The signed bundle manifest format is also described by its own JSON Schema so bu
 
 When replay is unnecessary, the reference CLI may also expose manifest-only inspection helpers that summarize bundle metadata and the embedded final replay snapshot directly from `bundle_manifest.json`.
 
+The reference CLI may also expose non-replay lint helpers that check declared bundle files, hash coverage, and directory-layout drift before a consumer decides whether full cryptographic replay verification is worth running.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.
