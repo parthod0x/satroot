@@ -6,6 +6,7 @@ import pytest
 
 from satroot1 import (
     annotate_ledger_events,
+    build_signed_ledger_bundle_index,
     bootstrap_ed25519_workflow,
     bootstrap_hmac_workflow,
     bootstrap_signed_ledger_bundle,
@@ -20,6 +21,7 @@ from satroot1 import (
     ed25519_sign,
     event_id,
     hmac_sha256_sign,
+    load_bundle_index_schema,
     load_bundle_manifest_schema,
     load_protocol_schema,
     load_profile_registry,
@@ -34,6 +36,7 @@ from satroot1 import (
     lint_signed_ledger_bundle,
     summarize_signed_ledger_bundle,
     validate_instance_against_schema,
+    validate_bundle_index_consistency,
     verify_signed_ledger_bundle,
 )
 
@@ -281,6 +284,12 @@ def test_load_bundle_manifest_schema_supports_signed_ledger_bundles():
     assert schema["properties"]["bundle_type"]["const"] == "signed-ledger"
     assert "hmac-sha256" in schema["properties"]["scheme"]["enum"]
     assert "verification_material_scope" in schema["properties"]
+
+
+def test_load_bundle_index_schema_supports_bundle_indexes():
+    schema = load_bundle_index_schema()
+    assert schema["properties"]["index_type"]["const"] == "bundle-index"
+    assert "bundles" in schema["properties"]
 
 
 def test_validate_instance_against_schema_accepts_demo_ledger():
@@ -722,6 +731,87 @@ def test_lint_signed_ledger_bundle_accepts_clean_hmac_bundle(tmp_path):
     assert report["unhashed_declared_files"] == []
     assert report["dangling_hash_entries"] == []
     assert report["duplicate_declared_paths"] == []
+
+
+def test_build_signed_ledger_bundle_index_from_bundle_dir(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+
+    index = build_signed_ledger_bundle_index([bundle_dir], base_dir=tmp_path)
+    assert index["protocol"] == "SATROOT-1"
+    assert index["index_type"] == "bundle-index"
+    assert index["bundle_count"] == 1
+    assert index["bundles"][0]["bundle_path"] == "bundle_a"
+    assert index["bundles"][0]["manifest_path"] == "bundle_a/bundle_manifest.json"
+    assert index["bundles"][0]["scheme"] == "hmac-sha256"
+    assert index["bundles"][0]["symbol"] == "FLOOR1"
+
+
+def test_validate_bundle_index_schema_accepts_generated_index(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+
+    index = build_signed_ledger_bundle_index([bundle_dir], base_dir=tmp_path)
+    count = validate_instance_against_schema(index, load_bundle_index_schema())
+    assert count == 1
+    validate_bundle_index_consistency(index)
+
+
+def test_validate_bundle_index_consistency_rejects_mismatch():
+    with pytest.raises(SatRootError):
+        validate_bundle_index_consistency(
+            {
+                "protocol": "SATROOT-1",
+                "version": "0.1",
+                "index_type": "bundle-index",
+                "bundle_count": 2,
+                "bundles": [{"bundle_id": "sha256:" + ("0" * 64)}],
+            }
+        )
 
 
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
@@ -1534,6 +1624,62 @@ def test_cli_bundle_lint_reports_findings(tmp_path, capsys):
     assert '"dangling_hash_entries":["private_keys"]' in captured.out
     assert '"duplicate_declared_paths":["signed_events.json"]' in captured.out
     assert '"extra_files":["unexpected.txt"]' in captured.out
+
+
+def test_cli_build_bundle_index(tmp_path):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    bootstrap_exit_code = main(
+        [
+            "bootstrap-signed-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(bundle_dir),
+        ]
+    )
+    assert bootstrap_exit_code == 0
+
+    build_exit_code = main(["build-bundle-index", str(bundle_dir), "--output", str(index_path)])
+    assert build_exit_code == 0
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 1
+    assert index["bundles"][0]["bundle_path"] == "bundle"
+    assert index["bundles"][0]["manifest_path"] == "bundle/bundle_manifest.json"
+    assert index["bundles"][0]["scheme"] == "hmac-sha256"
+
+
+def test_cli_validate_bundle_index(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    bootstrap_exit_code = main(
+        [
+            "bootstrap-signed-ledger",
+            str(events_path),
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(bundle_dir),
+        ]
+    )
+    assert bootstrap_exit_code == 0
+    build_exit_code = main(["build-bundle-index", str(bundle_dir), "--output", str(index_path)])
+    assert build_exit_code == 0
+    capsys.readouterr()
+
+    validate_exit_code = main(["validate-bundle-index", str(index_path)])
+    assert validate_exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "valid SATROOT-1 bundle index: 1 record(s)" in captured.out
 
 
 def test_cli_validate_bundle_manifest(tmp_path, capsys):

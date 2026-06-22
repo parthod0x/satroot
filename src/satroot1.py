@@ -31,6 +31,7 @@ ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.schema.json"
 BUNDLE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-manifest.schema.json"
+BUNDLE_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-index.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -100,6 +101,12 @@ def load_protocol_schema() -> Dict[str, Any]:
 @functools.lru_cache(maxsize=1)
 def load_bundle_manifest_schema() -> Dict[str, Any]:
     with BUNDLE_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_bundle_index_schema() -> Dict[str, Any]:
+    with BUNDLE_INDEX_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -500,6 +507,63 @@ def lint_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
         "duplicate_declared_paths": duplicate_declared_paths,
         "extra_files": extra_files,
     }
+
+
+def build_signed_ledger_bundle_index(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    base_dir: str | Path = ".",
+) -> Dict[str, Any]:
+    if not bundle_dirs:
+        raise SatRootError("at least one bundle directory is required")
+
+    base_path = Path(base_dir).resolve()
+    bundles: list[Dict[str, Any]] = []
+    for bundle_dir in bundle_dirs:
+        bundle_path = Path(bundle_dir).resolve()
+        manifest = _load_validated_bundle_manifest(bundle_path)
+        manifest_path = bundle_path / "bundle_manifest.json"
+        try:
+            relative_bundle_path = bundle_path.relative_to(base_path).as_posix()
+        except ValueError:
+            relative_bundle_path = bundle_path.as_posix()
+        entry = {
+            "bundle_id": "sha256:" + sha256_hex(relative_bundle_path),
+            "bundle_path": relative_bundle_path,
+            "manifest_path": (
+                f"{relative_bundle_path}/bundle_manifest.json"
+                if relative_bundle_path not in {"", "."}
+                else "bundle_manifest.json"
+            ),
+            "manifest_hash": "sha256:" + sha256_hex_bytes(manifest_path.read_bytes()),
+            "scheme": manifest.get("scheme"),
+            "verification_material_scope": manifest.get("verification_material_scope"),
+            "record_count": manifest.get("record_count"),
+            "root_id": manifest.get("root_id"),
+            "symbol": manifest.get("symbol"),
+            "final_event_id": manifest.get("final_event_id"),
+            "final_state_hash": manifest.get("final_state_hash"),
+            "annotated_output": bool(manifest.get("annotated_output")),
+        }
+        bundles.append(entry)
+
+    bundles.sort(key=lambda entry: (str(entry["symbol"]), str(entry["bundle_path"]), str(entry["manifest_hash"])))
+    return {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "index_type": "bundle-index",
+        "bundle_count": len(bundles),
+        "bundles": bundles,
+    }
+
+
+def validate_bundle_index_consistency(index: Mapping[str, Any]) -> None:
+    bundles = index.get("bundles")
+    bundle_count = index.get("bundle_count")
+    if not isinstance(bundles, list):
+        raise SatRootError("bundle index bundles must be an array")
+    if not isinstance(bundle_count, int) or bundle_count != len(bundles):
+        raise SatRootError("bundle index bundle_count mismatch")
 
 
 def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
@@ -1030,6 +1094,10 @@ def build_cli_parser() -> Any:
     validate_bundle_manifest_parser.add_argument("bundle_manifest_json", help="Path to bundle_manifest.json")
     validate_bundle_manifest_parser.add_argument("--schema-json", help="Optional path to a bundle-manifest JSON Schema file")
 
+    validate_bundle_index_parser = subparsers.add_parser("validate-bundle-index", help="Validate a SATROOT-1 bundle index against the bundle-index schema")
+    validate_bundle_index_parser.add_argument("bundle_index_json", help="Path to bundle-index.json")
+    validate_bundle_index_parser.add_argument("--schema-json", help="Optional path to a bundle-index JSON Schema file")
+
     signer_map_parser = subparsers.add_parser("init-signer-key-map", help="Build signer -> key_id mappings from a SATROOT-1 ledger")
     signer_map_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
     signer_map_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
@@ -1062,6 +1130,10 @@ def build_cli_parser() -> Any:
 
     bundle_lint_parser = subparsers.add_parser("bundle-lint", help="Check bundle_manifest.json plus bundle file layout without replaying")
     bundle_lint_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
+
+    bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
+    bundle_index_parser.add_argument("bundle_dir", nargs="+", help="Path to a signed SATROOT-1 bundle directory")
+    bundle_index_parser.add_argument("--output", help="Optional output path")
 
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
@@ -1181,6 +1253,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"valid SATROOT-1 bundle manifest: {count} record(s)")
         return 0
 
+    if args.command == "validate-bundle-index":
+        index = _load_json_file(args.bundle_index_json)
+        schema = load_bundle_index_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(index, schema)
+        if not isinstance(index, dict):
+            raise SatRootError("bundle index must contain an object")
+        validate_bundle_index_consistency(index)
+        print(f"valid SATROOT-1 bundle index: {count} record(s)")
+        return 0
+
     if args.command == "init-signer-key-map":
         events = _load_json_file(args.events_json)
         if not isinstance(events, list):
@@ -1266,6 +1348,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         report = lint_signed_ledger_bundle(args.bundle_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
+
+    if args.command == "build-bundle-index":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        index = build_signed_ledger_bundle_index(args.bundle_dir, base_dir=base_dir)
+        _write_output(index, output_path)
+        return 0
 
     if args.command == "verify-bundle":
         summary = verify_signed_ledger_bundle(args.bundle_dir)

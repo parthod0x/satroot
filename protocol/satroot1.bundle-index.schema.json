@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/satroot1.bundle-index.schema.json",
+  "title": "SATROOT-1 Bundle Index",
+  "type": "object",
+  "required": [
+    "protocol",
+    "version",
+    "index_type",
+    "bundle_count",
+    "bundles"
+  ],
+  "properties": {
+    "protocol": {"const": "SATROOT-1"},
+    "version": {"const": "0.1"},
+    "index_type": {"const": "bundle-index"},
+    "bundle_count": {"type": "integer", "minimum": 1},
+    "bundles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "bundle_id",
+          "bundle_path",
+          "manifest_path",
+          "manifest_hash",
+          "scheme",
+          "verification_material_scope",
+          "record_count",
+          "root_id",
+          "symbol",
+          "final_event_id",
+          "final_state_hash",
+          "annotated_output"
+        ],
+        "properties": {
+          "bundle_id": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+          "bundle_path": {"type": "string", "minLength": 1},
+          "manifest_path": {"type": "string", "minLength": 1},
+          "manifest_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+          "scheme": {"enum": ["hmac-sha256", "ed25519"]},
+          "verification_material_scope": {"enum": ["shared-secret", "public-only", "private-and-public"]},
+          "record_count": {"type": "integer", "minimum": 1},
+          "root_id": {"type": "string", "pattern": "^[a-fA-F0-9]{64}:[0-9]+$"},
+          "symbol": {"type": "string", "pattern": "^[A-Z0-9]{1,16}$"},
+          "final_event_id": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+          "final_state_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+          "annotated_output": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"bundle_count": {"type": "integer"}},
+        "required": ["bundle_count"]
+      },
+      "then": {
+        "properties": {
+          "bundles": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

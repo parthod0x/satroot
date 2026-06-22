@@ -30,6 +30,7 @@
 - Adds verifier-only Ed25519 bundle export with explicit manifest scope metadata.
 - Adds a manifest-only `bundle-summary` CLI path for fast bundle inspection without replay.
 - Adds a non-replay `bundle-lint` CLI path for structural bundle checks and layout drift detection.
+- Adds deterministic bundle-index exports plus bundle-index schema validation support.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.

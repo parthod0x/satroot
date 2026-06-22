@@ -241,6 +241,8 @@ When replay is unnecessary, the reference CLI may also expose manifest-only insp
 
 The reference CLI may also expose non-replay lint helpers that check declared bundle files, hash coverage, and directory-layout drift before a consumer decides whether full cryptographic replay verification is worth running.
 
+For multi-bundle releases, the reference implementation may also emit deterministic bundle-index catalogs that point at one or more `bundle_manifest.json` artifacts, record each manifest hash, and summarize the final committed state for downstream release tooling.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.
