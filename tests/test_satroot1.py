@@ -7,6 +7,7 @@ import pytest
 from satroot1 import (
     annotate_ledger_events,
     build_signed_ledger_bundle_index,
+    build_signed_release_manifest,
     bootstrap_ed25519_workflow,
     bootstrap_hmac_workflow,
     bootstrap_signed_ledger_bundle,
@@ -25,9 +26,11 @@ from satroot1 import (
     load_bundle_manifest_schema,
     load_protocol_schema,
     load_profile_registry,
+    load_release_manifest_schema,
     main,
     make_ed25519_verifier,
     make_hmac_sha256_verifier,
+    make_hmac_sha256_signer,
     replay,
     rendered_json_sha256,
     sha256_hex,
@@ -37,6 +40,7 @@ from satroot1 import (
     summarize_signed_ledger_bundle,
     validate_instance_against_schema,
     validate_bundle_index_consistency,
+    verify_signed_release_manifest,
     verify_signed_ledger_bundle,
 )
 
@@ -290,6 +294,12 @@ def test_load_bundle_index_schema_supports_bundle_indexes():
     schema = load_bundle_index_schema()
     assert schema["properties"]["index_type"]["const"] == "bundle-index"
     assert "bundles" in schema["properties"]
+
+
+def test_load_release_manifest_schema_supports_release_manifests():
+    schema = load_release_manifest_schema()
+    assert schema["properties"]["manifest_type"]["const"] == "release-manifest"
+    assert "signature_scheme" in schema["properties"]
 
 
 def test_validate_instance_against_schema_accepts_demo_ledger():
@@ -892,6 +902,192 @@ def test_validate_bundle_index_consistency_rejects_mismatch():
                 "bundle_count": 2,
                 "bundles": [{"bundle_id": "sha256:" + ("0" * 64)}],
             }
+        )
+
+
+def test_build_signed_release_manifest_hmac(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+    index = build_signed_ledger_bundle_index(
+        [bundle_dir],
+        base_dir=tmp_path,
+        release_metadata={"channel": "stable", "label": "SATROOT FLOOR1 Demo", "published_at": "2026-06-26T12:00:00Z"},
+    )
+    index_path = tmp_path / "bundle_index.json"
+    write_json(index_path, index)
+
+    release_manifest = build_signed_release_manifest(
+        index_path,
+        signature_scheme="hmac-sha256",
+        key_id="release-key",
+        signer=make_hmac_sha256_signer({"release-key": "release-secret"}),
+        base_dir=tmp_path,
+    )
+    assert release_manifest["manifest_type"] == "release-manifest"
+    assert release_manifest["bundle_index_path"] == "bundle_index.json"
+    assert release_manifest["signature_scheme"] == "hmac-sha256"
+    assert release_manifest["signature_key_id"] == "release-key"
+    assert release_manifest["signature"].startswith("hmac-sha256:")
+    assert release_manifest["release"] == index["release"]
+
+
+def test_validate_release_manifest_schema_accepts_generated_manifest(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+    index = build_signed_ledger_bundle_index([bundle_dir], base_dir=tmp_path)
+    index_path = tmp_path / "bundle_index.json"
+    write_json(index_path, index)
+
+    release_manifest = build_signed_release_manifest(
+        index_path,
+        signature_scheme="hmac-sha256",
+        key_id="release-key",
+        signer=make_hmac_sha256_signer({"release-key": "release-secret"}),
+        base_dir=tmp_path,
+    )
+    count = validate_instance_against_schema(release_manifest, load_release_manifest_schema())
+    assert count == 1
+
+
+def test_verify_signed_release_manifest_accepts_hmac(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+    index = build_signed_ledger_bundle_index(
+        [bundle_dir],
+        base_dir=tmp_path,
+        release_metadata={"channel": "stable", "label": "SATROOT FLOOR1 Demo", "published_at": "2026-06-26T12:00:00Z"},
+    )
+    index_path = tmp_path / "bundle_index.json"
+    write_json(index_path, index)
+    release_manifest = build_signed_release_manifest(
+        index_path,
+        signature_scheme="hmac-sha256",
+        key_id="release-key",
+        signer=make_hmac_sha256_signer({"release-key": "release-secret"}),
+        base_dir=tmp_path,
+    )
+    release_manifest_path = tmp_path / "release_manifest.json"
+    write_json(release_manifest_path, release_manifest)
+
+    summary = verify_signed_release_manifest(
+        release_manifest_path,
+        verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
+    )
+    assert summary["signature_scheme"] == "hmac-sha256"
+    assert summary["signature_key_id"] == "release-key"
+    assert summary["bundle_index_path"] == "bundle_index.json"
+    assert summary["release"] == index["release"]
+
+
+def test_verify_signed_release_manifest_rejects_index_hash_mismatch(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+    index = build_signed_ledger_bundle_index([bundle_dir], base_dir=tmp_path)
+    index_path = tmp_path / "bundle_index.json"
+    write_json(index_path, index)
+    release_manifest = build_signed_release_manifest(
+        index_path,
+        signature_scheme="hmac-sha256",
+        key_id="release-key",
+        signer=make_hmac_sha256_signer({"release-key": "release-secret"}),
+        base_dir=tmp_path,
+    )
+    release_manifest["bundle_index_hash"] = "sha256:" + ("0" * 64)
+    release_manifest_path = tmp_path / "release_manifest.json"
+    write_json(release_manifest_path, release_manifest)
+
+    with pytest.raises(SatRootError):
+        verify_signed_release_manifest(
+            release_manifest_path,
+            verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
         )
 
 
@@ -1803,6 +1999,118 @@ def test_cli_validate_bundle_index(tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert "valid SATROOT-1 bundle index: 1 record(s)" in captured.out
+
+
+def test_cli_build_release_manifest(tmp_path):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    release_manifest_path = tmp_path / "release_manifest.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["build-bundle-index", str(bundle_dir), "--output", str(index_path)]) == 0
+    exit_code = main(
+        [
+            "build-release-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secret",
+            "release-secret",
+            "--output",
+            str(release_manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    release_manifest = json.loads(release_manifest_path.read_text(encoding="utf-8"))
+    assert release_manifest["manifest_type"] == "release-manifest"
+    assert release_manifest["signature_scheme"] == "hmac-sha256"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+
+def test_cli_validate_release_manifest(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    release_manifest_path = tmp_path / "release_manifest.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["build-bundle-index", str(bundle_dir), "--output", str(index_path)]) == 0
+    assert main(
+        [
+            "build-release-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secret",
+            "release-secret",
+            "--output",
+            str(release_manifest_path),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    exit_code = main(["validate-release-manifest", str(release_manifest_path)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "valid SATROOT-1 release manifest: 1 record(s)" in captured.out
+
+
+def test_cli_verify_release_manifest(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    release_manifest_path = tmp_path / "release_manifest.json"
+    secrets_path = tmp_path / "release_secrets.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    write_json(secrets_path, {"release-key": "release-secret"})
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(
+        [
+            "build-bundle-index",
+            str(bundle_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT FLOOR1 Demo",
+            "--published-at",
+            "2026-06-26T12:00:00Z",
+            "--output",
+            str(index_path),
+        ]
+    ) == 0
+    assert main(
+        [
+            "build-release-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secret",
+            "release-secret",
+            "--output",
+            str(release_manifest_path),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    exit_code = main(["verify-release-manifest", str(release_manifest_path), "--secrets-json", str(secrets_path)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"release-key"' in captured.out
+    assert '"bundle_index_path":"bundle_index.json"' in captured.out
 
 
 def test_cli_validate_bundle_manifest(tmp_path, capsys):

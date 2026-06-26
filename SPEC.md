@@ -245,6 +245,8 @@ For multi-bundle releases, the reference implementation may also emit determinis
 
 Those bundle indexes may also carry optional release metadata such as channel, human label, and published-at timestamp so the same artifact can serve as a lightweight SATROOT distribution manifest.
 
+For authenticated publication workflows, the reference implementation may also emit a signed release manifest that binds a `bundle_index.json` path and hash to explicit release-signature metadata, allowing downstream consumers to verify the publication artifact separately from bundle replay itself.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

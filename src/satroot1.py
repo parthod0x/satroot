@@ -32,6 +32,7 @@ PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satr
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.schema.json"
 BUNDLE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-manifest.schema.json"
 BUNDLE_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-index.schema.json"
+RELEASE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-manifest.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -107,6 +108,12 @@ def load_bundle_manifest_schema() -> Dict[str, Any]:
 @functools.lru_cache(maxsize=1)
 def load_bundle_index_schema() -> Dict[str, Any]:
     with BUNDLE_INDEX_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_release_manifest_schema() -> Dict[str, Any]:
+    with RELEASE_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -568,6 +575,93 @@ def validate_bundle_index_consistency(index: Mapping[str, Any]) -> None:
         raise SatRootError("bundle index bundles must be an array")
     if not isinstance(bundle_count, int) or bundle_count != len(bundles):
         raise SatRootError("bundle index bundle_count mismatch")
+
+
+def release_manifest_signing_payload(manifest: Mapping[str, Any]) -> str:
+    cleaned = {k: v for k, v in manifest.items() if k != "signature"}
+    return canonical_json(cleaned)
+
+
+def build_signed_release_manifest(
+    bundle_index_json: str | Path,
+    *,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    base_dir: str | Path = ".",
+) -> Dict[str, Any]:
+    if signature_scheme not in {"hmac-sha256", "ed25519"}:
+        raise SatRootError(f"unsupported release signature scheme: {signature_scheme}")
+    bundle_index_path = Path(bundle_index_json).resolve()
+    index = _load_json_file(str(bundle_index_path))
+    validate_instance_against_schema(index, load_bundle_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("bundle index must contain an object")
+    validate_bundle_index_consistency(index)
+
+    base_path = Path(base_dir).resolve()
+    try:
+        relative_index_path = bundle_index_path.relative_to(base_path).as_posix()
+    except ValueError:
+        relative_index_path = bundle_index_path.as_posix()
+
+    manifest = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "manifest_type": "release-manifest",
+        "bundle_index_path": relative_index_path,
+        "bundle_index_hash": "sha256:" + sha256_hex_bytes(bundle_index_path.read_bytes()),
+        "bundle_count": index.get("bundle_count"),
+        "signature_scheme": signature_scheme,
+        "signature_key_id": key_id,
+    }
+    release = index.get("release")
+    if isinstance(release, dict) and release:
+        manifest["release"] = copy.deepcopy(release)
+    manifest["signature"] = signer(release_manifest_signing_payload(manifest), key_id)
+    return manifest
+
+
+def verify_signed_release_manifest(
+    release_manifest_json: str | Path,
+    *,
+    verifier: SignatureVerifier,
+) -> Dict[str, Any]:
+    manifest_path = Path(release_manifest_json).resolve()
+    manifest = _load_json_object_file(str(manifest_path), label="release-manifest")
+    validate_instance_against_schema(manifest, load_release_manifest_schema())
+
+    bundle_index_ref = manifest.get("bundle_index_path")
+    if not isinstance(bundle_index_ref, str) or not bundle_index_ref.strip():
+        raise SatRootError("release manifest bundle_index_path must be a non-empty string")
+    bundle_index_path = (manifest_path.parent / bundle_index_ref).resolve()
+    if not bundle_index_path.exists():
+        raise SatRootError(f"bundle index file not found: {bundle_index_ref}")
+
+    index = _load_json_file(str(bundle_index_path))
+    validate_instance_against_schema(index, load_bundle_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("bundle index must contain an object")
+    validate_bundle_index_consistency(index)
+
+    actual_index_hash = "sha256:" + sha256_hex_bytes(bundle_index_path.read_bytes())
+    if manifest.get("bundle_index_hash") != actual_index_hash:
+        raise SatRootError("release manifest bundle_index_hash mismatch")
+    if manifest.get("bundle_count") != index.get("bundle_count"):
+        raise SatRootError("release manifest bundle_count mismatch")
+    if manifest.get("release") != index.get("release"):
+        raise SatRootError("release manifest release metadata mismatch")
+    if not verifier(manifest, release_manifest_signing_payload(manifest)):
+        raise SatRootError("release manifest signature verification failed")
+
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "bundle_index_path": bundle_index_ref,
+        "bundle_index_hash": actual_index_hash,
+        "bundle_count": index.get("bundle_count"),
+        "release": copy.deepcopy(index.get("release")),
+    }
 
 
 def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
@@ -1102,6 +1196,10 @@ def build_cli_parser() -> Any:
     validate_bundle_index_parser.add_argument("bundle_index_json", help="Path to bundle-index.json")
     validate_bundle_index_parser.add_argument("--schema-json", help="Optional path to a bundle-index JSON Schema file")
 
+    validate_release_manifest_parser = subparsers.add_parser("validate-release-manifest", help="Validate a SATROOT-1 release manifest against the release-manifest schema")
+    validate_release_manifest_parser.add_argument("release_manifest_json", help="Path to release-manifest.json")
+    validate_release_manifest_parser.add_argument("--schema-json", help="Optional path to a release-manifest JSON Schema file")
+
     signer_map_parser = subparsers.add_parser("init-signer-key-map", help="Build signer -> key_id mappings from a SATROOT-1 ledger")
     signer_map_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
     signer_map_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
@@ -1142,8 +1240,22 @@ def build_cli_parser() -> Any:
     bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
     bundle_index_parser.add_argument("--output", help="Optional output path")
 
+    release_manifest_parser = subparsers.add_parser("build-release-manifest", help="Build a signed SATROOT-1 release manifest from a bundle index")
+    release_manifest_parser.add_argument("bundle_index_json", help="Path to bundle_index.json")
+    release_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    release_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release manifest")
+    release_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    release_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    release_manifest_parser.add_argument("--output", help="Optional output path")
+
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
+
+    verify_release_manifest_parser = subparsers.add_parser("verify-release-manifest", help="Verify a signed SATROOT-1 release manifest against its bundle index")
+    verify_release_manifest_parser.add_argument("release_manifest_json", help="Path to release-manifest.json")
+    verify_release_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification")
+    verify_release_manifest_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
+    verify_release_manifest_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for verification")
 
     generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
@@ -1228,6 +1340,37 @@ def _signer_and_verifier_from_args(args: Any) -> tuple[Optional[SignerFunction],
     raise SatRootError(f"unsupported scheme: {args.scheme}")
 
 
+def _release_manifest_signer_from_args(args: Any) -> SignerFunction:
+    if args.scheme == "hmac-sha256":
+        if not args.secret:
+            raise SatRootError("--secret is required for hmac-sha256 release-manifest signing")
+        return make_hmac_sha256_signer({args.key_id: args.secret})
+    if args.scheme == "ed25519":
+        if not args.private_key_hex:
+            raise SatRootError("--private-key-hex is required for ed25519 release-manifest signing")
+        return make_ed25519_signer({args.key_id: args.private_key_hex})
+    raise SatRootError(f"unsupported release signature scheme: {args.scheme}")
+
+
+def _release_manifest_verifier_from_args(args: Any, manifest: Mapping[str, Any]) -> SignatureVerifier:
+    scheme = manifest.get("signature_scheme")
+    if scheme == "hmac-sha256":
+        if not args.secrets_json:
+            raise SatRootError("--secrets-json is required for hmac-sha256 release-manifest verification")
+        secrets = _load_json_object_file(args.secrets_json, label="secrets-json")
+        return make_hmac_sha256_verifier(secrets)
+    if scheme == "ed25519":
+        if args.public_keys_json:
+            public_keys = _load_json_object_file(args.public_keys_json, label="public-keys-json")
+            return make_ed25519_verifier(public_keys)
+        if args.private_keys_json:
+            private_keys = _load_json_object_file(args.private_keys_json, label="private-keys-json")
+            public_keys = derive_ed25519_public_keys(private_keys)
+            return make_ed25519_verifier(public_keys)
+        raise SatRootError("--public-keys-json or --private-keys-json is required for ed25519 release-manifest verification")
+    raise SatRootError(f"unsupported release signature scheme: {scheme!r}")
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_cli_parser()
     args = parser.parse_args(argv)
@@ -1268,6 +1411,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             raise SatRootError("bundle index must contain an object")
         validate_bundle_index_consistency(index)
         print(f"valid SATROOT-1 bundle index: {count} record(s)")
+        return 0
+
+    if args.command == "validate-release-manifest":
+        manifest = _load_json_file(args.release_manifest_json)
+        schema = load_release_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(manifest, schema)
+        print(f"valid SATROOT-1 release manifest: {count} record(s)")
         return 0
 
     if args.command == "init-signer-key-map":
@@ -1368,8 +1518,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(index, output_path)
         return 0
 
+    if args.command == "build-release-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        manifest = build_signed_release_manifest(
+            args.bundle_index_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
     if args.command == "verify-bundle":
         summary = verify_signed_ledger_bundle(args.bundle_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "verify-release-manifest":
+        manifest = _load_json_object_file(args.release_manifest_json, label="release-manifest")
+        verifier = _release_manifest_verifier_from_args(args, manifest)
+        summary = verify_signed_release_manifest(args.release_manifest_json, verifier=verifier)
         print(canonical_json(summary))
         return 0
 

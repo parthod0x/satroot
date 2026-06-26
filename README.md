@@ -26,6 +26,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
 - `protocol/satroot1.bundle-manifest.schema.json` - JSON schema for signed bundle manifests.
 - `protocol/satroot1.bundle-index.schema.json` - JSON schema for bundle index catalogs.
+- `protocol/satroot1.release-manifest.schema.json` - JSON schema for signed release manifests.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
@@ -72,8 +73,9 @@ The v0.1 kernel defines:
 - structural bundle linting via `bundle-lint` for missing files and manifest layout drift,
 - deterministic bundle-index generation for release catalogs spanning multiple bundles,
 - optional release metadata on bundle indexes for channel, label, and published-at packaging context,
+- signed release-manifest generation for authenticating distributable bundle-index publications,
 - signed bundle verification against manifest and verifier material,
-- bundle-manifest and bundle-index schema validation for exported signed artifacts,
+- bundle-manifest, bundle-index, and release-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -151,7 +153,7 @@ python -m pytest
 Expected result:
 
 ```text
-93 passed
+101 passed
 ```
 
 ## Signing utilities
@@ -266,6 +268,12 @@ Attach lightweight release metadata to a bundle index:
 satroot1 build-bundle-index signed_hmac_bundle --channel stable --label "SATROOT FLOOR1 Demo" --published-at 2026-06-22T12:00:00Z --output bundle_index.json
 ```
 
+Build a signed release manifest from a bundle index:
+
+```bash
+satroot1 build-release-manifest bundle_index.json --scheme hmac-sha256 --key-id release-key --secret release-secret --output release_manifest.json
+```
+
 Validate a bundle manifest directly against the SATROOT manifest schema:
 
 ```bash
@@ -276,6 +284,18 @@ Validate a bundle index directly against the SATROOT bundle-index schema:
 
 ```bash
 satroot1 validate-bundle-index bundle_index.json
+```
+
+Validate a signed release manifest directly against the SATROOT release-manifest schema:
+
+```bash
+satroot1 validate-release-manifest release_manifest.json
+```
+
+Verify a signed release manifest against its bundle index:
+
+```bash
+satroot1 verify-release-manifest release_manifest.json --secrets-json release_secrets.json
 ```
 
 Sign a full demo ledger with the built-in demo signature mode:
