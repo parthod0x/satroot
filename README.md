@@ -75,6 +75,7 @@ The v0.1 kernel defines:
 - optional release metadata on bundle indexes for channel, label, and published-at packaging context,
 - signed release-manifest generation for authenticating distributable bundle-index publications,
 - release-key bootstrap helpers for HMAC and Ed25519 publication signing workflows,
+- one-shot `publish-release` orchestration for ready-to-verify release directories,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, and release-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -154,7 +155,7 @@ python -m pytest
 Expected result:
 
 ```text
-106 passed
+107 passed
 ```
 
 ## Signing utilities
@@ -285,6 +286,12 @@ Build a release manifest from generated HMAC release material:
 
 ```bash
 satroot1 build-release-manifest bundle_index.json --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json --output release_manifest.json
+```
+
+Publish a release directory with both `bundle_index.json` and `release_manifest.json` in one step:
+
+```bash
+satroot1 publish-release signed_hmac_bundle --output-dir stable_release --channel stable --label "SATROOT FLOOR1 Demo" --published-at 2026-06-26T12:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
 ```
 
 Validate a bundle manifest directly against the SATROOT manifest schema:

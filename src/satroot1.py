@@ -15,6 +15,7 @@ import hmac
 import importlib
 import importlib.util
 import json
+import os
 import re
 import secrets
 import sys
@@ -539,16 +540,12 @@ def build_signed_ledger_bundle_index(
     if not bundle_dirs:
         raise SatRootError("at least one bundle directory is required")
 
-    base_path = Path(base_dir).resolve()
     bundles: list[Dict[str, Any]] = []
     for bundle_dir in bundle_dirs:
         bundle_path = Path(bundle_dir).resolve()
         manifest = _load_validated_bundle_manifest(bundle_path)
         manifest_path = bundle_path / "bundle_manifest.json"
-        try:
-            relative_bundle_path = bundle_path.relative_to(base_path).as_posix()
-        except ValueError:
-            relative_bundle_path = bundle_path.as_posix()
+        relative_bundle_path = _relative_output_path(bundle_path, base_dir=base_dir)
         entry = {
             "bundle_id": "sha256:" + sha256_hex(relative_bundle_path),
             "bundle_path": relative_bundle_path,
@@ -591,6 +588,18 @@ def validate_bundle_index_consistency(index: Mapping[str, Any]) -> None:
         raise SatRootError("bundle index bundle_count mismatch")
 
 
+def _relative_output_path(path: str | Path, *, base_dir: str | Path) -> str:
+    target_path = Path(path).resolve()
+    base_path = Path(base_dir).resolve()
+    try:
+        return target_path.relative_to(base_path).as_posix()
+    except ValueError:
+        try:
+            return Path(os.path.relpath(target_path, base_path)).as_posix()
+        except ValueError:
+            return target_path.as_posix()
+
+
 def release_manifest_signing_payload(manifest: Mapping[str, Any]) -> str:
     cleaned = {k: v for k, v in manifest.items() if k != "signature"}
     return canonical_json(cleaned)
@@ -613,11 +622,7 @@ def build_signed_release_manifest(
         raise SatRootError("bundle index must contain an object")
     validate_bundle_index_consistency(index)
 
-    base_path = Path(base_dir).resolve()
-    try:
-        relative_index_path = bundle_index_path.relative_to(base_path).as_posix()
-    except ValueError:
-        relative_index_path = bundle_index_path.as_posix()
+    relative_index_path = _relative_output_path(bundle_index_path, base_dir=base_dir)
 
     manifest = {
         "protocol": "SATROOT-1",
@@ -675,6 +680,44 @@ def verify_signed_release_manifest(
         "bundle_index_hash": actual_index_hash,
         "bundle_count": index.get("bundle_count"),
         "release": copy.deepcopy(index.get("release")),
+    }
+
+
+def publish_signed_release(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    release_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    bundle_index = build_signed_ledger_bundle_index(
+        bundle_dirs,
+        base_dir=output_path,
+        release_metadata=release_metadata,
+    )
+    bundle_index_path = output_path / "bundle_index.json"
+    _write_json_file(bundle_index_path, bundle_index)
+
+    release_manifest = build_signed_release_manifest(
+        bundle_index_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        base_dir=output_path,
+    )
+    release_manifest_path = output_path / "release_manifest.json"
+    _write_json_file(release_manifest_path, release_manifest)
+
+    return {
+        "bundle_index": bundle_index,
+        "bundle_index_path": str(bundle_index_path),
+        "release_manifest": release_manifest,
+        "release_manifest_path": str(release_manifest_path),
     }
 
 
@@ -1268,6 +1311,19 @@ def build_cli_parser() -> Any:
     release_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
     release_manifest_parser.add_argument("--output", help="Optional output path")
 
+    publish_release_parser = subparsers.add_parser("publish-release", help="Build bundle_index.json plus release_manifest.json in one SATROOT-1 release directory")
+    publish_release_parser.add_argument("bundle_dir", nargs="+", help="Path to a signed SATROOT-1 bundle directory")
+    publish_release_parser.add_argument("--output-dir", required=True, help="Directory where bundle_index.json and release_manifest.json will be written")
+    publish_release_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    publish_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    publish_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+    publish_release_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_release_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release manifest")
+    publish_release_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_release_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-manifest signing")
+    publish_release_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_release_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
+
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
@@ -1569,6 +1625,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             base_dir=base_dir,
         )
         _write_output(manifest, output_path)
+        return 0
+
+    if args.command == "publish-release":
+        signer = _release_manifest_signer_from_args(args)
+        release_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        published = publish_signed_release(
+            args.bundle_dir,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            release_metadata=release_metadata,
+        )
+        print(f"wrote SATROOT release publication to {Path(published['release_manifest_path']).parent}")
         return 0
 
     if args.command == "verify-bundle":

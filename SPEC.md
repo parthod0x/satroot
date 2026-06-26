@@ -249,6 +249,8 @@ For authenticated publication workflows, the reference implementation may also e
 
 The reference CLI may also expose release-key bootstrap helpers so publication signing material can be generated and reused as files rather than injected only through one-off inline secret or private-key parameters.
 
+The reference CLI may also expose a one-shot publication helper that writes `bundle_index.json` and `release_manifest.json` together into a release directory while preserving relative bundle paths for downstream verification.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

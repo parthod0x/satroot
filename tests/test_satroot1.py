@@ -2220,6 +2220,59 @@ def test_cli_verify_release_manifest(tmp_path, capsys):
     assert '"bundle_index_path":"bundle_index.json"' in captured.out
 
 
+def test_cli_publish_release(tmp_path):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    release_material_dir = tmp_path / "release_hmac"
+    release_dir = tmp_path / "release"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["bootstrap-release-hmac", "--key-id", "release-key", "--output-dir", str(release_material_dir)]) == 0
+    assert (
+        main(
+            [
+                "publish-release",
+                str(bundle_dir),
+                "--output-dir",
+                str(release_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "SATROOT FLOOR1 Demo",
+                "--published-at",
+                "2026-06-26T12:00:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secrets-json",
+                str(release_material_dir / "release_secrets.json"),
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    assert bundle_index["release"] == {
+        "channel": "stable",
+        "label": "SATROOT FLOOR1 Demo",
+        "published_at": "2026-06-26T12:00:00Z",
+    }
+    assert bundle_index["bundles"][0]["bundle_path"] == "../bundle"
+    assert release_manifest["bundle_index_path"] == "bundle_index.json"
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(
+            json.loads((release_material_dir / "release_secrets.json").read_text(encoding="utf-8"))
+        ),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
+
+
 def test_cli_bootstrap_release_ed25519_material(tmp_path):
     output_dir = tmp_path / "release_ed25519"
     if not ed25519_available():

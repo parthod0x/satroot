@@ -34,6 +34,7 @@
 - Extends bundle indexes with optional release metadata for channel, label, and published-at packaging context.
 - Adds signed release-manifest exports plus release-manifest verification and schema validation support.
 - Adds release-key bootstrap helpers plus file-based release-manifest signing inputs.
+- Adds a one-shot `publish-release` workflow for writing bundle indexes plus signed release manifests together.
 - Adds the first `SATROOT-STABLE-1` reference-only profile draft.
 - Adds `USDROOT1` stable-value example genesis and event ledgers.
 - Adds the first `SATROOT-MACHINE-1` prepaid-credit profile draft.
