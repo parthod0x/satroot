@@ -59,6 +59,7 @@ The v0.1 kernel defines:
 - explicit `signature_scheme` and `signature_key_id` protocol metadata,
 - optional `event_id` and `state_hash` verification,
 - reference helpers for signing a single event or a whole ledger,
+- profile-aware genesis scaffolding for base and draft SATROOT profiles,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -157,7 +158,7 @@ python -m pytest
 Expected result:
 
 ```text
-117 passed
+122 passed
 ```
 
 ## Signing utilities
@@ -214,6 +215,12 @@ Build a signer-to-key map directly from a ledger:
 
 ```bash
 satroot1 init-signer-key-map examples/events_floor1.json --output signer_keys.json
+```
+
+Scaffold a profile-aware genesis record with valid defaults:
+
+```bash
+satroot1 init-genesis --symbol USDCLI1 --name "SATROOT CLI Dollar" --profile SATROOT-STABLE-1 --profile-field reference_unit=EUR --profile-field intended_use=cli-reference-ledger --output genesis.json
 ```
 
 Bootstrap the full Ed25519 workflow from a ledger in one step:

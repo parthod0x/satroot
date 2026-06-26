@@ -231,6 +231,8 @@ For convenience workflows, those pieces can also be composed into a one-shot Ed2
 
 The same pattern is exposed for controlled shared-secret deployments, where signer maps and HMAC verifier material can be bootstrapped directly from a ledger for reference and test workflows.
 
+The reference CLI may also expose profile-aware genesis scaffolding so valid base or profiled `genesis` objects can be emitted with safe defaults before downstream replay, signing, or bundling steps.
+
 Those workflow pieces can also be composed into a one-shot signed-ledger bundle path, allowing a ledger plus verifier material and signed/annotated artifacts to be emitted together for reference or testing.
 
 Signed bundle workflows may also emit a machine-readable manifest describing the chosen scheme, generated files, verifier-material scope, per-file hashes, record count, full final replay snapshot, and final committed SATROOT state hash so downstream tooling can inspect bundles without replaying them first.

@@ -33,8 +33,10 @@ from satroot1 import (
     make_ed25519_verifier,
     make_hmac_sha256_verifier,
     make_hmac_sha256_signer,
+    parse_profile_field_overrides,
     replay,
     rendered_json_sha256,
+    scaffold_genesis_record,
     sha256_hex,
     sign_ledger_events,
     signing_payload,
@@ -341,6 +343,51 @@ def test_profile_registry_contains_supported_profiles():
     registry = load_profile_registry()
     assert registry["SATROOT-STABLE-1"]["profile_mode"] == "reference-only"
     assert registry["SATROOT-LICENSE-1"]["required_fields"][-1] == "intended_use"
+
+
+def test_scaffold_genesis_record_base_replays():
+    genesis = scaffold_genesis_record(
+        symbol="BASE1",
+        name="SATROOT Base Asset",
+        root_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:0",
+        nonce="base-scaffold",
+    )
+    state = replay([genesis])
+    assert state.symbol == "BASE1"
+    assert state.supply == 1_000_000
+    assert state.balances["issuer"] == 1_000_000
+
+
+def test_scaffold_genesis_record_stable_profile_replays():
+    genesis = scaffold_genesis_record(
+        symbol="USDTEST1",
+        name="SATROOT Test Dollar",
+        root_id="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:0",
+        profile="SATROOT-STABLE-1",
+        profile_fields={"reference_unit": "INR", "intended_use": "internal-ledger"},
+        nonce="stable-scaffold",
+    )
+    state = replay([genesis])
+    assert state.profile == "SATROOT-STABLE-1"
+    assert state.decimals == 2
+    assert state.genesis_metadata["reference_unit"] == "INR"
+    assert state.genesis_metadata["redemption"] == "none"
+
+
+def test_scaffold_genesis_record_rejects_unknown_profile_override():
+    with pytest.raises(SatRootError):
+        scaffold_genesis_record(
+            symbol="BAD1",
+            name="Bad Asset",
+            root_id="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc:0",
+            profile="SATROOT-STABLE-1",
+            profile_fields={"service_scope": "api-compute"},
+        )
+
+
+def test_parse_profile_field_overrides_rejects_duplicate_keys():
+    with pytest.raises(SatRootError):
+        parse_profile_field_overrides(["reference_unit=USD", "reference_unit=INR"])
 
 
 def test_load_protocol_schema_supports_rotate_authority():
@@ -1749,6 +1796,37 @@ def test_cli_bootstrap_ed25519_workflow(tmp_path, capsys):
     public_keys = json.loads((output_dir / "public_keys.json").read_text(encoding="utf-8"))
     assert signer_key_map == {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
     assert public_keys["issuer-key"] == ed25519_public_key_hex(private_keys["issuer-key"])
+
+
+def test_cli_init_genesis_profile_output(tmp_path):
+    output_path = tmp_path / "genesis.json"
+
+    exit_code = main(
+        [
+            "init-genesis",
+            "--symbol",
+            "USDCLI1",
+            "--name",
+            "SATROOT CLI Dollar",
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--profile-field",
+            "reference_unit=EUR",
+            "--profile-field",
+            "intended_use=cli-reference-ledger",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    genesis = json.loads(output_path.read_text(encoding="utf-8"))
+    state = replay([genesis])
+    assert genesis["profile"] == "SATROOT-STABLE-1"
+    assert genesis["profile_mode"] == "reference-only"
+    assert genesis["reference_unit"] == "EUR"
+    assert state.symbol == "USDCLI1"
+    assert state.genesis_metadata["intended_use"] == "cli-reference-ledger"
 
 
 def test_cli_bootstrap_hmac_workflow_and_sign_replay(tmp_path, capsys):

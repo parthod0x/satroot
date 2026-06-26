@@ -53,6 +53,68 @@ CORE_GENESIS_FIELDS = {
     "transfer_model",
     "initial_balances",
 }
+PROFILE_SCAFFOLD_DEFAULTS: Dict[str, Dict[str, Any]] = {
+    "SATROOT-STABLE-1": {
+        "decimals": 2,
+        "max_supply": "1000000000",
+        "initial_balance": "1000000",
+        "fields": {
+            "reference_unit": "USD",
+            "redemption": "none",
+            "reserve_model": "none",
+            "intended_use": "reference-value-accounting",
+        },
+    },
+    "SATROOT-MACHINE-1": {
+        "decimals": 0,
+        "max_supply": "1000000",
+        "initial_balance": "1000000",
+        "fields": {
+            "service_scope": "api-compute",
+            "billing_unit": "request",
+            "consumption_model": "burn-on-use",
+            "intended_use": "machine-credit",
+        },
+    },
+    "SATROOT-RECEIPT-1": {
+        "decimals": 0,
+        "max_supply": "1",
+        "initial_balance": "1",
+        "fields": {
+            "document_type": "invoice-receipt",
+            "reference_id": "receipt-0001",
+            "issuer_entity": "issuer-co",
+            "counterparty_entity": "counterparty-co",
+            "settlement_unit": "USD",
+            "intended_use": "receipt-ledger",
+        },
+    },
+    "SATROOT-IDENTITY-1": {
+        "decimals": 0,
+        "max_supply": "1",
+        "initial_balance": "1",
+        "fields": {
+            "identity_type": "service-identity",
+            "subject_id": "subject-0001",
+            "controller_entity": "issuer-co",
+            "authority_scope": "api-signing",
+            "intended_use": "identity-ledger",
+        },
+    },
+    "SATROOT-LICENSE-1": {
+        "decimals": 0,
+        "max_supply": "1",
+        "initial_balance": "1",
+        "fields": {
+            "license_type": "software-license",
+            "asset_id": "asset-0001",
+            "licensor_entity": "issuer-co",
+            "licensee_entity": "customer-co",
+            "usage_scope": "production-api",
+            "intended_use": "license-ledger",
+        },
+    },
+}
 
 
 def canonical_json(obj: Any) -> str:
@@ -118,6 +180,109 @@ def load_bundle_index_schema() -> Dict[str, Any]:
 def load_release_manifest_schema() -> Dict[str, Any]:
     with RELEASE_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def build_scaffold_root_id() -> str:
+    return f"{secrets.token_hex(32)}:0"
+
+
+def build_scaffold_nonce() -> str:
+    return f"satroot-scaffold-{secrets.token_hex(8)}"
+
+
+def scaffold_genesis_record(
+    *,
+    symbol: str,
+    name: str,
+    root_id: Optional[str] = None,
+    mint_authority: str = "issuer",
+    initial_owner: Optional[str] = None,
+    decimals: Optional[int] = None,
+    max_supply: Optional[str] = None,
+    initial_balance: Optional[str] = None,
+    profile: Optional[str] = None,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+) -> Dict[str, Any]:
+    require_account_name(symbol, "symbol")
+    require_account_name(name, "name")
+    chosen_root_id = root_id or build_scaffold_root_id()
+    validate_root_id(chosen_root_id)
+    require_account_name(mint_authority, "mint_authority")
+
+    registry = load_profile_registry()
+    selected_profile_fields: Dict[str, Any] = {}
+    profile_mode: Optional[str] = None
+    default_decimals = 0
+    default_max_supply = "1000000"
+    default_initial_balance = "1000000"
+
+    if profile is not None:
+        rules = registry.get(profile)
+        if rules is None:
+            raise SatRootError(f"unsupported profile: {profile}")
+        defaults = PROFILE_SCAFFOLD_DEFAULTS.get(profile)
+        if defaults is None:
+            raise SatRootError(f"missing scaffold defaults for profile: {profile}")
+        profile_mode = rules["profile_mode"]
+        selected_profile_fields = copy.deepcopy(defaults["fields"])
+        default_decimals = defaults["decimals"]
+        default_max_supply = defaults["max_supply"]
+        default_initial_balance = defaults["initial_balance"]
+        for field_name, value in (profile_fields or {}).items():
+            if field_name not in rules["required_fields"]:
+                raise SatRootError(f"unsupported profile field override for {profile}: {field_name}")
+            selected_profile_fields[field_name] = value
+    elif profile_fields:
+        raise SatRootError("profile field overrides require --profile")
+
+    chosen_decimals = default_decimals if decimals is None else decimals
+    chosen_max_supply = default_max_supply if max_supply is None else max_supply
+    chosen_initial_balance = default_initial_balance if initial_balance is None else initial_balance
+    owner = mint_authority if initial_owner is None else initial_owner
+
+    genesis = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "action": "genesis",
+        "root_id": chosen_root_id,
+        "sequence": 0,
+        "symbol": symbol,
+        "name": name,
+        "decimals": chosen_decimals,
+        "max_supply": chosen_max_supply,
+        "mint_authority": mint_authority,
+        "transfer_model": "account-ledger",
+        "initial_balances": {
+            owner: chosen_initial_balance,
+        },
+        "nonce": nonce or build_scaffold_nonce(),
+    }
+    if rules_hash is not None:
+        genesis["rules_hash"] = rules_hash
+    if profile is not None:
+        genesis["profile"] = profile
+        genesis["profile_mode"] = profile_mode
+        genesis.update(selected_profile_fields)
+
+    apply_genesis(copy.deepcopy(genesis))
+    return genesis
+
+
+def parse_profile_field_overrides(values: Optional[Sequence[str]]) -> Dict[str, str]:
+    overrides: Dict[str, str] = {}
+    for value in values or []:
+        if "=" not in value:
+            raise SatRootError(f"invalid profile field override: {value!r}")
+        field_name, field_value = value.split("=", 1)
+        field_name = field_name.strip()
+        if not field_name:
+            raise SatRootError(f"invalid profile field override: {value!r}")
+        if field_name in overrides:
+            raise SatRootError(f"duplicate profile field override: {field_name}")
+        overrides[field_name] = field_value
+    return overrides
 
 
 def event_id(event: Dict[str, Any]) -> str:
@@ -1343,6 +1508,21 @@ def build_cli_parser() -> Any:
     validate_release_manifest_parser.add_argument("release_manifest_json", help="Path to release-manifest.json")
     validate_release_manifest_parser.add_argument("--schema-json", help="Optional path to a release-manifest JSON Schema file")
 
+    init_genesis_parser = subparsers.add_parser("init-genesis", help="Scaffold a SATROOT-1 genesis record with optional profile-aware defaults")
+    init_genesis_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
+    init_genesis_parser.add_argument("--name", required=True, help="Human-readable asset name for the genesis record")
+    init_genesis_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    init_genesis_parser.add_argument("--mint-authority", default="issuer", help="Mint authority account name")
+    init_genesis_parser.add_argument("--initial-owner", help="Initial holder account name; defaults to the mint authority")
+    init_genesis_parser.add_argument("--decimals", type=int, help="Optional explicit decimals override")
+    init_genesis_parser.add_argument("--max-supply", help="Optional explicit max_supply override")
+    init_genesis_parser.add_argument("--initial-balance", help="Optional explicit initial issued balance override")
+    init_genesis_parser.add_argument("--profile", choices=sorted(load_profile_registry()), help="Optional SATROOT profile to scaffold")
+    init_genesis_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Profile field override in key=value form; may be repeated")
+    init_genesis_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    init_genesis_parser.add_argument("--nonce", help="Optional nonce metadata")
+    init_genesis_parser.add_argument("--output", help="Optional output path")
+
     signer_map_parser = subparsers.add_parser("init-signer-key-map", help="Build signer -> key_id mappings from a SATROOT-1 ledger")
     signer_map_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
     signer_map_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
@@ -1553,6 +1733,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             parser.print_help()
             return 2
+
+    if args.command == "init-genesis":
+        genesis = scaffold_genesis_record(
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            mint_authority=args.mint_authority,
+            initial_owner=args.initial_owner,
+            decimals=args.decimals,
+            max_supply=args.max_supply,
+            initial_balance=args.initial_balance,
+            profile=args.profile,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+        )
+        _write_output(genesis, args.output)
+        return 0
 
     if args.command == "replay":
         events = _load_json_file(args.events_json)
