@@ -52,6 +52,7 @@ The v0.1 kernel defines:
 - explicit root authority rotation for mint-control handoff,
 - registry-backed profile compatibility checks,
 - runtime guardrails for stable reference-only profile metadata,
+- runtime guardrails for machine and singleton-object profile metadata,
 - a canonical signing payload model,
 - a built-in `hmac-sha256` reference verifier path for shared-secret environments,
 - an optional `ed25519` verifier path behind the `crypto` extra,
@@ -156,7 +157,7 @@ python -m pytest
 Expected result:
 
 ```text
-111 passed
+117 passed
 ```
 
 ## Signing utilities

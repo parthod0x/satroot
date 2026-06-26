@@ -92,6 +92,8 @@ Known profiles and their required genesis metadata are listed in `protocol/satro
 
 When a profile draft defines explicit safe-mode guardrails, replay engines may also enforce those genesis metadata constraints directly. For example, a `SATROOT-STABLE-1` `reference-only` genesis may require `redemption=none` and `reserve_model=none` so the ledger cannot accidentally claim redeemability or reserves while still presenting itself as reference-only.
 
+Likewise, machine and single-object profiles may enforce compact identifier formatting for fields such as `service_scope`, `document_type`, `identity_type`, `license_type`, and related usage metadata, while `single-receipt`, `single-identity`, and `single-license` modes may require a zero-decimal, one-unit genesis so the ledger unambiguously anchors one object.
+
 ## 3. Boundary rule
 
 A SATROOT-1 event MUST NOT claim that tokens are sub-satoshis.

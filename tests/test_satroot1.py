@@ -267,6 +267,48 @@ def test_reject_stable_reference_unit_with_lowercase_letters():
         replay(events)
 
 
+def test_reject_machine_profile_non_compact_service_scope():
+    events = load_events("events_apicredit1.json")
+    events[0]["service_scope"] = "API Compute"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_receipt_profile_non_uppercase_settlement_unit():
+    events = load_events("events_receipt1.json")
+    events[0]["settlement_unit"] = "usd"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_receipt_profile_non_singleton_max_supply():
+    events = load_events("events_receipt1.json")
+    events[0]["max_supply"] = "2"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_identity_profile_nonzero_decimals():
+    events = load_events("events_identity1.json")
+    events[0]["decimals"] = 1
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_license_profile_non_compact_usage_scope():
+    events = load_events("events_license1.json")
+    events[0]["usage_scope"] = "production api"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_license_profile_without_single_issued_unit():
+    events = load_events("events_license1.json")
+    events[0]["initial_balances"] = {"issuer": "0"}
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
 def test_reject_event_id_mismatch():
     events = load_events()
     events[1]["event_id"] = "sha256:" + ("0" * 64)

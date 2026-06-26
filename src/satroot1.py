@@ -30,6 +30,7 @@ class SatRootError(ValueError):
 
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 REFERENCE_UNIT_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{1,15}$")
+COMPACT_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.schema.json"
 BUNDLE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-manifest.schema.json"
@@ -880,6 +881,14 @@ def _validate_profile_metadata_fields(event: Mapping[str, Any], field_names: Seq
 def _validate_profile_specific_genesis(profile: str, event: Mapping[str, Any]) -> None:
     if profile == "SATROOT-STABLE-1":
         _validate_stable_profile_genesis(event)
+    elif profile == "SATROOT-MACHINE-1":
+        _validate_machine_profile_genesis(event)
+    elif profile == "SATROOT-RECEIPT-1":
+        _validate_receipt_profile_genesis(event)
+    elif profile == "SATROOT-IDENTITY-1":
+        _validate_identity_profile_genesis(event)
+    elif profile == "SATROOT-LICENSE-1":
+        _validate_license_profile_genesis(event)
 
 
 def _validate_stable_profile_genesis(event: Mapping[str, Any]) -> None:
@@ -892,6 +901,56 @@ def _validate_stable_profile_genesis(event: Mapping[str, Any]) -> None:
             raise SatRootError("reference-only stable profile requires redemption=none")
         if event.get("reserve_model") != "none":
             raise SatRootError("reference-only stable profile requires reserve_model=none")
+
+
+def _validate_machine_profile_genesis(event: Mapping[str, Any]) -> None:
+    _validate_compact_identifier_field(event, "service_scope")
+    _validate_compact_identifier_field(event, "billing_unit")
+    _validate_compact_identifier_field(event, "consumption_model")
+    _validate_compact_identifier_field(event, "intended_use")
+
+
+def _validate_receipt_profile_genesis(event: Mapping[str, Any]) -> None:
+    _validate_compact_identifier_field(event, "document_type")
+    _validate_compact_identifier_field(event, "intended_use")
+    settlement_unit = event.get("settlement_unit")
+    assert isinstance(settlement_unit, str)
+    if not REFERENCE_UNIT_RE.fullmatch(settlement_unit):
+        raise SatRootError(f"invalid receipt settlement_unit: {settlement_unit!r}")
+    _validate_singleton_object_profile(event, profile_label="receipt")
+
+
+def _validate_identity_profile_genesis(event: Mapping[str, Any]) -> None:
+    _validate_compact_identifier_field(event, "identity_type")
+    _validate_compact_identifier_field(event, "authority_scope")
+    _validate_compact_identifier_field(event, "intended_use")
+    _validate_singleton_object_profile(event, profile_label="identity")
+
+
+def _validate_license_profile_genesis(event: Mapping[str, Any]) -> None:
+    _validate_compact_identifier_field(event, "license_type")
+    _validate_compact_identifier_field(event, "usage_scope")
+    _validate_compact_identifier_field(event, "intended_use")
+    _validate_singleton_object_profile(event, profile_label="license")
+
+
+def _validate_compact_identifier_field(event: Mapping[str, Any], field_name: str) -> None:
+    value = event.get(field_name)
+    assert isinstance(value, str)
+    if not COMPACT_IDENTIFIER_RE.fullmatch(value):
+        raise SatRootError(f"invalid profile field {field_name}: expected compact identifier")
+
+
+def _validate_singleton_object_profile(event: Mapping[str, Any], *, profile_label: str) -> None:
+    if parse_decimals(event.get("decimals")) != 0:
+        raise SatRootError(f"{profile_label} profile requires decimals=0")
+    if parse_amount(event.get("max_supply")) != 1:
+        raise SatRootError(f"{profile_label} profile requires max_supply=1")
+    initial_balances = event.get("initial_balances")
+    if not isinstance(initial_balances, dict):
+        raise SatRootError(f"{profile_label} profile initial_balances must be an object")
+    if sum(parse_amount(amount) for amount in initial_balances.values()) != 1:
+        raise SatRootError(f"{profile_label} profile requires exactly one issued unit at genesis")
 
 
 def validate_state_hash(event: Dict[str, Any], state: "SatRootState") -> None:
