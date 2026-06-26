@@ -554,12 +554,21 @@ def bootstrap_signed_ledger_bundle(
     include_state_hash: bool = True,
     include_annotation: bool = True,
 ) -> Dict[str, Any]:
+    if not events:
+        raise SatRootError("empty ledger")
+
     if scheme == "hmac-sha256":
-        material = bootstrap_hmac_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
+        if len(events) == 1:
+            material = {"signer_key_map": {}, "shared_secrets": {}}
+        else:
+            material = bootstrap_hmac_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
         verifier = make_hmac_sha256_verifier(material["shared_secrets"])
         signer = make_hmac_sha256_signer(material["shared_secrets"])
     elif scheme == "ed25519":
-        material = bootstrap_ed25519_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
+        if len(events) == 1:
+            material = {"signer_key_map": {}, "private_keys": {}, "public_keys": {}}
+        else:
+            material = bootstrap_ed25519_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
         verifier = make_ed25519_verifier(material["public_keys"])
         signer = make_ed25519_signer(material["private_keys"])
     else:
@@ -583,6 +592,53 @@ def bootstrap_signed_ledger_bundle(
         "final_state_snapshot": final_state.snapshot(),
         "final_state_hash": final_state.state_hash(),
     }
+
+
+def bootstrap_genesis_bundle(
+    *,
+    symbol: str,
+    name: str,
+    scheme: str,
+    root_id: Optional[str] = None,
+    mint_authority: str = "issuer",
+    initial_owner: Optional[str] = None,
+    decimals: Optional[int] = None,
+    max_supply: Optional[str] = None,
+    initial_balance: Optional[str] = None,
+    profile: Optional[str] = None,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+) -> Dict[str, Any]:
+    genesis = scaffold_genesis_record(
+        symbol=symbol,
+        name=name,
+        root_id=root_id,
+        mint_authority=mint_authority,
+        initial_owner=initial_owner,
+        decimals=decimals,
+        max_supply=max_supply,
+        initial_balance=initial_balance,
+        profile=profile,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+    )
+    bundle = bootstrap_signed_ledger_bundle(
+        [genesis],
+        scheme=scheme,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+    )
+    result = dict(bundle)
+    result["genesis"] = copy.deepcopy(genesis)
+    return result
 
 
 def build_signed_ledger_bundle_manifest(
@@ -1523,6 +1579,27 @@ def build_cli_parser() -> Any:
     init_genesis_parser.add_argument("--nonce", help="Optional nonce metadata")
     init_genesis_parser.add_argument("--output", help="Optional output path")
 
+    bootstrap_genesis_bundle_parser = subparsers.add_parser("bootstrap-genesis-bundle", help="Scaffold a genesis record and emit a signed SATROOT-1 starter bundle")
+    bootstrap_genesis_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
+    bootstrap_genesis_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the genesis record")
+    bootstrap_genesis_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_genesis_bundle_parser.add_argument("--output-dir", required=True, help="Directory where starter bundle files will be written")
+    bootstrap_genesis_bundle_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_genesis_bundle_parser.add_argument("--mint-authority", default="issuer", help="Mint authority account name")
+    bootstrap_genesis_bundle_parser.add_argument("--initial-owner", help="Initial holder account name; defaults to the mint authority")
+    bootstrap_genesis_bundle_parser.add_argument("--decimals", type=int, help="Optional explicit decimals override")
+    bootstrap_genesis_bundle_parser.add_argument("--max-supply", help="Optional explicit max_supply override")
+    bootstrap_genesis_bundle_parser.add_argument("--initial-balance", help="Optional explicit initial issued balance override")
+    bootstrap_genesis_bundle_parser.add_argument("--profile", choices=sorted(load_profile_registry()), help="Optional SATROOT profile to scaffold")
+    bootstrap_genesis_bundle_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Profile field override in key=value form; may be repeated")
+    bootstrap_genesis_bundle_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_genesis_bundle_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_genesis_bundle_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_genesis_bundle_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_genesis_bundle_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during annotation")
+    bootstrap_genesis_bundle_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_genesis_bundle_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+
     signer_map_parser = subparsers.add_parser("init-signer-key-map", help="Build signer -> key_id mappings from a SATROOT-1 ledger")
     signer_map_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
     signer_map_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
@@ -1750,6 +1827,61 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             nonce=args.nonce,
         )
         _write_output(genesis, args.output)
+        return 0
+
+    if args.command == "bootstrap-genesis-bundle":
+        if args.verifier_only and args.scheme != "ed25519":
+            raise SatRootError("--verifier-only is only supported for ed25519 bundles")
+        bundle = bootstrap_genesis_bundle(
+            symbol=args.symbol,
+            name=args.name,
+            scheme=args.scheme,
+            root_id=args.root_id,
+            mint_authority=args.mint_authority,
+            initial_owner=args.initial_owner,
+            decimals=args.decimals,
+            max_supply=args.max_supply,
+            initial_balance=args.initial_balance,
+            profile=args.profile,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+        )
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_files: Dict[str, str] = {
+            "genesis": "genesis.json",
+            "signer_key_map": "signer_key_map.json",
+            "signed_events": "signed_events.json",
+        }
+        output_payloads: Dict[str, Any] = {
+            "genesis": bundle["genesis"],
+            "signer_key_map": bundle["material"]["signer_key_map"],
+            "signed_events": bundle["signed_events"],
+        }
+        if args.scheme == "hmac-sha256":
+            output_files["secrets"] = "secrets.json"
+            output_payloads["secrets"] = bundle["material"]["shared_secrets"]
+        elif args.scheme == "ed25519":
+            output_files["public_keys"] = "public_keys.json"
+            output_payloads["public_keys"] = bundle["material"]["public_keys"]
+            if not args.verifier_only:
+                output_files["private_keys"] = "private_keys.json"
+                output_payloads["private_keys"] = bundle["material"]["private_keys"]
+        if bundle["annotated_events"] is not None:
+            output_files["annotated_signed_events"] = "annotated_signed_events.json"
+            output_payloads["annotated_signed_events"] = bundle["annotated_events"]
+        output_files["bundle_manifest"] = "bundle_manifest.json"
+        output_file_hashes = {key: rendered_json_sha256(data) for key, data in output_payloads.items()}
+        manifest = build_signed_ledger_bundle_manifest(bundle, output_files=output_files, output_file_hashes=output_file_hashes)
+        output_payloads["bundle_manifest"] = manifest
+        for key, data in output_payloads.items():
+            _write_json_file(output_dir / output_files[key], data)
+        print(f"wrote scaffolded SATROOT-1 {args.scheme} genesis bundle to {output_dir}")
         return 0
 
     if args.command == "replay":

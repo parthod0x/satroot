@@ -9,6 +9,7 @@
 - Enforces stable reference-only profile guardrails plus non-empty profile metadata fields during replay.
 - Enforces compact machine/object profile metadata and singleton object-supply guardrails during replay.
 - Adds profile-aware genesis scaffolding helpers and an `init-genesis` CLI command.
+- Adds a one-shot `bootstrap-genesis-bundle` workflow for scaffolded signed starter bundles.
 - Adds a canonical signing payload function and a pluggable signature verifier interface.
 - Adds a concrete built-in `hmac-sha256` reference verifier for shared-secret event authentication.
 - Adds optional `ed25519` signing and verification helpers behind the `crypto` extra.

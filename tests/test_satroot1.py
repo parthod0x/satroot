@@ -11,6 +11,7 @@ from satroot1 import (
     bootstrap_release_ed25519_material,
     bootstrap_release_hmac_material,
     bootstrap_ed25519_workflow,
+    bootstrap_genesis_bundle,
     bootstrap_hmac_workflow,
     bootstrap_signed_ledger_bundle,
     build_signed_ledger_bundle_manifest,
@@ -390,6 +391,36 @@ def test_parse_profile_field_overrides_rejects_duplicate_keys():
         parse_profile_field_overrides(["reference_unit=USD", "reference_unit=INR"])
 
 
+def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
+    genesis = scaffold_genesis_record(
+        symbol="GENHMAC1",
+        name="Genesis HMAC Asset",
+        root_id="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd:0",
+        nonce="genesis-only-hmac",
+    )
+    bundle = bootstrap_signed_ledger_bundle([genesis], scheme="hmac-sha256")
+    assert bundle["material"]["signer_key_map"] == {}
+    assert bundle["material"]["shared_secrets"] == {}
+    assert len(bundle["signed_events"]) == 1
+    assert bundle["final_state_snapshot"]["symbol"] == "GENHMAC1"
+
+
+def test_bootstrap_genesis_bundle_scaffolds_profiled_starter():
+    bundle = bootstrap_genesis_bundle(
+        symbol="GENUSD1",
+        name="Genesis USD Asset",
+        scheme="hmac-sha256",
+        root_id="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee:0",
+        profile="SATROOT-STABLE-1",
+        profile_fields={"reference_unit": "GBP"},
+        nonce="genesis-bundle",
+    )
+    assert bundle["genesis"]["profile"] == "SATROOT-STABLE-1"
+    assert bundle["genesis"]["reference_unit"] == "GBP"
+    assert bundle["signed_events"][0]["symbol"] == "GENUSD1"
+    assert bundle["final_state_snapshot"]["symbol"] == "GENUSD1"
+
+
 def test_load_protocol_schema_supports_rotate_authority():
     schema = load_protocol_schema()
     assert "rotate-authority" in schema["properties"]["action"]["enum"]
@@ -400,6 +431,7 @@ def test_load_bundle_manifest_schema_supports_signed_ledger_bundles():
     assert schema["properties"]["bundle_type"]["const"] == "signed-ledger"
     assert "hmac-sha256" in schema["properties"]["scheme"]["enum"]
     assert "verification_material_scope" in schema["properties"]
+    assert "genesis" in schema["properties"]["files"]["properties"]
 
 
 def test_load_bundle_index_schema_supports_bundle_indexes():
@@ -1827,6 +1859,42 @@ def test_cli_init_genesis_profile_output(tmp_path):
     assert genesis["reference_unit"] == "EUR"
     assert state.symbol == "USDCLI1"
     assert state.genesis_metadata["intended_use"] == "cli-reference-ledger"
+
+
+def test_cli_bootstrap_genesis_bundle_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "bundle"
+
+    exit_code = main(
+        [
+            "bootstrap-genesis-bundle",
+            "--symbol",
+            "BUNDLE1",
+            "--name",
+            "SATROOT Bundle Asset",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-MACHINE-1",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote scaffolded SATROOT-1 hmac-sha256 genesis bundle to" in captured.out
+    genesis = json.loads((output_dir / "genesis.json").read_text(encoding="utf-8"))
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
+    signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
+    assert genesis["profile"] == "SATROOT-MACHINE-1"
+    assert signer_key_map == {}
+    assert secrets == {}
+    assert len(signed_events) == 1
+
+    summary = verify_signed_ledger_bundle(output_dir)
+    assert summary["symbol"] == "BUNDLE1"
+    assert summary["record_count"] == 1
 
 
 def test_cli_bootstrap_hmac_workflow_and_sign_replay(tmp_path, capsys):

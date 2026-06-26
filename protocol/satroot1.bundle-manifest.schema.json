@@ -97,6 +97,7 @@
       "type": "object",
       "required": ["signer_key_map", "signed_events", "bundle_manifest"],
       "properties": {
+        "genesis": {"type": "string", "minLength": 1},
         "signer_key_map": {"type": "string", "minLength": 1},
         "signed_events": {"type": "string", "minLength": 1},
         "annotated_signed_events": {"type": "string", "minLength": 1},
@@ -111,6 +112,7 @@
       "type": "object",
       "required": ["signer_key_map", "signed_events"],
       "properties": {
+        "genesis": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
         "signer_key_map": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
         "signed_events": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
         "annotated_signed_events": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},

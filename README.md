@@ -79,6 +79,7 @@ The v0.1 kernel defines:
 - signed release-manifest generation for authenticating distributable bundle-index publications,
 - release-key bootstrap helpers for HMAC and Ed25519 publication signing workflows,
 - one-shot `publish-release` orchestration for ready-to-verify release directories,
+- one-shot `bootstrap-genesis-bundle` scaffolding for signed starter bundles from profile-aware genesis defaults,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, and release-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -158,7 +159,7 @@ python -m pytest
 Expected result:
 
 ```text
-122 passed
+125 passed
 ```
 
 ## Signing utilities
@@ -221,6 +222,12 @@ Scaffold a profile-aware genesis record with valid defaults:
 
 ```bash
 satroot1 init-genesis --symbol USDCLI1 --name "SATROOT CLI Dollar" --profile SATROOT-STABLE-1 --profile-field reference_unit=EUR --profile-field intended_use=cli-reference-ledger --output genesis.json
+```
+
+Scaffold a genesis record and emit a signed starter bundle in one step:
+
+```bash
+satroot1 bootstrap-genesis-bundle --symbol BUNDLE1 --name "SATROOT Bundle Asset" --scheme hmac-sha256 --profile SATROOT-MACHINE-1 --output-dir starter_bundle
 ```
 
 Bootstrap the full Ed25519 workflow from a ledger in one step:
