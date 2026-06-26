@@ -247,6 +247,8 @@ Those bundle indexes may also carry optional release metadata such as channel, h
 
 For authenticated publication workflows, the reference implementation may also emit a signed release manifest that binds a `bundle_index.json` path and hash to explicit release-signature metadata, allowing downstream consumers to verify the publication artifact separately from bundle replay itself.
 
+The reference CLI may also expose release-key bootstrap helpers so publication signing material can be generated and reused as files rather than injected only through one-off inline secret or private-key parameters.
+
 The reference engine currently recognizes these signature metadata rules:
 
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.

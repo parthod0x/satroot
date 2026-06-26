@@ -312,6 +312,20 @@ def generate_hmac_shared_secrets(key_ids: Iterable[str]) -> Dict[str, str]:
     return generated
 
 
+def bootstrap_release_hmac_material(key_ids: Iterable[str]) -> Dict[str, Dict[str, str]]:
+    shared_secrets = generate_hmac_shared_secrets(key_ids)
+    return {"shared_secrets": shared_secrets}
+
+
+def bootstrap_release_ed25519_material(key_ids: Iterable[str]) -> Dict[str, Dict[str, str]]:
+    private_keys = generate_ed25519_private_keys(key_ids)
+    public_keys = derive_ed25519_public_keys(private_keys)
+    return {
+        "private_keys": private_keys,
+        "public_keys": public_keys,
+    }
+
+
 def build_signer_key_map(
     events: Sequence[Dict[str, Any]],
     *,
@@ -1217,6 +1231,10 @@ def build_cli_parser() -> Any:
     bootstrap_hmac_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
     bootstrap_hmac_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
 
+    bootstrap_release_hmac_parser = subparsers.add_parser("bootstrap-release-hmac", help="Generate HMAC shared-secret material for SATROOT release-manifest signing")
+    bootstrap_release_hmac_parser.add_argument("--key-id", action="append", dest="key_ids", help="Release key identifier to generate")
+    bootstrap_release_hmac_parser.add_argument("--output-dir", required=True, help="Directory where release_secrets.json will be written")
+
     bootstrap_signed_parser = subparsers.add_parser("bootstrap-signed-ledger", help="Bootstrap signing material and emit signed SATROOT-1 ledger artifacts")
     bootstrap_signed_parser.add_argument("events_json", help="Path to JSON array of SATROOT-1 events")
     bootstrap_signed_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
@@ -1245,7 +1263,9 @@ def build_cli_parser() -> Any:
     release_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     release_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release manifest")
     release_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    release_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-manifest signing")
     release_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    release_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
     release_manifest_parser.add_argument("--output", help="Optional output path")
 
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
@@ -1267,6 +1287,10 @@ def build_cli_parser() -> Any:
     bootstrap_ed25519_parser.add_argument("--output-dir", required=True, help="Directory where signer_key_map.json, private_keys.json, and public_keys.json will be written")
     bootstrap_ed25519_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
     bootstrap_ed25519_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+
+    bootstrap_release_ed25519_parser = subparsers.add_parser("bootstrap-release-ed25519", help="Generate Ed25519 signing and verification material for SATROOT release-manifest signing")
+    bootstrap_release_ed25519_parser.add_argument("--key-id", action="append", dest="key_ids", help="Release key identifier to generate")
+    bootstrap_release_ed25519_parser.add_argument("--output-dir", required=True, help="Directory where release_private_keys.json and release_public_keys.json will be written")
 
     derive_keys_parser = subparsers.add_parser("derive-ed25519-public-keys", help="Derive Ed25519 public keys from private key hex mappings")
     derive_keys_parser.add_argument("private_keys_json", help="Path to JSON mapping key_id -> Ed25519 private key hex")
@@ -1342,10 +1366,16 @@ def _signer_and_verifier_from_args(args: Any) -> tuple[Optional[SignerFunction],
 
 def _release_manifest_signer_from_args(args: Any) -> SignerFunction:
     if args.scheme == "hmac-sha256":
+        if getattr(args, "secrets_json", None):
+            secrets = _load_json_object_file(args.secrets_json, label="secrets-json")
+            return make_hmac_sha256_signer(secrets)
         if not args.secret:
             raise SatRootError("--secret is required for hmac-sha256 release-manifest signing")
         return make_hmac_sha256_signer({args.key_id: args.secret})
     if args.scheme == "ed25519":
+        if getattr(args, "private_keys_json", None):
+            private_keys = _load_json_object_file(args.private_keys_json, label="private-keys-json")
+            return make_ed25519_signer(private_keys)
         if not args.private_key_hex:
             raise SatRootError("--private-key-hex is required for ed25519 release-manifest signing")
         return make_ed25519_signer({args.key_id: args.private_key_hex})
@@ -1449,6 +1479,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_json_file(output_dir / "signer_key_map.json", material["signer_key_map"])
         _write_json_file(output_dir / "secrets.json", material["shared_secrets"])
         print(f"wrote HMAC workflow files to {output_dir}")
+        return 0
+
+    if args.command == "bootstrap-release-hmac":
+        key_ids = list(args.key_ids or [])
+        material = bootstrap_release_hmac_material(key_ids)
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        _write_json_file(output_dir / "release_secrets.json", material["shared_secrets"])
+        print(f"wrote release HMAC material to {output_dir}")
         return 0
 
     if args.command == "bootstrap-signed-ledger":
@@ -1555,6 +1594,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_json_file(output_dir / "private_keys.json", material["private_keys"])
         _write_json_file(output_dir / "public_keys.json", material["public_keys"])
         print(f"wrote Ed25519 workflow files to {output_dir}")
+        return 0
+
+    if args.command == "bootstrap-release-ed25519":
+        key_ids = list(args.key_ids or [])
+        material = bootstrap_release_ed25519_material(key_ids)
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        _write_json_file(output_dir / "release_private_keys.json", material["private_keys"])
+        _write_json_file(output_dir / "release_public_keys.json", material["public_keys"])
+        print(f"wrote release Ed25519 material to {output_dir}")
         return 0
 
     if args.command == "generate-ed25519-private-keys":

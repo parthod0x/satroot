@@ -8,6 +8,8 @@ from satroot1 import (
     annotate_ledger_events,
     build_signed_ledger_bundle_index,
     build_signed_release_manifest,
+    bootstrap_release_ed25519_material,
+    bootstrap_release_hmac_material,
     bootstrap_ed25519_workflow,
     bootstrap_hmac_workflow,
     bootstrap_signed_ledger_bundle,
@@ -953,6 +955,26 @@ def test_build_signed_release_manifest_hmac(tmp_path):
     assert release_manifest["release"] == index["release"]
 
 
+def test_bootstrap_release_hmac_material_generates_secret_map():
+    material = bootstrap_release_hmac_material(["release-key"])
+    assert set(material["shared_secrets"]) == {"release-key"}
+    assert len(material["shared_secrets"]["release-key"]) == 64
+
+
+def test_bootstrap_release_ed25519_material_generates_keypair_map():
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            bootstrap_release_ed25519_material(["release-key"])
+        return
+
+    material = bootstrap_release_ed25519_material(["release-key"])
+    assert set(material["private_keys"]) == {"release-key"}
+    assert set(material["public_keys"]) == {"release-key"}
+    assert len(material["private_keys"]["release-key"]) == 64
+    assert len(material["public_keys"]["release-key"]) == 64
+
+
 def test_validate_release_manifest_schema_accepts_generated_manifest(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     bundle_dir = tmp_path / "bundle_a"
@@ -991,6 +1013,58 @@ def test_validate_release_manifest_schema_accepts_generated_manifest(tmp_path):
     )
     count = validate_instance_against_schema(release_manifest, load_release_manifest_schema())
     assert count == 1
+
+
+def test_build_signed_release_manifest_hmac_from_secrets_json(tmp_path):
+    bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
+    bundle_dir = tmp_path / "bundle_a"
+    bundle_dir.mkdir()
+    manifest = build_signed_ledger_bundle_manifest(
+        bundle,
+        output_files={
+            "signer_key_map": "signer_key_map.json",
+            "secrets": "secrets.json",
+            "signed_events": "signed_events.json",
+            "annotated_signed_events": "annotated_signed_events.json",
+            "bundle_manifest": "bundle_manifest.json",
+        },
+        output_file_hashes={
+            "signer_key_map": rendered_json_sha256(bundle["material"]["signer_key_map"]),
+            "secrets": rendered_json_sha256(bundle["material"]["shared_secrets"]),
+            "signed_events": rendered_json_sha256(bundle["signed_events"]),
+            "annotated_signed_events": rendered_json_sha256(bundle["annotated_events"]),
+        },
+    )
+    write_json(bundle_dir / "signer_key_map.json", bundle["material"]["signer_key_map"])
+    write_json(bundle_dir / "secrets.json", bundle["material"]["shared_secrets"])
+    write_json(bundle_dir / "signed_events.json", bundle["signed_events"])
+    write_json(bundle_dir / "annotated_signed_events.json", bundle["annotated_events"])
+    write_json(bundle_dir / "bundle_manifest.json", manifest)
+    index = build_signed_ledger_bundle_index([bundle_dir], base_dir=tmp_path)
+    index_path = tmp_path / "bundle_index.json"
+    write_json(index_path, index)
+    secrets_path = tmp_path / "release_secrets.json"
+    write_json(secrets_path, {"release-key": "release-secret"})
+
+    exit_code = main(
+        [
+            "build-release-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secrets-json",
+            str(secrets_path),
+            "--output",
+            str(tmp_path / "release_manifest.json"),
+        ]
+    )
+    assert exit_code == 0
+
+    release_manifest = json.loads((tmp_path / "release_manifest.json").read_text(encoding="utf-8"))
+    assert release_manifest["signature_scheme"] == "hmac-sha256"
+    assert release_manifest["signature_key_id"] == "release-key"
 
 
 def test_verify_signed_release_manifest_accepts_hmac(tmp_path):
@@ -2032,6 +2106,39 @@ def test_cli_build_release_manifest(tmp_path):
     assert release_manifest["signature_key_id"] == "release-key"
 
 
+def test_cli_bootstrap_release_hmac_and_sign_manifest(tmp_path):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    release_dir = tmp_path / "release_hmac"
+    release_manifest_path = tmp_path / "release_manifest.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["build-bundle-index", str(bundle_dir), "--output", str(index_path)]) == 0
+    assert main(["bootstrap-release-hmac", "--key-id", "release-key", "--output-dir", str(release_dir)]) == 0
+
+    exit_code = main(
+        [
+            "build-release-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secrets-json",
+            str(release_dir / "release_secrets.json"),
+            "--output",
+            str(release_manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    release_manifest = json.loads(release_manifest_path.read_text(encoding="utf-8"))
+    assert release_manifest["signature_scheme"] == "hmac-sha256"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+
 def test_cli_validate_release_manifest(tmp_path, capsys):
     events_path = tmp_path / "events.json"
     bundle_dir = tmp_path / "bundle"
@@ -2111,6 +2218,23 @@ def test_cli_verify_release_manifest(tmp_path, capsys):
     assert '"signature_scheme":"hmac-sha256"' in captured.out
     assert '"signature_key_id":"release-key"' in captured.out
     assert '"bundle_index_path":"bundle_index.json"' in captured.out
+
+
+def test_cli_bootstrap_release_ed25519_material(tmp_path):
+    output_dir = tmp_path / "release_ed25519"
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(["bootstrap-release-ed25519", "--key-id", "release-key", "--output-dir", str(output_dir)])
+        return
+
+    exit_code = main(["bootstrap-release-ed25519", "--key-id", "release-key", "--output-dir", str(output_dir)])
+    assert exit_code == 0
+
+    private_keys = json.loads((output_dir / "release_private_keys.json").read_text(encoding="utf-8"))
+    public_keys = json.loads((output_dir / "release_public_keys.json").read_text(encoding="utf-8"))
+    assert set(private_keys) == {"release-key"}
+    assert set(public_keys) == {"release-key"}
 
 
 def test_cli_validate_bundle_manifest(tmp_path, capsys):
