@@ -239,6 +239,8 @@ Those workflow pieces can also be composed into a one-shot signed-ledger bundle 
 
 Signed bundle workflows may also emit a machine-readable manifest describing the chosen scheme, generated files, verifier-material scope, per-file hashes, record count, full final replay snapshot, and final committed SATROOT state hash so downstream tooling can inspect bundles without replaying them first.
 
+For release distribution workflows, the reference CLI may also expose a publication bootstrap helper that generates release signing material and writes `bundle_index.json` plus `release_manifest.json` into a ready-to-verify release directory in one step.
+
 For `ed25519` workflows, the reference CLI may emit either a `private-and-public` bundle for local workflow portability or a `public-only` verifier bundle that omits private keys while preserving end-to-end replay verification.
 
 The reference implementation also exposes bundle-verification helpers so a signed bundle directory can be checked against its manifest and verifier material before any consumer accepts it.

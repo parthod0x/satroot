@@ -9,6 +9,7 @@ from satroot1 import (
     build_signed_ledger_bundle_index,
     build_signed_release_manifest,
     bootstrap_release_ed25519_material,
+    bootstrap_release_publication,
     bootstrap_release_hmac_material,
     bootstrap_ed25519_workflow,
     bootstrap_genesis_bundle,
@@ -419,6 +420,37 @@ def test_bootstrap_genesis_bundle_scaffolds_profiled_starter():
     assert bundle["genesis"]["reference_unit"] == "GBP"
     assert bundle["signed_events"][0]["symbol"] == "GENUSD1"
     assert bundle["final_state_snapshot"]["symbol"] == "GENUSD1"
+
+
+def test_bootstrap_release_publication_writes_hmac_material(tmp_path):
+    bundle_dir = tmp_path / "bundle"
+    assert main(
+        [
+            "bootstrap-genesis-bundle",
+            "--symbol",
+            "RELBOOT1",
+            "--name",
+            "Release Bootstrap Asset",
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(bundle_dir),
+        ]
+    ) == 0
+
+    publication_dir = tmp_path / "release"
+    published = bootstrap_release_publication(
+        [bundle_dir],
+        output_dir=publication_dir,
+        signature_scheme="hmac-sha256",
+        key_id="release-key",
+        release_metadata={"channel": "stable"},
+    )
+    assert (publication_dir / "release_secrets.json").exists()
+    assert (publication_dir / "bundle_index.json").exists()
+    assert (publication_dir / "release_manifest.json").exists()
+    assert published["bundle_index"]["release"] == {"channel": "stable"}
+    assert published["release_manifest"]["signature_key_id"] == "release-key"
 
 
 def test_load_protocol_schema_supports_rotate_authority():
@@ -2484,6 +2516,66 @@ def test_cli_publish_release(tmp_path):
         verifier=make_hmac_sha256_verifier(
             json.loads((release_material_dir / "release_secrets.json").read_text(encoding="utf-8"))
         ),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_release_publication(tmp_path, capsys):
+    bundle_dir = tmp_path / "bundle"
+    release_dir = tmp_path / "release"
+
+    assert (
+        main(
+            [
+                "bootstrap-genesis-bundle",
+                "--symbol",
+                "RELCLI1",
+                "--name",
+                "SATROOT Release CLI Asset",
+                "--scheme",
+                "hmac-sha256",
+                "--profile",
+                "SATROOT-STABLE-1",
+                "--output-dir",
+                str(bundle_dir),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "bootstrap-release-publication",
+            str(bundle_dir),
+            "--output-dir",
+            str(release_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Release CLI",
+            "--published-at",
+            "2026-06-26T12:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release publication to" in captured.out
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_index["release"]["channel"] == "stable"
+    assert release_manifest["signature_key_id"] == "release-key"
+    assert set(secrets) == {"release-key"}
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
     )
     assert summary["bundle_count"] == 1
     assert summary["release"] == bundle_index["release"]

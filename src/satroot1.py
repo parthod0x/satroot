@@ -944,6 +944,41 @@ def publish_signed_release(
     }
 
 
+def bootstrap_release_publication(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    release_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    if signature_scheme == "hmac-sha256":
+        material = bootstrap_release_hmac_material([key_id])
+        signer = make_hmac_sha256_signer(material["shared_secrets"])
+        _write_json_file(output_path / "release_secrets.json", material["shared_secrets"])
+    elif signature_scheme == "ed25519":
+        material = bootstrap_release_ed25519_material([key_id])
+        signer = make_ed25519_signer(material["private_keys"])
+        _write_json_file(output_path / "release_private_keys.json", material["private_keys"])
+        _write_json_file(output_path / "release_public_keys.json", material["public_keys"])
+    else:
+        raise SatRootError(f"unsupported release signature scheme: {signature_scheme}")
+
+    published = publish_signed_release(
+        bundle_dirs,
+        output_dir=output_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        release_metadata=release_metadata,
+    )
+    published["release_material"] = material
+    return published
+
+
 def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
     bundle_path = Path(bundle_dir)
     manifest = _load_validated_bundle_manifest(bundle_path)
@@ -1667,6 +1702,15 @@ def build_cli_parser() -> Any:
     publish_release_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
     publish_release_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
 
+    bootstrap_release_publication_parser = subparsers.add_parser("bootstrap-release-publication", help="Generate release signing material and write a ready-to-verify SATROOT-1 release directory")
+    bootstrap_release_publication_parser.add_argument("bundle_dir", nargs="+", help="Path to a signed SATROOT-1 bundle directory")
+    bootstrap_release_publication_parser.add_argument("--output-dir", required=True, help="Directory where release material plus bundle_index.json and release_manifest.json will be written")
+    bootstrap_release_publication_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    bootstrap_release_publication_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    bootstrap_release_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+    bootstrap_release_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_release_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release manifest")
+
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
@@ -2059,6 +2103,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_metadata=release_metadata,
         )
         print(f"wrote SATROOT release publication to {Path(published['release_manifest_path']).parent}")
+        return 0
+
+    if args.command == "bootstrap-release-publication":
+        release_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        published = bootstrap_release_publication(
+            args.bundle_dir,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            release_metadata=release_metadata,
+        )
+        print(f"wrote bootstrapped SATROOT release publication to {Path(published['release_manifest_path']).parent}")
         return 0
 
     if args.command == "verify-bundle":

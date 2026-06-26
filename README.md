@@ -80,6 +80,7 @@ The v0.1 kernel defines:
 - release-key bootstrap helpers for HMAC and Ed25519 publication signing workflows,
 - one-shot `publish-release` orchestration for ready-to-verify release directories,
 - one-shot `bootstrap-genesis-bundle` scaffolding for signed starter bundles from profile-aware genesis defaults,
+- one-shot `bootstrap-release-publication` orchestration for release material plus signed publication outputs,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, and release-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -159,7 +160,7 @@ python -m pytest
 Expected result:
 
 ```text
-125 passed
+127 passed
 ```
 
 ## Signing utilities
@@ -308,6 +309,12 @@ Publish a release directory with both `bundle_index.json` and `release_manifest.
 
 ```bash
 satroot1 publish-release signed_hmac_bundle --output-dir stable_release --channel stable --label "SATROOT FLOOR1 Demo" --published-at 2026-06-26T12:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
+```
+
+Bootstrap release signing material and publish a ready-to-verify release directory in one step:
+
+```bash
+satroot1 bootstrap-release-publication starter_bundle --output-dir release_bootstrap --channel stable --label "SATROOT Starter Release" --published-at 2026-06-26T12:00:00Z --scheme hmac-sha256 --key-id release-key
 ```
 
 Validate a bundle manifest directly against the SATROOT manifest schema:
