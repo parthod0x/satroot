@@ -233,6 +233,8 @@ The same pattern is exposed for controlled shared-secret deployments, where sign
 
 The reference CLI may also expose profile-aware genesis scaffolding so valid base or profiled `genesis` objects can be emitted with safe defaults before downstream replay, signing, or bundling steps.
 
+The reference CLI may also expose event scaffolding helpers so valid non-genesis `mint`, `transfer`, `burn`, or `rotate-authority` records can be derived from an existing ledger tip or from explicit `root_id`, `sequence`, and `prev_event_id` inputs.
+
 That scaffolding may also be composed into a one-shot starter-bundle workflow that emits a scaffolded `genesis.json`, a one-record signed ledger bundle, and verifier material in a single directory for reference or testing.
 
 Those workflow pieces can also be composed into a one-shot signed-ledger bundle path, allowing a ledger plus verifier material and signed/annotated artifacts to be emitted together for reference or testing.

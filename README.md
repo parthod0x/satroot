@@ -60,6 +60,7 @@ The v0.1 kernel defines:
 - optional `event_id` and `state_hash` verification,
 - reference helpers for signing a single event or a whole ledger,
 - profile-aware genesis scaffolding for base and draft SATROOT profiles,
+- event scaffolding for valid non-genesis SATROOT records from an existing ledger or explicit references,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -160,7 +161,7 @@ python -m pytest
 Expected result:
 
 ```text
-127 passed
+131 passed
 ```
 
 ## Signing utilities
@@ -223,6 +224,12 @@ Scaffold a profile-aware genesis record with valid defaults:
 
 ```bash
 satroot1 init-genesis --symbol USDCLI1 --name "SATROOT CLI Dollar" --profile SATROOT-STABLE-1 --profile-field reference_unit=EUR --profile-field intended_use=cli-reference-ledger --output genesis.json
+```
+
+Scaffold the next event directly from an existing ledger:
+
+```bash
+satroot1 init-event --action transfer --events-json examples/events_floor1.json --signer bob --from bob --to issuer --amount 1000 --output next_event.json
 ```
 
 Scaffold a genesis record and emit a signed starter bundle in one step:

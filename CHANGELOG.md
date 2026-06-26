@@ -11,6 +11,7 @@
 - Adds profile-aware genesis scaffolding helpers and an `init-genesis` CLI command.
 - Adds a one-shot `bootstrap-genesis-bundle` workflow for scaffolded signed starter bundles.
 - Adds a one-shot `bootstrap-release-publication` workflow for release signing material plus published release directories.
+- Adds event scaffolding helpers and an `init-event` CLI command for non-genesis records.
 - Adds a canonical signing payload function and a pluggable signature verifier interface.
 - Adds a concrete built-in `hmac-sha256` reference verifier for shared-secret event authentication.
 - Adds optional `ed25519` signing and verification helpers behind the `crypto` extra.

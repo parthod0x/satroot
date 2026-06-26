@@ -285,6 +285,99 @@ def parse_profile_field_overrides(values: Optional[Sequence[str]]) -> Dict[str, 
     return overrides
 
 
+def scaffold_event_record(
+    *,
+    action: str,
+    root_id: str,
+    sequence: int,
+    prev_event_id: str,
+    signer: str,
+    from_account: Optional[str] = None,
+    to_account: Optional[str] = None,
+    amount: Optional[str] = None,
+    new_mint_authority: Optional[str] = None,
+    profile: Optional[str] = None,
+    profile_mode: Optional[str] = None,
+) -> Dict[str, Any]:
+    validate_root_id(root_id)
+    if not isinstance(sequence, int) or sequence <= 0:
+        raise SatRootError(f"invalid event sequence: {sequence!r}")
+    if not isinstance(prev_event_id, str) or not prev_event_id.startswith("sha256:"):
+        raise SatRootError(f"invalid prev_event_id: {prev_event_id!r}")
+    require_account_name(signer, "signer")
+
+    event: Dict[str, Any] = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "action": action,
+        "root_id": root_id,
+        "sequence": sequence,
+        "prev_event_id": prev_event_id,
+        "signer": signer,
+        "signature": "demo",
+    }
+    if profile is not None:
+        event["profile"] = profile
+    if profile_mode is not None:
+        event["profile_mode"] = profile_mode
+
+    if action == "mint":
+        require_account_name(to_account, "to")
+        parse_positive_amount(amount or "")
+        event["to"] = to_account
+        event["amount"] = amount
+    elif action == "transfer":
+        require_account_name(from_account, "from")
+        require_account_name(to_account, "to")
+        parse_positive_amount(amount or "")
+        event["from"] = from_account
+        event["to"] = to_account
+        event["amount"] = amount
+    elif action == "burn":
+        require_account_name(from_account, "from")
+        parse_positive_amount(amount or "")
+        event["from"] = from_account
+        event["amount"] = amount
+    elif action == "rotate-authority":
+        require_account_name(new_mint_authority, "new_mint_authority")
+        event["new_mint_authority"] = new_mint_authority
+    else:
+        raise SatRootError(f"unsupported scaffold action: {action}")
+
+    return event
+
+
+def scaffold_event_from_ledger(
+    events: Sequence[Dict[str, Any]],
+    *,
+    action: str,
+    signer: str,
+    from_account: Optional[str] = None,
+    to_account: Optional[str] = None,
+    amount: Optional[str] = None,
+    new_mint_authority: Optional[str] = None,
+) -> Dict[str, Any]:
+    if not events:
+        raise SatRootError("empty ledger")
+    state = replay(events)
+    last_event = events[-1]
+    profile = state.profile
+    profile_mode = state.profile_mode
+    return scaffold_event_record(
+        action=action,
+        root_id=state.root_id,
+        sequence=state.sequence + 1,
+        prev_event_id=event_id(last_event),
+        signer=signer,
+        from_account=from_account,
+        to_account=to_account,
+        amount=amount,
+        new_mint_authority=new_mint_authority,
+        profile=profile,
+        profile_mode=profile_mode,
+    )
+
+
 def event_id(event: Dict[str, Any]) -> str:
     """Return the canonical event hash.
 
@@ -1614,6 +1707,19 @@ def build_cli_parser() -> Any:
     init_genesis_parser.add_argument("--nonce", help="Optional nonce metadata")
     init_genesis_parser.add_argument("--output", help="Optional output path")
 
+    init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
+    init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
+    init_event_parser.add_argument("--events-json", help="Optional path to an existing SATROOT-1 ledger array; derives root_id, sequence, prev_event_id, and profile metadata")
+    init_event_parser.add_argument("--root-id", help="Explicit root_id when not deriving from --events-json")
+    init_event_parser.add_argument("--sequence", type=int, help="Explicit sequence when not deriving from --events-json")
+    init_event_parser.add_argument("--prev-event-id", help="Explicit prev_event_id when not deriving from --events-json")
+    init_event_parser.add_argument("--signer", required=True, help="Signer account name for the new event")
+    init_event_parser.add_argument("--from", dest="from_account", help="Source account for transfer/burn actions")
+    init_event_parser.add_argument("--to", dest="to_account", help="Destination account for mint/transfer actions")
+    init_event_parser.add_argument("--amount", help="Positive amount for mint/transfer/burn actions")
+    init_event_parser.add_argument("--new-mint-authority", help="New mint authority for rotate-authority actions")
+    init_event_parser.add_argument("--output", help="Optional output path")
+
     bootstrap_genesis_bundle_parser = subparsers.add_parser("bootstrap-genesis-bundle", help="Scaffold a genesis record and emit a signed SATROOT-1 starter bundle")
     bootstrap_genesis_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
     bootstrap_genesis_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the genesis record")
@@ -1871,6 +1977,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             nonce=args.nonce,
         )
         _write_output(genesis, args.output)
+        return 0
+
+    if args.command == "init-event":
+        if args.events_json:
+            events = _load_json_file(args.events_json)
+            if not isinstance(events, list):
+                raise SatRootError("events_json must contain a JSON array")
+            event = scaffold_event_from_ledger(
+                events,
+                action=args.action,
+                signer=args.signer,
+                from_account=args.from_account,
+                to_account=args.to_account,
+                amount=args.amount,
+                new_mint_authority=args.new_mint_authority,
+            )
+        else:
+            if args.root_id is None or args.sequence is None or args.prev_event_id is None:
+                raise SatRootError("--root-id, --sequence, and --prev-event-id are required when --events-json is not provided")
+            event = scaffold_event_record(
+                action=args.action,
+                root_id=args.root_id,
+                sequence=args.sequence,
+                prev_event_id=args.prev_event_id,
+                signer=args.signer,
+                from_account=args.from_account,
+                to_account=args.to_account,
+                amount=args.amount,
+                new_mint_authority=args.new_mint_authority,
+            )
+        _write_output(event, args.output)
         return 0
 
     if args.command == "bootstrap-genesis-bundle":

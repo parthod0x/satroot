@@ -39,6 +39,8 @@ from satroot1 import (
     replay,
     rendered_json_sha256,
     scaffold_genesis_record,
+    scaffold_event_from_ledger,
+    scaffold_event_record,
     sha256_hex,
     sign_ledger_events,
     signing_payload,
@@ -451,6 +453,38 @@ def test_bootstrap_release_publication_writes_hmac_material(tmp_path):
     assert (publication_dir / "release_manifest.json").exists()
     assert published["bundle_index"]["release"] == {"channel": "stable"}
     assert published["release_manifest"]["signature_key_id"] == "release-key"
+
+
+def test_scaffold_event_record_transfer_replays_when_appended():
+    events = load_events()
+    next_event = scaffold_event_record(
+        action="transfer",
+        root_id=events[0]["root_id"],
+        sequence=4,
+        prev_event_id=event_id(events[-1]),
+        signer="bob",
+        from_account="bob",
+        to_account="issuer",
+        amount="1000",
+    )
+    state = replay([*events, next_event])
+    assert state.balances["bob"] == 98_999_000
+    assert state.balances["issuer"] == 750_001_000
+
+
+def test_scaffold_event_from_ledger_uses_next_sequence_and_profile():
+    events = load_events("events_usdroot1.json")
+    next_event = scaffold_event_from_ledger(
+        events,
+        action="burn",
+        signer="api_node",
+        from_account="api_node",
+        amount="1000",
+    )
+    assert next_event["sequence"] == 4
+    assert next_event["prev_event_id"] == event_id(events[-1])
+    assert next_event["profile"] == "SATROOT-STABLE-1"
+    assert next_event["profile_mode"] == "reference-only"
 
 
 def test_load_protocol_schema_supports_rotate_authority():
@@ -1891,6 +1925,68 @@ def test_cli_init_genesis_profile_output(tmp_path):
     assert genesis["reference_unit"] == "EUR"
     assert state.symbol == "USDCLI1"
     assert state.genesis_metadata["intended_use"] == "cli-reference-ledger"
+
+
+def test_cli_init_event_from_ledger(tmp_path):
+    events_path = tmp_path / "events.json"
+    output_path = tmp_path / "event.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "init-event",
+            "--action",
+            "transfer",
+            "--events-json",
+            str(events_path),
+            "--signer",
+            "bob",
+            "--from",
+            "bob",
+            "--to",
+            "issuer",
+            "--amount",
+            "1000",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    event = json.loads(output_path.read_text(encoding="utf-8"))
+    assert event["sequence"] == 4
+    assert event["prev_event_id"] == event_id(load_events()[-1])
+    assert event["action"] == "transfer"
+
+
+def test_cli_init_event_manual_rotate_authority(tmp_path):
+    output_path = tmp_path / "event.json"
+
+    exit_code = main(
+        [
+            "init-event",
+            "--action",
+            "rotate-authority",
+            "--root-id",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff:0",
+            "--sequence",
+            "1",
+            "--prev-event-id",
+            "sha256:" + ("1" * 64),
+            "--signer",
+            "issuer",
+            "--new-mint-authority",
+            "issuer_v2",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    event = json.loads(output_path.read_text(encoding="utf-8"))
+    assert event["action"] == "rotate-authority"
+    assert event["new_mint_authority"] == "issuer_v2"
+    assert event["sequence"] == 1
 
 
 def test_cli_bootstrap_genesis_bundle_hmac(tmp_path, capsys):
