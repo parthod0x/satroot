@@ -90,6 +90,8 @@ The payload may still include fields such as `signature_scheme` or `signature_ke
 
 Known profiles and their required genesis metadata are listed in `protocol/satroot1.profile-registry.json`. Strict SATROOT-1 replay engines should treat that registry as the compatibility source of truth and reject unknown profiles until explicitly supported.
 
+When a profile draft defines explicit safe-mode guardrails, replay engines may also enforce those genesis metadata constraints directly. For example, a `SATROOT-STABLE-1` `reference-only` genesis may require `redemption=none` and `reserve_model=none` so the ledger cannot accidentally claim redeemability or reserves while still presenting itself as reference-only.
+
 ## 3. Boundary rule
 
 A SATROOT-1 event MUST NOT claim that tokens are sub-satoshis.

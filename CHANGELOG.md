@@ -6,6 +6,7 @@
 - Adds optional `event_id` and `state_hash` verification during replay.
 - Adds an explicit profile compatibility registry in `protocol/satroot1.profile-registry.json`.
 - Makes the replay engine load supported profile rules from the registry instead of a hardcoded table.
+- Enforces stable reference-only profile guardrails plus non-empty profile metadata fields during replay.
 - Adds a canonical signing payload function and a pluggable signature verifier interface.
 - Adds a concrete built-in `hmac-sha256` reference verifier for shared-secret event authentication.
 - Adds optional `ed25519` signing and verification helpers behind the `crypto` extra.

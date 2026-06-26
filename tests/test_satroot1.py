@@ -246,6 +246,27 @@ def test_reject_bad_profile_mode():
         replay(events)
 
 
+def test_reject_stable_reference_only_redemption_claim():
+    events = load_events("events_usdroot1.json")
+    events[0]["redemption"] = "issuer-redeemable"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_stable_reference_only_reserve_claim():
+    events = load_events("events_usdroot1.json")
+    events[0]["reserve_model"] = "fiat-backed"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_stable_reference_unit_with_lowercase_letters():
+    events = load_events("events_usdroot1.json")
+    events[0]["reference_unit"] = "usd"
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
 def test_reject_event_id_mismatch():
     events = load_events()
     events[1]["event_id"] = "sha256:" + ("0" * 64)
@@ -348,6 +369,13 @@ def test_annotate_ledger_events_preserves_hmac_replay():
 def test_reject_missing_required_profile_field():
     events = load_events("events_identity1.json")
     del events[0]["subject_id"]
+    with pytest.raises(SatRootError):
+        replay(events)
+
+
+def test_reject_blank_required_profile_field():
+    events = load_events("events_identity1.json")
+    events[0]["subject_id"] = "   "
     with pytest.raises(SatRootError):
         replay(events)
 

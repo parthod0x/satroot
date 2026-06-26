@@ -29,6 +29,7 @@ class SatRootError(ValueError):
 
 
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
+REFERENCE_UNIT_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{1,15}$")
 PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.schema.json"
 BUNDLE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-manifest.schema.json"
@@ -865,6 +866,32 @@ def validate_profile_genesis(event: Dict[str, Any]) -> None:
     require_fields(event, ["profile_mode", *rules["required_fields"]])
     if event.get("profile_mode") != rules["profile_mode"]:
         raise SatRootError(f"bad profile_mode for {profile}")
+    _validate_profile_metadata_fields(event, ["profile_mode", *rules["required_fields"]])
+    _validate_profile_specific_genesis(profile, event)
+
+
+def _validate_profile_metadata_fields(event: Mapping[str, Any], field_names: Sequence[str]) -> None:
+    for field_name in field_names:
+        value = event.get(field_name)
+        if not isinstance(value, str) or not value.strip():
+            raise SatRootError(f"invalid profile field {field_name}: expected non-empty string")
+
+
+def _validate_profile_specific_genesis(profile: str, event: Mapping[str, Any]) -> None:
+    if profile == "SATROOT-STABLE-1":
+        _validate_stable_profile_genesis(event)
+
+
+def _validate_stable_profile_genesis(event: Mapping[str, Any]) -> None:
+    reference_unit = event.get("reference_unit")
+    assert isinstance(reference_unit, str)
+    if not REFERENCE_UNIT_RE.fullmatch(reference_unit):
+        raise SatRootError(f"invalid stable reference_unit: {reference_unit!r}")
+    if event.get("profile_mode") == "reference-only":
+        if event.get("redemption") != "none":
+            raise SatRootError("reference-only stable profile requires redemption=none")
+        if event.get("reserve_model") != "none":
+            raise SatRootError("reference-only stable profile requires reserve_model=none")
 
 
 def validate_state_hash(event: Dict[str, Any], state: "SatRootState") -> None:
