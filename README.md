@@ -170,7 +170,7 @@ python -m pytest
 Expected result:
 
 ```text
-156 passed
+158 passed
 ```
 
 ## Signing utilities
@@ -257,6 +257,12 @@ Generate a signed SATROOT-STABLE-1 reference-only demo bundle:
 
 ```bash
 satroot1 bootstrap-stable-demo-bundle --symbol USDBUNDLE2 --name "Stable Bundle CLI" --scheme hmac-sha256 --reference-unit CHF --output-dir stable_bundle
+```
+
+For Ed25519 stable bundles, you can also emit a verifier-only variant that excludes `private_keys.json`:
+
+```bash
+satroot1 bootstrap-stable-demo-bundle --symbol USDEDCLI1 --name "Stable Bundle Ed25519" --scheme ed25519 --reference-unit AUD --output-dir stable_bundle_ed25519 --verifier-only
 ```
 
 Generate a signed SATROOT-STABLE-1 demo bundle plus release directory:

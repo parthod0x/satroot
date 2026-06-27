@@ -3335,6 +3335,60 @@ def test_cli_bootstrap_stable_demo_bundle_hmac(tmp_path, capsys):
     assert summary["record_count"] == 4
 
 
+def test_cli_bootstrap_stable_demo_bundle_ed25519_verifier_only(tmp_path):
+    output_dir = tmp_path / "stable_bundle_ed25519"
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(
+                [
+                    "bootstrap-stable-demo-bundle",
+                    "--symbol",
+                    "USDEDCLI1",
+                    "--name",
+                    "Stable Bundle Ed25519",
+                    "--scheme",
+                    "ed25519",
+                    "--reference-unit",
+                    "AUD",
+                    "--output-dir",
+                    str(output_dir),
+                    "--verifier-only",
+                ]
+            )
+        return
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-bundle",
+            "--symbol",
+            "USDEDCLI1",
+            "--name",
+            "Stable Bundle Ed25519",
+            "--scheme",
+            "ed25519",
+            "--reference-unit",
+            "AUD",
+            "--output-dir",
+            str(output_dir),
+            "--verifier-only",
+        ]
+    )
+    assert exit_code == 0
+    assert not (output_dir / "private_keys.json").exists()
+    assert (output_dir / "public_keys.json").exists()
+
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["verification_material_scope"] == "public-only"
+    assert manifest["final_state_snapshot"]["genesis_metadata"]["reference_unit"] == "AUD"
+    assert "private_keys" not in manifest["files"]
+    assert "private_keys" not in manifest["file_hashes"]
+
+    verify_exit_code = main(["verify-bundle", str(output_dir)])
+    assert verify_exit_code == 0
+
+
 def test_cli_bootstrap_stable_demo_release_hmac(tmp_path, capsys):
     output_dir = tmp_path / "stable_release"
 
@@ -3383,6 +3437,86 @@ def test_cli_bootstrap_stable_demo_release_hmac(tmp_path, capsys):
     )
     assert summary["bundle_count"] == 1
     assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_stable_demo_release_ed25519(tmp_path, capsys):
+    output_dir = tmp_path / "stable_release_ed25519"
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(
+                [
+                    "bootstrap-stable-demo-release",
+                    "--symbol",
+                    "USDRELCLI2",
+                    "--name",
+                    "Stable Release Ed25519",
+                    "--scheme",
+                    "ed25519",
+                    "--release-key-id",
+                    "release-key",
+                    "--reference-unit",
+                    "SGD",
+                    "--output-dir",
+                    str(output_dir),
+                    "--verifier-only",
+                ]
+            )
+        return
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-release",
+            "--symbol",
+            "USDRELCLI2",
+            "--name",
+            "Stable Release Ed25519",
+            "--scheme",
+            "ed25519",
+            "--release-key-id",
+            "release-key",
+            "--reference-unit",
+            "SGD",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Release Ed25519",
+            "--published-at",
+            "2026-06-27T18:00:00Z",
+            "--output-dir",
+            str(output_dir),
+            "--verifier-only",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo release to" in captured.out
+
+    bundle_dir = output_dir / "bundle"
+    release_dir = output_dir / "release"
+    bundle_manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    bundle_public_keys = json.loads((bundle_dir / "public_keys.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_public_keys = json.loads((release_dir / "release_public_keys.json").read_text(encoding="utf-8"))
+    assert not (bundle_dir / "private_keys.json").exists()
+    assert bundle_manifest["verification_material_scope"] == "public-only"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["reference_unit"] == "SGD"
+    assert release_manifest["signature_scheme"] == "ed25519"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+    bundle_summary = verify_signed_ledger_bundle(bundle_dir)
+    assert bundle_summary["symbol"] == "USDRELCLI2"
+    assert bundle_summary["annotated_verified"] is True
+    assert set(bundle_public_keys) == {"issuer-key", "merchant-key"}
+
+    release_summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_ed25519_verifier(release_public_keys),
+    )
+    assert release_summary["bundle_count"] == 1
+    assert release_summary["release"]["label"] == "SATROOT Stable Release Ed25519"
 
 
 def test_cli_bootstrap_release_ed25519_material(tmp_path):
