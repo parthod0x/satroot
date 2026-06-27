@@ -43,6 +43,7 @@ from satroot1 import (
     scaffold_event_from_ledger,
     scaffold_event_record,
     scaffold_machine_credit_consumption_event,
+    scaffold_singleton_object_archive_event,
     sha256_hex,
     sign_ledger_events,
     signing_payload,
@@ -519,6 +520,21 @@ def test_scaffold_machine_credit_consumption_event_from_machine_ledger():
     assert event["from"] == "worker_node"
     assert event["amount"] == "1000"
     assert event["sequence"] == 4
+
+
+def test_scaffold_singleton_object_archive_event_requires_supported_profile():
+    with pytest.raises(SatRootError):
+        scaffold_singleton_object_archive_event(load_events(), signer="bob")
+
+
+def test_scaffold_singleton_object_archive_event_from_receipt_ledger():
+    events = load_events("events_receipt1.json")[:2]
+    event = scaffold_singleton_object_archive_event(events, signer="buyer")
+    assert event["action"] == "transfer"
+    assert event["from"] == "buyer"
+    assert event["to"] == "archive"
+    assert event["amount"] == "1"
+    assert event["sequence"] == 2
 
 
 def test_load_protocol_schema_supports_rotate_authority():
@@ -2168,6 +2184,92 @@ def test_cli_consume_machine_credit_hmac(tmp_path):
     state = replay(appended, verifier=make_hmac_sha256_verifier(shared_secrets))
     assert state.balances["worker_node"] == 999_000
     assert state.supply == 99_799_000
+
+
+def test_cli_archive_singleton_object_demo(tmp_path):
+    events_path = tmp_path / "receipt_events.json"
+    output_path = tmp_path / "archived.json"
+    events = load_events("events_receipt1.json")[:2]
+    events_path.write_text(json.dumps(events), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "archive-singleton-object",
+            str(events_path),
+            "--signer",
+            "buyer",
+            "--include-state-hash",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    appended = json.loads(output_path.read_text(encoding="utf-8"))
+    assert appended[-1]["action"] == "transfer"
+    assert appended[-1]["to"] == "archive"
+    assert appended[-1]["state_hash"].startswith("sha256:")
+    state = replay(appended)
+    assert state.balances["archive"] == 1
+    assert state.balances["buyer"] == 0
+
+
+def test_cli_archive_singleton_object_hmac(tmp_path):
+    events_path = tmp_path / "license_events.json"
+    bootstrap_dir = tmp_path / "bootstrap"
+    signed_path = tmp_path / "signed.json"
+    output_path = tmp_path / "archived.json"
+    signer_map_path = bootstrap_dir / "signer_key_map.json"
+    secrets_path = bootstrap_dir / "secrets.json"
+    events = load_events("events_license1.json")[:2]
+    events_path.write_text(json.dumps(events), encoding="utf-8")
+    bootstrap_dir.mkdir()
+    write_json(signer_map_path, {"issuer": "issuer-key", "customer": "customer-key"})
+    write_json(secrets_path, {"issuer-key": "issuer-secret", "customer-key": "customer-secret"})
+    assert (
+        main(
+            [
+                "sign-ledger",
+                str(events_path),
+                "--scheme",
+                "hmac-sha256",
+                "--signer-key-map-json",
+                str(signer_map_path),
+                "--secrets-json",
+                str(secrets_path),
+                "--output",
+                str(signed_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "archive-singleton-object",
+            str(signed_path),
+            "--signer",
+            "customer",
+            "--scheme",
+            "hmac-sha256",
+            "--signer-key-map-json",
+            str(signer_map_path),
+            "--secrets-json",
+            str(secrets_path),
+            "--include-state-hash",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    shared_secrets = json.loads(secrets_path.read_text(encoding="utf-8"))
+    appended = json.loads(output_path.read_text(encoding="utf-8"))
+    assert appended[-1]["signature_scheme"] == "hmac-sha256"
+    assert appended[-1]["signature_key_id"] == "customer-key"
+    state = replay(appended, verifier=make_hmac_sha256_verifier(shared_secrets))
+    assert state.balances["archive"] == 1
+    assert state.balances["customer"] == 0
 
 
 def test_cli_bootstrap_genesis_bundle_hmac(tmp_path, capsys):

@@ -408,6 +408,51 @@ def scaffold_machine_credit_consumption_event(
     )
 
 
+def scaffold_singleton_object_archive_event(
+    events: Sequence[Dict[str, Any]],
+    *,
+    signer: str,
+    archive_account: str = "archive",
+    from_account: Optional[str] = None,
+    verifier: Optional[SignatureVerifier] = None,
+) -> Dict[str, Any]:
+    if verifier is None:
+        verifier = demo_signature_verifier
+    state = replay(events, verifier=verifier)
+    allowed_profiles = {
+        ("SATROOT-RECEIPT-1", "single-receipt"),
+        ("SATROOT-IDENTITY-1", "single-identity"),
+        ("SATROOT-LICENSE-1", "single-license"),
+    }
+    if (state.profile, state.profile_mode) not in allowed_profiles:
+        raise SatRootError("singleton object archival requires a SATROOT receipt, identity, or license ledger")
+    if state.supply != 1:
+        raise SatRootError("singleton object archival requires exactly one live unit")
+
+    holders = [account for account, balance in state.balances.items() if balance != 0]
+    if len(holders) != 1 or state.balances.get(holders[0]) != 1:
+        raise SatRootError("singleton object archival requires exactly one active holder with one unit")
+    current_holder = holders[0]
+    source = current_holder if from_account is None else require_account_name(from_account, "from_account")
+    target = require_account_name(archive_account, "archive_account")
+    if source != current_holder:
+        raise SatRootError("archive source must match the current active holder")
+    if signer != source:
+        raise SatRootError("archive helper requires signer to match the current active holder")
+    if target == current_holder:
+        raise SatRootError("singleton object is already archived to the requested account")
+
+    return scaffold_event_from_ledger(
+        events,
+        action="transfer",
+        signer=signer,
+        from_account=source,
+        to_account=target,
+        amount="1",
+        verifier=verifier,
+    )
+
+
 def _resolve_event_signing_key_id(
     event: Mapping[str, Any],
     *,
@@ -1830,6 +1875,20 @@ def build_cli_parser() -> Any:
     consume_machine_credit_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to the appended event")
     consume_machine_credit_parser.add_argument("--output", help="Optional output path")
 
+    archive_singleton_object_parser = subparsers.add_parser("archive-singleton-object", help="Append an archival transfer for SATROOT receipt, identity, or license ledgers")
+    archive_singleton_object_parser.add_argument("events_json", help="Path to an existing SATROOT singleton-object ledger array")
+    archive_singleton_object_parser.add_argument("--signer", required=True, help="Signer account name for the archival transfer")
+    archive_singleton_object_parser.add_argument("--archive-account", default="archive", help="Archive account destination; defaults to archive")
+    archive_singleton_object_parser.add_argument("--from", dest="from_account", help="Optional source account; defaults to the current active holder")
+    archive_singleton_object_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], default="demo")
+    archive_singleton_object_parser.add_argument("--key-id", help="Explicit signature key identifier for non-demo event signing")
+    archive_singleton_object_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id for non-demo event signing")
+    archive_singleton_object_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification/signing")
+    archive_singleton_object_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
+    archive_singleton_object_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> Ed25519 private key hex for signing")
+    archive_singleton_object_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to the appended event")
+    archive_singleton_object_parser.add_argument("--output", help="Optional output path")
+
     bootstrap_genesis_bundle_parser = subparsers.add_parser("bootstrap-genesis-bundle", help="Scaffold a genesis record and emit a signed SATROOT-1 starter bundle")
     bootstrap_genesis_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
     bootstrap_genesis_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the genesis record")
@@ -2176,6 +2235,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             events,
             signer=args.signer,
             amount=args.amount,
+            from_account=args.from_account,
+            verifier=verifier,
+        )
+        appended = append_signed_event_to_ledger(
+            events,
+            event,
+            scheme=args.scheme,
+            explicit_key_id=args.key_id,
+            signer_key_ids=signer_key_ids,
+            signer=signer_function,
+            verifier=verifier,
+            include_state_hash=args.include_state_hash,
+        )
+        _write_output(appended, args.output)
+        return 0
+
+    if args.command == "archive-singleton-object":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        signer_key_ids = None
+        signer_function: Optional[SignerFunction] = None
+        verifier = demo_signature_verifier
+        if args.scheme != "demo":
+            signer_function, verifier, _ = _signer_and_verifier_from_args(args)
+            if args.signer_key_map_json:
+                signer_key_ids = _load_json_object_file(args.signer_key_map_json, label="signer-key-map-json")
+        event = scaffold_singleton_object_archive_event(
+            events,
+            signer=args.signer,
+            archive_account=args.archive_account,
             from_account=args.from_account,
             verifier=verifier,
         )
