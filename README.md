@@ -61,6 +61,7 @@ The v0.1 kernel defines:
 - reference helpers for signing a single event or a whole ledger,
 - profile-aware genesis scaffolding for base and draft SATROOT profiles,
 - event scaffolding for valid non-genesis SATROOT records from an existing ledger or explicit references,
+- append-and-sign event workflows for extending existing demo or signed ledgers,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -161,7 +162,7 @@ python -m pytest
 Expected result:
 
 ```text
-131 passed
+133 passed
 ```
 
 ## Signing utilities
@@ -230,6 +231,12 @@ Scaffold the next event directly from an existing ledger:
 
 ```bash
 satroot1 init-event --action transfer --events-json examples/events_floor1.json --signer bob --from bob --to issuer --amount 1000 --output next_event.json
+```
+
+Append and sign the next event directly onto an existing ledger:
+
+```bash
+satroot1 append-event signed_events.json --action transfer --signer bob --from bob --to issuer --amount 1000 --scheme hmac-sha256 --signer-key-map-json signer_key_map.json --secrets-json secrets.json --include-state-hash --output appended_events.json
 ```
 
 Scaffold a genesis record and emit a signed starter bundle in one step:

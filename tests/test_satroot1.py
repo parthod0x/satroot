@@ -8,6 +8,7 @@ from satroot1 import (
     annotate_ledger_events,
     build_signed_ledger_bundle_index,
     build_signed_release_manifest,
+    append_signed_event_to_ledger,
     bootstrap_release_ed25519_material,
     bootstrap_release_publication,
     bootstrap_release_hmac_material,
@@ -485,6 +486,24 @@ def test_scaffold_event_from_ledger_uses_next_sequence_and_profile():
     assert next_event["prev_event_id"] == event_id(events[-1])
     assert next_event["profile"] == "SATROOT-STABLE-1"
     assert next_event["profile_mode"] == "reference-only"
+
+
+def test_append_signed_event_to_ledger_demo_roundtrip():
+    events = load_events()
+    next_event = scaffold_event_from_ledger(
+        events,
+        action="transfer",
+        signer="bob",
+        from_account="bob",
+        to_account="issuer",
+        amount="1000",
+    )
+    appended = append_signed_event_to_ledger(events, next_event, scheme="demo", include_state_hash=True)
+    assert len(appended) == len(events) + 1
+    assert appended[-1]["signature"] == "demo"
+    assert appended[-1]["state_hash"].startswith("sha256:")
+    state = replay(appended)
+    assert state.balances["bob"] == 98_999_000
 
 
 def test_load_protocol_schema_supports_rotate_authority():
@@ -1987,6 +2006,68 @@ def test_cli_init_event_manual_rotate_authority(tmp_path):
     assert event["action"] == "rotate-authority"
     assert event["new_mint_authority"] == "issuer_v2"
     assert event["sequence"] == 1
+
+
+def test_cli_append_event_hmac(tmp_path):
+    events_path = tmp_path / "events.json"
+    bootstrap_dir = tmp_path / "bootstrap"
+    signed_path = tmp_path / "signed.json"
+    appended_path = tmp_path / "appended.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-hmac-workflow", str(events_path), "--output-dir", str(bootstrap_dir)]) == 0
+    assert (
+        main(
+            [
+                "sign-ledger",
+                str(events_path),
+                "--scheme",
+                "hmac-sha256",
+                "--signer-key-map-json",
+                str(bootstrap_dir / "signer_key_map.json"),
+                "--secrets-json",
+                str(bootstrap_dir / "secrets.json"),
+                "--output",
+                str(signed_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "append-event",
+            str(signed_path),
+            "--action",
+            "transfer",
+            "--signer",
+            "bob",
+            "--from",
+            "bob",
+            "--to",
+            "issuer",
+            "--amount",
+            "1000",
+            "--scheme",
+            "hmac-sha256",
+            "--signer-key-map-json",
+            str(bootstrap_dir / "signer_key_map.json"),
+            "--secrets-json",
+            str(bootstrap_dir / "secrets.json"),
+            "--include-state-hash",
+            "--output",
+            str(appended_path),
+        ]
+    )
+    assert exit_code == 0
+
+    shared_secrets = json.loads((bootstrap_dir / "secrets.json").read_text(encoding="utf-8"))
+    appended = json.loads(appended_path.read_text(encoding="utf-8"))
+    assert appended[-1]["signature_scheme"] == "hmac-sha256"
+    assert appended[-1]["signature_key_id"] == "bob-key"
+    assert appended[-1]["state_hash"].startswith("sha256:")
+    state = replay(appended, verifier=make_hmac_sha256_verifier(shared_secrets))
+    assert state.balances["bob"] == 98_999_000
 
 
 def test_cli_bootstrap_genesis_bundle_hmac(tmp_path, capsys):

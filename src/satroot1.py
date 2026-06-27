@@ -356,10 +356,13 @@ def scaffold_event_from_ledger(
     to_account: Optional[str] = None,
     amount: Optional[str] = None,
     new_mint_authority: Optional[str] = None,
+    verifier: Optional[SignatureVerifier] = None,
 ) -> Dict[str, Any]:
     if not events:
         raise SatRootError("empty ledger")
-    state = replay(events)
+    if verifier is None:
+        verifier = demo_signature_verifier
+    state = replay(events, verifier=verifier)
     last_event = events[-1]
     profile = state.profile
     profile_mode = state.profile_mode
@@ -376,6 +379,54 @@ def scaffold_event_from_ledger(
         profile=profile,
         profile_mode=profile_mode,
     )
+
+
+def _resolve_event_signing_key_id(
+    event: Mapping[str, Any],
+    *,
+    explicit_key_id: Optional[str] = None,
+    signer_key_ids: Optional[Mapping[str, str]] = None,
+) -> str:
+    if isinstance(explicit_key_id, str) and explicit_key_id.strip():
+        return explicit_key_id
+    signer_name = event.get("signer")
+    if isinstance(signer_name, str) and signer_key_ids is not None:
+        key_id = signer_key_ids.get(signer_name)
+        if isinstance(key_id, str) and key_id.strip():
+            return key_id
+    raise SatRootError("non-demo event append requires --key-id or --signer-key-map-json")
+
+
+def append_signed_event_to_ledger(
+    events: Sequence[Dict[str, Any]],
+    event: Mapping[str, Any],
+    *,
+    scheme: str,
+    explicit_key_id: Optional[str] = None,
+    signer_key_ids: Optional[Mapping[str, str]] = None,
+    signer: Optional[SignerFunction] = None,
+    verifier: Optional[SignatureVerifier] = None,
+    include_state_hash: bool = False,
+) -> list[Dict[str, Any]]:
+    if not events:
+        raise SatRootError("empty ledger")
+    if verifier is None:
+        verifier = demo_signature_verifier
+
+    appended_events = copy.deepcopy(list(events))
+    unsigned_event = copy.deepcopy(dict(event))
+    if scheme == "demo":
+        signed_event = sign_event_record(unsigned_event, scheme="demo")
+    else:
+        key_id = _resolve_event_signing_key_id(unsigned_event, explicit_key_id=explicit_key_id, signer_key_ids=signer_key_ids)
+        signed_event = sign_event_record(unsigned_event, scheme=scheme, key_id=key_id, signer=signer)
+
+    state = replay(appended_events, verifier=verifier)
+    next_state = apply_event(state, signed_event, verifier=verifier)
+    if include_state_hash:
+        signed_event["state_hash"] = next_state.state_hash()
+    appended_events.append(signed_event)
+    return appended_events
 
 
 def event_id(event: Dict[str, Any]) -> str:
@@ -1720,6 +1771,24 @@ def build_cli_parser() -> Any:
     init_event_parser.add_argument("--new-mint-authority", help="New mint authority for rotate-authority actions")
     init_event_parser.add_argument("--output", help="Optional output path")
 
+    append_event_parser = subparsers.add_parser("append-event", help="Append a scaffolded or supplied SATROOT-1 event to an existing ledger and optionally sign it")
+    append_event_parser.add_argument("events_json", help="Path to an existing SATROOT-1 ledger array")
+    append_event_parser.add_argument("--event-json", help="Optional path to an event object to append; otherwise scaffold from the ledger tip")
+    append_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], help="Action to scaffold when --event-json is not provided")
+    append_event_parser.add_argument("--signer", help="Signer account name for the appended event")
+    append_event_parser.add_argument("--from", dest="from_account", help="Source account for transfer/burn actions")
+    append_event_parser.add_argument("--to", dest="to_account", help="Destination account for mint/transfer actions")
+    append_event_parser.add_argument("--amount", help="Positive amount for mint/transfer/burn actions")
+    append_event_parser.add_argument("--new-mint-authority", help="New mint authority for rotate-authority actions")
+    append_event_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], default="demo")
+    append_event_parser.add_argument("--key-id", help="Explicit signature key identifier for non-demo event signing")
+    append_event_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id for non-demo event signing")
+    append_event_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification/signing")
+    append_event_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
+    append_event_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> Ed25519 private key hex for signing")
+    append_event_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to the appended event")
+    append_event_parser.add_argument("--output", help="Optional output path")
+
     bootstrap_genesis_bundle_parser = subparsers.add_parser("bootstrap-genesis-bundle", help="Scaffold a genesis record and emit a signed SATROOT-1 starter bundle")
     bootstrap_genesis_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
     bootstrap_genesis_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the genesis record")
@@ -2008,6 +2077,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 new_mint_authority=args.new_mint_authority,
             )
         _write_output(event, args.output)
+        return 0
+
+    if args.command == "append-event":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        signer_key_ids = None
+        signer_function: Optional[SignerFunction] = None
+        verifier = demo_signature_verifier
+        if args.scheme != "demo":
+            signer_function, verifier, _ = _signer_and_verifier_from_args(args)
+            if args.signer_key_map_json:
+                signer_key_ids = _load_json_object_file(args.signer_key_map_json, label="signer-key-map-json")
+        if args.event_json:
+            event = _load_json_file(args.event_json)
+            if not isinstance(event, dict):
+                raise SatRootError("event_json must contain a JSON object")
+        else:
+            if not args.action or not args.signer:
+                raise SatRootError("--action and --signer are required when --event-json is not provided")
+            event = scaffold_event_from_ledger(
+                events,
+                action=args.action,
+                signer=args.signer,
+                from_account=args.from_account,
+                to_account=args.to_account,
+                amount=args.amount,
+                new_mint_authority=args.new_mint_authority,
+                verifier=verifier,
+            )
+        appended = append_signed_event_to_ledger(
+            events,
+            event,
+            scheme=args.scheme,
+            explicit_key_id=args.key_id,
+            signer_key_ids=signer_key_ids,
+            signer=signer_function,
+            verifier=verifier,
+            include_state_hash=args.include_state_hash,
+        )
+        _write_output(appended, args.output)
         return 0
 
     if args.command == "bootstrap-genesis-bundle":
