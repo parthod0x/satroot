@@ -825,6 +825,94 @@ def bootstrap_hmac_workflow(
     }
 
 
+def bootstrap_stable_reference_demo_ledger(
+    *,
+    symbol: str,
+    name: str,
+    reference_unit: str = "USD",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    merchant_account: str = "merchant",
+    service_account: str = "api_node",
+    initial_balance: str = "25000000",
+    merchant_amount: str = "1250000",
+    service_amount: str = "250000",
+    merchant_burn_amount: str = "5000",
+    intended_use: str = "invoice-credit-accounting",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    include_annotation: bool = True,
+) -> Dict[str, Any]:
+    require_account_name(issuer, "issuer")
+    require_account_name(merchant_account, "merchant_account")
+    require_account_name(service_account, "service_account")
+
+    initial_balance_value = parse_positive_amount(initial_balance)
+    merchant_amount_value = parse_positive_amount(merchant_amount)
+    service_amount_value = parse_positive_amount(service_amount)
+    burn_amount_value = parse_amount(merchant_burn_amount)
+    distributed_total = merchant_amount_value + service_amount_value
+    if distributed_total > initial_balance_value:
+        raise SatRootError("stable demo distribution exceeds initial issued balance")
+    if burn_amount_value > merchant_amount_value:
+        raise SatRootError("stable demo burn amount cannot exceed the merchant allocation")
+
+    genesis = scaffold_genesis_record(
+        symbol=symbol,
+        name=name,
+        root_id=root_id,
+        mint_authority=issuer,
+        initial_owner=issuer,
+        initial_balance=initial_balance,
+        profile="SATROOT-STABLE-1",
+        profile_fields={
+            "reference_unit": reference_unit,
+            "intended_use": intended_use,
+        },
+        rules_hash=rules_hash,
+        nonce=nonce,
+    )
+
+    events: list[Dict[str, Any]] = [genesis]
+    merchant_transfer = scaffold_event_from_ledger(
+        events,
+        action="transfer",
+        signer=issuer,
+        from_account=issuer,
+        to_account=merchant_account,
+        amount=merchant_amount,
+    )
+    events.append(sign_event_record(merchant_transfer, scheme="demo"))
+
+    service_transfer = scaffold_event_from_ledger(
+        events,
+        action="transfer",
+        signer=issuer,
+        from_account=issuer,
+        to_account=service_account,
+        amount=service_amount,
+    )
+    events.append(sign_event_record(service_transfer, scheme="demo"))
+
+    if burn_amount_value > 0:
+        merchant_burn = scaffold_event_from_ledger(
+            events,
+            action="burn",
+            signer=merchant_account,
+            from_account=merchant_account,
+            amount=merchant_burn_amount,
+        )
+        events.append(sign_event_record(merchant_burn, scheme="demo"))
+
+    final_state = replay(events)
+    return {
+        "events": events,
+        "annotated_events": annotate_ledger_events(events) if include_annotation else None,
+        "final_state_snapshot": final_state.snapshot(),
+        "final_state_hash": final_state.state_hash(),
+    }
+
+
 def bootstrap_signed_ledger_bundle(
     events: Sequence[Dict[str, Any]],
     *,
@@ -1894,6 +1982,24 @@ def build_cli_parser() -> Any:
     init_genesis_parser.add_argument("--nonce", help="Optional nonce metadata")
     init_genesis_parser.add_argument("--output", help="Optional output path")
 
+    bootstrap_stable_demo_parser = subparsers.add_parser("bootstrap-stable-demo", help="Generate a reference-only SATROOT-STABLE-1 demo ledger plus annotated artifacts")
+    bootstrap_stable_demo_parser.add_argument("--symbol", required=True, help="Asset symbol for the stable reference demo")
+    bootstrap_stable_demo_parser.add_argument("--name", required=True, help="Human-readable asset name for the stable reference demo")
+    bootstrap_stable_demo_parser.add_argument("--output-dir", required=True, help="Directory where events.json, annotated_events.json, and summary.json will be written")
+    bootstrap_stable_demo_parser.add_argument("--reference-unit", default="USD", help="External reference unit; defaults to USD")
+    bootstrap_stable_demo_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_stable_demo_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and distribution events")
+    bootstrap_stable_demo_parser.add_argument("--merchant-account", default="merchant", help="Merchant account for the first reference distribution leg")
+    bootstrap_stable_demo_parser.add_argument("--service-account", default="api_node", help="Service account for the second reference distribution leg")
+    bootstrap_stable_demo_parser.add_argument("--initial-balance", default="25000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_stable_demo_parser.add_argument("--merchant-amount", default="1250000", help="Amount transferred from the issuer to the merchant account")
+    bootstrap_stable_demo_parser.add_argument("--service-amount", default="250000", help="Amount transferred from the issuer to the service account")
+    bootstrap_stable_demo_parser.add_argument("--merchant-burn-amount", default="5000", help="Optional merchant-side burn amount; use 0 to skip the burn event")
+    bootstrap_stable_demo_parser.add_argument("--intended-use", default="invoice-credit-accounting", help="Reference-only intended_use metadata")
+    bootstrap_stable_demo_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_stable_demo_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_stable_demo_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_events.json")
+
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
     init_event_parser.add_argument("--events-json", help="Optional path to an existing SATROOT-1 ledger array; derives root_id, sequence, prev_event_id, and profile metadata")
@@ -2237,6 +2343,41 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             nonce=args.nonce,
         )
         _write_output(genesis, args.output)
+        return 0
+
+    if args.command == "bootstrap-stable-demo":
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        demo = bootstrap_stable_reference_demo_ledger(
+            symbol=args.symbol,
+            name=args.name,
+            reference_unit=args.reference_unit,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            merchant_account=args.merchant_account,
+            service_account=args.service_account,
+            initial_balance=args.initial_balance,
+            merchant_amount=args.merchant_amount,
+            service_amount=args.service_amount,
+            merchant_burn_amount=args.merchant_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            include_annotation=not args.no_annotated_output,
+        )
+        _write_json_file(output_dir / "events.json", demo["events"])
+        if demo["annotated_events"] is not None:
+            _write_json_file(output_dir / "annotated_events.json", demo["annotated_events"])
+        summary = {
+            "profile": "SATROOT-STABLE-1",
+            "profile_mode": "reference-only",
+            "reference_unit": args.reference_unit,
+            "event_count": len(demo["events"]),
+            "final_state_hash": demo["final_state_hash"],
+            "final_state_snapshot": demo["final_state_snapshot"],
+        }
+        _write_json_file(output_dir / "summary.json", summary)
+        print(f"wrote SATROOT-STABLE-1 demo ledger to {output_dir}")
         return 0
 
     if args.command == "init-event":

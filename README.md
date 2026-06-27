@@ -64,6 +64,7 @@ The v0.1 kernel defines:
 - append-and-sign event workflows for extending existing demo or signed ledgers,
 - profile-aware lifecycle helpers for common machine-credit consumption flows,
 - profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
+- a one-shot SATROOT-STABLE-1 reference-demo bootstrap for runnable stable-profile artifact generation,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -124,7 +125,8 @@ This repo now includes the first stable-value profile draft:
 
 - `SATROOT-STABLE-1` for reference-value accounting units,
 - `examples/genesis_usdroot1.json` for a `USDROOT1` genesis record,
-- `examples/events_usdroot1.json` for a runnable reference-only ledger flow.
+- `examples/events_usdroot1.json` for a runnable reference-only ledger flow,
+- `satroot1 bootstrap-stable-demo` for generating new reference-only demo ledgers on demand.
 
 This repo also now includes the first machine-credit profile draft:
 
@@ -164,7 +166,7 @@ python -m pytest
 Expected result:
 
 ```text
-149 passed
+152 passed
 ```
 
 ## Signing utilities
@@ -239,6 +241,12 @@ Append and sign the next event directly onto an existing ledger:
 
 ```bash
 satroot1 append-event signed_events.json --action transfer --signer bob --from bob --to issuer --amount 1000 --scheme hmac-sha256 --signer-key-map-json signer_key_map.json --secrets-json secrets.json --include-state-hash --output appended_events.json
+```
+
+Generate a runnable SATROOT-STABLE-1 reference-only demo ledger:
+
+```bash
+satroot1 bootstrap-stable-demo --symbol USDCLI2 --name "Stable CLI Demo" --reference-unit EUR --output-dir stable_demo
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:

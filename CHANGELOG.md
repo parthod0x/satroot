@@ -13,6 +13,7 @@
 - Adds a one-shot `bootstrap-release-publication` workflow for release signing material plus published release directories.
 - Adds event scaffolding helpers and an `init-event` CLI command for non-genesis records.
 - Adds an `append-event` CLI workflow plus helper for extending existing ledgers with signed events.
+- Adds a `bootstrap-stable-demo` workflow for generating runnable reference-only SATROOT-STABLE-1 ledgers.
 - Adds a `consume-machine-credit` lifecycle helper for burn-on-use `SATROOT-MACHINE-1` ledgers.
 - Adds a `transfer-singleton-object` lifecycle helper for receipt, identity, and license ledgers.
 - Adds an `archive-singleton-object` lifecycle helper for receipt, identity, and license ledgers.

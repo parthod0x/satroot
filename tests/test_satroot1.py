@@ -16,6 +16,7 @@ from satroot1 import (
     bootstrap_genesis_bundle,
     bootstrap_hmac_workflow,
     bootstrap_signed_ledger_bundle,
+    bootstrap_stable_reference_demo_ledger,
     build_signed_ledger_bundle_manifest,
     build_signer_key_map,
     derive_ed25519_public_keys,
@@ -427,6 +428,37 @@ def test_bootstrap_genesis_bundle_scaffolds_profiled_starter():
     assert bundle["genesis"]["reference_unit"] == "GBP"
     assert bundle["signed_events"][0]["symbol"] == "GENUSD1"
     assert bundle["final_state_snapshot"]["symbol"] == "GENUSD1"
+
+
+def test_bootstrap_stable_reference_demo_ledger_replays():
+    demo = bootstrap_stable_reference_demo_ledger(
+        symbol="USDDEMO1",
+        name="Stable Demo Asset",
+        root_id="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff:0",
+        reference_unit="EUR",
+        nonce="stable-demo-bootstrap",
+    )
+    events = demo["events"]
+    state = replay(events)
+    assert len(events) == 4
+    assert state.profile == "SATROOT-STABLE-1"
+    assert state.profile_mode == "reference-only"
+    assert state.genesis_metadata["reference_unit"] == "EUR"
+    assert state.balances["issuer"] == 23_500_000
+    assert state.balances["merchant"] == 1_245_000
+    assert state.balances["api_node"] == 250_000
+    assert demo["annotated_events"][-1]["state_hash"].startswith("sha256:")
+
+
+def test_bootstrap_stable_reference_demo_ledger_rejects_overallocated_distribution():
+    with pytest.raises(SatRootError):
+        bootstrap_stable_reference_demo_ledger(
+            symbol="BADDEMO1",
+            name="Bad Stable Demo",
+            initial_balance="100",
+            merchant_amount="90",
+            service_amount="20",
+        )
 
 
 def test_bootstrap_release_publication_writes_hmac_material(tmp_path):
@@ -3175,6 +3207,44 @@ def test_cli_bootstrap_release_publication(tmp_path, capsys):
     )
     assert summary["bundle_count"] == 1
     assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_stable_demo(tmp_path, capsys):
+    output_dir = tmp_path / "stable_demo"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo",
+            "--symbol",
+            "USDCLI2",
+            "--name",
+            "Stable CLI Demo",
+            "--reference-unit",
+            "EUR",
+            "--merchant-burn-amount",
+            "0",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo ledger to" in captured.out
+
+    events = json.loads((output_dir / "events.json").read_text(encoding="utf-8"))
+    annotated = json.loads((output_dir / "annotated_events.json").read_text(encoding="utf-8"))
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    state = replay(events)
+    assert len(events) == 3
+    assert len(annotated) == 3
+    assert summary["profile"] == "SATROOT-STABLE-1"
+    assert summary["reference_unit"] == "EUR"
+    assert summary["event_count"] == 3
+    assert state.symbol == "USDCLI2"
+    assert state.genesis_metadata["reference_unit"] == "EUR"
+    assert state.balances["merchant"] == 1_250_000
+    assert state.balances["api_node"] == 250_000
 
 
 def test_cli_bootstrap_release_ed25519_material(tmp_path):
