@@ -17,6 +17,7 @@ from satroot1 import (
     bootstrap_hmac_workflow,
     bootstrap_singleton_object_demo_bundle,
     bootstrap_singleton_object_demo_ledger,
+    bootstrap_singleton_object_demo_release,
     bootstrap_signed_ledger_bundle,
     bootstrap_stable_reference_demo_bundle,
     bootstrap_stable_reference_demo_ledger,
@@ -501,6 +502,33 @@ def test_bootstrap_singleton_object_demo_bundle_hmac():
     assert bundle["material"]["signer_key_map"] == {"issuer": "issuer-key", "customer": "customer-key", "archive": "archive-key"}
     assert state.symbol == "LICBUNDLE1"
     assert state.supply == 0
+
+
+def test_bootstrap_singleton_object_demo_release_hmac(tmp_path):
+    released = bootstrap_singleton_object_demo_release(
+        profile="SATROOT-RECEIPT-1",
+        symbol="RECREL1",
+        name="Receipt Release Asset",
+        bundle_scheme="hmac-sha256",
+        release_key_id="release-key",
+        output_dir=tmp_path / "singleton_release",
+        holder_account="buyer",
+        archive_account="archive",
+        release_metadata={"channel": "stable", "label": "Receipt Release Asset"},
+    )
+    bundle_dir = Path(released["bundle_dir"])
+    release_dir = Path(released["release_dir"])
+    assert (bundle_dir / "bundle_manifest.json").is_file()
+    assert (release_dir / "release_manifest.json").is_file()
+    assert (release_dir / "bundle_index.json").is_file()
+    secrets = released["release_material"]["shared_secrets"]
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"]["channel"] == "stable"
+    assert summary["release"]["label"] == "Receipt Release Asset"
 
 
 def test_bootstrap_stable_reference_demo_bundle_hmac():
@@ -3500,6 +3528,134 @@ def test_cli_bootstrap_singleton_demo_bundle_ed25519_verifier_only(tmp_path):
 
     verify_exit_code = main(["verify-bundle", str(output_dir)])
     assert verify_exit_code == 0
+
+
+def test_cli_bootstrap_singleton_demo_release_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "singleton_release"
+
+    exit_code = main(
+        [
+            "bootstrap-singleton-demo-release",
+            "--profile",
+            "SATROOT-LICENSE-1",
+            "--symbol",
+            "LICRELCLI1",
+            "--name",
+            "License Release CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT License Release",
+            "--published-at",
+            "2026-06-28T12:00:00Z",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-LICENSE-1 singleton demo release to" in captured.out
+
+    bundle_dir = output_dir / "bundle"
+    release_dir = output_dir / "release"
+    bundle_manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_manifest["symbol"] == "LICRELCLI1"
+    assert bundle_manifest["final_state_snapshot"]["profile"] == "SATROOT-LICENSE-1"
+    assert bundle_index["release"]["label"] == "SATROOT License Release"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_singleton_demo_release_ed25519(tmp_path, capsys):
+    output_dir = tmp_path / "singleton_release_ed25519"
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(
+                [
+                    "bootstrap-singleton-demo-release",
+                    "--profile",
+                    "SATROOT-IDENTITY-1",
+                    "--symbol",
+                    "IDRELCLI2",
+                    "--name",
+                    "Identity Release Ed25519",
+                    "--scheme",
+                    "ed25519",
+                    "--release-key-id",
+                    "release-key",
+                    "--output-dir",
+                    str(output_dir),
+                    "--verifier-only",
+                ]
+            )
+        return
+
+    exit_code = main(
+        [
+            "bootstrap-singleton-demo-release",
+            "--profile",
+            "SATROOT-IDENTITY-1",
+            "--symbol",
+            "IDRELCLI2",
+            "--name",
+            "Identity Release Ed25519",
+            "--scheme",
+            "ed25519",
+            "--release-key-id",
+            "release-key",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Identity Release Ed25519",
+            "--published-at",
+            "2026-06-28T18:00:00Z",
+            "--output-dir",
+            str(output_dir),
+            "--verifier-only",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-IDENTITY-1 singleton demo release to" in captured.out
+
+    bundle_dir = output_dir / "bundle"
+    release_dir = output_dir / "release"
+    bundle_manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_public_keys = json.loads((release_dir / "release_public_keys.json").read_text(encoding="utf-8"))
+    assert not (bundle_dir / "private_keys.json").exists()
+    assert bundle_manifest["verification_material_scope"] == "public-only"
+    assert bundle_manifest["final_state_snapshot"]["profile"] == "SATROOT-IDENTITY-1"
+    assert release_manifest["signature_scheme"] == "ed25519"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+    bundle_summary = verify_signed_ledger_bundle(bundle_dir)
+    assert bundle_summary["symbol"] == "IDRELCLI2"
+    assert bundle_summary["annotated_verified"] is True
+
+    release_summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_ed25519_verifier(release_public_keys),
+    )
+    assert release_summary["bundle_count"] == 1
+    assert release_summary["release"]["label"] == "SATROOT Identity Release Ed25519"
 
 
 def test_cli_bootstrap_stable_demo_bundle_hmac(tmp_path, capsys):

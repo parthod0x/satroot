@@ -66,6 +66,7 @@ The v0.1 kernel defines:
 - profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
 - a one-shot singleton receipt/identity/license demo bootstrap for runnable object-profile lifecycle artifacts,
 - a one-shot singleton receipt/identity/license signed demo-bundle bootstrap for verifiable object-profile artifacts,
+- a one-shot singleton receipt/identity/license demo-release bootstrap for bundle plus release publication generation,
 - a one-shot SATROOT-STABLE-1 reference-demo bootstrap for runnable stable-profile artifact generation,
 - a one-shot SATROOT-STABLE-1 signed demo-bundle bootstrap for release-ready stable-profile artifacts,
 - a one-shot SATROOT-STABLE-1 demo-release bootstrap for bundle plus release publication generation,
@@ -146,7 +147,8 @@ This repo also now includes the first receipt-object profile draft:
 - `examples/genesis_receipt1.json` for a `RECEIPT1` genesis record,
 - `examples/events_receipt1.json` for a runnable receipt lifecycle ledger flow,
 - `satroot1 bootstrap-singleton-demo --profile SATROOT-RECEIPT-1` for generating new receipt/identity/license singleton demo ledgers on demand,
-- `satroot1 bootstrap-singleton-demo-bundle --profile SATROOT-RECEIPT-1` for generating signed receipt/identity/license demo bundles on demand.
+- `satroot1 bootstrap-singleton-demo-bundle --profile SATROOT-RECEIPT-1` for generating signed receipt/identity/license demo bundles on demand,
+- `satroot1 bootstrap-singleton-demo-release --profile SATROOT-RECEIPT-1` for generating signed receipt/identity/license demo bundles plus release directories in one step.
 
 This repo also now includes the first identity-object profile draft:
 
@@ -174,7 +176,7 @@ python -m pytest
 Expected result:
 
 ```text
-165 passed
+168 passed
 ```
 
 ## Signing utilities
@@ -267,6 +269,12 @@ Generate a signed receipt, identity, or license singleton demo bundle:
 
 ```bash
 satroot1 bootstrap-singleton-demo-bundle --profile SATROOT-RECEIPT-1 --symbol RECBUNDLE2 --name "Receipt Bundle CLI" --scheme hmac-sha256 --output-dir singleton_bundle
+```
+
+Generate a signed receipt, identity, or license singleton demo bundle plus release directory:
+
+```bash
+satroot1 bootstrap-singleton-demo-release --profile SATROOT-LICENSE-1 --symbol LICRELCLI1 --name "License Release CLI" --scheme hmac-sha256 --release-key-id release-key --channel stable --label "SATROOT License Release" --published-at 2026-06-28T12:00:00Z --output-dir singleton_release
 ```
 
 Generate a signed SATROOT-STABLE-1 reference-only demo bundle:

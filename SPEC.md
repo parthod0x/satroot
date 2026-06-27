@@ -245,6 +245,8 @@ The reference CLI may also expose singleton demo bootstrap paths that scaffold r
 
 Those singleton demo paths may also be composed directly into signed bundle workflows so object-style profiles can emit verifier material, annotated replay artifacts, and bundle manifests without a separately prepared intermediate ledger file.
 
+Those singleton bundle workflows may also be composed one step further into release bootstraps so receipt, identity, or license profile artifacts can emit both signed bundles and signed release directories through the same bundle-index and release-manifest verification path used elsewhere in SATROOT.
+
 For reference-only stable ledgers, the reference CLI may also expose a demo bootstrap path that scaffolds a runnable `SATROOT-STABLE-1` issuance, distribution, and optional burn flow into reusable JSON artifacts without introducing redemption or reserve semantics.
 
 That same stable bootstrap may also be composed directly into a signed bundle path so a reference-only stable ledger can be emitted together with signer material, annotated replay artifacts, and a verifiable bundle manifest without requiring a separate handwritten intermediate ledger file.

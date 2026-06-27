@@ -134,6 +134,22 @@ SINGLETON_DEMO_PROFILE_DEFAULTS: Dict[str, Dict[str, Optional[str]]] = {
 }
 
 
+def _resolve_singleton_demo_accounts(
+    profile: str,
+    *,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+) -> tuple[str, Optional[str], Optional[str]]:
+    preset = SINGLETON_DEMO_PROFILE_DEFAULTS[profile]
+    resolved_holder = holder_account or preset["holder_account"]
+    resolved_next_holder = next_holder if next_holder is not None else preset["next_holder"]
+    resolved_archive_account = None if no_archive else (archive_account if archive_account is not None else preset["archive_account"])
+    assert resolved_holder is not None
+    return resolved_holder, resolved_next_holder, resolved_archive_account
+
+
 def canonical_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -1060,6 +1076,80 @@ def bootstrap_singleton_object_demo_bundle(
     result["events"] = copy.deepcopy(demo["events"])
     result["profile"] = profile
     return result
+
+
+def bootstrap_singleton_object_demo_release(
+    *,
+    profile: str,
+    symbol: str,
+    name: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    holder_account: str,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: bool = True,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_release_scheme = release_scheme or bundle_scheme
+    if verifier_only and bundle_scheme != "ed25519":
+        raise SatRootError("--verifier-only is only supported for ed25519 bundles")
+
+    root_output_dir = Path(output_dir).resolve()
+    bundle_dir = root_output_dir / "bundle"
+    release_dir = root_output_dir / "release"
+    bundle = bootstrap_singleton_object_demo_bundle(
+        profile=profile,
+        symbol=symbol,
+        name=name,
+        scheme=bundle_scheme,
+        root_id=root_id,
+        issuer=issuer,
+        holder_account=holder_account,
+        next_holder=next_holder,
+        archive_account=archive_account,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        retire=retire,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+    )
+    bundle_output = _write_bundle_output_dir(
+        bundle,
+        output_dir=bundle_dir,
+        include_private_keys=not verifier_only,
+        genesis=bundle["genesis"],
+    )
+    published = bootstrap_release_publication(
+        [bundle_dir],
+        output_dir=release_dir,
+        signature_scheme=resolved_release_scheme,
+        key_id=release_key_id,
+        release_metadata=release_metadata,
+    )
+    return {
+        "bundle": bundle,
+        "bundle_output": bundle_output,
+        "bundle_dir": str(bundle_dir.resolve()),
+        "release_dir": str(release_dir.resolve()),
+        "release_publication": published,
+        "release_material": published["release_material"],
+    }
 
 
 def bootstrap_stable_reference_demo_bundle(
@@ -2384,6 +2474,33 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_bundle_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
     bootstrap_singleton_demo_bundle_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
 
+    bootstrap_singleton_demo_release_parser = subparsers.add_parser("bootstrap-singleton-demo-release", help="Generate a signed receipt, identity, or license singleton demo bundle plus signed release directory from profile parameters")
+    bootstrap_singleton_demo_release_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to scaffold")
+    bootstrap_singleton_demo_release_parser.add_argument("--symbol", required=True, help="Asset symbol for the singleton demo release")
+    bootstrap_singleton_demo_release_parser.add_argument("--name", required=True, help="Human-readable asset name for the singleton demo release")
+    bootstrap_singleton_demo_release_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the singleton demo bundle")
+    bootstrap_singleton_demo_release_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_release_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the release manifest")
+    bootstrap_singleton_demo_release_parser.add_argument("--output-dir", required=True, help="Directory where bundle/ and release/ outputs will be written")
+    bootstrap_singleton_demo_release_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_singleton_demo_release_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and lifecycle events")
+    bootstrap_singleton_demo_release_parser.add_argument("--holder-account", help="Initial non-issuer holder; defaults to the profile demo preset")
+    bootstrap_singleton_demo_release_parser.add_argument("--next-holder", help="Optional intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_release_parser.add_argument("--archive-account", help="Optional archive destination; defaults to the profile demo preset when present")
+    bootstrap_singleton_demo_release_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if the profile preset defines one")
+    bootstrap_singleton_demo_release_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_release_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_release_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_singleton_demo_release_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_singleton_demo_release_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_release_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_release_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_release_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_singleton_demo_release_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_singleton_demo_release_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    bootstrap_singleton_demo_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    bootstrap_singleton_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+
     bootstrap_stable_demo_bundle_parser = subparsers.add_parser("bootstrap-stable-demo-bundle", help="Generate a signed SATROOT-STABLE-1 reference-demo bundle from profile parameters")
     bootstrap_stable_demo_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the stable reference demo bundle")
     bootstrap_stable_demo_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the stable reference demo bundle")
@@ -2818,10 +2935,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-singleton-demo":
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        preset = SINGLETON_DEMO_PROFILE_DEFAULTS[args.profile]
-        holder_account = args.holder_account or preset["holder_account"]
-        next_holder = args.next_holder if args.next_holder is not None else preset["next_holder"]
-        archive_account = None if args.no_archive else (args.archive_account if args.archive_account is not None else preset["archive_account"])
+        holder_account, next_holder, archive_account = _resolve_singleton_demo_accounts(
+            args.profile,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+        )
         demo = bootstrap_singleton_object_demo_ledger(
             profile=args.profile,
             symbol=args.symbol,
@@ -2854,10 +2974,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-singleton-demo-bundle":
         if args.verifier_only and args.scheme != "ed25519":
             raise SatRootError("--verifier-only is only supported for ed25519 bundles")
-        preset = SINGLETON_DEMO_PROFILE_DEFAULTS[args.profile]
-        holder_account = args.holder_account or preset["holder_account"]
-        next_holder = args.next_holder if args.next_holder is not None else preset["next_holder"]
-        archive_account = None if args.no_archive else (args.archive_account if args.archive_account is not None else preset["archive_account"])
+        holder_account, next_holder, archive_account = _resolve_singleton_demo_accounts(
+            args.profile,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+        )
         bundle = bootstrap_singleton_object_demo_bundle(
             profile=args.profile,
             symbol=args.symbol,
@@ -2884,6 +3007,46 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             genesis=bundle["genesis"],
         )
         print(f"wrote {args.profile} {args.scheme} singleton demo bundle to {Path(output['output_dir'])}")
+        return 0
+
+    if args.command == "bootstrap-singleton-demo-release":
+        release_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        holder_account, next_holder, archive_account = _resolve_singleton_demo_accounts(
+            args.profile,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+        )
+        released = bootstrap_singleton_object_demo_release(
+            profile=args.profile,
+            symbol=args.symbol,
+            name=args.name,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=holder_account,
+            next_holder=next_holder,
+            archive_account=archive_account,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=not args.no_retire,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata=release_metadata,
+        )
+        print(f"wrote {args.profile} singleton demo release to {Path(released['release_dir'])}")
         return 0
 
     if args.command == "init-event":
