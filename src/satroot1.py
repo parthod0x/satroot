@@ -913,6 +913,59 @@ def bootstrap_stable_reference_demo_ledger(
     }
 
 
+def bootstrap_stable_reference_demo_bundle(
+    *,
+    symbol: str,
+    name: str,
+    scheme: str,
+    reference_unit: str = "USD",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    merchant_account: str = "merchant",
+    service_account: str = "api_node",
+    initial_balance: str = "25000000",
+    merchant_amount: str = "1250000",
+    service_amount: str = "250000",
+    merchant_burn_amount: str = "5000",
+    intended_use: str = "invoice-credit-accounting",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+) -> Dict[str, Any]:
+    demo = bootstrap_stable_reference_demo_ledger(
+        symbol=symbol,
+        name=name,
+        reference_unit=reference_unit,
+        root_id=root_id,
+        issuer=issuer,
+        merchant_account=merchant_account,
+        service_account=service_account,
+        initial_balance=initial_balance,
+        merchant_amount=merchant_amount,
+        service_amount=service_amount,
+        merchant_burn_amount=merchant_burn_amount,
+        intended_use=intended_use,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        include_annotation=False,
+    )
+    bundle = bootstrap_signed_ledger_bundle(
+        demo["events"],
+        scheme=scheme,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+    )
+    result = dict(bundle)
+    result["genesis"] = copy.deepcopy(demo["events"][0])
+    result["events"] = copy.deepcopy(demo["events"])
+    return result
+
+
 def bootstrap_signed_ledger_bundle(
     events: Sequence[Dict[str, Any]],
     *,
@@ -1911,6 +1964,48 @@ def _write_json_file(path: Path, data: Any) -> None:
         f.write(_dump_json(data))
 
 
+def _bundle_output_artifacts(
+    bundle: Mapping[str, Any],
+    *,
+    include_private_keys: bool,
+    genesis: Optional[Mapping[str, Any]] = None,
+) -> tuple[Dict[str, str], Dict[str, Any]]:
+    output_files: Dict[str, str] = {
+        "signer_key_map": "signer_key_map.json",
+        "signed_events": "signed_events.json",
+    }
+    output_payloads: Dict[str, Any] = {
+        "signer_key_map": bundle["material"]["signer_key_map"],
+        "signed_events": bundle["signed_events"],
+    }
+    if genesis is not None:
+        output_files["genesis"] = "genesis.json"
+        output_payloads["genesis"] = copy.deepcopy(dict(genesis))
+
+    scheme = bundle["scheme"]
+    if scheme == "hmac-sha256":
+        output_files["secrets"] = "secrets.json"
+        output_payloads["secrets"] = bundle["material"]["shared_secrets"]
+    elif scheme == "ed25519":
+        output_files["public_keys"] = "public_keys.json"
+        output_payloads["public_keys"] = bundle["material"]["public_keys"]
+        if include_private_keys:
+            output_files["private_keys"] = "private_keys.json"
+            output_payloads["private_keys"] = bundle["material"]["private_keys"]
+    else:
+        raise SatRootError(f"unsupported bundle scheme: {scheme}")
+
+    if bundle["annotated_events"] is not None:
+        output_files["annotated_signed_events"] = "annotated_signed_events.json"
+        output_payloads["annotated_signed_events"] = bundle["annotated_events"]
+
+    output_files["bundle_manifest"] = "bundle_manifest.json"
+    output_file_hashes = {key: rendered_json_sha256(data) for key, data in output_payloads.items()}
+    manifest = build_signed_ledger_bundle_manifest(bundle, output_files=output_files, output_file_hashes=output_file_hashes)
+    output_payloads["bundle_manifest"] = manifest
+    return output_files, output_payloads
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -1999,6 +2094,29 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
     bootstrap_stable_demo_parser.add_argument("--nonce", help="Optional nonce metadata")
     bootstrap_stable_demo_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_events.json")
+
+    bootstrap_stable_demo_bundle_parser = subparsers.add_parser("bootstrap-stable-demo-bundle", help="Generate a signed SATROOT-STABLE-1 reference-demo bundle from profile parameters")
+    bootstrap_stable_demo_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the stable reference demo bundle")
+    bootstrap_stable_demo_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the stable reference demo bundle")
+    bootstrap_stable_demo_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_stable_demo_bundle_parser.add_argument("--output-dir", required=True, help="Directory where signed bundle files will be written")
+    bootstrap_stable_demo_bundle_parser.add_argument("--reference-unit", default="USD", help="External reference unit; defaults to USD")
+    bootstrap_stable_demo_bundle_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_stable_demo_bundle_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and distribution events")
+    bootstrap_stable_demo_bundle_parser.add_argument("--merchant-account", default="merchant", help="Merchant account for the first reference distribution leg")
+    bootstrap_stable_demo_bundle_parser.add_argument("--service-account", default="api_node", help="Service account for the second reference distribution leg")
+    bootstrap_stable_demo_bundle_parser.add_argument("--initial-balance", default="25000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_stable_demo_bundle_parser.add_argument("--merchant-amount", default="1250000", help="Amount transferred from the issuer to the merchant account")
+    bootstrap_stable_demo_bundle_parser.add_argument("--service-amount", default="250000", help="Amount transferred from the issuer to the service account")
+    bootstrap_stable_demo_bundle_parser.add_argument("--merchant-burn-amount", default="5000", help="Optional merchant-side burn amount; use 0 to skip the burn event")
+    bootstrap_stable_demo_bundle_parser.add_argument("--intended-use", default="invoice-credit-accounting", help="Reference-only intended_use metadata")
+    bootstrap_stable_demo_bundle_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_stable_demo_bundle_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_stable_demo_bundle_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_stable_demo_bundle_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_stable_demo_bundle_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during signing")
+    bootstrap_stable_demo_bundle_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_stable_demo_bundle_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -2575,6 +2693,42 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(appended, args.output)
         return 0
 
+    if args.command == "bootstrap-stable-demo-bundle":
+        if args.verifier_only and args.scheme != "ed25519":
+            raise SatRootError("--verifier-only is only supported for ed25519 bundles")
+        bundle = bootstrap_stable_reference_demo_bundle(
+            symbol=args.symbol,
+            name=args.name,
+            scheme=args.scheme,
+            reference_unit=args.reference_unit,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            merchant_account=args.merchant_account,
+            service_account=args.service_account,
+            initial_balance=args.initial_balance,
+            merchant_amount=args.merchant_amount,
+            service_amount=args.service_amount,
+            merchant_burn_amount=args.merchant_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+        )
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_files, output_payloads = _bundle_output_artifacts(
+            bundle,
+            include_private_keys=not args.verifier_only,
+            genesis=bundle["genesis"],
+        )
+        for key, data in output_payloads.items():
+            _write_json_file(output_dir / output_files[key], data)
+        print(f"wrote SATROOT-STABLE-1 {args.scheme} demo bundle to {output_dir}")
+        return 0
+
     if args.command == "bootstrap-genesis-bundle":
         if args.verifier_only and args.scheme != "ed25519":
             raise SatRootError("--verifier-only is only supported for ed25519 bundles")
@@ -2599,32 +2753,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_files: Dict[str, str] = {
-            "genesis": "genesis.json",
-            "signer_key_map": "signer_key_map.json",
-            "signed_events": "signed_events.json",
-        }
-        output_payloads: Dict[str, Any] = {
-            "genesis": bundle["genesis"],
-            "signer_key_map": bundle["material"]["signer_key_map"],
-            "signed_events": bundle["signed_events"],
-        }
-        if args.scheme == "hmac-sha256":
-            output_files["secrets"] = "secrets.json"
-            output_payloads["secrets"] = bundle["material"]["shared_secrets"]
-        elif args.scheme == "ed25519":
-            output_files["public_keys"] = "public_keys.json"
-            output_payloads["public_keys"] = bundle["material"]["public_keys"]
-            if not args.verifier_only:
-                output_files["private_keys"] = "private_keys.json"
-                output_payloads["private_keys"] = bundle["material"]["private_keys"]
-        if bundle["annotated_events"] is not None:
-            output_files["annotated_signed_events"] = "annotated_signed_events.json"
-            output_payloads["annotated_signed_events"] = bundle["annotated_events"]
-        output_files["bundle_manifest"] = "bundle_manifest.json"
-        output_file_hashes = {key: rendered_json_sha256(data) for key, data in output_payloads.items()}
-        manifest = build_signed_ledger_bundle_manifest(bundle, output_files=output_files, output_file_hashes=output_file_hashes)
-        output_payloads["bundle_manifest"] = manifest
+        output_files, output_payloads = _bundle_output_artifacts(
+            bundle,
+            include_private_keys=not args.verifier_only,
+            genesis=bundle["genesis"],
+        )
         for key, data in output_payloads.items():
             _write_json_file(output_dir / output_files[key], data)
         print(f"wrote scaffolded SATROOT-1 {args.scheme} genesis bundle to {output_dir}")
@@ -2724,30 +2857,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_files: Dict[str, str] = {
-            "signer_key_map": "signer_key_map.json",
-            "signed_events": "signed_events.json",
-        }
-        output_payloads: Dict[str, Any] = {
-            "signer_key_map": bundle["material"]["signer_key_map"],
-            "signed_events": bundle["signed_events"],
-        }
-        if args.scheme == "hmac-sha256":
-            output_files["secrets"] = "secrets.json"
-            output_payloads["secrets"] = bundle["material"]["shared_secrets"]
-        elif args.scheme == "ed25519":
-            output_files["public_keys"] = "public_keys.json"
-            output_payloads["public_keys"] = bundle["material"]["public_keys"]
-            if not args.verifier_only:
-                output_files["private_keys"] = "private_keys.json"
-                output_payloads["private_keys"] = bundle["material"]["private_keys"]
-        if bundle["annotated_events"] is not None:
-            output_files["annotated_signed_events"] = "annotated_signed_events.json"
-            output_payloads["annotated_signed_events"] = bundle["annotated_events"]
-        output_files["bundle_manifest"] = "bundle_manifest.json"
-        output_file_hashes = {key: rendered_json_sha256(data) for key, data in output_payloads.items()}
-        manifest = build_signed_ledger_bundle_manifest(bundle, output_files=output_files, output_file_hashes=output_file_hashes)
-        output_payloads["bundle_manifest"] = manifest
+        output_files, output_payloads = _bundle_output_artifacts(
+            bundle,
+            include_private_keys=not args.verifier_only,
+        )
         for key, data in output_payloads.items():
             _write_json_file(output_dir / output_files[key], data)
         print(f"wrote signed SATROOT-1 {args.scheme} bundle to {output_dir}")

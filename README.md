@@ -65,6 +65,7 @@ The v0.1 kernel defines:
 - profile-aware lifecycle helpers for common machine-credit consumption flows,
 - profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
 - a one-shot SATROOT-STABLE-1 reference-demo bootstrap for runnable stable-profile artifact generation,
+- a one-shot SATROOT-STABLE-1 signed demo-bundle bootstrap for release-ready stable-profile artifacts,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -126,7 +127,8 @@ This repo now includes the first stable-value profile draft:
 - `SATROOT-STABLE-1` for reference-value accounting units,
 - `examples/genesis_usdroot1.json` for a `USDROOT1` genesis record,
 - `examples/events_usdroot1.json` for a runnable reference-only ledger flow,
-- `satroot1 bootstrap-stable-demo` for generating new reference-only demo ledgers on demand.
+- `satroot1 bootstrap-stable-demo` for generating new reference-only demo ledgers on demand,
+- `satroot1 bootstrap-stable-demo-bundle` for generating signed stable demo bundles directly from profile parameters.
 
 This repo also now includes the first machine-credit profile draft:
 
@@ -166,7 +168,7 @@ python -m pytest
 Expected result:
 
 ```text
-152 passed
+154 passed
 ```
 
 ## Signing utilities
@@ -247,6 +249,12 @@ Generate a runnable SATROOT-STABLE-1 reference-only demo ledger:
 
 ```bash
 satroot1 bootstrap-stable-demo --symbol USDCLI2 --name "Stable CLI Demo" --reference-unit EUR --output-dir stable_demo
+```
+
+Generate a signed SATROOT-STABLE-1 reference-only demo bundle:
+
+```bash
+satroot1 bootstrap-stable-demo-bundle --symbol USDBUNDLE2 --name "Stable Bundle CLI" --scheme hmac-sha256 --reference-unit CHF --output-dir stable_bundle
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:

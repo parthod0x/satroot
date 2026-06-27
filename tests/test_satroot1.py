@@ -16,6 +16,7 @@ from satroot1 import (
     bootstrap_genesis_bundle,
     bootstrap_hmac_workflow,
     bootstrap_signed_ledger_bundle,
+    bootstrap_stable_reference_demo_bundle,
     bootstrap_stable_reference_demo_ledger,
     build_signed_ledger_bundle_manifest,
     build_signer_key_map,
@@ -448,6 +449,25 @@ def test_bootstrap_stable_reference_demo_ledger_replays():
     assert state.balances["merchant"] == 1_245_000
     assert state.balances["api_node"] == 250_000
     assert demo["annotated_events"][-1]["state_hash"].startswith("sha256:")
+
+
+def test_bootstrap_stable_reference_demo_bundle_hmac():
+    bundle = bootstrap_stable_reference_demo_bundle(
+        symbol="USDBUNDLE1",
+        name="Stable Bundle Asset",
+        scheme="hmac-sha256",
+        root_id="abababababababababababababababababababababababababababababababab:0",
+        reference_unit="GBP",
+        nonce="stable-bundle-bootstrap",
+    )
+    verifier = make_hmac_sha256_verifier(bundle["material"]["shared_secrets"])
+    state = replay(bundle["signed_events"], verifier=verifier)
+    assert bundle["genesis"]["profile"] == "SATROOT-STABLE-1"
+    assert bundle["genesis"]["reference_unit"] == "GBP"
+    assert len(bundle["events"]) == 4
+    assert bundle["material"]["signer_key_map"] == {"issuer": "issuer-key", "merchant": "merchant-key"}
+    assert state.symbol == "USDBUNDLE1"
+    assert state.genesis_metadata["reference_unit"] == "GBP"
 
 
 def test_bootstrap_stable_reference_demo_ledger_rejects_overallocated_distribution():
@@ -3245,6 +3265,48 @@ def test_cli_bootstrap_stable_demo(tmp_path, capsys):
     assert state.genesis_metadata["reference_unit"] == "EUR"
     assert state.balances["merchant"] == 1_250_000
     assert state.balances["api_node"] == 250_000
+
+
+def test_cli_bootstrap_stable_demo_bundle_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "stable_bundle"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-bundle",
+            "--symbol",
+            "USDBUNDLE2",
+            "--name",
+            "Stable Bundle CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--reference-unit",
+            "CHF",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 hmac-sha256 demo bundle to" in captured.out
+
+    genesis = json.loads((output_dir / "genesis.json").read_text(encoding="utf-8"))
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
+    signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    verifier = make_hmac_sha256_verifier(secrets)
+    state = replay(signed_events, verifier=verifier)
+    assert genesis["profile"] == "SATROOT-STABLE-1"
+    assert genesis["reference_unit"] == "CHF"
+    assert signer_key_map == {"issuer": "issuer-key", "merchant": "merchant-key"}
+    assert state.symbol == "USDBUNDLE2"
+    assert manifest["scheme"] == "hmac-sha256"
+    assert manifest["files"]["genesis"] == "genesis.json"
+
+    summary = verify_signed_ledger_bundle(output_dir)
+    assert summary["symbol"] == "USDBUNDLE2"
+    assert summary["record_count"] == 4
 
 
 def test_cli_bootstrap_release_ed25519_material(tmp_path):
