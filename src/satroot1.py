@@ -1560,6 +1560,58 @@ def build_signed_ledger_bundle_index(
     return index
 
 
+def discover_signed_ledger_bundle_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    if not search_roots:
+        raise SatRootError("at least one bundle discovery root is required")
+
+    discovered: Dict[str, str] = {}
+    for search_root in search_roots:
+        root_path = Path(search_root).resolve()
+        if not root_path.exists():
+            raise SatRootError(f"bundle discovery root not found: {search_root}")
+        if not root_path.is_dir():
+            raise SatRootError(f"bundle discovery root must be a directory: {search_root}")
+
+        manifest_paths = root_path.rglob("bundle_manifest.json") if recursive else root_path.glob("bundle_manifest.json")
+        for manifest_path in manifest_paths:
+            bundle_dir = str(manifest_path.parent.resolve())
+            discovered.setdefault(bundle_dir, bundle_dir)
+
+    if not discovered:
+        raise SatRootError("no signed bundle directories found under the provided discovery roots")
+    return sorted(discovered.values())
+
+
+def resolve_bundle_directory_inputs(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> list[str | Path]:
+    resolved: list[str | Path] = []
+    seen: set[str] = set()
+
+    for bundle_dir in bundle_dirs:
+        bundle_path = str(Path(bundle_dir).resolve())
+        if bundle_path not in seen:
+            resolved.append(bundle_dir)
+            seen.add(bundle_path)
+
+    if discover_under:
+        for bundle_dir in discover_signed_ledger_bundle_dirs(discover_under, recursive=recursive):
+            if bundle_dir not in seen:
+                resolved.append(bundle_dir)
+                seen.add(bundle_dir)
+
+    if not resolved:
+        raise SatRootError("at least one bundle directory or --discover-under path is required")
+    return resolved
+
+
 def validate_bundle_index_consistency(index: Mapping[str, Any]) -> None:
     bundles = index.get("bundles")
     bundle_count = index.get("bundle_count")
@@ -3016,7 +3068,9 @@ def build_cli_parser() -> Any:
     bundle_lint_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
-    bundle_index_parser.add_argument("bundle_dir", nargs="+", help="Path to a signed SATROOT-1 bundle directory")
+    bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
+    bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
+    bundle_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bundle_index_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
     bundle_index_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
@@ -3033,7 +3087,9 @@ def build_cli_parser() -> Any:
     release_manifest_parser.add_argument("--output", help="Optional output path")
 
     publish_release_parser = subparsers.add_parser("publish-release", help="Build bundle_index.json plus release_manifest.json in one SATROOT-1 release directory")
-    publish_release_parser.add_argument("bundle_dir", nargs="+", help="Path to a signed SATROOT-1 bundle directory")
+    publish_release_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
+    publish_release_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
+    publish_release_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_release_parser.add_argument("--output-dir", required=True, help="Directory where bundle_index.json and release_manifest.json will be written")
     publish_release_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
     publish_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
@@ -3046,7 +3102,9 @@ def build_cli_parser() -> Any:
     publish_release_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
 
     bootstrap_release_publication_parser = subparsers.add_parser("bootstrap-release-publication", help="Generate release signing material and write a ready-to-verify SATROOT-1 release directory")
-    bootstrap_release_publication_parser.add_argument("bundle_dir", nargs="+", help="Path to a signed SATROOT-1 bundle directory")
+    bootstrap_release_publication_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
+    bootstrap_release_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
+    bootstrap_release_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bootstrap_release_publication_parser.add_argument("--output-dir", required=True, help="Directory where release material plus bundle_index.json and release_manifest.json will be written")
     bootstrap_release_publication_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
     bootstrap_release_publication_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
@@ -3894,7 +3952,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "label": args.label,
             "published_at": args.published_at,
         }
-        index = build_signed_ledger_bundle_index(args.bundle_dir, base_dir=base_dir, release_metadata=release_metadata)
+        bundle_dirs = resolve_bundle_directory_inputs(
+            args.bundle_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        index = build_signed_ledger_bundle_index(bundle_dirs, base_dir=base_dir, release_metadata=release_metadata)
         _write_output(index, output_path)
         return 0
 
@@ -3919,8 +3982,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "label": args.label,
             "published_at": args.published_at,
         }
-        published = publish_signed_release(
+        bundle_dirs = resolve_bundle_directory_inputs(
             args.bundle_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        published = publish_signed_release(
+            bundle_dirs,
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
@@ -3936,8 +4004,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "label": args.label,
             "published_at": args.published_at,
         }
-        published = bootstrap_release_publication(
+        bundle_dirs = resolve_bundle_directory_inputs(
             args.bundle_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        published = bootstrap_release_publication(
+            bundle_dirs,
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,

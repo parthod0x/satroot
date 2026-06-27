@@ -88,6 +88,7 @@ The v0.1 kernel defines:
 - manifest-only bundle inspection via `bundle-summary` when replay is unnecessary,
 - structural bundle linting via `bundle-lint` for missing files and manifest layout drift,
 - deterministic bundle-index generation for release catalogs spanning multiple bundles,
+- discovery-based bundle catalog packaging from parent artifact directories,
 - optional release metadata on bundle indexes for channel, label, and published-at packaging context,
 - signed release-manifest generation for authenticating distributable bundle-index publications,
 - release-key bootstrap helpers for HMAC and Ed25519 publication signing workflows,
@@ -182,7 +183,7 @@ python -m pytest
 Expected result:
 
 ```text
-175 passed
+178 passed
 ```
 
 ## Signing utilities
@@ -399,6 +400,12 @@ Build a bundle index catalog from one or more bundle directories:
 satroot1 build-bundle-index signed_hmac_bundle --output bundle_index.json
 ```
 
+Or discover bundle directories recursively under a parent artifacts folder:
+
+```bash
+satroot1 build-bundle-index --discover-under generated_artifacts --output bundle_index.json
+```
+
 Attach lightweight release metadata to a bundle index:
 
 ```bash
@@ -429,10 +436,22 @@ Publish a release directory with both `bundle_index.json` and `release_manifest.
 satroot1 publish-release signed_hmac_bundle --output-dir stable_release --channel stable --label "SATROOT FLOOR1 Demo" --published-at 2026-06-26T12:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
 ```
 
+That same release flow can also discover multiple bundle directories under a parent workspace:
+
+```bash
+satroot1 publish-release --discover-under generated_artifacts --output-dir catalog_release --channel stable --label "SATROOT Multi Bundle Demo" --published-at 2026-06-28T18:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
+```
+
 Bootstrap release signing material and publish a ready-to-verify release directory in one step:
 
 ```bash
 satroot1 bootstrap-release-publication starter_bundle --output-dir release_bootstrap --channel stable --label "SATROOT Starter Release" --published-at 2026-06-26T12:00:00Z --scheme hmac-sha256 --key-id release-key
+```
+
+For catalog-style packaging, you can point that bootstrap flow at a parent directory and let it discover nested bundles automatically:
+
+```bash
+satroot1 bootstrap-release-publication --discover-under generated_artifacts --output-dir catalog_bootstrap --channel stable --label "SATROOT Catalog Release" --published-at 2026-06-28T19:00:00Z --scheme hmac-sha256 --key-id release-key
 ```
 
 Validate a bundle manifest directly against the SATROOT manifest schema:

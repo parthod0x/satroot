@@ -3077,6 +3077,36 @@ def test_cli_build_bundle_index_with_release_metadata(tmp_path):
     }
 
 
+def test_cli_build_bundle_index_with_discovery_root(tmp_path):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    bundle_root = tmp_path / "bundles"
+    floor_bundle_dir = bundle_root / "floor_bundle"
+    machine_bundle_dir = bundle_root / "machine_bundle"
+    index_path = tmp_path / "bundle_index.json"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+
+    build_exit_code = main(
+        [
+            "build-bundle-index",
+            "--discover-under",
+            str(bundle_root),
+            "--output",
+            str(index_path),
+        ]
+    )
+    assert build_exit_code == 0
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 2
+    assert {entry["symbol"] for entry in index["bundles"]} == {"FLOOR1", "APICREDIT1"}
+    assert {entry["bundle_path"] for entry in index["bundles"]} == {"bundles/floor_bundle", "bundles/machine_bundle"}
+
+
 def test_cli_validate_bundle_index(tmp_path, capsys):
     events_path = tmp_path / "events.json"
     bundle_dir = tmp_path / "bundle"
@@ -3303,6 +3333,54 @@ def test_cli_publish_release(tmp_path):
     assert summary["release"] == bundle_index["release"]
 
 
+def test_cli_publish_release_with_discovery_root(tmp_path):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    bundle_root = tmp_path / "bundles"
+    floor_bundle_dir = bundle_root / "floor_bundle"
+    machine_bundle_dir = bundle_root / "machine_bundle"
+    release_material_dir = tmp_path / "release_hmac"
+    release_dir = tmp_path / "release"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+    assert main(["bootstrap-release-hmac", "--key-id", "release-key", "--output-dir", str(release_material_dir)]) == 0
+
+    assert (
+        main(
+            [
+                "publish-release",
+                "--discover-under",
+                str(bundle_root),
+                "--output-dir",
+                str(release_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "SATROOT Multi Bundle Demo",
+                "--published-at",
+                "2026-06-28T18:00:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secrets-json",
+                str(release_material_dir / "release_secrets.json"),
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 2
+    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"FLOOR1", "APICREDIT1"}
+    assert bundle_index["release"]["label"] == "SATROOT Multi Bundle Demo"
+    assert release_manifest["bundle_count"] == 2
+
+
 def test_cli_bootstrap_release_publication(tmp_path, capsys):
     bundle_dir = tmp_path / "bundle"
     release_dir = tmp_path / "release"
@@ -3360,6 +3438,58 @@ def test_cli_bootstrap_release_publication(tmp_path, capsys):
         verifier=make_hmac_sha256_verifier(secrets),
     )
     assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_release_publication_with_discovery_root(tmp_path, capsys):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    bundle_root = tmp_path / "bundles"
+    floor_bundle_dir = bundle_root / "floor_bundle"
+    machine_bundle_dir = bundle_root / "machine_bundle"
+    release_dir = tmp_path / "release"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+
+    exit_code = main(
+        [
+            "bootstrap-release-publication",
+            "--discover-under",
+            str(bundle_root),
+            "--output-dir",
+            str(release_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Catalog Release",
+            "--published-at",
+            "2026-06-28T19:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release publication to" in captured.out
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 2
+    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"FLOOR1", "APICREDIT1"}
+    assert release_manifest["bundle_count"] == 2
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert summary["bundle_count"] == 2
     assert summary["release"] == bundle_index["release"]
 
 
