@@ -15,6 +15,7 @@ from satroot1 import (
     bootstrap_ed25519_workflow,
     bootstrap_genesis_bundle,
     bootstrap_hmac_workflow,
+    bootstrap_singleton_object_demo_bundle,
     bootstrap_singleton_object_demo_ledger,
     bootstrap_signed_ledger_bundle,
     bootstrap_stable_reference_demo_bundle,
@@ -480,6 +481,26 @@ def test_bootstrap_singleton_object_demo_ledger_rejects_unsupported_profile():
             name="Bad Singleton Demo",
             holder_account="holder",
         )
+
+
+def test_bootstrap_singleton_object_demo_bundle_hmac():
+    bundle = bootstrap_singleton_object_demo_bundle(
+        profile="SATROOT-LICENSE-1",
+        symbol="LICBUNDLE1",
+        name="License Bundle Asset",
+        scheme="hmac-sha256",
+        root_id="efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef:0",
+        holder_account="customer",
+        archive_account="archive",
+        nonce="singleton-bundle-bootstrap",
+    )
+    verifier = make_hmac_sha256_verifier(bundle["material"]["shared_secrets"])
+    state = replay(bundle["signed_events"], verifier=verifier)
+    assert bundle["genesis"]["profile"] == "SATROOT-LICENSE-1"
+    assert len(bundle["events"]) == 4
+    assert bundle["material"]["signer_key_map"] == {"issuer": "issuer-key", "customer": "customer-key", "archive": "archive-key"}
+    assert state.symbol == "LICBUNDLE1"
+    assert state.supply == 0
 
 
 def test_bootstrap_stable_reference_demo_bundle_hmac():
@@ -3385,6 +3406,100 @@ def test_cli_bootstrap_singleton_demo_identity_custom_flow(tmp_path, capsys):
     assert summary["profile"] == "SATROOT-IDENTITY-1"
     assert state.supply == 1
     assert state.balances["controller_v2"] == 1
+
+
+def test_cli_bootstrap_singleton_demo_bundle_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "singleton_bundle"
+
+    exit_code = main(
+        [
+            "bootstrap-singleton-demo-bundle",
+            "--profile",
+            "SATROOT-RECEIPT-1",
+            "--symbol",
+            "RECBUNDLE2",
+            "--name",
+            "Receipt Bundle CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-RECEIPT-1 hmac-sha256 singleton demo bundle to" in captured.out
+
+    genesis = json.loads((output_dir / "genesis.json").read_text(encoding="utf-8"))
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
+    signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    verifier = make_hmac_sha256_verifier(secrets)
+    state = replay(signed_events, verifier=verifier)
+    assert genesis["profile"] == "SATROOT-RECEIPT-1"
+    assert signer_key_map == {"issuer": "issuer-key", "buyer": "buyer-key", "archive": "archive-key"}
+    assert state.symbol == "RECBUNDLE2"
+    assert manifest["scheme"] == "hmac-sha256"
+    assert manifest["files"]["genesis"] == "genesis.json"
+
+    summary = verify_signed_ledger_bundle(output_dir)
+    assert summary["symbol"] == "RECBUNDLE2"
+    assert summary["record_count"] == 4
+
+
+def test_cli_bootstrap_singleton_demo_bundle_ed25519_verifier_only(tmp_path):
+    output_dir = tmp_path / "singleton_bundle_ed25519"
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(
+                [
+                    "bootstrap-singleton-demo-bundle",
+                    "--profile",
+                    "SATROOT-IDENTITY-1",
+                    "--symbol",
+                    "IDBUNDLE3",
+                    "--name",
+                    "Identity Bundle Ed25519",
+                    "--scheme",
+                    "ed25519",
+                    "--output-dir",
+                    str(output_dir),
+                    "--verifier-only",
+                ]
+            )
+        return
+
+    exit_code = main(
+        [
+            "bootstrap-singleton-demo-bundle",
+            "--profile",
+            "SATROOT-IDENTITY-1",
+            "--symbol",
+            "IDBUNDLE3",
+            "--name",
+            "Identity Bundle Ed25519",
+            "--scheme",
+            "ed25519",
+            "--output-dir",
+            str(output_dir),
+            "--verifier-only",
+        ]
+    )
+    assert exit_code == 0
+    assert not (output_dir / "private_keys.json").exists()
+    assert (output_dir / "public_keys.json").exists()
+
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["verification_material_scope"] == "public-only"
+    assert manifest["final_state_snapshot"]["profile"] == "SATROOT-IDENTITY-1"
+    assert "private_keys" not in manifest["files"]
+
+    verify_exit_code = main(["verify-bundle", str(output_dir)])
+    assert verify_exit_code == 0
 
 
 def test_cli_bootstrap_stable_demo_bundle_hmac(tmp_path, capsys):

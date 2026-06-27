@@ -243,6 +243,8 @@ Likewise, singleton receipt, identity, or license profiles may support transfer 
 
 The reference CLI may also expose singleton demo bootstrap paths that scaffold runnable receipt, identity, or license lifecycle ledgers from profile-aware defaults so object-style SATROOT workflows can be generated without hand-authoring each lifecycle record.
 
+Those singleton demo paths may also be composed directly into signed bundle workflows so object-style profiles can emit verifier material, annotated replay artifacts, and bundle manifests without a separately prepared intermediate ledger file.
+
 For reference-only stable ledgers, the reference CLI may also expose a demo bootstrap path that scaffolds a runnable `SATROOT-STABLE-1` issuance, distribution, and optional burn flow into reusable JSON artifacts without introducing redemption or reserve semantics.
 
 That same stable bootstrap may also be composed directly into a signed bundle path so a reference-only stable ledger can be emitted together with signer material, annotated replay artifacts, and a verifiable bundle manifest without requiring a separate handwritten intermediate ledger file.
