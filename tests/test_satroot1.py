@@ -9,6 +9,7 @@ from satroot1 import (
     build_signed_ledger_bundle_index,
     build_signed_release_manifest,
     append_signed_event_to_ledger,
+    bootstrap_machine_credit_demo_ledger,
     bootstrap_release_ed25519_material,
     bootstrap_release_publication,
     bootstrap_release_hmac_material,
@@ -194,6 +195,34 @@ def test_replay_machine_profile_demo():
     assert state.balances["issuer"] == 95_000_000
     assert state.balances["tenant_a"] == 3_800_000
     assert state.balances["worker_node"] == 1_000_000
+
+
+def test_bootstrap_machine_credit_demo_ledger():
+    demo = bootstrap_machine_credit_demo_ledger(
+        symbol="APIDEMO2",
+        name="Machine Demo",
+        service_scope="vector-index",
+        billing_unit="call",
+        worker_burn_amount="0",
+    )
+
+    state = replay(demo["events"])
+    assert len(demo["events"]) == 3
+    assert state.symbol == "APIDEMO2"
+    assert state.genesis_metadata["service_scope"] == "vector-index"
+    assert state.genesis_metadata["billing_unit"] == "call"
+    assert state.balances["tenant_a"] == 3_800_000
+    assert state.balances["worker_node"] == 1_200_000
+
+
+def test_bootstrap_machine_credit_demo_ledger_rejects_non_burn_consumption_flow():
+    with pytest.raises(SatRootError):
+        bootstrap_machine_credit_demo_ledger(
+            symbol="APIBAD1",
+            name="Bad Machine Demo",
+            consumption_model="metered-ledger",
+            worker_burn_amount="1",
+        )
 
 
 def test_replay_receipt_profile_demo():
@@ -3372,6 +3401,271 @@ def test_cli_bootstrap_stable_demo(tmp_path, capsys):
     assert state.balances["api_node"] == 250_000
 
 
+def test_cli_bootstrap_machine_demo(tmp_path, capsys):
+    output_dir = tmp_path / "machine_demo"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo",
+            "--symbol",
+            "APIDEMO2",
+            "--name",
+            "Machine CLI Demo",
+            "--service-scope",
+            "inference-api",
+            "--billing-unit",
+            "token",
+            "--worker-burn-amount",
+            "50000",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo ledger to" in captured.out
+
+    events = json.loads((output_dir / "events.json").read_text(encoding="utf-8"))
+    annotated = json.loads((output_dir / "annotated_events.json").read_text(encoding="utf-8"))
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    state = replay(events)
+    assert len(events) == 4
+    assert len(annotated) == 4
+    assert summary["profile"] == "SATROOT-MACHINE-1"
+    assert summary["service_scope"] == "inference-api"
+    assert summary["billing_unit"] == "token"
+    assert state.symbol == "APIDEMO2"
+    assert state.genesis_metadata["service_scope"] == "inference-api"
+    assert state.genesis_metadata["billing_unit"] == "token"
+    assert state.balances["tenant_a"] == 3_800_000
+    assert state.balances["worker_node"] == 1_150_000
+
+
+def test_cli_bootstrap_machine_demo_bundle_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "machine_bundle"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-bundle",
+            "--symbol",
+            "APIBUNDLE2",
+            "--name",
+            "Machine Bundle CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--service-scope",
+            "batch-jobs",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 hmac-sha256 demo bundle to" in captured.out
+
+    genesis = json.loads((output_dir / "genesis.json").read_text(encoding="utf-8"))
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
+    signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    verifier = make_hmac_sha256_verifier(secrets)
+    state = replay(signed_events, verifier=verifier)
+    assert genesis["profile"] == "SATROOT-MACHINE-1"
+    assert genesis["service_scope"] == "batch-jobs"
+    assert signer_key_map == {
+        "issuer": "issuer-key",
+        "tenant_a": "tenant_a-key",
+        "worker_node": "worker_node-key",
+    }
+    assert state.symbol == "APIBUNDLE2"
+    assert manifest["scheme"] == "hmac-sha256"
+    assert manifest["files"]["genesis"] == "genesis.json"
+
+    summary = verify_signed_ledger_bundle(output_dir)
+    assert summary["symbol"] == "APIBUNDLE2"
+    assert summary["record_count"] == 4
+
+
+def test_cli_bootstrap_machine_demo_bundle_ed25519_verifier_only(tmp_path):
+    output_dir = tmp_path / "machine_bundle_ed25519"
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(
+                [
+                    "bootstrap-machine-demo-bundle",
+                    "--symbol",
+                    "APIEDCLI1",
+                    "--name",
+                    "Machine Bundle Ed25519",
+                    "--scheme",
+                    "ed25519",
+                    "--output-dir",
+                    str(output_dir),
+                    "--verifier-only",
+                ]
+            )
+        return
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-bundle",
+            "--symbol",
+            "APIEDCLI1",
+            "--name",
+            "Machine Bundle Ed25519",
+            "--scheme",
+            "ed25519",
+            "--output-dir",
+            str(output_dir),
+            "--verifier-only",
+        ]
+    )
+    assert exit_code == 0
+    assert not (output_dir / "private_keys.json").exists()
+    assert (output_dir / "public_keys.json").exists()
+
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["verification_material_scope"] == "public-only"
+    assert manifest["final_state_snapshot"]["profile"] == "SATROOT-MACHINE-1"
+    assert "private_keys" not in manifest["files"]
+    assert "private_keys" not in manifest["file_hashes"]
+
+    verify_exit_code = main(["verify-bundle", str(output_dir)])
+    assert verify_exit_code == 0
+
+
+def test_cli_bootstrap_machine_demo_release_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "machine_release"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-release",
+            "--symbol",
+            "APIRELCLI1",
+            "--name",
+            "Machine Release CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "render-farm",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Machine Release",
+            "--published-at",
+            "2026-06-28T06:00:00Z",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo release to" in captured.out
+
+    bundle_dir = output_dir / "bundle"
+    release_dir = output_dir / "release"
+    bundle_manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_manifest["symbol"] == "APIRELCLI1"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["service_scope"] == "render-farm"
+    assert bundle_index["release"]["label"] == "SATROOT Machine Release"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_machine_demo_release_ed25519(tmp_path, capsys):
+    output_dir = tmp_path / "machine_release_ed25519"
+
+    if not ed25519_available():
+        assert ed25519_available() is False
+        with pytest.raises(SatRootError):
+            main(
+                [
+                    "bootstrap-machine-demo-release",
+                    "--symbol",
+                    "APIRELCLI2",
+                    "--name",
+                    "Machine Release Ed25519",
+                    "--scheme",
+                    "ed25519",
+                    "--release-key-id",
+                    "release-key",
+                    "--output-dir",
+                    str(output_dir),
+                    "--verifier-only",
+                ]
+            )
+        return
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-release",
+            "--symbol",
+            "APIRELCLI2",
+            "--name",
+            "Machine Release Ed25519",
+            "--scheme",
+            "ed25519",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "gpu-cluster",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Machine Release Ed25519",
+            "--published-at",
+            "2026-06-28T08:00:00Z",
+            "--output-dir",
+            str(output_dir),
+            "--verifier-only",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo release to" in captured.out
+
+    bundle_dir = output_dir / "bundle"
+    release_dir = output_dir / "release"
+    bundle_manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    bundle_public_keys = json.loads((bundle_dir / "public_keys.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_public_keys = json.loads((release_dir / "release_public_keys.json").read_text(encoding="utf-8"))
+    assert not (bundle_dir / "private_keys.json").exists()
+    assert bundle_manifest["verification_material_scope"] == "public-only"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["service_scope"] == "gpu-cluster"
+    assert release_manifest["signature_scheme"] == "ed25519"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+    bundle_summary = verify_signed_ledger_bundle(bundle_dir)
+    assert bundle_summary["symbol"] == "APIRELCLI2"
+    assert bundle_summary["annotated_verified"] is True
+    assert set(bundle_public_keys) == {"issuer-key", "tenant_a-key", "worker_node-key"}
+
+    release_summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_ed25519_verifier(release_public_keys),
+    )
+    assert release_summary["bundle_count"] == 1
+    assert release_summary["release"]["label"] == "SATROOT Machine Release Ed25519"
+
+
 def test_cli_bootstrap_singleton_demo_receipt(tmp_path, capsys):
     output_dir = tmp_path / "singleton_receipt"
 
@@ -3794,6 +4088,56 @@ def test_cli_bootstrap_stable_demo_release_hmac(tmp_path, capsys):
     assert bundle_manifest["symbol"] == "USDRELCLI1"
     assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["reference_unit"] == "JPY"
     assert bundle_index["release"]["label"] == "SATROOT Stable Release"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_machine_demo_release_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "machine_release"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-release",
+            "--symbol",
+            "APIRELCLI1",
+            "--name",
+            "Machine Release CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "render-cluster",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Machine Release",
+            "--published-at",
+            "2026-06-28T12:00:00Z",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo release to" in captured.out
+
+    bundle_dir = output_dir / "bundle"
+    release_dir = output_dir / "release"
+    bundle_manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_manifest["symbol"] == "APIRELCLI1"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["service_scope"] == "render-cluster"
+    assert bundle_index["release"]["label"] == "SATROOT Machine Release"
     assert release_manifest["signature_key_id"] == "release-key"
 
     summary = verify_signed_release_manifest(

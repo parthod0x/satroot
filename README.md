@@ -63,6 +63,9 @@ The v0.1 kernel defines:
 - event scaffolding for valid non-genesis SATROOT records from an existing ledger or explicit references,
 - append-and-sign event workflows for extending existing demo or signed ledgers,
 - profile-aware lifecycle helpers for common machine-credit consumption flows,
+- a one-shot SATROOT-MACHINE-1 machine-credit demo bootstrap for runnable machine-profile artifact generation,
+- a one-shot SATROOT-MACHINE-1 signed demo-bundle bootstrap for release-ready machine-profile artifacts,
+- a one-shot SATROOT-MACHINE-1 demo-release bootstrap for bundle plus release publication generation,
 - profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
 - a one-shot singleton receipt/identity/license demo bootstrap for runnable object-profile lifecycle artifacts,
 - a one-shot singleton receipt/identity/license signed demo-bundle bootstrap for verifiable object-profile artifacts,
@@ -139,7 +142,10 @@ This repo also now includes the first machine-credit profile draft:
 
 - `SATROOT-MACHINE-1` for prepaid machine-native service credits,
 - `examples/genesis_apicredit1.json` for an `APICREDIT1` genesis record,
-- `examples/events_apicredit1.json` for a runnable machine-credit ledger flow.
+- `examples/events_apicredit1.json` for a runnable machine-credit ledger flow,
+- `satroot1 bootstrap-machine-demo` for generating new machine-credit demo ledgers on demand,
+- `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters,
+- `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step.
 
 This repo also now includes the first receipt-object profile draft:
 
@@ -176,7 +182,7 @@ python -m pytest
 Expected result:
 
 ```text
-168 passed
+175 passed
 ```
 
 ## Signing utilities
@@ -259,6 +265,12 @@ Generate a runnable SATROOT-STABLE-1 reference-only demo ledger:
 satroot1 bootstrap-stable-demo --symbol USDCLI2 --name "Stable CLI Demo" --reference-unit EUR --output-dir stable_demo
 ```
 
+Generate a runnable SATROOT-MACHINE-1 machine-credit demo ledger:
+
+```bash
+satroot1 bootstrap-machine-demo --symbol APIDEMO2 --name "Machine CLI Demo" --service-scope inference-api --billing-unit token --output-dir machine_demo
+```
+
 Generate a runnable receipt, identity, or license singleton demo ledger:
 
 ```bash
@@ -293,6 +305,18 @@ Generate a signed SATROOT-STABLE-1 demo bundle plus release directory:
 
 ```bash
 satroot1 bootstrap-stable-demo-release --symbol USDRELCLI1 --name "Stable Release CLI" --scheme hmac-sha256 --release-key-id release-key --reference-unit JPY --channel stable --label "SATROOT Stable Release" --published-at 2026-06-27T12:00:00Z --output-dir stable_release
+```
+
+Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle:
+
+```bash
+satroot1 bootstrap-machine-demo-bundle --symbol APIBUNDLE2 --name "Machine Bundle CLI" --scheme hmac-sha256 --service-scope batch-jobs --output-dir machine_bundle
+```
+
+Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle plus release directory:
+
+```bash
+satroot1 bootstrap-machine-demo-release --symbol APIRELCLI1 --name "Machine Release CLI" --scheme hmac-sha256 --release-key-id release-key --service-scope render-farm --channel stable --label "SATROOT Machine Release" --published-at 2026-06-28T06:00:00Z --output-dir machine_release
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:
