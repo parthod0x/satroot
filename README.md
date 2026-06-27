@@ -64,6 +64,7 @@ The v0.1 kernel defines:
 - append-and-sign event workflows for extending existing demo or signed ledgers,
 - profile-aware lifecycle helpers for common machine-credit consumption flows,
 - profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
+- a one-shot singleton receipt/identity/license demo bootstrap for runnable object-profile lifecycle artifacts,
 - a one-shot SATROOT-STABLE-1 reference-demo bootstrap for runnable stable-profile artifact generation,
 - a one-shot SATROOT-STABLE-1 signed demo-bundle bootstrap for release-ready stable-profile artifacts,
 - a one-shot SATROOT-STABLE-1 demo-release bootstrap for bundle plus release publication generation,
@@ -142,7 +143,8 @@ This repo also now includes the first receipt-object profile draft:
 
 - `SATROOT-RECEIPT-1` for invoice and receipt state objects,
 - `examples/genesis_receipt1.json` for a `RECEIPT1` genesis record,
-- `examples/events_receipt1.json` for a runnable receipt lifecycle ledger flow.
+- `examples/events_receipt1.json` for a runnable receipt lifecycle ledger flow,
+- `satroot1 bootstrap-singleton-demo --profile SATROOT-RECEIPT-1` for generating new receipt/identity/license singleton demo ledgers on demand.
 
 This repo also now includes the first identity-object profile draft:
 
@@ -170,7 +172,7 @@ python -m pytest
 Expected result:
 
 ```text
-158 passed
+162 passed
 ```
 
 ## Signing utilities
@@ -251,6 +253,12 @@ Generate a runnable SATROOT-STABLE-1 reference-only demo ledger:
 
 ```bash
 satroot1 bootstrap-stable-demo --symbol USDCLI2 --name "Stable CLI Demo" --reference-unit EUR --output-dir stable_demo
+```
+
+Generate a runnable receipt, identity, or license singleton demo ledger:
+
+```bash
+satroot1 bootstrap-singleton-demo --profile SATROOT-IDENTITY-1 --symbol IDDEMO2 --name "Identity CLI Demo" --next-holder controller_v2 --no-archive --no-retire --output-dir singleton_identity
 ```
 
 Generate a signed SATROOT-STABLE-1 reference-only demo bundle:

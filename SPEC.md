@@ -241,6 +241,8 @@ For profile-specific ergonomics, the reference CLI may also expose lifecycle hel
 
 Likewise, singleton receipt, identity, or license profiles may support transfer helpers that detect the current active holder and append the corresponding one-unit reassignment without restating the generic SATROOT event details each time. Those same profiles may also support archival helpers that move the active unit into an archive account and retirement helpers that burn an already archived singleton object once the archived holder is ready to retire it.
 
+The reference CLI may also expose singleton demo bootstrap paths that scaffold runnable receipt, identity, or license lifecycle ledgers from profile-aware defaults so object-style SATROOT workflows can be generated without hand-authoring each lifecycle record.
+
 For reference-only stable ledgers, the reference CLI may also expose a demo bootstrap path that scaffolds a runnable `SATROOT-STABLE-1` issuance, distribution, and optional burn flow into reusable JSON artifacts without introducing redemption or reserve semantics.
 
 That same stable bootstrap may also be composed directly into a signed bundle path so a reference-only stable ledger can be emitted together with signer material, annotated replay artifacts, and a verifiable bundle manifest without requiring a separate handwritten intermediate ledger file.

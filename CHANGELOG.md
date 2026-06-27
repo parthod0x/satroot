@@ -16,6 +16,7 @@
 - Adds a `bootstrap-stable-demo` workflow for generating runnable reference-only SATROOT-STABLE-1 ledgers.
 - Adds a `bootstrap-stable-demo-bundle` workflow for generating signed reference-only SATROOT-STABLE-1 bundles.
 - Adds a `bootstrap-stable-demo-release` workflow for generating signed reference-only SATROOT-STABLE-1 bundles plus release directories.
+- Adds a `bootstrap-singleton-demo` workflow for generating runnable receipt, identity, and license lifecycle ledgers.
 - Hardens Ed25519 stable demo bundle/release coverage, including verifier-only bundle verification.
 - Adds a `consume-machine-credit` lifecycle helper for burn-on-use `SATROOT-MACHINE-1` ledgers.
 - Adds a `transfer-singleton-object` lifecycle helper for receipt, identity, and license ledgers.

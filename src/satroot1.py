@@ -115,6 +115,23 @@ PROFILE_SCAFFOLD_DEFAULTS: Dict[str, Dict[str, Any]] = {
         },
     },
 }
+SINGLETON_DEMO_PROFILE_DEFAULTS: Dict[str, Dict[str, Optional[str]]] = {
+    "SATROOT-RECEIPT-1": {
+        "holder_account": "buyer",
+        "next_holder": None,
+        "archive_account": "archive",
+    },
+    "SATROOT-IDENTITY-1": {
+        "holder_account": "node_alpha",
+        "next_holder": "rotated_controller",
+        "archive_account": None,
+    },
+    "SATROOT-LICENSE-1": {
+        "holder_account": "customer",
+        "next_holder": None,
+        "archive_account": "archive",
+    },
+}
 
 
 def canonical_json(obj: Any) -> str:
@@ -903,6 +920,88 @@ def bootstrap_stable_reference_demo_ledger(
             amount=merchant_burn_amount,
         )
         events.append(sign_event_record(merchant_burn, scheme="demo"))
+
+    final_state = replay(events)
+    return {
+        "events": events,
+        "annotated_events": annotate_ledger_events(events) if include_annotation else None,
+        "final_state_snapshot": final_state.snapshot(),
+        "final_state_hash": final_state.state_hash(),
+    }
+
+
+def bootstrap_singleton_object_demo_ledger(
+    *,
+    profile: str,
+    symbol: str,
+    name: str,
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    holder_account: str,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: bool = True,
+    include_annotation: bool = True,
+) -> Dict[str, Any]:
+    if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
+        raise SatRootError("singleton demo bootstrap requires a SATROOT receipt, identity, or license profile")
+
+    issuer_account = require_account_name(issuer, "issuer")
+    current_holder = require_account_name(holder_account, "holder_account")
+    resolved_next_holder = None if next_holder is None else require_account_name(next_holder, "next_holder")
+    resolved_archive_account = None if archive_account is None else require_account_name(archive_account, "archive_account")
+
+    genesis = scaffold_genesis_record(
+        symbol=symbol,
+        name=name,
+        root_id=root_id,
+        mint_authority=issuer_account,
+        initial_owner=issuer_account,
+        profile=profile,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+    )
+
+    events: list[Dict[str, Any]] = [genesis]
+    issue_event = scaffold_event_from_ledger(
+        events,
+        action="transfer",
+        signer=issuer_account,
+        from_account=issuer_account,
+        to_account=current_holder,
+        amount="1",
+    )
+    events.append(sign_event_record(issue_event, scheme="demo"))
+
+    if resolved_next_holder is not None:
+        transfer_event = scaffold_singleton_object_transfer_event(
+            events,
+            signer=current_holder,
+            to_account=resolved_next_holder,
+        )
+        events.append(sign_event_record(transfer_event, scheme="demo"))
+        current_holder = resolved_next_holder
+
+    if resolved_archive_account is not None:
+        archive_event = scaffold_singleton_object_archive_event(
+            events,
+            signer=current_holder,
+            archive_account=resolved_archive_account,
+        )
+        events.append(sign_event_record(archive_event, scheme="demo"))
+        current_holder = resolved_archive_account
+
+    if retire:
+        retire_event = scaffold_singleton_object_retirement_event(
+            events,
+            signer=current_holder,
+            from_account=current_holder,
+        )
+        events.append(sign_event_record(retire_event, scheme="demo"))
 
     final_state = replay(events)
     return {
@@ -2196,6 +2295,23 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_parser.add_argument("--nonce", help="Optional nonce metadata")
     bootstrap_stable_demo_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_events.json")
 
+    bootstrap_singleton_demo_parser = subparsers.add_parser("bootstrap-singleton-demo", help="Generate a receipt, identity, or license singleton demo ledger plus annotated artifacts")
+    bootstrap_singleton_demo_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to scaffold")
+    bootstrap_singleton_demo_parser.add_argument("--symbol", required=True, help="Asset symbol for the singleton demo")
+    bootstrap_singleton_demo_parser.add_argument("--name", required=True, help="Human-readable asset name for the singleton demo")
+    bootstrap_singleton_demo_parser.add_argument("--output-dir", required=True, help="Directory where events.json, annotated_events.json, and summary.json will be written")
+    bootstrap_singleton_demo_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_singleton_demo_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and lifecycle events")
+    bootstrap_singleton_demo_parser.add_argument("--holder-account", help="Initial non-issuer holder; defaults to the profile demo preset")
+    bootstrap_singleton_demo_parser.add_argument("--next-holder", help="Optional intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_parser.add_argument("--archive-account", help="Optional archive destination; defaults to the profile demo preset when present")
+    bootstrap_singleton_demo_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if the profile preset defines one")
+    bootstrap_singleton_demo_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_singleton_demo_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_singleton_demo_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_events.json")
+
     bootstrap_stable_demo_bundle_parser = subparsers.add_parser("bootstrap-stable-demo-bundle", help="Generate a signed SATROOT-STABLE-1 reference-demo bundle from profile parameters")
     bootstrap_stable_demo_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the stable reference demo bundle")
     bootstrap_stable_demo_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the stable reference demo bundle")
@@ -2625,6 +2741,42 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         }
         _write_json_file(output_dir / "summary.json", summary)
         print(f"wrote SATROOT-STABLE-1 demo ledger to {output_dir}")
+        return 0
+
+    if args.command == "bootstrap-singleton-demo":
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        preset = SINGLETON_DEMO_PROFILE_DEFAULTS[args.profile]
+        holder_account = args.holder_account or preset["holder_account"]
+        next_holder = args.next_holder if args.next_holder is not None else preset["next_holder"]
+        archive_account = None if args.no_archive else (args.archive_account if args.archive_account is not None else preset["archive_account"])
+        demo = bootstrap_singleton_object_demo_ledger(
+            profile=args.profile,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=holder_account,
+            next_holder=next_holder,
+            archive_account=archive_account,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=not args.no_retire,
+            include_annotation=not args.no_annotated_output,
+        )
+        _write_json_file(output_dir / "events.json", demo["events"])
+        if demo["annotated_events"] is not None:
+            _write_json_file(output_dir / "annotated_events.json", demo["annotated_events"])
+        summary = {
+            "profile": args.profile,
+            "profile_mode": demo["final_state_snapshot"]["profile_mode"],
+            "event_count": len(demo["events"]),
+            "final_state_hash": demo["final_state_hash"],
+            "final_state_snapshot": demo["final_state_snapshot"],
+        }
+        _write_json_file(output_dir / "summary.json", summary)
+        print(f"wrote {args.profile} singleton demo ledger to {output_dir}")
         return 0
 
     if args.command == "init-event":

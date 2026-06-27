@@ -15,6 +15,7 @@ from satroot1 import (
     bootstrap_ed25519_workflow,
     bootstrap_genesis_bundle,
     bootstrap_hmac_workflow,
+    bootstrap_singleton_object_demo_ledger,
     bootstrap_signed_ledger_bundle,
     bootstrap_stable_reference_demo_bundle,
     bootstrap_stable_reference_demo_ledger,
@@ -450,6 +451,35 @@ def test_bootstrap_stable_reference_demo_ledger_replays():
     assert state.balances["merchant"] == 1_245_000
     assert state.balances["api_node"] == 250_000
     assert demo["annotated_events"][-1]["state_hash"].startswith("sha256:")
+
+
+def test_bootstrap_singleton_object_demo_ledger_receipt_replays():
+    demo = bootstrap_singleton_object_demo_ledger(
+        profile="SATROOT-RECEIPT-1",
+        symbol="RECDEMO1",
+        name="Receipt Demo Asset",
+        root_id="cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd:0",
+        holder_account="buyer",
+        archive_account="archive",
+        nonce="singleton-demo-bootstrap",
+    )
+    events = demo["events"]
+    state = replay(events)
+    assert len(events) == 4
+    assert state.profile == "SATROOT-RECEIPT-1"
+    assert state.supply == 0
+    assert state.balances["archive"] == 0
+    assert demo["annotated_events"][-1]["state_hash"].startswith("sha256:")
+
+
+def test_bootstrap_singleton_object_demo_ledger_rejects_unsupported_profile():
+    with pytest.raises(SatRootError):
+        bootstrap_singleton_object_demo_ledger(
+            profile="SATROOT-STABLE-1",
+            symbol="BADSINGLE1",
+            name="Bad Singleton Demo",
+            holder_account="holder",
+        )
 
 
 def test_bootstrap_stable_reference_demo_bundle_hmac():
@@ -3291,6 +3321,70 @@ def test_cli_bootstrap_stable_demo(tmp_path, capsys):
     assert state.genesis_metadata["reference_unit"] == "EUR"
     assert state.balances["merchant"] == 1_250_000
     assert state.balances["api_node"] == 250_000
+
+
+def test_cli_bootstrap_singleton_demo_receipt(tmp_path, capsys):
+    output_dir = tmp_path / "singleton_receipt"
+
+    exit_code = main(
+        [
+            "bootstrap-singleton-demo",
+            "--profile",
+            "SATROOT-RECEIPT-1",
+            "--symbol",
+            "RECDEMO2",
+            "--name",
+            "Receipt CLI Demo",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-RECEIPT-1 singleton demo ledger to" in captured.out
+
+    events = json.loads((output_dir / "events.json").read_text(encoding="utf-8"))
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    state = replay(events)
+    assert len(events) == 4
+    assert summary["profile"] == "SATROOT-RECEIPT-1"
+    assert state.supply == 0
+    assert state.balances["archive"] == 0
+
+
+def test_cli_bootstrap_singleton_demo_identity_custom_flow(tmp_path, capsys):
+    output_dir = tmp_path / "singleton_identity"
+
+    exit_code = main(
+        [
+            "bootstrap-singleton-demo",
+            "--profile",
+            "SATROOT-IDENTITY-1",
+            "--symbol",
+            "IDDEMO2",
+            "--name",
+            "Identity CLI Demo",
+            "--next-holder",
+            "controller_v2",
+            "--no-archive",
+            "--no-retire",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-IDENTITY-1 singleton demo ledger to" in captured.out
+
+    events = json.loads((output_dir / "events.json").read_text(encoding="utf-8"))
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    state = replay(events)
+    assert len(events) == 3
+    assert summary["profile"] == "SATROOT-IDENTITY-1"
+    assert state.supply == 1
+    assert state.balances["controller_v2"] == 1
 
 
 def test_cli_bootstrap_stable_demo_bundle_hmac(tmp_path, capsys):
