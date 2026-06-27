@@ -44,6 +44,7 @@ from satroot1 import (
     scaffold_event_record,
     scaffold_machine_credit_consumption_event,
     scaffold_singleton_object_archive_event,
+    scaffold_singleton_object_retirement_event,
     sha256_hex,
     sign_ledger_events,
     signing_payload,
@@ -535,6 +536,21 @@ def test_scaffold_singleton_object_archive_event_from_receipt_ledger():
     assert event["to"] == "archive"
     assert event["amount"] == "1"
     assert event["sequence"] == 2
+
+
+def test_scaffold_singleton_object_retirement_event_requires_archived_holder():
+    events = load_events("events_receipt1.json")[:2]
+    with pytest.raises(SatRootError):
+        scaffold_singleton_object_retirement_event(events, signer="archive")
+
+
+def test_scaffold_singleton_object_retirement_event_from_archived_receipt_ledger():
+    events = load_events("events_receipt1.json")[:3]
+    event = scaffold_singleton_object_retirement_event(events, signer="archive")
+    assert event["action"] == "burn"
+    assert event["from"] == "archive"
+    assert event["amount"] == "1"
+    assert event["sequence"] == 3
 
 
 def test_load_protocol_schema_supports_rotate_authority():
@@ -2270,6 +2286,99 @@ def test_cli_archive_singleton_object_hmac(tmp_path):
     state = replay(appended, verifier=make_hmac_sha256_verifier(shared_secrets))
     assert state.balances["archive"] == 1
     assert state.balances["customer"] == 0
+
+
+def test_cli_retire_singleton_object_demo(tmp_path):
+    events_path = tmp_path / "archived_receipt_events.json"
+    output_path = tmp_path / "retired.json"
+    events = load_events("events_receipt1.json")[:3]
+    events_path.write_text(json.dumps(events), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "retire-singleton-object",
+            str(events_path),
+            "--signer",
+            "archive",
+            "--include-state-hash",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    appended = json.loads(output_path.read_text(encoding="utf-8"))
+    assert appended[-1]["action"] == "burn"
+    assert appended[-1]["from"] == "archive"
+    assert appended[-1]["state_hash"].startswith("sha256:")
+    state = replay(appended)
+    assert state.supply == 0
+    assert state.balances["archive"] == 0
+
+
+def test_cli_retire_singleton_object_hmac(tmp_path):
+    events_path = tmp_path / "archived_license_events.json"
+    bootstrap_dir = tmp_path / "bootstrap"
+    signed_path = tmp_path / "signed.json"
+    output_path = tmp_path / "retired.json"
+    signer_map_path = bootstrap_dir / "signer_key_map.json"
+    secrets_path = bootstrap_dir / "secrets.json"
+    events = load_events("events_license1.json")[:3]
+    events_path.write_text(json.dumps(events), encoding="utf-8")
+    bootstrap_dir.mkdir()
+    write_json(signer_map_path, {"issuer": "issuer-key", "customer": "customer-key", "archive": "archive-key"})
+    write_json(
+        secrets_path,
+        {
+            "issuer-key": "issuer-secret",
+            "customer-key": "customer-secret",
+            "archive-key": "archive-secret",
+        },
+    )
+    assert (
+        main(
+            [
+                "sign-ledger",
+                str(events_path),
+                "--scheme",
+                "hmac-sha256",
+                "--signer-key-map-json",
+                str(signer_map_path),
+                "--secrets-json",
+                str(secrets_path),
+                "--output",
+                str(signed_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "retire-singleton-object",
+            str(signed_path),
+            "--signer",
+            "archive",
+            "--scheme",
+            "hmac-sha256",
+            "--signer-key-map-json",
+            str(signer_map_path),
+            "--secrets-json",
+            str(secrets_path),
+            "--include-state-hash",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    shared_secrets = json.loads(secrets_path.read_text(encoding="utf-8"))
+    appended = json.loads(output_path.read_text(encoding="utf-8"))
+    assert appended[-1]["signature_scheme"] == "hmac-sha256"
+    assert appended[-1]["signature_key_id"] == "archive-key"
+    state = replay(appended, verifier=make_hmac_sha256_verifier(shared_secrets))
+    assert state.supply == 0
+    assert state.balances["archive"] == 0
 
 
 def test_cli_bootstrap_genesis_bundle_hmac(tmp_path, capsys):

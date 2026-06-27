@@ -15,6 +15,7 @@
 - Adds an `append-event` CLI workflow plus helper for extending existing ledgers with signed events.
 - Adds a `consume-machine-credit` lifecycle helper for burn-on-use `SATROOT-MACHINE-1` ledgers.
 - Adds an `archive-singleton-object` lifecycle helper for receipt, identity, and license ledgers.
+- Adds a `retire-singleton-object` lifecycle helper for archived receipt, identity, and license ledgers.
 - Adds a canonical signing payload function and a pluggable signature verifier interface.
 - Adds a concrete built-in `hmac-sha256` reference verifier for shared-secret event authentication.
 - Adds optional `ed25519` signing and verification helpers behind the `crypto` extra.
