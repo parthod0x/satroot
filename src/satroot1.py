@@ -2006,6 +2006,107 @@ def _bundle_output_artifacts(
     return output_files, output_payloads
 
 
+def _write_bundle_output_dir(
+    bundle: Mapping[str, Any],
+    *,
+    output_dir: str | Path,
+    include_private_keys: bool,
+    genesis: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+    output_files, output_payloads = _bundle_output_artifacts(
+        bundle,
+        include_private_keys=include_private_keys,
+        genesis=genesis,
+    )
+    for key, data in output_payloads.items():
+        _write_json_file(output_path / output_files[key], data)
+    return {
+        "output_dir": str(output_path),
+        "files": output_files,
+        "bundle_manifest_path": str(output_path / output_files["bundle_manifest"]),
+    }
+
+
+def bootstrap_stable_reference_demo_release(
+    *,
+    symbol: str,
+    name: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    reference_unit: str = "USD",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    merchant_account: str = "merchant",
+    service_account: str = "api_node",
+    initial_balance: str = "25000000",
+    merchant_amount: str = "1250000",
+    service_amount: str = "250000",
+    merchant_burn_amount: str = "5000",
+    intended_use: str = "invoice-credit-accounting",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_release_scheme = release_scheme or bundle_scheme
+    if verifier_only and bundle_scheme != "ed25519":
+        raise SatRootError("--verifier-only is only supported for ed25519 bundles")
+
+    root_output_dir = Path(output_dir).resolve()
+    bundle_dir = root_output_dir / "bundle"
+    release_dir = root_output_dir / "release"
+    bundle = bootstrap_stable_reference_demo_bundle(
+        symbol=symbol,
+        name=name,
+        scheme=bundle_scheme,
+        reference_unit=reference_unit,
+        root_id=root_id,
+        issuer=issuer,
+        merchant_account=merchant_account,
+        service_account=service_account,
+        initial_balance=initial_balance,
+        merchant_amount=merchant_amount,
+        service_amount=service_amount,
+        merchant_burn_amount=merchant_burn_amount,
+        intended_use=intended_use,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+    )
+    bundle_output = _write_bundle_output_dir(
+        bundle,
+        output_dir=bundle_dir,
+        include_private_keys=not verifier_only,
+        genesis=bundle["genesis"],
+    )
+    published = bootstrap_release_publication(
+        [bundle_dir],
+        output_dir=release_dir,
+        signature_scheme=resolved_release_scheme,
+        key_id=release_key_id,
+        release_metadata=release_metadata,
+    )
+    return {
+        "bundle": bundle,
+        "bundle_output": bundle_output,
+        "bundle_dir": str(bundle_dir.resolve()),
+        "release_dir": str(release_dir.resolve()),
+        "release_publication": published,
+        "release_material": published["release_material"],
+    }
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -2117,6 +2218,34 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_bundle_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during signing")
     bootstrap_stable_demo_bundle_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
     bootstrap_stable_demo_bundle_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+
+    bootstrap_stable_demo_release_parser = subparsers.add_parser("bootstrap-stable-demo-release", help="Generate a signed SATROOT-STABLE-1 demo bundle plus signed release directory from profile parameters")
+    bootstrap_stable_demo_release_parser.add_argument("--symbol", required=True, help="Asset symbol for the stable reference demo release")
+    bootstrap_stable_demo_release_parser.add_argument("--name", required=True, help="Human-readable asset name for the stable reference demo release")
+    bootstrap_stable_demo_release_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the stable demo bundle")
+    bootstrap_stable_demo_release_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
+    bootstrap_stable_demo_release_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the release manifest")
+    bootstrap_stable_demo_release_parser.add_argument("--output-dir", required=True, help="Directory where bundle/ and release/ outputs will be written")
+    bootstrap_stable_demo_release_parser.add_argument("--reference-unit", default="USD", help="External reference unit; defaults to USD")
+    bootstrap_stable_demo_release_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_stable_demo_release_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and distribution events")
+    bootstrap_stable_demo_release_parser.add_argument("--merchant-account", default="merchant", help="Merchant account for the first reference distribution leg")
+    bootstrap_stable_demo_release_parser.add_argument("--service-account", default="api_node", help="Service account for the second reference distribution leg")
+    bootstrap_stable_demo_release_parser.add_argument("--initial-balance", default="25000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_stable_demo_release_parser.add_argument("--merchant-amount", default="1250000", help="Amount transferred from the issuer to the merchant account")
+    bootstrap_stable_demo_release_parser.add_argument("--service-amount", default="250000", help="Amount transferred from the issuer to the service account")
+    bootstrap_stable_demo_release_parser.add_argument("--merchant-burn-amount", default="5000", help="Optional merchant-side burn amount; use 0 to skip the burn event")
+    bootstrap_stable_demo_release_parser.add_argument("--intended-use", default="invoice-credit-accounting", help="Reference-only intended_use metadata")
+    bootstrap_stable_demo_release_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_stable_demo_release_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_stable_demo_release_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_stable_demo_release_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_stable_demo_release_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_stable_demo_release_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_stable_demo_release_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_stable_demo_release_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    bootstrap_stable_demo_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    bootstrap_stable_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -2717,16 +2846,48 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             include_state_hash=not args.no_state_hash,
             include_annotation=not args.no_annotated_output,
         )
-        output_dir = Path(args.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_files, output_payloads = _bundle_output_artifacts(
+        output = _write_bundle_output_dir(
             bundle,
+            output_dir=args.output_dir,
             include_private_keys=not args.verifier_only,
             genesis=bundle["genesis"],
         )
-        for key, data in output_payloads.items():
-            _write_json_file(output_dir / output_files[key], data)
-        print(f"wrote SATROOT-STABLE-1 {args.scheme} demo bundle to {output_dir}")
+        print(f"wrote SATROOT-STABLE-1 {args.scheme} demo bundle to {Path(output['output_dir'])}")
+        return 0
+
+    if args.command == "bootstrap-stable-demo-release":
+        release_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        released = bootstrap_stable_reference_demo_release(
+            symbol=args.symbol,
+            name=args.name,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            reference_unit=args.reference_unit,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            merchant_account=args.merchant_account,
+            service_account=args.service_account,
+            initial_balance=args.initial_balance,
+            merchant_amount=args.merchant_amount,
+            service_amount=args.service_amount,
+            merchant_burn_amount=args.merchant_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata=release_metadata,
+        )
+        print(f"wrote SATROOT-STABLE-1 demo release to {Path(released['release_dir'])}")
         return 0
 
     if args.command == "bootstrap-genesis-bundle":
@@ -2751,16 +2912,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             include_state_hash=not args.no_state_hash,
             include_annotation=not args.no_annotated_output,
         )
-        output_dir = Path(args.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_files, output_payloads = _bundle_output_artifacts(
+        output = _write_bundle_output_dir(
             bundle,
+            output_dir=args.output_dir,
             include_private_keys=not args.verifier_only,
             genesis=bundle["genesis"],
         )
-        for key, data in output_payloads.items():
-            _write_json_file(output_dir / output_files[key], data)
-        print(f"wrote scaffolded SATROOT-1 {args.scheme} genesis bundle to {output_dir}")
+        print(f"wrote scaffolded SATROOT-1 {args.scheme} genesis bundle to {Path(output['output_dir'])}")
         return 0
 
     if args.command == "replay":
@@ -2855,15 +3013,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             include_state_hash=not args.no_state_hash,
             include_annotation=not args.no_annotated_output,
         )
-        output_dir = Path(args.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_files, output_payloads = _bundle_output_artifacts(
+        output = _write_bundle_output_dir(
             bundle,
+            output_dir=args.output_dir,
             include_private_keys=not args.verifier_only,
         )
-        for key, data in output_payloads.items():
-            _write_json_file(output_dir / output_files[key], data)
-        print(f"wrote signed SATROOT-1 {args.scheme} bundle to {output_dir}")
+        print(f"wrote signed SATROOT-1 {args.scheme} bundle to {Path(output['output_dir'])}")
         return 0
 
     if args.command == "bundle-summary":

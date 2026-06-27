@@ -18,6 +18,7 @@ from satroot1 import (
     bootstrap_signed_ledger_bundle,
     bootstrap_stable_reference_demo_bundle,
     bootstrap_stable_reference_demo_ledger,
+    bootstrap_stable_reference_demo_release,
     build_signed_ledger_bundle_manifest,
     build_signer_key_map,
     derive_ed25519_public_keys,
@@ -468,6 +469,31 @@ def test_bootstrap_stable_reference_demo_bundle_hmac():
     assert bundle["material"]["signer_key_map"] == {"issuer": "issuer-key", "merchant": "merchant-key"}
     assert state.symbol == "USDBUNDLE1"
     assert state.genesis_metadata["reference_unit"] == "GBP"
+
+
+def test_bootstrap_stable_reference_demo_release_hmac(tmp_path):
+    released = bootstrap_stable_reference_demo_release(
+        symbol="USDREL1",
+        name="Stable Release Asset",
+        bundle_scheme="hmac-sha256",
+        release_key_id="release-key",
+        output_dir=tmp_path / "stable_release",
+        reference_unit="CAD",
+        release_metadata={"channel": "stable", "label": "Stable Release Asset"},
+    )
+    bundle_dir = Path(released["bundle_dir"])
+    release_dir = Path(released["release_dir"])
+    assert (bundle_dir / "bundle_manifest.json").is_file()
+    assert (release_dir / "release_manifest.json").is_file()
+    assert (release_dir / "bundle_index.json").is_file()
+    secrets = released["release_material"]["shared_secrets"]
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"]["channel"] == "stable"
+    assert summary["release"]["label"] == "Stable Release Asset"
 
 
 def test_bootstrap_stable_reference_demo_ledger_rejects_overallocated_distribution():
@@ -3307,6 +3333,56 @@ def test_cli_bootstrap_stable_demo_bundle_hmac(tmp_path, capsys):
     summary = verify_signed_ledger_bundle(output_dir)
     assert summary["symbol"] == "USDBUNDLE2"
     assert summary["record_count"] == 4
+
+
+def test_cli_bootstrap_stable_demo_release_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "stable_release"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-release",
+            "--symbol",
+            "USDRELCLI1",
+            "--name",
+            "Stable Release CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--reference-unit",
+            "JPY",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Release",
+            "--published-at",
+            "2026-06-27T12:00:00Z",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo release to" in captured.out
+
+    bundle_dir = output_dir / "bundle"
+    release_dir = output_dir / "release"
+    bundle_manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_manifest["symbol"] == "USDRELCLI1"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["reference_unit"] == "JPY"
+    assert bundle_index["release"]["label"] == "SATROOT Stable Release"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
 
 
 def test_cli_bootstrap_release_ed25519_material(tmp_path):

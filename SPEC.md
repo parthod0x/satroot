@@ -245,6 +245,8 @@ For reference-only stable ledgers, the reference CLI may also expose a demo boot
 
 That same stable bootstrap may also be composed directly into a signed bundle path so a reference-only stable ledger can be emitted together with signer material, annotated replay artifacts, and a verifiable bundle manifest without requiring a separate handwritten intermediate ledger file.
 
+That signed stable bundle path may also be composed one step further into a release bootstrap that writes both the stable bundle and a signed release directory together, preserving the reference-only stable semantics while exposing the same bundle-index and release-manifest verification flow used elsewhere in SATROOT.
+
 That scaffolding may also be composed into a one-shot starter-bundle workflow that emits a scaffolded `genesis.json`, a one-record signed ledger bundle, and verifier material in a single directory for reference or testing.
 
 Those workflow pieces can also be composed into a one-shot signed-ledger bundle path, allowing a ledger plus verifier material and signed/annotated artifacts to be emitted together for reference or testing.

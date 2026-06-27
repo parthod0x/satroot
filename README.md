@@ -66,6 +66,7 @@ The v0.1 kernel defines:
 - profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
 - a one-shot SATROOT-STABLE-1 reference-demo bootstrap for runnable stable-profile artifact generation,
 - a one-shot SATROOT-STABLE-1 signed demo-bundle bootstrap for release-ready stable-profile artifacts,
+- a one-shot SATROOT-STABLE-1 demo-release bootstrap for bundle plus release publication generation,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -128,7 +129,8 @@ This repo now includes the first stable-value profile draft:
 - `examples/genesis_usdroot1.json` for a `USDROOT1` genesis record,
 - `examples/events_usdroot1.json` for a runnable reference-only ledger flow,
 - `satroot1 bootstrap-stable-demo` for generating new reference-only demo ledgers on demand,
-- `satroot1 bootstrap-stable-demo-bundle` for generating signed stable demo bundles directly from profile parameters.
+- `satroot1 bootstrap-stable-demo-bundle` for generating signed stable demo bundles directly from profile parameters,
+- `satroot1 bootstrap-stable-demo-release` for generating signed stable demo bundles plus release directories in one step.
 
 This repo also now includes the first machine-credit profile draft:
 
@@ -168,7 +170,7 @@ python -m pytest
 Expected result:
 
 ```text
-154 passed
+156 passed
 ```
 
 ## Signing utilities
@@ -255,6 +257,12 @@ Generate a signed SATROOT-STABLE-1 reference-only demo bundle:
 
 ```bash
 satroot1 bootstrap-stable-demo-bundle --symbol USDBUNDLE2 --name "Stable Bundle CLI" --scheme hmac-sha256 --reference-unit CHF --output-dir stable_bundle
+```
+
+Generate a signed SATROOT-STABLE-1 demo bundle plus release directory:
+
+```bash
+satroot1 bootstrap-stable-demo-release --symbol USDRELCLI1 --name "Stable Release CLI" --scheme hmac-sha256 --release-key-id release-key --reference-unit JPY --channel stable --label "SATROOT Stable Release" --published-at 2026-06-27T12:00:00Z --output-dir stable_release
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:
