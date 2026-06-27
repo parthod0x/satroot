@@ -63,7 +63,7 @@ The v0.1 kernel defines:
 - event scaffolding for valid non-genesis SATROOT records from an existing ledger or explicit references,
 - append-and-sign event workflows for extending existing demo or signed ledgers,
 - profile-aware lifecycle helpers for common machine-credit consumption flows,
-- profile-aware lifecycle helpers for singleton receipt, identity, and license archival and retirement flows,
+- profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -164,7 +164,7 @@ python -m pytest
 Expected result:
 
 ```text
-145 passed
+149 passed
 ```
 
 ## Signing utilities
@@ -251,6 +251,12 @@ Archive a singleton receipt, identity, or license object into an archive account
 
 ```bash
 satroot1 archive-singleton-object signed_receipt_events.json --signer buyer --scheme hmac-sha256 --signer-key-map-json signer_key_map.json --secrets-json secrets.json --include-state-hash --output archived_receipt_events.json
+```
+
+Transfer a singleton receipt, identity, or license object to its next active holder:
+
+```bash
+satroot1 transfer-singleton-object signed_identity_events.json --signer node_alpha --to rotated_controller --scheme hmac-sha256 --signer-key-map-json signer_key_map.json --secrets-json secrets.json --include-state-hash --output transferred_identity_events.json
 ```
 
 Retire an already archived singleton receipt, identity, or license object:

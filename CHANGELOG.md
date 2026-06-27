@@ -14,6 +14,7 @@
 - Adds event scaffolding helpers and an `init-event` CLI command for non-genesis records.
 - Adds an `append-event` CLI workflow plus helper for extending existing ledgers with signed events.
 - Adds a `consume-machine-credit` lifecycle helper for burn-on-use `SATROOT-MACHINE-1` ledgers.
+- Adds a `transfer-singleton-object` lifecycle helper for receipt, identity, and license ledgers.
 - Adds an `archive-singleton-object` lifecycle helper for receipt, identity, and license ledgers.
 - Adds a `retire-singleton-object` lifecycle helper for archived receipt, identity, and license ledgers.
 - Adds a canonical signing payload function and a pluggable signature verifier interface.

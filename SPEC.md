@@ -239,7 +239,7 @@ Those helpers may also be composed into append workflows so an existing ledger c
 
 For profile-specific ergonomics, the reference CLI may also expose lifecycle helpers that map draft profile semantics to ordinary SATROOT events. For example, a `SATROOT-MACHINE-1` ledger with `consumption_model=burn-on-use` may support a helper that appends the corresponding `burn` event without forcing the operator to restate the generic lifecycle mapping each time.
 
-Likewise, singleton receipt, identity, or license profiles may support archival helpers that detect the current active holder and append the corresponding transfer into an archive account while preserving the underlying SATROOT-1 event model. Those same profiles may also support retirement helpers that burn an already archived singleton object once the archived holder is ready to retire it.
+Likewise, singleton receipt, identity, or license profiles may support transfer helpers that detect the current active holder and append the corresponding one-unit reassignment without restating the generic SATROOT event details each time. Those same profiles may also support archival helpers that move the active unit into an archive account and retirement helpers that burn an already archived singleton object once the archived holder is ready to retire it.
 
 That scaffolding may also be composed into a one-shot starter-bundle workflow that emits a scaffolded `genesis.json`, a one-record signed ledger bundle, and verifier material in a single directory for reference or testing.
 
