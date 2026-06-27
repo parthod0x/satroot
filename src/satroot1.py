@@ -381,6 +381,33 @@ def scaffold_event_from_ledger(
     )
 
 
+def scaffold_machine_credit_consumption_event(
+    events: Sequence[Dict[str, Any]],
+    *,
+    signer: str,
+    amount: str,
+    from_account: Optional[str] = None,
+    verifier: Optional[SignatureVerifier] = None,
+) -> Dict[str, Any]:
+    if verifier is None:
+        verifier = demo_signature_verifier
+    state = replay(events, verifier=verifier)
+    if state.profile != "SATROOT-MACHINE-1" or state.profile_mode != "prepaid-credit":
+        raise SatRootError("machine credit consumption requires a SATROOT-MACHINE-1 prepaid-credit ledger")
+    consumption_model = state.genesis_metadata.get("consumption_model")
+    if consumption_model != "burn-on-use":
+        raise SatRootError("machine credit consumption requires consumption_model=burn-on-use")
+    burner = signer if from_account is None else from_account
+    return scaffold_event_from_ledger(
+        events,
+        action="burn",
+        signer=signer,
+        from_account=burner,
+        amount=amount,
+        verifier=verifier,
+    )
+
+
 def _resolve_event_signing_key_id(
     event: Mapping[str, Any],
     *,
@@ -1789,6 +1816,20 @@ def build_cli_parser() -> Any:
     append_event_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to the appended event")
     append_event_parser.add_argument("--output", help="Optional output path")
 
+    consume_machine_credit_parser = subparsers.add_parser("consume-machine-credit", help="Append a burn-on-use SATROOT-MACHINE-1 consumption event to an existing ledger")
+    consume_machine_credit_parser.add_argument("events_json", help="Path to an existing SATROOT-MACHINE-1 ledger array")
+    consume_machine_credit_parser.add_argument("--signer", required=True, help="Signer account name for the consumption event")
+    consume_machine_credit_parser.add_argument("--amount", required=True, help="Positive machine-credit amount to consume")
+    consume_machine_credit_parser.add_argument("--from", dest="from_account", help="Optional source account; defaults to the signer")
+    consume_machine_credit_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], default="demo")
+    consume_machine_credit_parser.add_argument("--key-id", help="Explicit signature key identifier for non-demo event signing")
+    consume_machine_credit_parser.add_argument("--signer-key-map-json", help="Optional path to JSON mapping signer -> key_id for non-demo event signing")
+    consume_machine_credit_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification/signing")
+    consume_machine_credit_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
+    consume_machine_credit_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> Ed25519 private key hex for signing")
+    consume_machine_credit_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to the appended event")
+    consume_machine_credit_parser.add_argument("--output", help="Optional output path")
+
     bootstrap_genesis_bundle_parser = subparsers.add_parser("bootstrap-genesis-bundle", help="Scaffold a genesis record and emit a signed SATROOT-1 starter bundle")
     bootstrap_genesis_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
     bootstrap_genesis_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the genesis record")
@@ -2107,6 +2148,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 new_mint_authority=args.new_mint_authority,
                 verifier=verifier,
             )
+        appended = append_signed_event_to_ledger(
+            events,
+            event,
+            scheme=args.scheme,
+            explicit_key_id=args.key_id,
+            signer_key_ids=signer_key_ids,
+            signer=signer_function,
+            verifier=verifier,
+            include_state_hash=args.include_state_hash,
+        )
+        _write_output(appended, args.output)
+        return 0
+
+    if args.command == "consume-machine-credit":
+        events = _load_json_file(args.events_json)
+        if not isinstance(events, list):
+            raise SatRootError("events_json must contain a JSON array")
+        signer_key_ids = None
+        signer_function: Optional[SignerFunction] = None
+        verifier = demo_signature_verifier
+        if args.scheme != "demo":
+            signer_function, verifier, _ = _signer_and_verifier_from_args(args)
+            if args.signer_key_map_json:
+                signer_key_ids = _load_json_object_file(args.signer_key_map_json, label="signer-key-map-json")
+        event = scaffold_machine_credit_consumption_event(
+            events,
+            signer=args.signer,
+            amount=args.amount,
+            from_account=args.from_account,
+            verifier=verifier,
+        )
         appended = append_signed_event_to_ledger(
             events,
             event,

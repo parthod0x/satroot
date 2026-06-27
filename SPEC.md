@@ -237,6 +237,8 @@ The reference CLI may also expose event scaffolding helpers so valid non-genesis
 
 Those helpers may also be composed into append workflows so an existing ledger can be replayed, a next event scaffolded or supplied, and that new event signed and appended in one step without manual JSON surgery.
 
+For profile-specific ergonomics, the reference CLI may also expose lifecycle helpers that map draft profile semantics to ordinary SATROOT events. For example, a `SATROOT-MACHINE-1` ledger with `consumption_model=burn-on-use` may support a helper that appends the corresponding `burn` event without forcing the operator to restate the generic lifecycle mapping each time.
+
 That scaffolding may also be composed into a one-shot starter-bundle workflow that emits a scaffolded `genesis.json`, a one-record signed ledger bundle, and verifier material in a single directory for reference or testing.
 
 Those workflow pieces can also be composed into a one-shot signed-ledger bundle path, allowing a ledger plus verifier material and signed/annotated artifacts to be emitted together for reference or testing.

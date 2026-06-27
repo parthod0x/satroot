@@ -42,6 +42,7 @@ from satroot1 import (
     scaffold_genesis_record,
     scaffold_event_from_ledger,
     scaffold_event_record,
+    scaffold_machine_credit_consumption_event,
     sha256_hex,
     sign_ledger_events,
     signing_payload,
@@ -504,6 +505,20 @@ def test_append_signed_event_to_ledger_demo_roundtrip():
     assert appended[-1]["state_hash"].startswith("sha256:")
     state = replay(appended)
     assert state.balances["bob"] == 98_999_000
+
+
+def test_scaffold_machine_credit_consumption_event_requires_machine_profile():
+    with pytest.raises(SatRootError):
+        scaffold_machine_credit_consumption_event(load_events(), signer="bob", amount="1000")
+
+
+def test_scaffold_machine_credit_consumption_event_from_machine_ledger():
+    events = load_events("events_apicredit1.json")
+    event = scaffold_machine_credit_consumption_event(events, signer="worker_node", amount="1000")
+    assert event["action"] == "burn"
+    assert event["from"] == "worker_node"
+    assert event["amount"] == "1000"
+    assert event["sequence"] == 4
 
 
 def test_load_protocol_schema_supports_rotate_authority():
@@ -2068,6 +2083,91 @@ def test_cli_append_event_hmac(tmp_path):
     assert appended[-1]["state_hash"].startswith("sha256:")
     state = replay(appended, verifier=make_hmac_sha256_verifier(shared_secrets))
     assert state.balances["bob"] == 98_999_000
+
+
+def test_cli_consume_machine_credit_demo(tmp_path):
+    events_path = tmp_path / "machine_events.json"
+    output_path = tmp_path / "consumed.json"
+    events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "consume-machine-credit",
+            str(events_path),
+            "--signer",
+            "worker_node",
+            "--amount",
+            "1000",
+            "--include-state-hash",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    appended = json.loads(output_path.read_text(encoding="utf-8"))
+    assert appended[-1]["action"] == "burn"
+    assert appended[-1]["from"] == "worker_node"
+    assert appended[-1]["state_hash"].startswith("sha256:")
+    state = replay(appended)
+    assert state.balances["worker_node"] == 999_000
+    assert state.supply == 99_799_000
+
+
+def test_cli_consume_machine_credit_hmac(tmp_path):
+    events_path = tmp_path / "machine_events.json"
+    bootstrap_dir = tmp_path / "bootstrap"
+    signed_path = tmp_path / "signed.json"
+    output_path = tmp_path / "consumed.json"
+    events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-hmac-workflow", str(events_path), "--output-dir", str(bootstrap_dir)]) == 0
+    assert (
+        main(
+            [
+                "sign-ledger",
+                str(events_path),
+                "--scheme",
+                "hmac-sha256",
+                "--signer-key-map-json",
+                str(bootstrap_dir / "signer_key_map.json"),
+                "--secrets-json",
+                str(bootstrap_dir / "secrets.json"),
+                "--output",
+                str(signed_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "consume-machine-credit",
+            str(signed_path),
+            "--signer",
+            "worker_node",
+            "--amount",
+            "1000",
+            "--scheme",
+            "hmac-sha256",
+            "--signer-key-map-json",
+            str(bootstrap_dir / "signer_key_map.json"),
+            "--secrets-json",
+            str(bootstrap_dir / "secrets.json"),
+            "--include-state-hash",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    shared_secrets = json.loads((bootstrap_dir / "secrets.json").read_text(encoding="utf-8"))
+    appended = json.loads(output_path.read_text(encoding="utf-8"))
+    assert appended[-1]["signature_scheme"] == "hmac-sha256"
+    assert appended[-1]["signature_key_id"] == "worker_node-key"
+    state = replay(appended, verifier=make_hmac_sha256_verifier(shared_secrets))
+    assert state.balances["worker_node"] == 999_000
+    assert state.supply == 99_799_000
 
 
 def test_cli_bootstrap_genesis_bundle_hmac(tmp_path, capsys):

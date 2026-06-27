@@ -13,6 +13,7 @@
 - Adds a one-shot `bootstrap-release-publication` workflow for release signing material plus published release directories.
 - Adds event scaffolding helpers and an `init-event` CLI command for non-genesis records.
 - Adds an `append-event` CLI workflow plus helper for extending existing ledgers with signed events.
+- Adds a `consume-machine-credit` lifecycle helper for burn-on-use `SATROOT-MACHINE-1` ledgers.
 - Adds a canonical signing payload function and a pluggable signature verifier interface.
 - Adds a concrete built-in `hmac-sha256` reference verifier for shared-secret event authentication.
 - Adds optional `ed25519` signing and verification helpers behind the `crypto` extra.
