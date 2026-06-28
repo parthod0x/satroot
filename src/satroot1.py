@@ -1716,6 +1716,172 @@ def verify_signed_release_manifest(
     }
 
 
+def _load_release_publication(
+    release_dir: str | Path,
+) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
+    release_path = Path(release_dir).resolve()
+    if not release_path.is_dir():
+        raise SatRootError("release directory must be an existing directory")
+
+    manifest_path = release_path / "release_manifest.json"
+    if not manifest_path.is_file():
+        raise SatRootError("release_manifest.json is required for release publication operations")
+    manifest = _load_json_object_file(str(manifest_path), label="release-manifest")
+    validate_instance_against_schema(manifest, load_release_manifest_schema())
+
+    bundle_index_ref = manifest.get("bundle_index_path")
+    if not isinstance(bundle_index_ref, str) or not bundle_index_ref.strip():
+        raise SatRootError("release manifest bundle_index_path must be a non-empty string")
+    bundle_index_path = (manifest_path.parent / bundle_index_ref).resolve()
+    if not bundle_index_path.is_file():
+        raise SatRootError(f"bundle index file not found: {bundle_index_ref}")
+
+    index = _load_json_file(str(bundle_index_path))
+    validate_instance_against_schema(index, load_bundle_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("bundle index must contain an object")
+    validate_bundle_index_consistency(index)
+    return manifest_path, bundle_index_path, manifest, index
+
+
+def summarize_signed_release_publication(release_dir: str | Path) -> Dict[str, Any]:
+    _, bundle_index_path, manifest, index = _load_release_publication(release_dir)
+    bundles = index.get("bundles")
+    assert isinstance(bundles, list)
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "bundle_index_path": manifest.get("bundle_index_path"),
+        "bundle_index_hash": manifest.get("bundle_index_hash"),
+        "bundle_index_resolved_path": str(bundle_index_path),
+        "bundle_count": index.get("bundle_count"),
+        "release": copy.deepcopy(index.get("release")),
+        "bundle_symbols": sorted({str(entry.get("symbol")) for entry in bundles}),
+        "bundles": copy.deepcopy(bundles),
+    }
+
+
+def lint_signed_release_publication(release_dir: str | Path) -> Dict[str, Any]:
+    manifest_path, bundle_index_path, manifest, index = _load_release_publication(release_dir)
+    bundles = index.get("bundles")
+    assert isinstance(bundles, list)
+
+    actual_index_hash = "sha256:" + sha256_hex_bytes(bundle_index_path.read_bytes())
+    bundle_index_hash_matches = manifest.get("bundle_index_hash") == actual_index_hash
+    bundle_count_matches = manifest.get("bundle_count") == index.get("bundle_count")
+    release_metadata_matches = manifest.get("release") == index.get("release")
+
+    bundle_id_counts: Dict[str, int] = {}
+    bundle_path_counts: Dict[str, int] = {}
+    manifest_path_counts: Dict[str, int] = {}
+    for entry in bundles:
+        bundle_id = entry.get("bundle_id")
+        bundle_path_ref = entry.get("bundle_path")
+        manifest_path_ref = entry.get("manifest_path")
+        if isinstance(bundle_id, str):
+            bundle_id_counts[bundle_id] = bundle_id_counts.get(bundle_id, 0) + 1
+        if isinstance(bundle_path_ref, str):
+            bundle_path_counts[bundle_path_ref] = bundle_path_counts.get(bundle_path_ref, 0) + 1
+        if isinstance(manifest_path_ref, str):
+            manifest_path_counts[manifest_path_ref] = manifest_path_counts.get(manifest_path_ref, 0) + 1
+
+    duplicate_bundle_ids = sorted(bundle_id for bundle_id, count in bundle_id_counts.items() if count > 1)
+    duplicate_bundle_paths = sorted(bundle_path for bundle_path, count in bundle_path_counts.items() if count > 1)
+    duplicate_manifest_paths = sorted(path for path, count in manifest_path_counts.items() if count > 1)
+
+    bundle_manifest_path_mismatches: list[str] = []
+    missing_bundle_directories: list[str] = []
+    missing_bundle_manifests: list[str] = []
+    manifest_hash_mismatches: list[str] = []
+    bundle_manifest_metadata_mismatches: list[Dict[str, Any]] = []
+
+    for entry in bundles:
+        bundle_path_ref = entry.get("bundle_path")
+        manifest_path_ref = entry.get("manifest_path")
+        if not isinstance(bundle_path_ref, str) or not bundle_path_ref.strip():
+            continue
+        if not isinstance(manifest_path_ref, str) or not manifest_path_ref.strip():
+            continue
+
+        expected_manifest_path = (
+            "bundle_manifest.json"
+            if bundle_path_ref in {"", "."}
+            else f"{bundle_path_ref}/bundle_manifest.json"
+        )
+        if manifest_path_ref != expected_manifest_path:
+            bundle_manifest_path_mismatches.append(bundle_path_ref)
+
+        resolved_bundle_dir = (manifest_path.parent / bundle_path_ref).resolve()
+        resolved_manifest_path = (manifest_path.parent / manifest_path_ref).resolve()
+        if not resolved_bundle_dir.is_dir():
+            missing_bundle_directories.append(bundle_path_ref)
+        if not resolved_manifest_path.is_file():
+            missing_bundle_manifests.append(manifest_path_ref)
+            continue
+
+        actual_manifest_hash = "sha256:" + sha256_hex_bytes(resolved_manifest_path.read_bytes())
+        if entry.get("manifest_hash") != actual_manifest_hash:
+            manifest_hash_mismatches.append(manifest_path_ref)
+
+        bundle_manifest = _load_json_object_file(str(resolved_manifest_path), label="bundle-manifest")
+        validate_instance_against_schema(bundle_manifest, load_bundle_manifest_schema())
+        mismatched_fields = [
+            field_name
+            for field_name in [
+                "scheme",
+                "verification_material_scope",
+                "record_count",
+                "root_id",
+                "symbol",
+                "final_event_id",
+                "final_state_hash",
+                "annotated_output",
+            ]
+            if entry.get(field_name) != bundle_manifest.get(field_name)
+        ]
+        if mismatched_fields:
+            bundle_manifest_metadata_mismatches.append(
+                {
+                    "bundle_path": bundle_path_ref,
+                    "fields": mismatched_fields,
+                }
+            )
+
+    return {
+        "ok": not any(
+            [
+                not bundle_index_hash_matches,
+                not bundle_count_matches,
+                not release_metadata_matches,
+                duplicate_bundle_ids,
+                duplicate_bundle_paths,
+                duplicate_manifest_paths,
+                bundle_manifest_path_mismatches,
+                missing_bundle_directories,
+                missing_bundle_manifests,
+                manifest_hash_mismatches,
+                bundle_manifest_metadata_mismatches,
+            ]
+        ),
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "bundle_index_path": manifest.get("bundle_index_path"),
+        "bundle_index_hash_matches": bundle_index_hash_matches,
+        "bundle_count_matches": bundle_count_matches,
+        "release_metadata_matches": release_metadata_matches,
+        "declared_bundle_count": len(bundles),
+        "bundle_count": index.get("bundle_count"),
+        "duplicate_bundle_ids": duplicate_bundle_ids,
+        "duplicate_bundle_paths": duplicate_bundle_paths,
+        "duplicate_manifest_paths": duplicate_manifest_paths,
+        "bundle_manifest_path_mismatches": sorted(bundle_manifest_path_mismatches),
+        "missing_bundle_directories": sorted(missing_bundle_directories),
+        "missing_bundle_manifests": sorted(missing_bundle_manifests),
+        "manifest_hash_mismatches": sorted(manifest_hash_mismatches),
+        "bundle_manifest_metadata_mismatches": bundle_manifest_metadata_mismatches,
+    }
+
+
 def publish_signed_release(
     bundle_dirs: Sequence[str | Path],
     *,
@@ -3067,6 +3233,12 @@ def build_cli_parser() -> Any:
     bundle_lint_parser = subparsers.add_parser("bundle-lint", help="Check bundle_manifest.json plus bundle file layout without replaying")
     bundle_lint_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
+    release_summary_parser = subparsers.add_parser("release-summary", help="Read release_manifest.json plus bundle_index.json and print a release-level summary without signature verification")
+    release_summary_parser.add_argument("release_dir", help="Path to a SATROOT release directory")
+
+    release_lint_parser = subparsers.add_parser("release-lint", help="Check release_manifest.json, bundle_index.json, and referenced bundle manifests without signature verification")
+    release_lint_parser.add_argument("release_dir", help="Path to a SATROOT release directory")
+
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
     bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
@@ -3941,6 +4113,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bundle-lint":
         report = lint_signed_ledger_bundle(args.bundle_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "release-summary":
+        summary = summarize_signed_release_publication(args.release_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "release-lint":
+        report = lint_signed_release_publication(args.release_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 

@@ -87,6 +87,8 @@ The v0.1 kernel defines:
 - machine-readable signed bundle manifests describing artifacts, verifier-material scope, per-file hashes, and the full final replay snapshot,
 - manifest-only bundle inspection via `bundle-summary` when replay is unnecessary,
 - structural bundle linting via `bundle-lint` for missing files and manifest layout drift,
+- release-level inspection via `release-summary` when signature verification is unnecessary,
+- structural release linting via `release-lint` for bundle-index and manifest drift,
 - deterministic bundle-index generation for release catalogs spanning multiple bundles,
 - discovery-based bundle catalog packaging from parent artifact directories,
 - optional release metadata on bundle indexes for channel, label, and published-at packaging context,
@@ -183,7 +185,7 @@ python -m pytest
 Expected result:
 
 ```text
-178 passed
+181 passed
 ```
 
 ## Signing utilities
@@ -392,6 +394,18 @@ Lint bundle structure without replaying the ledger:
 
 ```bash
 satroot1 bundle-lint signed_hmac_bundle
+```
+
+Read a release publication summary without signature verification:
+
+```bash
+satroot1 release-summary stable_release
+```
+
+Lint release structure and referenced bundle manifests without signature verification:
+
+```bash
+satroot1 release-lint stable_release
 ```
 
 Build a bundle index catalog from one or more bundle directories:
