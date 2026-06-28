@@ -186,7 +186,7 @@ python -m pytest
 Expected result:
 
 ```text
-186 passed
+188 passed
 ```
 
 ## Signing utilities
@@ -339,6 +339,12 @@ Per-profile metadata can also be overridden inside the catalog bootstrap with `P
 
 ```bash
 satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace_fields --profile SATROOT-STABLE-1 --profile SATROOT-MACHINE-1 --profile-field-override SATROOT-STABLE-1:reference_unit=EUR --profile-field-override SATROOT-STABLE-1:intended_use=treasury-ledger --profile-field-override SATROOT-MACHINE-1:service_scope=batch-inference --profile-field-override SATROOT-MACHINE-1:billing_unit=job --profile-field-override SATROOT-MACHINE-1:intended_use=compute-credit --channel stable --label "SATROOT Field Override Catalog" --published-at 2026-06-28T23:00:00Z
+```
+
+Per-profile structural demo parameters can be overridden too, so the catalog can generate different ledger shapes and singleton lifecycles from one command:
+
+```bash
+satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace_structure --profile SATROOT-STABLE-1 --profile SATROOT-MACHINE-1 --profile SATROOT-IDENTITY-1 --profile-structure-override SATROOT-STABLE-1:merchant_account=merchant_beta --profile-structure-override SATROOT-STABLE-1:service_account=settlement_node --profile-structure-override SATROOT-STABLE-1:merchant_burn_amount=0 --profile-structure-override SATROOT-MACHINE-1:tenant_account=tenant_b --profile-structure-override SATROOT-MACHINE-1:worker_account=worker_beta --profile-structure-override SATROOT-MACHINE-1:worker_burn_amount=0 --profile-structure-override SATROOT-IDENTITY-1:holder_account=controller_a --profile-structure-override SATROOT-IDENTITY-1:next_holder=none --profile-structure-override SATROOT-IDENTITY-1:retire=false --channel stable --label "SATROOT Structure Override Catalog" --published-at 2026-06-29T00:00:00Z
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:

@@ -46,6 +46,7 @@ from satroot1 import (
     parse_named_string_overrides,
     parse_profile_field_override_map,
     parse_profile_field_overrides,
+    parse_profile_structure_override_map,
     replay,
     rendered_json_sha256,
     scaffold_genesis_record,
@@ -451,6 +452,17 @@ def test_parse_profile_field_override_map_rejects_duplicate_fields():
             [
                 "SATROOT-STABLE-1:reference_unit=USD",
                 "SATROOT-STABLE-1:reference_unit=EUR",
+            ],
+            allowed_profiles=["SATROOT-STABLE-1", "SATROOT-MACHINE-1"],
+        )
+
+
+def test_parse_profile_structure_override_map_rejects_duplicate_fields():
+    with pytest.raises(SatRootError):
+        parse_profile_structure_override_map(
+            [
+                "SATROOT-MACHINE-1:tenant_amount=5000000",
+                "SATROOT-MACHINE-1:tenant_amount=7000000",
             ],
             allowed_profiles=["SATROOT-STABLE-1", "SATROOT-MACHINE-1"],
         )
@@ -3801,6 +3813,108 @@ def test_cli_bootstrap_demo_catalog_subset_with_profile_field_overrides(tmp_path
     assert machine_genesis["service_scope"] == "batch-inference"
     assert machine_genesis["billing_unit"] == "job"
     assert machine_genesis["intended_use"] == "compute-credit"
+
+
+def test_cli_bootstrap_demo_catalog_subset_with_structure_overrides(tmp_path, capsys):
+    output_dir = tmp_path / "catalog_workspace_structure"
+
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(output_dir),
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--profile",
+            "SATROOT-MACHINE-1",
+            "--profile",
+            "SATROOT-IDENTITY-1",
+            "--profile-structure-override",
+            "SATROOT-STABLE-1:merchant_account=merchant_beta",
+            "--profile-structure-override",
+            "SATROOT-STABLE-1:service_account=settlement_node",
+            "--profile-structure-override",
+            "SATROOT-STABLE-1:initial_balance=30000000",
+            "--profile-structure-override",
+            "SATROOT-STABLE-1:merchant_amount=1400000",
+            "--profile-structure-override",
+            "SATROOT-STABLE-1:service_amount=350000",
+            "--profile-structure-override",
+            "SATROOT-STABLE-1:merchant_burn_amount=0",
+            "--profile-structure-override",
+            "SATROOT-MACHINE-1:tenant_account=tenant_b",
+            "--profile-structure-override",
+            "SATROOT-MACHINE-1:worker_account=worker_beta",
+            "--profile-structure-override",
+            "SATROOT-MACHINE-1:max_supply=150000000",
+            "--profile-structure-override",
+            "SATROOT-MACHINE-1:initial_balance=120000000",
+            "--profile-structure-override",
+            "SATROOT-MACHINE-1:tenant_amount=7000000",
+            "--profile-structure-override",
+            "SATROOT-MACHINE-1:worker_amount=1500000",
+            "--profile-structure-override",
+            "SATROOT-MACHINE-1:worker_burn_amount=0",
+            "--profile-structure-override",
+            "SATROOT-IDENTITY-1:holder_account=controller_a",
+            "--profile-structure-override",
+            "SATROOT-IDENTITY-1:next_holder=none",
+            "--profile-structure-override",
+            "SATROOT-IDENTITY-1:retire=false",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Structure Override Catalog",
+            "--published-at",
+            "2026-06-29T00:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    stable_genesis = json.loads((output_dir / "bundles" / "stable" / "genesis.json").read_text(encoding="utf-8"))
+    stable_events = json.loads((output_dir / "bundles" / "stable" / "signed_events.json").read_text(encoding="utf-8"))
+    machine_genesis = json.loads((output_dir / "bundles" / "machine" / "genesis.json").read_text(encoding="utf-8"))
+    machine_events = json.loads((output_dir / "bundles" / "machine" / "signed_events.json").read_text(encoding="utf-8"))
+    identity_events = json.loads((output_dir / "bundles" / "identity" / "signed_events.json").read_text(encoding="utf-8"))
+    release_dir = output_dir / "release"
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+
+    assert summary["bundle_count"] == 3
+    assert stable_genesis["initial_balances"] == {"issuer": "30000000"}
+    assert len(stable_events) == 3
+    assert stable_events[1]["to"] == "merchant_beta"
+    assert stable_events[1]["amount"] == "1400000"
+    assert stable_events[2]["to"] == "settlement_node"
+    assert stable_events[2]["amount"] == "350000"
+
+    assert machine_genesis["max_supply"] == "150000000"
+    assert machine_genesis["initial_balances"] == {"issuer": "120000000"}
+    assert len(machine_events) == 3
+    assert machine_events[1]["to"] == "tenant_b"
+    assert machine_events[1]["amount"] == "7000000"
+    assert machine_events[2]["to"] == "worker_beta"
+    assert machine_events[2]["amount"] == "1500000"
+
+    assert len(identity_events) == 2
+    assert identity_events[1]["to"] == "controller_a"
+
+    identity_summary = next(entry for entry in summary["bundles"] if entry["profile"] == "SATROOT-IDENTITY-1")
+    assert identity_summary["structure_overrides"]["next_holder"] is None
+    assert identity_summary["structure_overrides"]["retire"] is False
+
+    verified = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert verified["bundle_count"] == 3
 
 
 def test_cli_bootstrap_stable_demo(tmp_path, capsys):

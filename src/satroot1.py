@@ -165,6 +165,43 @@ DEMO_CATALOG_BUNDLE_SPECS: tuple[Dict[str, str], ...] = (
     },
 )
 DEMO_CATALOG_PROFILES: tuple[str, ...] = tuple(spec["profile"] for spec in DEMO_CATALOG_BUNDLE_SPECS)
+DEMO_CATALOG_STRUCTURE_OVERRIDE_SPECS: Dict[str, Dict[str, str]] = {
+    "SATROOT-STABLE-1": {
+        "merchant_account": "account",
+        "service_account": "account",
+        "initial_balance": "positive_amount",
+        "merchant_amount": "positive_amount",
+        "service_amount": "positive_amount",
+        "merchant_burn_amount": "amount",
+    },
+    "SATROOT-MACHINE-1": {
+        "tenant_account": "account",
+        "worker_account": "account",
+        "max_supply": "positive_amount",
+        "initial_balance": "positive_amount",
+        "tenant_amount": "positive_amount",
+        "worker_amount": "positive_amount",
+        "worker_burn_amount": "amount",
+    },
+    "SATROOT-RECEIPT-1": {
+        "holder_account": "account",
+        "next_holder": "optional_account",
+        "archive_account": "optional_account",
+        "retire": "bool",
+    },
+    "SATROOT-IDENTITY-1": {
+        "holder_account": "account",
+        "next_holder": "optional_account",
+        "archive_account": "optional_account",
+        "retire": "bool",
+    },
+    "SATROOT-LICENSE-1": {
+        "holder_account": "account",
+        "next_holder": "optional_account",
+        "archive_account": "optional_account",
+        "retire": "bool",
+    },
+}
 
 
 def _resolve_singleton_demo_accounts(
@@ -398,6 +435,60 @@ def parse_profile_field_override_map(
         if field_name in profile_overrides:
             raise SatRootError(f"duplicate demo catalog profile field override: {profile}:{field_name}")
         profile_overrides[field_name] = field_value
+    return overrides
+
+
+def _parse_demo_catalog_structure_override_value(kind: str, value: str, *, label: str) -> Any:
+    if kind == "account":
+        return require_account_name(value.strip(), label)
+    if kind == "optional_account":
+        normalized = value.strip()
+        if normalized.lower() in {"none", "null"}:
+            return None
+        return require_account_name(normalized, label)
+    if kind == "positive_amount":
+        return str(parse_positive_amount(value))
+    if kind == "amount":
+        return str(parse_amount(value))
+    if kind == "bool":
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+        raise SatRootError(f"invalid {label}: {value!r}")
+    raise SatRootError(f"unsupported demo catalog structure override kind: {kind}")
+
+
+def parse_profile_structure_override_map(
+    values: Optional[Sequence[str]],
+    *,
+    allowed_profiles: Sequence[str],
+) -> Dict[str, Dict[str, Any]]:
+    allowed_profile_set = set(allowed_profiles)
+    overrides: Dict[str, Dict[str, Any]] = {}
+    for value in values or []:
+        if "=" not in value or ":" not in value:
+            raise SatRootError(f"invalid demo catalog structure override: {value!r}")
+        profile_and_key, override_value = value.split("=", 1)
+        profile, override_key = profile_and_key.split(":", 1)
+        profile = profile.strip()
+        override_key = override_key.strip()
+        if profile not in allowed_profile_set:
+            raise SatRootError(f"unsupported demo catalog structure override profile: {profile!r}")
+        if not override_key:
+            raise SatRootError(f"invalid demo catalog structure override: {value!r}")
+        profile_specs = DEMO_CATALOG_STRUCTURE_OVERRIDE_SPECS.get(profile, {})
+        if override_key not in profile_specs:
+            raise SatRootError(f"unsupported demo catalog structure override for {profile}: {override_key}")
+        profile_overrides = overrides.setdefault(profile, {})
+        if override_key in profile_overrides:
+            raise SatRootError(f"duplicate demo catalog structure override: {profile}:{override_key}")
+        profile_overrides[override_key] = _parse_demo_catalog_structure_override_value(
+            profile_specs[override_key],
+            override_value,
+            label=f"demo catalog structure override {profile}:{override_key}",
+        )
     return overrides
 
 
@@ -2910,6 +3001,7 @@ def bootstrap_demo_catalog_release(
     symbol_overrides: Optional[Mapping[str, str]] = None,
     name_overrides: Optional[Mapping[str, str]] = None,
     profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
+    profile_structure_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
     key_prefix: str = "",
     key_suffix: str = "-key",
     include_state_hash: bool = True,
@@ -2939,6 +3031,9 @@ def bootstrap_demo_catalog_release(
     resolved_symbol_overrides = dict(symbol_overrides or {})
     resolved_name_overrides = dict(name_overrides or {})
     resolved_profile_field_overrides = {profile: dict(fields) for profile, fields in (profile_field_overrides or {}).items()}
+    resolved_profile_structure_overrides = {
+        profile: dict(fields) for profile, fields in (profile_structure_overrides or {}).items()
+    }
     for profile in resolved_symbol_overrides:
         if profile not in selected_profile_set:
             raise SatRootError(f"symbol override requires selected demo catalog profile: {profile}")
@@ -2948,6 +3043,9 @@ def bootstrap_demo_catalog_release(
     for profile in resolved_profile_field_overrides:
         if profile not in selected_profile_set:
             raise SatRootError(f"profile field override requires selected demo catalog profile: {profile}")
+    for profile in resolved_profile_structure_overrides:
+        if profile not in selected_profile_set:
+            raise SatRootError(f"profile structure override requires selected demo catalog profile: {profile}")
 
     bundle_entries: list[Dict[str, Any]] = []
     bundle_dirs: list[str] = []
@@ -2957,6 +3055,7 @@ def bootstrap_demo_catalog_release(
         symbol = resolved_symbol_overrides.get(profile, spec["symbol"])
         name = resolved_name_overrides.get(profile, spec["name"])
         profile_fields = resolved_profile_field_overrides.get(profile)
+        structure_overrides = resolved_profile_structure_overrides.get(profile, {})
         bundle_dir = bundles_dir / bundle_name
 
         if profile == "SATROOT-STABLE-1":
@@ -2965,6 +3064,7 @@ def bootstrap_demo_catalog_release(
                 name=name,
                 scheme=bundle_scheme,
                 profile_fields=profile_fields,
+                **structure_overrides,
                 key_prefix=key_prefix,
                 key_suffix=key_suffix,
                 include_state_hash=include_state_hash,
@@ -2976,6 +3076,7 @@ def bootstrap_demo_catalog_release(
                 name=name,
                 scheme=bundle_scheme,
                 profile_fields=profile_fields,
+                **structure_overrides,
                 key_prefix=key_prefix,
                 key_suffix=key_suffix,
                 include_state_hash=include_state_hash,
@@ -2988,10 +3089,11 @@ def bootstrap_demo_catalog_release(
                 symbol=symbol,
                 name=name,
                 scheme=bundle_scheme,
-                holder_account=holder_account,
-                next_holder=next_holder,
-                archive_account=archive_account,
+                holder_account=structure_overrides.get("holder_account", holder_account),
+                next_holder=structure_overrides.get("next_holder", next_holder),
+                archive_account=structure_overrides.get("archive_account", archive_account),
                 profile_fields=profile_fields,
+                retire=structure_overrides.get("retire", True),
                 key_prefix=key_prefix,
                 key_suffix=key_suffix,
                 include_state_hash=include_state_hash,
@@ -3012,6 +3114,7 @@ def bootstrap_demo_catalog_release(
                 "symbol": symbol,
                 "name": name,
                 "profile_fields": copy.deepcopy(profile_fields),
+                "structure_overrides": copy.deepcopy(structure_overrides),
                 "bundle_dir": str(bundle_dir.resolve()),
                 "bundle_output": bundle_output,
             }
@@ -3329,6 +3432,7 @@ def build_cli_parser() -> Any:
     bootstrap_demo_catalog_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--profile-field-override", action="append", dest="profile_field_overrides", help="Per-profile metadata override in PROFILE:field=value form; may be repeated")
+    bootstrap_demo_catalog_parser.add_argument("--profile-structure-override", action="append", dest="profile_structure_overrides", help="Per-profile structural override in PROFILE:key=value form; use none/null for optional singleton accounts")
     bootstrap_demo_catalog_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
     bootstrap_demo_catalog_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
     bootstrap_demo_catalog_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
@@ -4250,6 +4354,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.profile_field_overrides,
                 allowed_profiles=DEMO_CATALOG_PROFILES,
             ),
+            profile_structure_overrides=parse_profile_structure_override_map(
+                args.profile_structure_overrides,
+                allowed_profiles=DEMO_CATALOG_PROFILES,
+            ),
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -4269,6 +4377,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "profile": entry["profile"],
                     "symbol": entry["symbol"],
                     "name": entry["name"],
+                    "profile_fields": entry["profile_fields"],
+                    "structure_overrides": entry["structure_overrides"],
                     "bundle_dir": entry["bundle_dir"],
                 }
                 for entry in catalog["bundles"]
