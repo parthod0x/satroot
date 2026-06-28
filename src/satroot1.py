@@ -132,6 +132,38 @@ SINGLETON_DEMO_PROFILE_DEFAULTS: Dict[str, Dict[str, Optional[str]]] = {
         "archive_account": "archive",
     },
 }
+DEMO_CATALOG_BUNDLE_SPECS: tuple[Dict[str, str], ...] = (
+    {
+        "bundle_name": "stable",
+        "profile": "SATROOT-STABLE-1",
+        "symbol": "USDCAT1",
+        "name": "SATROOT Stable Catalog",
+    },
+    {
+        "bundle_name": "machine",
+        "profile": "SATROOT-MACHINE-1",
+        "symbol": "APICAT1",
+        "name": "SATROOT Machine Catalog",
+    },
+    {
+        "bundle_name": "receipt",
+        "profile": "SATROOT-RECEIPT-1",
+        "symbol": "RECCAT1",
+        "name": "SATROOT Receipt Catalog",
+    },
+    {
+        "bundle_name": "identity",
+        "profile": "SATROOT-IDENTITY-1",
+        "symbol": "IDCAT1",
+        "name": "SATROOT Identity Catalog",
+    },
+    {
+        "bundle_name": "license",
+        "profile": "SATROOT-LICENSE-1",
+        "symbol": "LICCAT1",
+        "name": "SATROOT License Catalog",
+    },
+)
 
 
 def _resolve_singleton_demo_accounts(
@@ -2805,6 +2837,109 @@ def bootstrap_machine_credit_demo_release(
     }
 
 
+def bootstrap_demo_catalog_release(
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_release_scheme = release_scheme or bundle_scheme
+    if verifier_only and bundle_scheme != "ed25519":
+        raise SatRootError("--verifier-only is only supported for ed25519 bundles")
+
+    root_output_dir = Path(output_dir).resolve()
+    bundles_dir = root_output_dir / "bundles"
+    release_dir = root_output_dir / "release"
+
+    bundle_entries: list[Dict[str, Any]] = []
+    bundle_dirs: list[str] = []
+    for spec in DEMO_CATALOG_BUNDLE_SPECS:
+        bundle_name = spec["bundle_name"]
+        profile = spec["profile"]
+        symbol = spec["symbol"]
+        name = spec["name"]
+        bundle_dir = bundles_dir / bundle_name
+
+        if profile == "SATROOT-STABLE-1":
+            bundle = bootstrap_stable_reference_demo_bundle(
+                symbol=symbol,
+                name=name,
+                scheme=bundle_scheme,
+                key_prefix=key_prefix,
+                key_suffix=key_suffix,
+                include_state_hash=include_state_hash,
+                include_annotation=include_annotation,
+            )
+        elif profile == "SATROOT-MACHINE-1":
+            bundle = bootstrap_machine_credit_demo_bundle(
+                symbol=symbol,
+                name=name,
+                scheme=bundle_scheme,
+                key_prefix=key_prefix,
+                key_suffix=key_suffix,
+                include_state_hash=include_state_hash,
+                include_annotation=include_annotation,
+            )
+        else:
+            holder_account, next_holder, archive_account = _resolve_singleton_demo_accounts(profile)
+            bundle = bootstrap_singleton_object_demo_bundle(
+                profile=profile,
+                symbol=symbol,
+                name=name,
+                scheme=bundle_scheme,
+                holder_account=holder_account,
+                next_holder=next_holder,
+                archive_account=archive_account,
+                key_prefix=key_prefix,
+                key_suffix=key_suffix,
+                include_state_hash=include_state_hash,
+                include_annotation=include_annotation,
+            )
+
+        bundle_output = _write_bundle_output_dir(
+            bundle,
+            output_dir=bundle_dir,
+            include_private_keys=not verifier_only,
+            genesis=bundle["genesis"],
+        )
+        bundle_dirs.append(str(bundle_dir.resolve()))
+        bundle_entries.append(
+            {
+                "bundle_name": bundle_name,
+                "profile": profile,
+                "symbol": symbol,
+                "name": name,
+                "bundle_dir": str(bundle_dir.resolve()),
+                "bundle_output": bundle_output,
+            }
+        )
+
+    published = bootstrap_release_publication(
+        bundle_dirs,
+        output_dir=release_dir,
+        signature_scheme=resolved_release_scheme,
+        key_id=release_key_id,
+        release_metadata=release_metadata,
+    )
+    return {
+        "bundle_scheme": bundle_scheme,
+        "release_scheme": resolved_release_scheme,
+        "bundle_count": len(bundle_entries),
+        "bundles_dir": str(bundles_dir.resolve()),
+        "release_dir": str(release_dir.resolve()),
+        "bundles": bundle_entries,
+        "release_publication": published,
+        "release_material": published["release_material"],
+    }
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -3088,6 +3223,20 @@ def build_cli_parser() -> Any:
     bootstrap_machine_demo_release_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
     bootstrap_machine_demo_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bootstrap_machine_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+
+    bootstrap_demo_catalog_parser = subparsers.add_parser("bootstrap-demo-catalog", help="Generate stable, machine, and singleton demo bundles plus a signed catalog release workspace")
+    bootstrap_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated demo bundles")
+    bootstrap_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
+    bootstrap_demo_catalog_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the catalog release manifest")
+    bootstrap_demo_catalog_parser.add_argument("--output-dir", required=True, help="Directory where bundles/, release/, and summary.json will be written")
+    bootstrap_demo_catalog_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_demo_catalog_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_demo_catalog_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_catalog_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_demo_catalog_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_demo_catalog_parser.add_argument("--channel", help="Optional release channel metadata for the catalog bundle index")
+    bootstrap_demo_catalog_parser.add_argument("--label", help="Optional human-readable release label for the catalog bundle index")
+    bootstrap_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the catalog bundle index")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -3973,6 +4122,49 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_metadata=release_metadata,
         )
         print(f"wrote SATROOT-MACHINE-1 demo release to {Path(released['release_dir'])}")
+        return 0
+
+    if args.command == "bootstrap-demo-catalog":
+        release_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        catalog = bootstrap_demo_catalog_release(
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata=release_metadata,
+        )
+        summary = {
+            "bundle_scheme": catalog["bundle_scheme"],
+            "release_scheme": catalog["release_scheme"],
+            "bundle_count": catalog["bundle_count"],
+            "bundles_dir": catalog["bundles_dir"],
+            "release_dir": catalog["release_dir"],
+            "bundles": [
+                {
+                    "bundle_name": entry["bundle_name"],
+                    "profile": entry["profile"],
+                    "symbol": entry["symbol"],
+                    "name": entry["name"],
+                    "bundle_dir": entry["bundle_dir"],
+                }
+                for entry in catalog["bundles"]
+            ],
+            "release_manifest_path": catalog["release_publication"]["release_manifest_path"],
+            "bundle_index_path": catalog["release_publication"]["bundle_index_path"],
+        }
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        _write_json_file(output_dir / "summary.json", summary)
+        print(f"wrote SATROOT demo catalog workspace to {output_dir}")
         return 0
 
     if args.command == "bootstrap-genesis-bundle":

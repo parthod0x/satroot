@@ -3621,6 +3621,59 @@ def test_cli_bootstrap_release_publication_with_discovery_root(tmp_path, capsys)
     assert summary["release"] == bundle_index["release"]
 
 
+def test_cli_bootstrap_demo_catalog(tmp_path, capsys):
+    output_dir = tmp_path / "catalog_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Demo Catalog",
+            "--published-at",
+            "2026-06-28T22:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    release_dir = output_dir / "release"
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert summary["bundle_count"] == 5
+    assert len(summary["bundles"]) == 5
+    assert {entry["bundle_name"] for entry in summary["bundles"]} == {"stable", "machine", "receipt", "identity", "license"}
+    assert bundle_index["bundle_count"] == 5
+    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"USDCAT1", "APICAT1", "RECCAT1", "IDCAT1", "LICCAT1"}
+    assert bundle_index["release"]["label"] == "SATROOT Demo Catalog"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+    for entry in summary["bundles"]:
+        assert (Path(entry["bundle_dir"]) / "bundle_manifest.json").exists()
+
+    lint_exit_code = main(["release-lint", str(release_dir)])
+    assert lint_exit_code == 0
+    capsys.readouterr()
+
+    verified = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert verified["bundle_count"] == 5
+    assert verified["release"] == bundle_index["release"]
+
+
 def test_cli_bootstrap_stable_demo(tmp_path, capsys):
     output_dir = tmp_path / "stable_demo"
 

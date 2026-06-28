@@ -73,6 +73,7 @@ The v0.1 kernel defines:
 - a one-shot SATROOT-STABLE-1 reference-demo bootstrap for runnable stable-profile artifact generation,
 - a one-shot SATROOT-STABLE-1 signed demo-bundle bootstrap for release-ready stable-profile artifacts,
 - a one-shot SATROOT-STABLE-1 demo-release bootstrap for bundle plus release publication generation,
+- a one-shot multi-profile demo catalog workspace bootstrap for bundles plus signed catalog release generation,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -185,7 +186,7 @@ python -m pytest
 Expected result:
 
 ```text
-181 passed
+182 passed
 ```
 
 ## Signing utilities
@@ -320,6 +321,12 @@ Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle plus release dire
 
 ```bash
 satroot1 bootstrap-machine-demo-release --symbol APIRELCLI1 --name "Machine Release CLI" --scheme hmac-sha256 --release-key-id release-key --service-scope render-farm --channel stable --label "SATROOT Machine Release" --published-at 2026-06-28T06:00:00Z --output-dir machine_release
+```
+
+Generate a full multi-profile demo catalog workspace with `bundles/`, `release/`, and a root `summary.json` in one step:
+
+```bash
+satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace --channel stable --label "SATROOT Demo Catalog" --published-at 2026-06-28T22:00:00Z
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:
