@@ -186,7 +186,7 @@ python -m pytest
 Expected result:
 
 ```text
-182 passed
+184 passed
 ```
 
 ## Signing utilities
@@ -327,6 +327,12 @@ Generate a full multi-profile demo catalog workspace with `bundles/`, `release/`
 
 ```bash
 satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace --channel stable --label "SATROOT Demo Catalog" --published-at 2026-06-28T22:00:00Z
+```
+
+That workspace bootstrap can also be narrowed to selected profiles with per-profile symbol and name overrides:
+
+```bash
+satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace_subset --profile SATROOT-MACHINE-1 --profile SATROOT-IDENTITY-1 --symbol-override SATROOT-MACHINE-1=APISET2 --name-override "SATROOT-IDENTITY-1=SATROOT Identity Subset" --channel stable --label "SATROOT Subset Catalog" --published-at 2026-06-28T22:30:00Z
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:

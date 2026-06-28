@@ -164,6 +164,7 @@ DEMO_CATALOG_BUNDLE_SPECS: tuple[Dict[str, str], ...] = (
         "name": "SATROOT License Catalog",
     },
 )
+DEMO_CATALOG_PROFILES: tuple[str, ...] = tuple(spec["profile"] for spec in DEMO_CATALOG_BUNDLE_SPECS)
 
 
 def _resolve_singleton_demo_accounts(
@@ -347,6 +348,27 @@ def parse_profile_field_overrides(values: Optional[Sequence[str]]) -> Dict[str, 
         if field_name in overrides:
             raise SatRootError(f"duplicate profile field override: {field_name}")
         overrides[field_name] = field_value
+    return overrides
+
+
+def parse_named_string_overrides(
+    values: Optional[Sequence[str]],
+    *,
+    label: str,
+    allowed_keys: Sequence[str],
+) -> Dict[str, str]:
+    allowed_key_set = set(allowed_keys)
+    overrides: Dict[str, str] = {}
+    for value in values or []:
+        if "=" not in value:
+            raise SatRootError(f"invalid {label}: {value!r}")
+        key, override_value = value.split("=", 1)
+        key = key.strip()
+        if not key or key not in allowed_key_set:
+            raise SatRootError(f"unsupported {label} key: {key!r}")
+        if key in overrides:
+            raise SatRootError(f"duplicate {label} key: {key}")
+        overrides[key] = override_value
     return overrides
 
 
@@ -2843,6 +2865,9 @@ def bootstrap_demo_catalog_release(
     output_dir: str | Path,
     release_key_id: str,
     release_scheme: Optional[str] = None,
+    profiles: Optional[Sequence[str]] = None,
+    symbol_overrides: Optional[Mapping[str, str]] = None,
+    name_overrides: Optional[Mapping[str, str]] = None,
     key_prefix: str = "",
     key_suffix: str = "-key",
     include_state_hash: bool = True,
@@ -2857,14 +2882,34 @@ def bootstrap_demo_catalog_release(
     root_output_dir = Path(output_dir).resolve()
     bundles_dir = root_output_dir / "bundles"
     release_dir = root_output_dir / "release"
+    spec_map = {spec["profile"]: copy.deepcopy(spec) for spec in DEMO_CATALOG_BUNDLE_SPECS}
+    selected_profiles = list(DEMO_CATALOG_PROFILES if profiles is None else profiles)
+    selected_profile_set: set[str] = set()
+    ordered_profiles: list[str] = []
+    for profile in selected_profiles:
+        if profile not in spec_map:
+            raise SatRootError(f"unsupported demo catalog profile: {profile}")
+        if profile in selected_profile_set:
+            raise SatRootError(f"duplicate demo catalog profile: {profile}")
+        selected_profile_set.add(profile)
+        ordered_profiles.append(profile)
+
+    resolved_symbol_overrides = dict(symbol_overrides or {})
+    resolved_name_overrides = dict(name_overrides or {})
+    for profile in resolved_symbol_overrides:
+        if profile not in selected_profile_set:
+            raise SatRootError(f"symbol override requires selected demo catalog profile: {profile}")
+    for profile in resolved_name_overrides:
+        if profile not in selected_profile_set:
+            raise SatRootError(f"name override requires selected demo catalog profile: {profile}")
 
     bundle_entries: list[Dict[str, Any]] = []
     bundle_dirs: list[str] = []
-    for spec in DEMO_CATALOG_BUNDLE_SPECS:
+    for profile in ordered_profiles:
+        spec = spec_map[profile]
         bundle_name = spec["bundle_name"]
-        profile = spec["profile"]
-        symbol = spec["symbol"]
-        name = spec["name"]
+        symbol = resolved_symbol_overrides.get(profile, spec["symbol"])
+        name = resolved_name_overrides.get(profile, spec["name"])
         bundle_dir = bundles_dir / bundle_name
 
         if profile == "SATROOT-STABLE-1":
@@ -3229,6 +3274,9 @@ def build_cli_parser() -> Any:
     bootstrap_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
     bootstrap_demo_catalog_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the catalog release manifest")
     bootstrap_demo_catalog_parser.add_argument("--output-dir", required=True, help="Directory where bundles/, release/, and summary.json will be written")
+    bootstrap_demo_catalog_parser.add_argument("--profile", action="append", choices=sorted(DEMO_CATALOG_PROFILES), help="Limit the workspace to selected demo catalog profiles; may be repeated")
+    bootstrap_demo_catalog_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
+    bootstrap_demo_catalog_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
     bootstrap_demo_catalog_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
     bootstrap_demo_catalog_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
@@ -4135,6 +4183,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_scheme=args.release_scheme,
             release_key_id=args.release_key_id,
             output_dir=args.output_dir,
+            profiles=args.profile,
+            symbol_overrides=parse_named_string_overrides(
+                args.symbol_overrides,
+                label="demo catalog symbol override",
+                allowed_keys=DEMO_CATALOG_PROFILES,
+            ),
+            name_overrides=parse_named_string_overrides(
+                args.name_overrides,
+                label="demo catalog name override",
+                allowed_keys=DEMO_CATALOG_PROFILES,
+            ),
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,

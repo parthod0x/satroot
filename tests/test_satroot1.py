@@ -43,6 +43,7 @@ from satroot1 import (
     make_ed25519_verifier,
     make_hmac_sha256_verifier,
     make_hmac_sha256_signer,
+    parse_named_string_overrides,
     parse_profile_field_overrides,
     replay,
     rendered_json_sha256,
@@ -432,6 +433,15 @@ def test_scaffold_genesis_record_rejects_unknown_profile_override():
 def test_parse_profile_field_overrides_rejects_duplicate_keys():
     with pytest.raises(SatRootError):
         parse_profile_field_overrides(["reference_unit=USD", "reference_unit=INR"])
+
+
+def test_parse_named_string_overrides_rejects_duplicate_keys():
+    with pytest.raises(SatRootError):
+        parse_named_string_overrides(
+            ["SATROOT-STABLE-1=USDCAT2", "SATROOT-STABLE-1=USDCAT3"],
+            label="demo catalog symbol override",
+            allowed_keys=["SATROOT-STABLE-1", "SATROOT-MACHINE-1"],
+        )
 
 
 def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
@@ -3671,6 +3681,61 @@ def test_cli_bootstrap_demo_catalog(tmp_path, capsys):
         verifier=make_hmac_sha256_verifier(release_secrets),
     )
     assert verified["bundle_count"] == 5
+    assert verified["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_demo_catalog_subset_with_overrides(tmp_path, capsys):
+    output_dir = tmp_path / "catalog_workspace_subset"
+
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(output_dir),
+            "--profile",
+            "SATROOT-MACHINE-1",
+            "--profile",
+            "SATROOT-IDENTITY-1",
+            "--symbol-override",
+            "SATROOT-MACHINE-1=APISET2",
+            "--name-override",
+            "SATROOT-IDENTITY-1=SATROOT Identity Subset",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Subset Catalog",
+            "--published-at",
+            "2026-06-28T22:30:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    release_dir = output_dir / "release"
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert summary["bundle_count"] == 2
+    assert [entry["bundle_name"] for entry in summary["bundles"]] == ["machine", "identity"]
+    assert {entry["symbol"] for entry in summary["bundles"]} == {"APISET2", "IDCAT1"}
+    assert {entry["name"] for entry in summary["bundles"]} == {"SATROOT Machine Catalog", "SATROOT Identity Subset"}
+    assert bundle_index["bundle_count"] == 2
+    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"APISET2", "IDCAT1"}
+    assert (output_dir / "bundles" / "machine" / "bundle_manifest.json").exists()
+    assert (output_dir / "bundles" / "identity" / "bundle_manifest.json").exists()
+    assert not (output_dir / "bundles" / "stable").exists()
+
+    verified = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert verified["bundle_count"] == 2
     assert verified["release"] == bundle_index["release"]
 
 
