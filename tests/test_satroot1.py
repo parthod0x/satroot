@@ -44,6 +44,7 @@ from satroot1 import (
     make_hmac_sha256_verifier,
     make_hmac_sha256_signer,
     parse_named_string_overrides,
+    parse_profile_field_override_map,
     parse_profile_field_overrides,
     replay,
     rendered_json_sha256,
@@ -441,6 +442,17 @@ def test_parse_named_string_overrides_rejects_duplicate_keys():
             ["SATROOT-STABLE-1=USDCAT2", "SATROOT-STABLE-1=USDCAT3"],
             label="demo catalog symbol override",
             allowed_keys=["SATROOT-STABLE-1", "SATROOT-MACHINE-1"],
+        )
+
+
+def test_parse_profile_field_override_map_rejects_duplicate_fields():
+    with pytest.raises(SatRootError):
+        parse_profile_field_override_map(
+            [
+                "SATROOT-STABLE-1:reference_unit=USD",
+                "SATROOT-STABLE-1:reference_unit=EUR",
+            ],
+            allowed_profiles=["SATROOT-STABLE-1", "SATROOT-MACHINE-1"],
         )
 
 
@@ -3737,6 +3749,58 @@ def test_cli_bootstrap_demo_catalog_subset_with_overrides(tmp_path, capsys):
     )
     assert verified["bundle_count"] == 2
     assert verified["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_demo_catalog_subset_with_profile_field_overrides(tmp_path, capsys):
+    output_dir = tmp_path / "catalog_workspace_fields"
+
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(output_dir),
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--profile",
+            "SATROOT-MACHINE-1",
+            "--profile-field-override",
+            "SATROOT-STABLE-1:reference_unit=EUR",
+            "--profile-field-override",
+            "SATROOT-STABLE-1:intended_use=treasury-ledger",
+            "--profile-field-override",
+            "SATROOT-MACHINE-1:service_scope=batch-inference",
+            "--profile-field-override",
+            "SATROOT-MACHINE-1:billing_unit=job",
+            "--profile-field-override",
+            "SATROOT-MACHINE-1:intended_use=compute-credit",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Field Override Catalog",
+            "--published-at",
+            "2026-06-28T23:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    stable_genesis = json.loads((output_dir / "bundles" / "stable" / "genesis.json").read_text(encoding="utf-8"))
+    machine_genesis = json.loads((output_dir / "bundles" / "machine" / "genesis.json").read_text(encoding="utf-8"))
+    assert summary["bundle_count"] == 2
+    assert stable_genesis["reference_unit"] == "EUR"
+    assert stable_genesis["intended_use"] == "treasury-ledger"
+    assert stable_genesis["redemption"] == "none"
+    assert stable_genesis["reserve_model"] == "none"
+    assert machine_genesis["service_scope"] == "batch-inference"
+    assert machine_genesis["billing_unit"] == "job"
+    assert machine_genesis["intended_use"] == "compute-credit"
 
 
 def test_cli_bootstrap_stable_demo(tmp_path, capsys):

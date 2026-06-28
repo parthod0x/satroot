@@ -372,6 +372,35 @@ def parse_named_string_overrides(
     return overrides
 
 
+def parse_profile_field_override_map(
+    values: Optional[Sequence[str]],
+    *,
+    allowed_profiles: Sequence[str],
+) -> Dict[str, Dict[str, str]]:
+    allowed_profile_set = set(allowed_profiles)
+    registry = load_profile_registry()
+    overrides: Dict[str, Dict[str, str]] = {}
+    for value in values or []:
+        if "=" not in value or ":" not in value:
+            raise SatRootError(f"invalid demo catalog profile field override: {value!r}")
+        profile_and_field, field_value = value.split("=", 1)
+        profile, field_name = profile_and_field.split(":", 1)
+        profile = profile.strip()
+        field_name = field_name.strip()
+        if profile not in allowed_profile_set:
+            raise SatRootError(f"unsupported demo catalog profile field override profile: {profile!r}")
+        if not field_name:
+            raise SatRootError(f"invalid demo catalog profile field override: {value!r}")
+        required_fields = registry[profile]["required_fields"]
+        if field_name not in required_fields:
+            raise SatRootError(f"unsupported demo catalog profile field override for {profile}: {field_name}")
+        profile_overrides = overrides.setdefault(profile, {})
+        if field_name in profile_overrides:
+            raise SatRootError(f"duplicate demo catalog profile field override: {profile}:{field_name}")
+        profile_overrides[field_name] = field_value
+    return overrides
+
+
 def scaffold_event_record(
     *,
     action: str,
@@ -926,6 +955,7 @@ def bootstrap_stable_reference_demo_ledger(
     service_amount: str = "250000",
     merchant_burn_amount: str = "5000",
     intended_use: str = "invoice-credit-accounting",
+    profile_fields: Optional[Mapping[str, str]] = None,
     rules_hash: Optional[str] = None,
     nonce: Optional[str] = None,
     include_annotation: bool = True,
@@ -943,6 +973,12 @@ def bootstrap_stable_reference_demo_ledger(
         raise SatRootError("stable demo distribution exceeds initial issued balance")
     if burn_amount_value > merchant_amount_value:
         raise SatRootError("stable demo burn amount cannot exceed the merchant allocation")
+    resolved_profile_fields = {
+        "reference_unit": reference_unit,
+        "intended_use": intended_use,
+    }
+    if profile_fields:
+        resolved_profile_fields.update(profile_fields)
 
     genesis = scaffold_genesis_record(
         symbol=symbol,
@@ -952,10 +988,7 @@ def bootstrap_stable_reference_demo_ledger(
         initial_owner=issuer,
         initial_balance=initial_balance,
         profile="SATROOT-STABLE-1",
-        profile_fields={
-            "reference_unit": reference_unit,
-            "intended_use": intended_use,
-        },
+        profile_fields=resolved_profile_fields,
         rules_hash=rules_hash,
         nonce=nonce,
     )
@@ -1017,6 +1050,7 @@ def bootstrap_machine_credit_demo_ledger(
     worker_amount: str = "1200000",
     worker_burn_amount: str = "200000",
     intended_use: str = "machine-api-credit",
+    profile_fields: Optional[Mapping[str, str]] = None,
     rules_hash: Optional[str] = None,
     nonce: Optional[str] = None,
     include_annotation: bool = True,
@@ -1037,6 +1071,14 @@ def bootstrap_machine_credit_demo_ledger(
         raise SatRootError("machine demo worker allocation cannot exceed the tenant allocation")
     if burn_amount_value > worker_amount_value:
         raise SatRootError("machine demo burn amount cannot exceed the worker allocation")
+    resolved_profile_fields = {
+        "service_scope": service_scope,
+        "billing_unit": billing_unit,
+        "consumption_model": consumption_model,
+        "intended_use": intended_use,
+    }
+    if profile_fields:
+        resolved_profile_fields.update(profile_fields)
 
     genesis = scaffold_genesis_record(
         symbol=symbol,
@@ -1047,12 +1089,7 @@ def bootstrap_machine_credit_demo_ledger(
         max_supply=resolved_max_supply,
         initial_balance=initial_balance,
         profile="SATROOT-MACHINE-1",
-        profile_fields={
-            "service_scope": service_scope,
-            "billing_unit": billing_unit,
-            "consumption_model": consumption_model,
-            "intended_use": intended_use,
-        },
+        profile_fields=resolved_profile_fields,
         rules_hash=rules_hash,
         nonce=nonce,
     )
@@ -1079,7 +1116,7 @@ def bootstrap_machine_credit_demo_ledger(
     events.append(sign_event_record(worker_transfer, scheme="demo"))
 
     if burn_amount_value > 0:
-        if consumption_model != "burn-on-use":
+        if resolved_profile_fields["consumption_model"] != "burn-on-use":
             raise SatRootError("machine demo burn step requires consumption_model=burn-on-use")
         worker_burn = scaffold_machine_credit_consumption_event(
             events,
@@ -1319,6 +1356,7 @@ def bootstrap_stable_reference_demo_bundle(
     service_amount: str = "250000",
     merchant_burn_amount: str = "5000",
     intended_use: str = "invoice-credit-accounting",
+    profile_fields: Optional[Mapping[str, str]] = None,
     rules_hash: Optional[str] = None,
     nonce: Optional[str] = None,
     key_prefix: str = "",
@@ -1339,6 +1377,7 @@ def bootstrap_stable_reference_demo_bundle(
         service_amount=service_amount,
         merchant_burn_amount=merchant_burn_amount,
         intended_use=intended_use,
+        profile_fields=profile_fields,
         rules_hash=rules_hash,
         nonce=nonce,
         include_annotation=False,
@@ -2734,6 +2773,7 @@ def bootstrap_machine_credit_demo_bundle(
     worker_amount: str = "1200000",
     worker_burn_amount: str = "200000",
     intended_use: str = "machine-api-credit",
+    profile_fields: Optional[Mapping[str, str]] = None,
     rules_hash: Optional[str] = None,
     nonce: Optional[str] = None,
     key_prefix: str = "",
@@ -2757,6 +2797,7 @@ def bootstrap_machine_credit_demo_bundle(
         worker_amount=worker_amount,
         worker_burn_amount=worker_burn_amount,
         intended_use=intended_use,
+        profile_fields=profile_fields,
         rules_hash=rules_hash,
         nonce=nonce,
         include_annotation=False,
@@ -2868,6 +2909,7 @@ def bootstrap_demo_catalog_release(
     profiles: Optional[Sequence[str]] = None,
     symbol_overrides: Optional[Mapping[str, str]] = None,
     name_overrides: Optional[Mapping[str, str]] = None,
+    profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
     key_prefix: str = "",
     key_suffix: str = "-key",
     include_state_hash: bool = True,
@@ -2896,12 +2938,16 @@ def bootstrap_demo_catalog_release(
 
     resolved_symbol_overrides = dict(symbol_overrides or {})
     resolved_name_overrides = dict(name_overrides or {})
+    resolved_profile_field_overrides = {profile: dict(fields) for profile, fields in (profile_field_overrides or {}).items()}
     for profile in resolved_symbol_overrides:
         if profile not in selected_profile_set:
             raise SatRootError(f"symbol override requires selected demo catalog profile: {profile}")
     for profile in resolved_name_overrides:
         if profile not in selected_profile_set:
             raise SatRootError(f"name override requires selected demo catalog profile: {profile}")
+    for profile in resolved_profile_field_overrides:
+        if profile not in selected_profile_set:
+            raise SatRootError(f"profile field override requires selected demo catalog profile: {profile}")
 
     bundle_entries: list[Dict[str, Any]] = []
     bundle_dirs: list[str] = []
@@ -2910,6 +2956,7 @@ def bootstrap_demo_catalog_release(
         bundle_name = spec["bundle_name"]
         symbol = resolved_symbol_overrides.get(profile, spec["symbol"])
         name = resolved_name_overrides.get(profile, spec["name"])
+        profile_fields = resolved_profile_field_overrides.get(profile)
         bundle_dir = bundles_dir / bundle_name
 
         if profile == "SATROOT-STABLE-1":
@@ -2917,6 +2964,7 @@ def bootstrap_demo_catalog_release(
                 symbol=symbol,
                 name=name,
                 scheme=bundle_scheme,
+                profile_fields=profile_fields,
                 key_prefix=key_prefix,
                 key_suffix=key_suffix,
                 include_state_hash=include_state_hash,
@@ -2927,6 +2975,7 @@ def bootstrap_demo_catalog_release(
                 symbol=symbol,
                 name=name,
                 scheme=bundle_scheme,
+                profile_fields=profile_fields,
                 key_prefix=key_prefix,
                 key_suffix=key_suffix,
                 include_state_hash=include_state_hash,
@@ -2942,6 +2991,7 @@ def bootstrap_demo_catalog_release(
                 holder_account=holder_account,
                 next_holder=next_holder,
                 archive_account=archive_account,
+                profile_fields=profile_fields,
                 key_prefix=key_prefix,
                 key_suffix=key_suffix,
                 include_state_hash=include_state_hash,
@@ -2961,6 +3011,7 @@ def bootstrap_demo_catalog_release(
                 "profile": profile,
                 "symbol": symbol,
                 "name": name,
+                "profile_fields": copy.deepcopy(profile_fields),
                 "bundle_dir": str(bundle_dir.resolve()),
                 "bundle_output": bundle_output,
             }
@@ -3277,6 +3328,7 @@ def build_cli_parser() -> Any:
     bootstrap_demo_catalog_parser.add_argument("--profile", action="append", choices=sorted(DEMO_CATALOG_PROFILES), help="Limit the workspace to selected demo catalog profiles; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
+    bootstrap_demo_catalog_parser.add_argument("--profile-field-override", action="append", dest="profile_field_overrides", help="Per-profile metadata override in PROFILE:field=value form; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
     bootstrap_demo_catalog_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
     bootstrap_demo_catalog_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
@@ -4193,6 +4245,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.name_overrides,
                 label="demo catalog name override",
                 allowed_keys=DEMO_CATALOG_PROFILES,
+            ),
+            profile_field_overrides=parse_profile_field_override_map(
+                args.profile_field_overrides,
+                allowed_profiles=DEMO_CATALOG_PROFILES,
             ),
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,

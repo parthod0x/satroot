@@ -186,7 +186,7 @@ python -m pytest
 Expected result:
 
 ```text
-184 passed
+186 passed
 ```
 
 ## Signing utilities
@@ -333,6 +333,12 @@ That workspace bootstrap can also be narrowed to selected profiles with per-prof
 
 ```bash
 satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace_subset --profile SATROOT-MACHINE-1 --profile SATROOT-IDENTITY-1 --symbol-override SATROOT-MACHINE-1=APISET2 --name-override "SATROOT-IDENTITY-1=SATROOT Identity Subset" --channel stable --label "SATROOT Subset Catalog" --published-at 2026-06-28T22:30:00Z
+```
+
+Per-profile metadata can also be overridden inside the catalog bootstrap with `PROFILE:field=value` entries:
+
+```bash
+satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace_fields --profile SATROOT-STABLE-1 --profile SATROOT-MACHINE-1 --profile-field-override SATROOT-STABLE-1:reference_unit=EUR --profile-field-override SATROOT-STABLE-1:intended_use=treasury-ledger --profile-field-override SATROOT-MACHINE-1:service_scope=batch-inference --profile-field-override SATROOT-MACHINE-1:billing_unit=job --profile-field-override SATROOT-MACHINE-1:intended_use=compute-credit --channel stable --label "SATROOT Field Override Catalog" --published-at 2026-06-28T23:00:00Z
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:
