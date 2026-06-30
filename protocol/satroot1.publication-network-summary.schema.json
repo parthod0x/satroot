@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/satroot1.publication-network-summary.schema.json",
+  "title": "SATROOT Publication Network Summary",
+  "type": "object",
+  "required": [
+    "bundle_scheme",
+    "release_scheme",
+    "release_catalog_scheme",
+    "release_catalog_index_scheme",
+    "stack_count",
+    "stack_workspaces_dir",
+    "release_catalog_index_dir",
+    "stack_preset_paths",
+    "release_catalog_index",
+    "release_catalog_index_manifest_path",
+    "workspaces"
+  ],
+  "properties": {
+    "bundle_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+    "release_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+    "release_catalog_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+    "release_catalog_index_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+    "stack_count": {"type": "integer", "minimum": 1},
+    "stack_workspaces_dir": {"type": "string", "minLength": 1},
+    "release_catalog_index_dir": {"type": "string", "minLength": 1},
+    "stack_preset_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "network_preset_path": {"type": ["string", "null"], "minLength": 1},
+    "release_catalog_index_preset_path": {"type": ["string", "null"], "minLength": 1},
+    "release_catalog_index": {
+      "type": "object",
+      "required": ["protocol", "version", "index_type", "release_catalog_count", "release_catalogs"],
+      "properties": {
+        "protocol": {"const": "SATROOT-1"},
+        "version": {"const": "0.1"},
+        "index_type": {"const": "release-catalog-index"},
+        "release_catalog_count": {"type": "integer", "minimum": 1},
+        "index": {"type": "object"},
+        "release_catalogs": {"type": "array", "minItems": 1, "items": {"type": "object"}}
+      },
+      "additionalProperties": true
+    },
+    "release_catalog_index_manifest_path": {"type": "string", "minLength": 1},
+    "workspaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "workspace_name",
+          "preset_path",
+          "workspace_dir",
+          "summary_path",
+          "catalog_workspace_count",
+          "release_catalog_dir",
+          "release_catalog_manifest_path"
+        ],
+        "properties": {
+          "workspace_name": {"type": "string", "minLength": 1},
+          "preset_path": {"type": "string", "minLength": 1},
+          "workspace_dir": {"type": "string", "minLength": 1},
+          "summary_path": {"type": "string", "minLength": 1},
+          "catalog_workspace_count": {"type": "integer", "minimum": 1},
+          "release_catalog_dir": {"type": "string", "minLength": 1},
+          "release_catalog_manifest_path": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

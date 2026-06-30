@@ -40,6 +40,8 @@ RELEASE_CATALOG_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" /
 RELEASE_CATALOG_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-manifest.schema.json"
 RELEASE_CATALOG_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-index.schema.json"
 RELEASE_CATALOG_INDEX_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-index-manifest.schema.json"
+PUBLICATION_STACK_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-stack-summary.schema.json"
+PUBLICATION_NETWORK_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-network-summary.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -310,6 +312,18 @@ def load_release_catalog_index_schema() -> Dict[str, Any]:
 @functools.lru_cache(maxsize=1)
 def load_release_catalog_index_manifest_schema() -> Dict[str, Any]:
     with RELEASE_CATALOG_INDEX_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_publication_stack_summary_schema() -> Dict[str, Any]:
+    with PUBLICATION_STACK_SUMMARY_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_publication_network_summary_schema() -> Dict[str, Any]:
+    with PUBLICATION_NETWORK_SUMMARY_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -3480,11 +3494,29 @@ def _load_workspace_summary(
     return workspace_path, summary
 
 
-def summarize_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
-    stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
+def validate_publication_stack_summary_consistency(summary: Mapping[str, Any]) -> None:
     workspaces = summary.get("workspaces")
+    workspace_count = summary.get("workspace_count")
     if not isinstance(workspaces, list):
         raise SatRootError("publication stack summary workspaces must be an array")
+    if not isinstance(workspace_count, int) or workspace_count != len(workspaces):
+        raise SatRootError("publication stack summary workspace_count mismatch")
+
+
+def validate_publication_network_summary_consistency(summary: Mapping[str, Any]) -> None:
+    workspaces = summary.get("workspaces")
+    stack_count = summary.get("stack_count")
+    if not isinstance(workspaces, list):
+        raise SatRootError("publication network summary workspaces must be an array")
+    if not isinstance(stack_count, int) or stack_count != len(workspaces):
+        raise SatRootError("publication network summary stack_count mismatch")
+
+
+def summarize_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
+    stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
+    validate_publication_stack_summary_consistency(summary)
+    workspaces = summary.get("workspaces")
+    assert isinstance(workspaces, list)
     release_catalog_dir = stack_path / "release_catalog"
     release_catalog_summary = summarize_signed_release_catalog_publication(release_catalog_dir)
     return {
@@ -3513,9 +3545,9 @@ def summarize_publication_stack_workspace(publication_stack_dir: str | Path) -> 
 
 def lint_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
     stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
+    validate_publication_stack_summary_consistency(summary)
     workspaces = summary.get("workspaces")
-    if not isinstance(workspaces, list):
-        raise SatRootError("publication stack summary workspaces must be an array")
+    assert isinstance(workspaces, list)
     workspace_count_matches = isinstance(summary.get("workspace_count"), int) and summary.get("workspace_count") == len(workspaces)
 
     actual_catalog_workspaces_dir = (stack_path / "catalog_workspaces").resolve()
@@ -3630,9 +3662,9 @@ def lint_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[
 
 def summarize_publication_network_workspace(publication_network_dir: str | Path) -> Dict[str, Any]:
     network_path, summary = _load_workspace_summary(publication_network_dir, label="publication network")
+    validate_publication_network_summary_consistency(summary)
     workspaces = summary.get("workspaces")
-    if not isinstance(workspaces, list):
-        raise SatRootError("publication network summary workspaces must be an array")
+    assert isinstance(workspaces, list)
     release_catalog_index_dir = network_path / "release_catalog_index"
     release_catalog_index_summary = summarize_signed_release_catalog_index_publication(release_catalog_index_dir)
     return {
@@ -3662,9 +3694,9 @@ def summarize_publication_network_workspace(publication_network_dir: str | Path)
 
 def lint_publication_network_workspace(publication_network_dir: str | Path) -> Dict[str, Any]:
     network_path, summary = _load_workspace_summary(publication_network_dir, label="publication network")
+    validate_publication_network_summary_consistency(summary)
     workspaces = summary.get("workspaces")
-    if not isinstance(workspaces, list):
-        raise SatRootError("publication network summary workspaces must be an array")
+    assert isinstance(workspaces, list)
     stack_count_matches = isinstance(summary.get("stack_count"), int) and summary.get("stack_count") == len(workspaces)
 
     actual_stack_workspaces_dir = (network_path / "stack_workspaces").resolve()
@@ -5128,6 +5160,14 @@ def build_cli_parser() -> Any:
     validate_release_catalog_index_manifest_parser = subparsers.add_parser("validate-release-catalog-index-manifest", help="Validate a SATROOT-1 release catalog index manifest against the release-catalog-index-manifest schema")
     validate_release_catalog_index_manifest_parser.add_argument("release_catalog_index_manifest_json", help="Path to release_catalog_index_manifest.json")
     validate_release_catalog_index_manifest_parser.add_argument("--schema-json", help="Optional path to a release-catalog-index-manifest JSON Schema file")
+
+    validate_publication_stack_summary_parser = subparsers.add_parser("validate-publication-stack-summary", help="Validate a SATROOT publication stack summary against the publication-stack-summary schema")
+    validate_publication_stack_summary_parser.add_argument("publication_stack_summary_json", help="Path to publication stack summary.json")
+    validate_publication_stack_summary_parser.add_argument("--schema-json", help="Optional path to a publication-stack-summary JSON Schema file")
+
+    validate_publication_network_summary_parser = subparsers.add_parser("validate-publication-network-summary", help="Validate a SATROOT publication network summary against the publication-network-summary schema")
+    validate_publication_network_summary_parser.add_argument("publication_network_summary_json", help="Path to publication network summary.json")
+    validate_publication_network_summary_parser.add_argument("--schema-json", help="Optional path to a publication-network-summary JSON Schema file")
 
     init_genesis_parser = subparsers.add_parser("init-genesis", help="Scaffold a SATROOT-1 genesis record with optional profile-aware defaults")
     init_genesis_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
@@ -6692,6 +6732,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_release_catalog_index_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(manifest, schema)
         print(f"valid SATROOT-1 release catalog index manifest: {count} record(s)")
+        return 0
+
+    if args.command == "validate-publication-stack-summary":
+        summary = _load_json_file(args.publication_stack_summary_json)
+        schema = load_publication_stack_summary_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(summary, schema)
+        if not isinstance(summary, dict):
+            raise SatRootError("publication stack summary must contain an object")
+        validate_publication_stack_summary_consistency(summary)
+        print(f"valid SATROOT publication stack summary: {count} record(s)")
+        return 0
+
+    if args.command == "validate-publication-network-summary":
+        summary = _load_json_file(args.publication_network_summary_json)
+        schema = load_publication_network_summary_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(summary, schema)
+        if not isinstance(summary, dict):
+            raise SatRootError("publication network summary must contain an object")
+        validate_publication_network_summary_consistency(summary)
+        print(f"valid SATROOT publication network summary: {count} record(s)")
         return 0
 
     if args.command == "init-signer-key-map":

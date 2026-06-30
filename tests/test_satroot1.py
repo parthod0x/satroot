@@ -47,7 +47,9 @@ from satroot1 import (
     load_protocol_schema,
     load_profile_registry,
     load_publication_network_preset,
+    load_publication_network_summary_schema,
     load_publication_stack_preset,
+    load_publication_stack_summary_schema,
     load_release_catalog_index_manifest_schema,
     load_release_catalog_index_preset,
     load_release_catalog_index_schema,
@@ -79,6 +81,8 @@ from satroot1 import (
     summarize_signed_ledger_bundle,
     validate_instance_against_schema,
     validate_bundle_index_consistency,
+    validate_publication_network_summary_consistency,
+    validate_publication_stack_summary_consistency,
     validate_release_catalog_index_consistency,
     validate_release_catalog_consistency,
     verify_signed_release_catalog_index_manifest,
@@ -792,6 +796,24 @@ def test_load_publication_network_preset_example():
     preset = load_publication_network_preset(ROOT / "examples" / "network_presets" / "ai_compute_publication_network.json")
     assert preset["stack_preset_paths"] == [str((ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack.json").resolve())]
     assert preset["release_catalog_index_metadata"]["label"] == "SATROOT AI Compute Publication Network"
+
+
+def test_validate_publication_stack_summary_schema_accepts_generated_summary(tmp_path):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+    summary = json.loads((stack_dir / "summary.json").read_text(encoding="utf-8"))
+
+    count = validate_instance_against_schema(summary, load_publication_stack_summary_schema())
+    assert count == 1
+    validate_publication_stack_summary_consistency(summary)
+
+
+def test_validate_publication_network_summary_schema_accepts_generated_summary(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    summary = json.loads((network_dir / "summary.json").read_text(encoding="utf-8"))
+
+    count = validate_instance_against_schema(summary, load_publication_network_summary_schema())
+    assert count == 1
+    validate_publication_network_summary_consistency(summary)
 
 
 def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
@@ -4361,6 +4383,26 @@ def test_cli_publication_network_lint_reports_findings(tmp_path, capsys):
     assert '"ok":false' in captured.out
     assert '"release_catalog_index_manifest_path_matches":false' in captured.out
     assert '"missing_workspace_summaries":["stack_a"]' in captured.out
+
+
+def test_cli_validate_publication_stack_summary(tmp_path, capsys):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+
+    exit_code = main(["validate-publication-stack-summary", str(stack_dir / "summary.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "valid SATROOT publication stack summary: 1 record(s)" in captured.out
+
+
+def test_cli_validate_publication_network_summary(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    exit_code = main(["validate-publication-network-summary", str(network_dir / "summary.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "valid SATROOT publication network summary: 1 record(s)" in captured.out
 
 
 def test_cli_build_bundle_index(tmp_path):

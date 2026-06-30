@@ -31,6 +31,8 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `protocol/satroot1.release-catalog-manifest.schema.json` - JSON schema for signed multi-release catalog manifests.
 - `protocol/satroot1.release-catalog-index.schema.json` - JSON schema for multi-catalog release index exports.
 - `protocol/satroot1.release-catalog-index-manifest.schema.json` - JSON schema for signed multi-catalog release index manifests.
+- `protocol/satroot1.publication-stack-summary.schema.json` - JSON schema for publication-stack workspace summaries.
+- `protocol/satroot1.publication-network-summary.schema.json` - JSON schema for publication-network workspace summaries.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
@@ -123,8 +125,9 @@ The v0.1 kernel defines:
 - publication-stack inspection via `publication-stack-summary` and structural linting via `publication-stack-lint`,
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
+- publication-stack and publication-network summary schema validation for exported top-level workspace summaries,
 - signed bundle verification against manifest and verifier material,
-- bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, and release-catalog-index-manifest schema validation for exported signed artifacts,
+- bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -211,7 +214,7 @@ python -m pytest
 Expected result:
 
 ```text
-220 passed
+224 passed
 ```
 
 ## Signing utilities
@@ -645,13 +648,15 @@ Validate a signed release manifest directly against the SATROOT release-manifest
 satroot1 validate-release-manifest release_manifest.json
 ```
 
-Validate a release catalog, release-catalog index, and their signed manifests directly against the SATROOT schemas:
+Validate a release catalog, release-catalog index, publication workspace summaries, and their signed manifests directly against the SATROOT schemas:
 
 ```bash
 satroot1 validate-release-catalog release_catalog.json
 satroot1 validate-release-catalog-manifest release_catalog_manifest.json
 satroot1 validate-release-catalog-index release_catalog_index.json
 satroot1 validate-release-catalog-index-manifest release_catalog_index_manifest.json
+satroot1 validate-publication-stack-summary publication_stack/summary.json
+satroot1 validate-publication-network-summary publication_network/summary.json
 ```
 
 Verify a signed release manifest against its bundle index:
