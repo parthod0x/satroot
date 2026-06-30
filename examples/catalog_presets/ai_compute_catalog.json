@@ -1,0 +1,54 @@
+{
+  "type": "SATROOT-DEMO-CATALOG-PRESET",
+  "version": "0.1",
+  "profiles": [
+    "SATROOT-STABLE-1",
+    "SATROOT-MACHINE-1",
+    "SATROOT-IDENTITY-1"
+  ],
+  "symbol_overrides": {
+    "SATROOT-STABLE-1": "EURSET1",
+    "SATROOT-MACHINE-1": "AICORE1",
+    "SATROOT-IDENTITY-1": "OPSID1"
+  },
+  "name_overrides": {
+    "SATROOT-STABLE-1": "SATROOT Settlement Rail",
+    "SATROOT-MACHINE-1": "SATROOT AI Compute Credits",
+    "SATROOT-IDENTITY-1": "SATROOT Operator Identity"
+  },
+  "profile_field_overrides": {
+    "SATROOT-STABLE-1": {
+      "reference_unit": "EUR",
+      "intended_use": "settlement-ledger"
+    },
+    "SATROOT-MACHINE-1": {
+      "service_scope": "batch-inference",
+      "billing_unit": "job",
+      "intended_use": "ai-compute-credit"
+    }
+  },
+  "profile_structure_overrides": {
+    "SATROOT-STABLE-1": {
+      "merchant_account": "merchant_ops",
+      "service_account": "settlement_node",
+      "merchant_burn_amount": "0"
+    },
+    "SATROOT-MACHINE-1": {
+      "tenant_account": "tenant_ops",
+      "worker_account": "gpu_pool",
+      "tenant_amount": "7000000",
+      "worker_amount": "1800000",
+      "worker_burn_amount": "0"
+    },
+    "SATROOT-IDENTITY-1": {
+      "holder_account": "operator_alpha",
+      "next_holder": null,
+      "retire": false
+    }
+  },
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT AI Compute Catalog",
+    "published_at": "2026-06-30T00:00:00Z"
+  }
+}

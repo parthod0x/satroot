@@ -36,6 +36,7 @@ from satroot1 import (
     hmac_sha256_sign,
     load_bundle_index_schema,
     load_bundle_manifest_schema,
+    load_demo_catalog_preset,
     load_protocol_schema,
     load_profile_registry,
     load_release_manifest_schema,
@@ -466,6 +467,16 @@ def test_parse_profile_structure_override_map_rejects_duplicate_fields():
             ],
             allowed_profiles=["SATROOT-STABLE-1", "SATROOT-MACHINE-1"],
         )
+
+
+def test_load_demo_catalog_preset_example():
+    preset = load_demo_catalog_preset(ROOT / "examples" / "catalog_presets" / "ai_compute_catalog.json")
+    assert preset["profiles"] == ["SATROOT-STABLE-1", "SATROOT-MACHINE-1", "SATROOT-IDENTITY-1"]
+    assert preset["symbol_overrides"]["SATROOT-MACHINE-1"] == "AICORE1"
+    assert preset["profile_field_overrides"]["SATROOT-MACHINE-1"]["service_scope"] == "batch-inference"
+    assert preset["profile_structure_overrides"]["SATROOT-IDENTITY-1"]["next_holder"] is None
+    assert preset["profile_structure_overrides"]["SATROOT-IDENTITY-1"]["retire"] is False
+    assert preset["release_metadata"]["label"] == "SATROOT AI Compute Catalog"
 
 
 def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
@@ -3688,6 +3699,7 @@ def test_cli_bootstrap_demo_catalog(tmp_path, capsys):
     assert summary["bundle_count"] == 5
     assert len(summary["bundles"]) == 5
     assert {entry["bundle_name"] for entry in summary["bundles"]} == {"stable", "machine", "receipt", "identity", "license"}
+    assert summary["release"] == bundle_index["release"]
     assert bundle_index["bundle_count"] == 5
     assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"USDCAT1", "APICAT1", "RECCAT1", "IDCAT1", "LICCAT1"}
     assert bundle_index["release"]["label"] == "SATROOT Demo Catalog"
@@ -3915,6 +3927,88 @@ def test_cli_bootstrap_demo_catalog_subset_with_structure_overrides(tmp_path, ca
         verifier=make_hmac_sha256_verifier(release_secrets),
     )
     assert verified["bundle_count"] == 3
+
+
+def test_cli_bootstrap_demo_catalog_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    preset_path = tmp_path / "catalog_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1", "SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APIPRESET1"},
+            "name_overrides": {"SATROOT-STABLE-1": "SATROOT Preset Stable"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {"reference_unit": "EUR"},
+                "SATROOT-MACHINE-1": {"service_scope": "batch-inference", "intended_use": "preset-credit"},
+            },
+            "profile_structure_overrides": {
+                "SATROOT-STABLE-1": {
+                    "merchant_account": "merchant_preset",
+                    "merchant_burn_amount": "0",
+                },
+                "SATROOT-MACHINE-1": {
+                    "tenant_account": "tenant_preset",
+                    "worker_burn_amount": 0,
+                },
+            },
+            "release": {
+                "channel": "beta",
+                "label": "SATROOT Preset Catalog",
+                "published_at": "2026-06-30T01:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "catalog_workspace_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(output_dir),
+            "--preset-json",
+            str(preset_path),
+            "--symbol-override",
+            "SATROOT-MACHINE-1=APIMERGE1",
+            "--profile-field-override",
+            "SATROOT-MACHINE-1:intended_use=cli-credit",
+            "--label",
+            "SATROOT Preset Override Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    release_dir = output_dir / "release"
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    stable_genesis = json.loads((output_dir / "bundles" / "stable" / "genesis.json").read_text(encoding="utf-8"))
+    machine_genesis = json.loads((output_dir / "bundles" / "machine" / "genesis.json").read_text(encoding="utf-8"))
+
+    assert summary["bundle_count"] == 2
+    assert summary["preset_path"] == str(preset_path.resolve())
+    assert summary["release"]["channel"] == "beta"
+    assert summary["release"]["label"] == "SATROOT Preset Override Catalog"
+    assert summary["release"]["published_at"] == "2026-06-30T01:00:00Z"
+    assert bundle_index["release"] == summary["release"]
+    assert {entry["symbol"] for entry in summary["bundles"]} == {"USDCAT1", "APIMERGE1"}
+    assert stable_genesis["reference_unit"] == "EUR"
+    assert machine_genesis["service_scope"] == "batch-inference"
+    assert machine_genesis["intended_use"] == "cli-credit"
+
+    stable_summary = next(entry for entry in summary["bundles"] if entry["profile"] == "SATROOT-STABLE-1")
+    machine_summary = next(entry for entry in summary["bundles"] if entry["profile"] == "SATROOT-MACHINE-1")
+    assert stable_summary["structure_overrides"]["merchant_account"] == "merchant_preset"
+    assert stable_summary["structure_overrides"]["merchant_burn_amount"] == "0"
+    assert machine_summary["structure_overrides"]["tenant_account"] == "tenant_preset"
+    assert machine_summary["structure_overrides"]["worker_burn_amount"] == "0"
 
 
 def test_cli_bootstrap_stable_demo(tmp_path, capsys):

@@ -409,6 +409,29 @@ def parse_named_string_overrides(
     return overrides
 
 
+def validate_named_string_override_map(
+    values: Optional[Mapping[str, Any]],
+    *,
+    label: str,
+    allowed_keys: Sequence[str],
+) -> Dict[str, str]:
+    if values is None:
+        return {}
+    if not isinstance(values, Mapping):
+        raise SatRootError(f"{label} must contain an object")
+    allowed_key_set = set(allowed_keys)
+    overrides: Dict[str, str] = {}
+    for key, override_value in values.items():
+        if not isinstance(key, str) or not key.strip() or key not in allowed_key_set:
+            raise SatRootError(f"unsupported {label} key: {key!r}")
+        if not isinstance(override_value, str):
+            raise SatRootError(f"invalid {label} value for {key}: {override_value!r}")
+        if key in overrides:
+            raise SatRootError(f"duplicate {label} key: {key}")
+        overrides[key] = override_value
+    return overrides
+
+
 def parse_profile_field_override_map(
     values: Optional[Sequence[str]],
     *,
@@ -438,19 +461,72 @@ def parse_profile_field_override_map(
     return overrides
 
 
-def _parse_demo_catalog_structure_override_value(kind: str, value: str, *, label: str) -> Any:
+def validate_profile_field_override_mapping(
+    values: Optional[Mapping[str, Any]],
+    *,
+    allowed_profiles: Sequence[str],
+) -> Dict[str, Dict[str, str]]:
+    if values is None:
+        return {}
+    if not isinstance(values, Mapping):
+        raise SatRootError("demo catalog profile_field_overrides must contain an object")
+    allowed_profile_set = set(allowed_profiles)
+    registry = load_profile_registry()
+    overrides: Dict[str, Dict[str, str]] = {}
+    for profile, profile_values in values.items():
+        if not isinstance(profile, str) or profile not in allowed_profile_set:
+            raise SatRootError(f"unsupported demo catalog profile field override profile: {profile!r}")
+        if not isinstance(profile_values, Mapping):
+            raise SatRootError(f"demo catalog profile field overrides for {profile} must contain an object")
+        required_fields = registry[profile]["required_fields"]
+        profile_overrides: Dict[str, str] = {}
+        for field_name, field_value in profile_values.items():
+            if not isinstance(field_name, str) or not field_name.strip():
+                raise SatRootError(f"invalid demo catalog profile field override for {profile}: {field_name!r}")
+            if field_name not in required_fields:
+                raise SatRootError(f"unsupported demo catalog profile field override for {profile}: {field_name}")
+            if not isinstance(field_value, str):
+                raise SatRootError(f"invalid demo catalog profile field override for {profile}:{field_name}")
+            profile_overrides[field_name] = field_value
+        overrides[profile] = profile_overrides
+    return overrides
+
+
+def _parse_demo_catalog_structure_override_value(kind: str, value: Any, *, label: str) -> Any:
     if kind == "account":
+        if not isinstance(value, str):
+            raise SatRootError(f"invalid {label}: {value!r}")
         return require_account_name(value.strip(), label)
     if kind == "optional_account":
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise SatRootError(f"invalid {label}: {value!r}")
         normalized = value.strip()
         if normalized.lower() in {"none", "null"}:
             return None
         return require_account_name(normalized, label)
     if kind == "positive_amount":
-        return str(parse_positive_amount(value))
+        if isinstance(value, int) and not isinstance(value, bool):
+            return str(parse_positive_amount(str(value)))
+        if isinstance(value, str):
+            return str(parse_positive_amount(value))
+        raise SatRootError(f"invalid {label}: {value!r}")
     if kind == "amount":
-        return str(parse_amount(value))
+        if isinstance(value, int) and not isinstance(value, bool):
+            return str(parse_amount(str(value)))
+        if isinstance(value, str):
+            return str(parse_amount(value))
+        raise SatRootError(f"invalid {label}: {value!r}")
     if kind == "bool":
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            if value in {0, 1}:
+                return bool(value)
+            raise SatRootError(f"invalid {label}: {value!r}")
+        if not isinstance(value, str):
+            raise SatRootError(f"invalid {label}: {value!r}")
         normalized = value.strip().lower()
         if normalized in {"true", "1", "yes", "on"}:
             return True
@@ -490,6 +566,106 @@ def parse_profile_structure_override_map(
             label=f"demo catalog structure override {profile}:{override_key}",
         )
     return overrides
+
+
+def validate_profile_structure_override_mapping(
+    values: Optional[Mapping[str, Any]],
+    *,
+    allowed_profiles: Sequence[str],
+) -> Dict[str, Dict[str, Any]]:
+    if values is None:
+        return {}
+    if not isinstance(values, Mapping):
+        raise SatRootError("demo catalog profile_structure_overrides must contain an object")
+    allowed_profile_set = set(allowed_profiles)
+    overrides: Dict[str, Dict[str, Any]] = {}
+    for profile, profile_values in values.items():
+        if not isinstance(profile, str) or profile not in allowed_profile_set:
+            raise SatRootError(f"unsupported demo catalog structure override profile: {profile!r}")
+        if not isinstance(profile_values, Mapping):
+            raise SatRootError(f"demo catalog structure overrides for {profile} must contain an object")
+        profile_specs = DEMO_CATALOG_STRUCTURE_OVERRIDE_SPECS.get(profile, {})
+        profile_overrides: Dict[str, Any] = {}
+        for override_key, override_value in profile_values.items():
+            if not isinstance(override_key, str) or not override_key.strip():
+                raise SatRootError(f"invalid demo catalog structure override for {profile}: {override_key!r}")
+            if override_key not in profile_specs:
+                raise SatRootError(f"unsupported demo catalog structure override for {profile}: {override_key}")
+            profile_overrides[override_key] = _parse_demo_catalog_structure_override_value(
+                profile_specs[override_key],
+                override_value,
+                label=f"demo catalog structure override {profile}:{override_key}",
+            )
+        overrides[profile] = profile_overrides
+    return overrides
+
+
+def validate_release_metadata_mapping(values: Optional[Mapping[str, Any]]) -> Dict[str, str]:
+    if values is None:
+        return {}
+    if not isinstance(values, Mapping):
+        raise SatRootError("demo catalog release metadata must contain an object")
+    allowed_keys = {"channel", "label", "published_at"}
+    metadata: Dict[str, str] = {}
+    for key, value in values.items():
+        if not isinstance(key, str) or key not in allowed_keys:
+            raise SatRootError(f"unsupported demo catalog release metadata key: {key!r}")
+        if not isinstance(value, str):
+            raise SatRootError(f"invalid demo catalog release metadata value for {key}: {value!r}")
+        metadata[key] = value
+    return metadata
+
+
+def load_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
+    preset = _load_json_object_file(str(path), label="demo catalog preset")
+    if preset.get("type") != "SATROOT-DEMO-CATALOG-PRESET":
+        raise SatRootError("unsupported demo catalog preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported demo catalog preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "profiles",
+        "symbol_overrides",
+        "name_overrides",
+        "profile_field_overrides",
+        "profile_structure_overrides",
+        "release",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported demo catalog preset keys: {sorted(unexpected)}")
+
+    profiles = preset.get("profiles")
+    if profiles is not None:
+        if not isinstance(profiles, list) or not all(isinstance(value, str) for value in profiles):
+            raise SatRootError("demo catalog preset profiles must contain an array of strings")
+        if len(set(profiles)) != len(profiles):
+            raise SatRootError("demo catalog preset profiles must not contain duplicates")
+
+    return {
+        "profiles": profiles,
+        "symbol_overrides": validate_named_string_override_map(
+            preset.get("symbol_overrides"),
+            label="demo catalog symbol override",
+            allowed_keys=DEMO_CATALOG_PROFILES,
+        ),
+        "name_overrides": validate_named_string_override_map(
+            preset.get("name_overrides"),
+            label="demo catalog name override",
+            allowed_keys=DEMO_CATALOG_PROFILES,
+        ),
+        "profile_field_overrides": validate_profile_field_override_mapping(
+            preset.get("profile_field_overrides"),
+            allowed_profiles=DEMO_CATALOG_PROFILES,
+        ),
+        "profile_structure_overrides": validate_profile_structure_override_mapping(
+            preset.get("profile_structure_overrides"),
+            allowed_profiles=DEMO_CATALOG_PROFILES,
+        ),
+        "release_metadata": validate_release_metadata_mapping(preset.get("release")),
+    }
 
 
 def scaffold_event_record(
@@ -3139,6 +3315,19 @@ def bootstrap_demo_catalog_release(
     }
 
 
+def _merge_nested_override_maps(
+    base: Optional[Mapping[str, Mapping[str, Any]]],
+    override: Optional[Mapping[str, Mapping[str, Any]]],
+) -> Dict[str, Dict[str, Any]]:
+    merged: Dict[str, Dict[str, Any]] = {
+        key: dict(value) for key, value in (base or {}).items()
+    }
+    for key, value in (override or {}).items():
+        merged.setdefault(key, {})
+        merged[key].update(value)
+    return merged
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -3428,6 +3617,7 @@ def build_cli_parser() -> Any:
     bootstrap_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
     bootstrap_demo_catalog_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the catalog release manifest")
     bootstrap_demo_catalog_parser.add_argument("--output-dir", required=True, help="Directory where bundles/, release/, and summary.json will be written")
+    bootstrap_demo_catalog_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file with profiles, overrides, and release metadata defaults")
     bootstrap_demo_catalog_parser.add_argument("--profile", action="append", choices=sorted(DEMO_CATALOG_PROFILES), help="Limit the workspace to selected demo catalog profiles; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
@@ -4329,35 +4519,56 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-demo-catalog":
-        release_metadata = {
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        preset = load_demo_catalog_preset(preset_path) if preset_path is not None else None
+        release_metadata = dict((preset or {}).get("release_metadata", {}))
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                release_metadata[key] = value
+        symbol_overrides = dict((preset or {}).get("symbol_overrides", {}))
+        symbol_overrides.update(
+            parse_named_string_overrides(
+                args.symbol_overrides,
+                label="demo catalog symbol override",
+                allowed_keys=DEMO_CATALOG_PROFILES,
+            )
+        )
+        name_overrides = dict((preset or {}).get("name_overrides", {}))
+        name_overrides.update(
+            parse_named_string_overrides(
+                args.name_overrides,
+                label="demo catalog name override",
+                allowed_keys=DEMO_CATALOG_PROFILES,
+            )
+        )
+        profile_field_overrides = _merge_nested_override_maps(
+            (preset or {}).get("profile_field_overrides"),
+            parse_profile_field_override_map(
+                args.profile_field_overrides,
+                allowed_profiles=DEMO_CATALOG_PROFILES,
+            ),
+        )
+        profile_structure_overrides = _merge_nested_override_maps(
+            (preset or {}).get("profile_structure_overrides"),
+            parse_profile_structure_override_map(
+                args.profile_structure_overrides,
+                allowed_profiles=DEMO_CATALOG_PROFILES,
+            ),
+        )
         catalog = bootstrap_demo_catalog_release(
             bundle_scheme=args.scheme,
             release_scheme=args.release_scheme,
             release_key_id=args.release_key_id,
             output_dir=args.output_dir,
-            profiles=args.profile,
-            symbol_overrides=parse_named_string_overrides(
-                args.symbol_overrides,
-                label="demo catalog symbol override",
-                allowed_keys=DEMO_CATALOG_PROFILES,
-            ),
-            name_overrides=parse_named_string_overrides(
-                args.name_overrides,
-                label="demo catalog name override",
-                allowed_keys=DEMO_CATALOG_PROFILES,
-            ),
-            profile_field_overrides=parse_profile_field_override_map(
-                args.profile_field_overrides,
-                allowed_profiles=DEMO_CATALOG_PROFILES,
-            ),
-            profile_structure_overrides=parse_profile_structure_override_map(
-                args.profile_structure_overrides,
-                allowed_profiles=DEMO_CATALOG_PROFILES,
-            ),
+            profiles=args.profile or (preset or {}).get("profiles"),
+            symbol_overrides=symbol_overrides,
+            name_overrides=name_overrides,
+            profile_field_overrides=profile_field_overrides,
+            profile_structure_overrides=profile_structure_overrides,
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -4371,6 +4582,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "bundle_count": catalog["bundle_count"],
             "bundles_dir": catalog["bundles_dir"],
             "release_dir": catalog["release_dir"],
+            "preset_path": None if preset_path is None else str(preset_path),
+            "release": {key: value for key, value in release_metadata.items() if isinstance(value, str) and value.strip()},
             "bundles": [
                 {
                     "bundle_name": entry["bundle_name"],

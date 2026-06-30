@@ -30,6 +30,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
+- `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
 - `profiles/machine/SATROOT-MACHINE-1.md` - prepaid machine-credit profile draft.
@@ -186,7 +187,7 @@ python -m pytest
 Expected result:
 
 ```text
-188 passed
+190 passed
 ```
 
 ## Signing utilities
@@ -345,6 +346,12 @@ Per-profile structural demo parameters can be overridden too, so the catalog can
 
 ```bash
 satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace_structure --profile SATROOT-STABLE-1 --profile SATROOT-MACHINE-1 --profile SATROOT-IDENTITY-1 --profile-structure-override SATROOT-STABLE-1:merchant_account=merchant_beta --profile-structure-override SATROOT-STABLE-1:service_account=settlement_node --profile-structure-override SATROOT-STABLE-1:merchant_burn_amount=0 --profile-structure-override SATROOT-MACHINE-1:tenant_account=tenant_b --profile-structure-override SATROOT-MACHINE-1:worker_account=worker_beta --profile-structure-override SATROOT-MACHINE-1:worker_burn_amount=0 --profile-structure-override SATROOT-IDENTITY-1:holder_account=controller_a --profile-structure-override SATROOT-IDENTITY-1:next_holder=none --profile-structure-override SATROOT-IDENTITY-1:retire=false --channel stable --label "SATROOT Structure Override Catalog" --published-at 2026-06-29T00:00:00Z
+```
+
+For repeatable scenario generation, `bootstrap-demo-catalog` can also load a checked-in preset file and still accept CLI overrides on top:
+
+```bash
+satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace_preset --preset-json examples/catalog_presets/ai_compute_catalog.json --label "SATROOT AI Compute Catalog Override"
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:
