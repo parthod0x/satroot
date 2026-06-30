@@ -1,0 +1,12 @@
+{
+  "type": "SATROOT-PUBLICATION-STACK-PRESET",
+  "version": "0.1",
+  "catalog_presets": [
+    "../catalog_presets/ai_compute_catalog.json"
+  ],
+  "release_catalog": {
+    "channel": "stable",
+    "label": "SATROOT AI Compute Publication Stack",
+    "published_at": "2026-07-01T12:00:00Z"
+  }
+}

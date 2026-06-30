@@ -34,6 +34,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/` - the `FLOOR1` demo token ledger.
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `examples/release_catalog_presets/` - reusable SATROOT release-catalog publication presets.
+- `examples/stack_presets/` - reusable SATROOT end-to-end publication-stack presets.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
 - `profiles/machine/SATROOT-MACHINE-1.md` - prepaid machine-credit profile draft.
@@ -197,7 +198,7 @@ python -m pytest
 Expected result:
 
 ```text
-200 passed
+202 passed
 ```
 
 ## Signing utilities
@@ -538,6 +539,12 @@ For a single end-to-end workspace, `bootstrap-publication-stack` can take multip
 
 ```bash
 satroot1 bootstrap-publication-stack --catalog-preset-json examples/catalog_presets/ai_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-preset-json examples/release_catalog_presets/ai_compute_release_stack.json --release-catalog-key-id catalog-key --output-dir publication_stack --label "SATROOT Stack Override"
+```
+
+If you want the whole stack described in one checked-in file, `bootstrap-publication-stack` also accepts a dedicated stack preset:
+
+```bash
+satroot1 bootstrap-publication-stack --stack-preset-json examples/stack_presets/ai_compute_publication_stack.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir publication_stack --label "SATROOT Stack Override"
 ```
 
 Inspect a release catalog publication without signature verification:

@@ -43,6 +43,7 @@ from satroot1 import (
     load_demo_catalog_preset,
     load_protocol_schema,
     load_profile_registry,
+    load_publication_stack_preset,
     load_release_catalog_preset,
     load_release_catalog_manifest_schema,
     load_release_catalog_schema,
@@ -540,6 +541,12 @@ def test_load_release_catalog_preset_example():
     assert preset["discover_under"] == [str((ROOT / "generated_release_workspaces").resolve())]
     assert preset["recursive"] is True
     assert preset["catalog_metadata"]["label"] == "SATROOT AI Compute Release Stack"
+
+
+def test_load_publication_stack_preset_example():
+    preset = load_publication_stack_preset(ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack.json")
+    assert preset["catalog_preset_paths"] == [str((ROOT / "examples" / "catalog_presets" / "ai_compute_catalog.json").resolve())]
+    assert preset["release_catalog_metadata"]["label"] == "SATROOT AI Compute Publication Stack"
 
 
 def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
@@ -2009,6 +2016,72 @@ def test_cli_bootstrap_publication_stack_from_presets(tmp_path, capsys):
     )
     assert verified["release_count"] == 2
     assert verified["catalog"]["label"] == "SATROOT Stack Override"
+
+
+def test_cli_bootstrap_publication_stack_with_stack_preset_json(tmp_path, capsys):
+    catalog_preset = tmp_path / "identity_catalog.json"
+    write_json(
+        catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-IDENTITY-1"],
+            "symbol_overrides": {"SATROOT-IDENTITY-1": "STKID1"},
+            "name_overrides": {"SATROOT-IDENTITY-1": "Stack Identity Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Stack Identity Release",
+                "published_at": "2026-07-01T05:00:00Z",
+            },
+        },
+    )
+    stack_preset = tmp_path / "publication_stack.json"
+    write_json(
+        stack_preset,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "beta",
+                "label": "SATROOT Embedded Stack",
+                "published_at": "2026-07-01T06:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_stack_single"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-stack",
+            "--stack-preset-json",
+            str(stack_preset),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Embedded Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication stack to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["stack_preset_path"] == str(stack_preset.resolve())
+    assert summary["release_catalog"]["catalog"]["channel"] == "beta"
+    assert summary["release_catalog"]["catalog"]["label"] == "SATROOT Embedded Override"
+
+    identity_summary = json.loads((output_dir / "catalog_workspaces" / "identity_catalog" / "summary.json").read_text(encoding="utf-8"))
+    assert identity_summary["bundle_count"] == 1
+    assert {entry["symbol"] for entry in identity_summary["bundles"]} == {"STKID1"}
 
 
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):

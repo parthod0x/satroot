@@ -730,6 +730,37 @@ def load_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
     }
 
 
+def load_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="publication stack preset")
+    if preset.get("type") != "SATROOT-PUBLICATION-STACK-PRESET":
+        raise SatRootError("unsupported publication stack preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported publication stack preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "catalog_presets",
+        "release_catalog",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported publication stack preset keys: {sorted(unexpected)}")
+
+    catalog_preset_paths = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(preset.get("catalog_presets"), label="publication stack preset catalog_presets")
+    ]
+    if not catalog_preset_paths:
+        raise SatRootError("publication stack preset must contain at least one catalog_preset")
+
+    return {
+        "catalog_preset_paths": catalog_preset_paths,
+        "release_catalog_metadata": validate_release_metadata_mapping(preset.get("release_catalog")),
+    }
+
+
 def _unique_workspace_names(paths: Sequence[str | Path]) -> list[str]:
     used: Dict[str, int] = {}
     names: list[str] = []
@@ -4252,7 +4283,8 @@ def build_cli_parser() -> Any:
     bootstrap_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the catalog bundle index")
 
     bootstrap_publication_stack_parser = subparsers.add_parser("bootstrap-publication-stack", help="Generate one or more demo catalog workspaces from presets and publish them as a signed release catalog stack")
-    bootstrap_publication_stack_parser.add_argument("--catalog-preset-json", action="append", dest="catalog_preset_jsons", required=True, help="SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_publication_stack_parser.add_argument("--stack-preset-json", help="Optional SATROOT publication stack preset JSON file with catalog preset paths and release-catalog metadata defaults")
+    bootstrap_publication_stack_parser.add_argument("--catalog-preset-json", action="append", dest="catalog_preset_jsons", help="SATROOT demo catalog preset JSON file; may be repeated")
     bootstrap_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
     bootstrap_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
     bootstrap_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each workspace release manifest")
@@ -5279,7 +5311,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-publication-stack":
-        catalog_preset_paths = [Path(value).resolve() for value in args.catalog_preset_jsons]
+        stack_preset_path = None if not args.stack_preset_json else Path(args.stack_preset_json).resolve()
+        stack_preset = load_publication_stack_preset(stack_preset_path) if stack_preset_path is not None else None
+        catalog_preset_paths = [
+            Path(value).resolve()
+            for value in [*((stack_preset or {}).get("catalog_preset_paths", [])), *((args.catalog_preset_jsons or []))]
+        ]
+        if not catalog_preset_paths:
+            raise SatRootError("bootstrap-publication-stack requires at least one --catalog-preset-json or a --stack-preset-json")
         catalog_workspace_names = _unique_workspace_names(catalog_preset_paths)
         root_output_dir = Path(args.output_dir).resolve()
         catalog_workspaces_dir = root_output_dir / "catalog_workspaces"
@@ -5327,7 +5366,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if release_catalog_preset_path is not None
             else None
         )
-        catalog_metadata = dict((release_catalog_preset or {}).get("catalog_metadata", {}))
+        catalog_metadata = dict((stack_preset or {}).get("release_catalog_metadata", {}))
+        catalog_metadata.update(dict((release_catalog_preset or {}).get("catalog_metadata", {})))
         for key, value in {
             "channel": args.channel,
             "label": args.label,
@@ -5351,6 +5391,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "catalog_workspaces_dir": str(catalog_workspaces_dir.resolve()),
             "release_catalog_dir": str(release_catalog_dir.resolve()),
             "catalog_preset_paths": [str(path) for path in catalog_preset_paths],
+            "stack_preset_path": None if stack_preset_path is None else str(stack_preset_path),
             "release_catalog_preset_path": None if release_catalog_preset_path is None else str(release_catalog_preset_path),
             "release_catalog": copy.deepcopy(published["release_catalog"]),
             "release_catalog_manifest_path": published["release_catalog_manifest_path"],
