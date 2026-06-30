@@ -200,6 +200,33 @@ def make_demo_release_catalog_index_dir(tmp_path: Path) -> Path:
     return output_dir
 
 
+def make_demo_catalog_workspace_dir(tmp_path: Path) -> Path:
+    output_dir = tmp_path / "catalog_workspace"
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--profile",
+            "SATROOT-MACHINE-1",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "CLI Demo Catalog",
+            "--published-at",
+            "2026-07-05T02:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+    return output_dir
+
+
 def make_demo_publication_stack_dir(tmp_path: Path) -> Path:
     catalog_preset_a = tmp_path / "stable_catalog.json"
     write_json(
@@ -4330,6 +4357,48 @@ def test_cli_release_catalog_index_lint_reports_findings(tmp_path, capsys):
     assert '"missing_release_catalog_manifests":[' in captured.out
 
 
+def test_cli_demo_catalog_summary_reads_summary_and_release(tmp_path, capsys):
+    output_dir = make_demo_catalog_workspace_dir(tmp_path)
+
+    exit_code = main(["demo-catalog-summary", str(output_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"bundle_count":2' in captured.out
+    assert '"bundle_names":["machine","stable"]' in captured.out
+    assert '"release_summary":' in captured.out
+
+
+def test_cli_demo_catalog_lint_accepts_clean_workspace(tmp_path, capsys):
+    output_dir = make_demo_catalog_workspace_dir(tmp_path)
+
+    exit_code = main(["demo-catalog-lint", str(output_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"release_lint":' in captured.out
+    assert '"bundle_summary_metadata_mismatches":[]' in captured.out
+
+
+def test_cli_demo_catalog_lint_reports_findings(tmp_path, capsys):
+    output_dir = make_demo_catalog_workspace_dir(tmp_path)
+
+    summary_path = output_dir / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["release_manifest_path"] = "tampered"
+    write_json(summary_path, summary)
+    (output_dir / "bundles" / "stable" / "bundle_manifest.json").unlink()
+
+    exit_code = main(["demo-catalog-lint", str(output_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"release_manifest_path_matches":false' in captured.out
+    assert '"missing_bundle_manifests":["stable"]' in captured.out
+
+
 def test_cli_publication_stack_summary_reads_summary_and_catalog(tmp_path, capsys):
     stack_dir = make_demo_publication_stack_dir(tmp_path)
 
@@ -4435,25 +4504,7 @@ def test_cli_validate_publication_network_summary(tmp_path, capsys):
 
 
 def test_cli_validate_demo_catalog_summary(tmp_path, capsys):
-    output_dir = tmp_path / "catalog_workspace"
-    exit_code = main(
-        [
-            "bootstrap-demo-catalog",
-            "--scheme",
-            "hmac-sha256",
-            "--release-key-id",
-            "release-key",
-            "--output-dir",
-            str(output_dir),
-            "--channel",
-            "stable",
-            "--label",
-            "CLI Demo Catalog",
-            "--published-at",
-            "2026-07-05T02:00:00Z",
-        ]
-    )
-    assert exit_code == 0
+    output_dir = make_demo_catalog_workspace_dir(tmp_path)
     capsys.readouterr()
 
     exit_code = main(["validate-demo-catalog-summary", str(output_dir / "summary.json")])

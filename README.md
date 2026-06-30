@@ -122,6 +122,7 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-release-publication` orchestration for release material plus signed publication outputs,
 - one-shot `bootstrap-release-catalog-publication` orchestration for release-catalog material plus signed publication outputs,
 - one-shot `bootstrap-release-catalog-index-publication` orchestration for release-catalog-index material plus signed publication outputs,
+- demo-catalog inspection via `demo-catalog-summary` and structural linting via `demo-catalog-lint`,
 - one-shot `bootstrap-publication-stack` orchestration for preset-driven bundles, releases, and release-catalog outputs in one workspace,
 - publication-stack inspection via `publication-stack-summary` and structural linting via `publication-stack-lint`,
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
@@ -215,7 +216,7 @@ python -m pytest
 Expected result:
 
 ```text
-226 passed
+229 passed
 ```
 
 ## Signing utilities
@@ -605,6 +606,18 @@ Lint a release-catalog index publication and all referenced release-catalog dire
 
 ```bash
 satroot1 release-catalog-index-lint release_catalog_index_bootstrap
+```
+
+Inspect a demo catalog workspace without signature verification:
+
+```bash
+satroot1 demo-catalog-summary catalog_workspace
+```
+
+Lint a demo catalog workspace, its nested release, and all referenced bundle directories:
+
+```bash
+satroot1 demo-catalog-lint catalog_workspace
 ```
 
 Inspect a publication stack workspace without signature verification:

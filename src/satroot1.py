@@ -3528,6 +3528,181 @@ def validate_publication_network_summary_consistency(summary: Mapping[str, Any])
         raise SatRootError("publication network summary stack_count mismatch")
 
 
+def summarize_demo_catalog_workspace(demo_catalog_dir: str | Path) -> Dict[str, Any]:
+    catalog_path, summary = _load_workspace_summary(demo_catalog_dir, label="demo catalog workspace")
+    validate_demo_catalog_summary_consistency(summary)
+    bundles = summary.get("bundles")
+    assert isinstance(bundles, list)
+    release_dir = catalog_path / "release"
+    release_summary = summarize_signed_release_publication(release_dir)
+    return {
+        "bundle_scheme": summary.get("bundle_scheme"),
+        "release_scheme": summary.get("release_scheme"),
+        "bundle_count": summary.get("bundle_count"),
+        "bundles_dir": summary.get("bundles_dir"),
+        "release_dir": summary.get("release_dir"),
+        "preset_path": summary.get("preset_path"),
+        "release": copy.deepcopy(summary.get("release")),
+        "release_manifest_path": summary.get("release_manifest_path"),
+        "bundle_index_path": summary.get("bundle_index_path"),
+        "bundle_names": sorted(
+            str(entry.get("bundle_name"))
+            for entry in bundles
+            if isinstance(entry, dict) and isinstance(entry.get("bundle_name"), str)
+        ),
+        "bundle_profiles": sorted(
+            str(entry.get("profile"))
+            for entry in bundles
+            if isinstance(entry, dict) and isinstance(entry.get("profile"), str)
+        ),
+        "bundle_symbols": sorted(
+            str(entry.get("symbol"))
+            for entry in bundles
+            if isinstance(entry, dict) and isinstance(entry.get("symbol"), str)
+        ),
+        "release_summary": release_summary,
+        "bundles": copy.deepcopy(bundles),
+    }
+
+
+def lint_demo_catalog_workspace(demo_catalog_dir: str | Path) -> Dict[str, Any]:
+    catalog_path, summary = _load_workspace_summary(demo_catalog_dir, label="demo catalog workspace")
+    validate_demo_catalog_summary_consistency(summary)
+    bundles = summary.get("bundles")
+    assert isinstance(bundles, list)
+    bundle_count_matches = isinstance(summary.get("bundle_count"), int) and summary.get("bundle_count") == len(bundles)
+
+    actual_bundles_dir = (catalog_path / "bundles").resolve()
+    actual_release_dir = (catalog_path / "release").resolve()
+    actual_release_manifest_path = (actual_release_dir / "release_manifest.json").resolve()
+    actual_bundle_index_path = (actual_release_dir / "bundle_index.json").resolve()
+
+    bundles_dir_matches = summary.get("bundles_dir") == str(actual_bundles_dir)
+    release_dir_matches = summary.get("release_dir") == str(actual_release_dir)
+    release_manifest_path_matches = summary.get("release_manifest_path") == str(actual_release_manifest_path)
+    bundle_index_path_matches = summary.get("bundle_index_path") == str(actual_bundle_index_path)
+
+    release_summary = summarize_signed_release_publication(actual_release_dir)
+    release_lint = lint_signed_release_publication(actual_release_dir)
+    release_metadata_matches = summary.get("release") == release_summary.get("release")
+
+    bundle_name_counts: Dict[str, int] = {}
+    bundle_dir_counts: Dict[str, int] = {}
+    for entry in bundles:
+        if not isinstance(entry, dict):
+            continue
+        bundle_name = entry.get("bundle_name")
+        bundle_dir = entry.get("bundle_dir")
+        if isinstance(bundle_name, str):
+            bundle_name_counts[bundle_name] = bundle_name_counts.get(bundle_name, 0) + 1
+        if isinstance(bundle_dir, str):
+            bundle_dir_counts[bundle_dir] = bundle_dir_counts.get(bundle_dir, 0) + 1
+
+    duplicate_bundle_names = sorted(value for value, count in bundle_name_counts.items() if count > 1)
+    duplicate_bundle_dirs = sorted(value for value, count in bundle_dir_counts.items() if count > 1)
+
+    bundle_dir_path_mismatches: list[str] = []
+    missing_bundle_dirs: list[str] = []
+    missing_bundle_manifests: list[str] = []
+    bundle_summary_metadata_mismatches: list[Dict[str, Any]] = []
+    bundle_lint_failures: list[str] = []
+
+    for entry in bundles:
+        if not isinstance(entry, dict):
+            continue
+        bundle_name = entry.get("bundle_name")
+        bundle_dir_ref = entry.get("bundle_dir")
+        if not isinstance(bundle_name, str) or not bundle_name.strip():
+            continue
+        if not isinstance(bundle_dir_ref, str) or not bundle_dir_ref.strip():
+            continue
+
+        resolved_bundle_dir = Path(bundle_dir_ref).resolve()
+        expected_bundle_dir = (actual_bundles_dir / bundle_name).resolve()
+        if resolved_bundle_dir != expected_bundle_dir:
+            bundle_dir_path_mismatches.append(bundle_name)
+        if not resolved_bundle_dir.is_dir():
+            missing_bundle_dirs.append(bundle_name)
+            continue
+
+        manifest_path = resolved_bundle_dir / "bundle_manifest.json"
+        if not manifest_path.is_file():
+            missing_bundle_manifests.append(bundle_name)
+            continue
+
+        bundle_summary = summarize_signed_ledger_bundle(resolved_bundle_dir)
+        snapshot = bundle_summary.get("final_state_snapshot")
+        assert isinstance(snapshot, dict)
+
+        mismatched_fields: list[str] = []
+        if entry.get("symbol") != bundle_summary.get("symbol"):
+            mismatched_fields.append("symbol")
+        if entry.get("profile") != snapshot.get("profile"):
+            mismatched_fields.append("profile")
+        if entry.get("name") != snapshot.get("name"):
+            mismatched_fields.append("name")
+
+        profile_fields = entry.get("profile_fields")
+        if isinstance(profile_fields, dict):
+            for field_name, field_value in profile_fields.items():
+                if snapshot.get(field_name) != field_value:
+                    mismatched_fields.append("profile_fields")
+                    break
+
+        structure_overrides = entry.get("structure_overrides")
+        if isinstance(structure_overrides, dict):
+            for field_name, field_value in structure_overrides.items():
+                if snapshot.get(field_name) != field_value:
+                    mismatched_fields.append("structure_overrides")
+                    break
+
+        if mismatched_fields:
+            bundle_summary_metadata_mismatches.append(
+                {
+                    "bundle_name": bundle_name,
+                    "fields": sorted(set(mismatched_fields)),
+                }
+            )
+
+        if not lint_signed_ledger_bundle(resolved_bundle_dir).get("ok", False):
+            bundle_lint_failures.append(bundle_name)
+
+    return {
+        "ok": not any(
+            [
+                not bundle_count_matches,
+                not bundles_dir_matches,
+                not release_dir_matches,
+                not release_manifest_path_matches,
+                not bundle_index_path_matches,
+                not release_metadata_matches,
+                not release_lint["ok"],
+                duplicate_bundle_names,
+                duplicate_bundle_dirs,
+                bundle_dir_path_mismatches,
+                missing_bundle_dirs,
+                missing_bundle_manifests,
+                bundle_summary_metadata_mismatches,
+                bundle_lint_failures,
+            ]
+        ),
+        "bundle_count_matches": bundle_count_matches,
+        "bundles_dir_matches": bundles_dir_matches,
+        "release_dir_matches": release_dir_matches,
+        "release_manifest_path_matches": release_manifest_path_matches,
+        "bundle_index_path_matches": bundle_index_path_matches,
+        "release_metadata_matches": release_metadata_matches,
+        "duplicate_bundle_names": duplicate_bundle_names,
+        "duplicate_bundle_dirs": duplicate_bundle_dirs,
+        "bundle_dir_path_mismatches": sorted(bundle_dir_path_mismatches),
+        "missing_bundle_dirs": sorted(missing_bundle_dirs),
+        "missing_bundle_manifests": sorted(missing_bundle_manifests),
+        "bundle_summary_metadata_mismatches": bundle_summary_metadata_mismatches,
+        "bundle_lint_failures": sorted(bundle_lint_failures),
+        "release_lint": release_lint,
+    }
+
+
 def summarize_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
     stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
     validate_publication_stack_summary_consistency(summary)
@@ -5639,6 +5814,12 @@ def build_cli_parser() -> Any:
     release_catalog_index_lint_parser = subparsers.add_parser("release-catalog-index-lint", help="Check release_catalog_index_manifest.json, release_catalog_index.json, and referenced release catalog publications without signature verification")
     release_catalog_index_lint_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
 
+    demo_catalog_summary_parser = subparsers.add_parser("demo-catalog-summary", help="Read summary.json plus release/ and print a demo-catalog workspace summary without signature verification")
+    demo_catalog_summary_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory")
+
+    demo_catalog_lint_parser = subparsers.add_parser("demo-catalog-lint", help="Check summary.json, release/, and referenced bundle directories without signature verification")
+    demo_catalog_lint_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory")
+
     publication_stack_summary_parser = subparsers.add_parser("publication-stack-summary", help="Read summary.json plus release_catalog/ and print a publication-stack summary without signature verification")
     publication_stack_summary_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack directory")
 
@@ -6883,6 +7064,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "release-catalog-index-lint":
         report = lint_signed_release_catalog_index_publication(args.release_catalog_index_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "demo-catalog-summary":
+        summary = summarize_demo_catalog_workspace(args.demo_catalog_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "demo-catalog-lint":
+        report = lint_demo_catalog_workspace(args.demo_catalog_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 
