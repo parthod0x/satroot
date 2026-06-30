@@ -2592,6 +2592,211 @@ def bootstrap_release_catalog_publication(
     return published
 
 
+def _load_release_catalog_publication(
+    release_catalog_dir: str | Path,
+) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
+    catalog_path = Path(release_catalog_dir).resolve()
+    if not catalog_path.is_dir():
+        raise SatRootError("release catalog directory must be an existing directory")
+
+    manifest_path = catalog_path / "release_catalog_manifest.json"
+    if not manifest_path.is_file():
+        raise SatRootError("release_catalog_manifest.json is required for release catalog publication operations")
+    manifest = _load_json_object_file(str(manifest_path), label="release-catalog-manifest")
+    validate_instance_against_schema(manifest, load_release_catalog_manifest_schema())
+
+    release_catalog_ref = manifest.get("release_catalog_path")
+    if not isinstance(release_catalog_ref, str) or not release_catalog_ref.strip():
+        raise SatRootError("release catalog manifest release_catalog_path must be a non-empty string")
+    release_catalog_path = (manifest_path.parent / release_catalog_ref).resolve()
+    if not release_catalog_path.is_file():
+        raise SatRootError(f"release catalog file not found: {release_catalog_ref}")
+
+    catalog = _load_json_file(str(release_catalog_path))
+    validate_instance_against_schema(catalog, load_release_catalog_schema())
+    if not isinstance(catalog, dict):
+        raise SatRootError("release catalog must contain an object")
+    validate_release_catalog_consistency(catalog)
+    return manifest_path, release_catalog_path, manifest, catalog
+
+
+def summarize_signed_release_catalog_publication(release_catalog_dir: str | Path) -> Dict[str, Any]:
+    _, release_catalog_path, manifest, catalog = _load_release_catalog_publication(release_catalog_dir)
+    releases = catalog.get("releases")
+    assert isinstance(releases, list)
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "release_catalog_path": manifest.get("release_catalog_path"),
+        "release_catalog_hash": manifest.get("release_catalog_hash"),
+        "release_catalog_resolved_path": str(release_catalog_path),
+        "release_count": catalog.get("release_count"),
+        "catalog": copy.deepcopy(catalog.get("catalog")),
+        "release_paths": sorted(str(entry.get("release_path")) for entry in releases),
+        "release_labels": sorted(
+            {
+                str(entry["release"].get("label"))
+                for entry in releases
+                if isinstance(entry.get("release"), dict) and isinstance(entry["release"].get("label"), str)
+            }
+        ),
+        "releases": copy.deepcopy(releases),
+    }
+
+
+def lint_signed_release_catalog_publication(release_catalog_dir: str | Path) -> Dict[str, Any]:
+    manifest_path, release_catalog_path, manifest, catalog = _load_release_catalog_publication(release_catalog_dir)
+    releases = catalog.get("releases")
+    assert isinstance(releases, list)
+
+    actual_catalog_hash = "sha256:" + sha256_hex_bytes(release_catalog_path.read_bytes())
+    release_catalog_hash_matches = manifest.get("release_catalog_hash") == actual_catalog_hash
+    release_count_matches = manifest.get("release_count") == catalog.get("release_count")
+    catalog_metadata_matches = manifest.get("catalog") == catalog.get("catalog")
+
+    release_id_counts: Dict[str, int] = {}
+    release_path_counts: Dict[str, int] = {}
+    release_manifest_path_counts: Dict[str, int] = {}
+    bundle_index_path_counts: Dict[str, int] = {}
+    for entry in releases:
+        release_id = entry.get("release_id")
+        release_path_ref = entry.get("release_path")
+        release_manifest_path_ref = entry.get("release_manifest_path")
+        bundle_index_path_ref = entry.get("bundle_index_path")
+        if isinstance(release_id, str):
+            release_id_counts[release_id] = release_id_counts.get(release_id, 0) + 1
+        if isinstance(release_path_ref, str):
+            release_path_counts[release_path_ref] = release_path_counts.get(release_path_ref, 0) + 1
+        if isinstance(release_manifest_path_ref, str):
+            release_manifest_path_counts[release_manifest_path_ref] = release_manifest_path_counts.get(release_manifest_path_ref, 0) + 1
+        if isinstance(bundle_index_path_ref, str):
+            bundle_index_path_counts[bundle_index_path_ref] = bundle_index_path_counts.get(bundle_index_path_ref, 0) + 1
+
+    duplicate_release_ids = sorted(value for value, count in release_id_counts.items() if count > 1)
+    duplicate_release_paths = sorted(value for value, count in release_path_counts.items() if count > 1)
+    duplicate_release_manifest_paths = sorted(value for value, count in release_manifest_path_counts.items() if count > 1)
+    duplicate_bundle_index_paths = sorted(value for value, count in bundle_index_path_counts.items() if count > 1)
+
+    release_manifest_path_mismatches: list[str] = []
+    missing_release_directories: list[str] = []
+    missing_release_manifests: list[str] = []
+    missing_bundle_indexes: list[str] = []
+    release_manifest_hash_mismatches: list[str] = []
+    bundle_index_hash_mismatches: list[str] = []
+    release_publication_metadata_mismatches: list[Dict[str, Any]] = []
+
+    for entry in releases:
+        release_path_ref = entry.get("release_path")
+        release_manifest_path_ref = entry.get("release_manifest_path")
+        bundle_index_path_ref = entry.get("bundle_index_path")
+        if not isinstance(release_path_ref, str) or not release_path_ref.strip():
+            continue
+        if not isinstance(release_manifest_path_ref, str) or not release_manifest_path_ref.strip():
+            continue
+        if not isinstance(bundle_index_path_ref, str) or not bundle_index_path_ref.strip():
+            continue
+
+        expected_manifest_path = (
+            "release_manifest.json"
+            if release_path_ref in {"", "."}
+            else f"{release_path_ref}/release_manifest.json"
+        )
+        if release_manifest_path_ref != expected_manifest_path:
+            release_manifest_path_mismatches.append(release_path_ref)
+
+        resolved_release_dir = (manifest_path.parent / release_path_ref).resolve()
+        resolved_manifest_path = (manifest_path.parent / release_manifest_path_ref).resolve()
+        resolved_bundle_index_path = (manifest_path.parent / bundle_index_path_ref).resolve()
+        if not resolved_release_dir.is_dir():
+            missing_release_directories.append(release_path_ref)
+        if not resolved_manifest_path.is_file():
+            missing_release_manifests.append(release_manifest_path_ref)
+            continue
+        if not resolved_bundle_index_path.is_file():
+            missing_bundle_indexes.append(bundle_index_path_ref)
+            continue
+
+        actual_manifest_hash = "sha256:" + sha256_hex_bytes(resolved_manifest_path.read_bytes())
+        if entry.get("release_manifest_hash") != actual_manifest_hash:
+            release_manifest_hash_mismatches.append(release_manifest_path_ref)
+
+        actual_bundle_index_hash = "sha256:" + sha256_hex_bytes(resolved_bundle_index_path.read_bytes())
+        if entry.get("bundle_index_hash") != actual_bundle_index_hash:
+            bundle_index_hash_mismatches.append(bundle_index_path_ref)
+
+        _, _, release_manifest, release_index = _load_release_publication(resolved_release_dir)
+        release_bundles = release_index.get("bundles")
+        assert isinstance(release_bundles, list)
+        mismatched_fields = [
+            field_name
+            for field_name in [
+                "signature_scheme",
+                "signature_key_id",
+                "bundle_count",
+                "release",
+            ]
+            if entry.get(field_name) != release_manifest.get(field_name if field_name.startswith("signature_") else field_name, release_index.get(field_name))
+        ]
+        if sorted({str(bundle.get("symbol")) for bundle in release_bundles}) != sorted(entry.get("bundle_symbols", [])):
+            mismatched_fields.append("bundle_symbols")
+        if entry.get("signature_scheme") != release_manifest.get("signature_scheme") and "signature_scheme" not in mismatched_fields:
+            mismatched_fields.append("signature_scheme")
+        if entry.get("signature_key_id") != release_manifest.get("signature_key_id") and "signature_key_id" not in mismatched_fields:
+            mismatched_fields.append("signature_key_id")
+        if entry.get("bundle_count") != release_index.get("bundle_count") and "bundle_count" not in mismatched_fields:
+            mismatched_fields.append("bundle_count")
+        if entry.get("release") != release_index.get("release") and "release" not in mismatched_fields:
+            mismatched_fields.append("release")
+
+        if mismatched_fields:
+            release_publication_metadata_mismatches.append(
+                {
+                    "release_path": release_path_ref,
+                    "fields": sorted(set(mismatched_fields)),
+                }
+            )
+
+    return {
+        "ok": not any(
+            [
+                not release_catalog_hash_matches,
+                not release_count_matches,
+                not catalog_metadata_matches,
+                duplicate_release_ids,
+                duplicate_release_paths,
+                duplicate_release_manifest_paths,
+                duplicate_bundle_index_paths,
+                release_manifest_path_mismatches,
+                missing_release_directories,
+                missing_release_manifests,
+                missing_bundle_indexes,
+                release_manifest_hash_mismatches,
+                bundle_index_hash_mismatches,
+                release_publication_metadata_mismatches,
+            ]
+        ),
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "release_catalog_path": manifest.get("release_catalog_path"),
+        "release_catalog_hash_matches": release_catalog_hash_matches,
+        "release_count_matches": release_count_matches,
+        "catalog_metadata_matches": catalog_metadata_matches,
+        "declared_release_count": len(releases),
+        "release_count": catalog.get("release_count"),
+        "duplicate_release_ids": duplicate_release_ids,
+        "duplicate_release_paths": duplicate_release_paths,
+        "duplicate_release_manifest_paths": duplicate_release_manifest_paths,
+        "duplicate_bundle_index_paths": duplicate_bundle_index_paths,
+        "release_manifest_path_mismatches": sorted(release_manifest_path_mismatches),
+        "missing_release_directories": sorted(missing_release_directories),
+        "missing_release_manifests": sorted(missing_release_manifests),
+        "missing_bundle_indexes": sorted(missing_bundle_indexes),
+        "release_manifest_hash_mismatches": sorted(release_manifest_hash_mismatches),
+        "bundle_index_hash_mismatches": sorted(bundle_index_hash_mismatches),
+        "release_publication_metadata_mismatches": release_publication_metadata_mismatches,
+    }
+
+
 def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
     bundle_path = Path(bundle_dir)
     manifest = _load_validated_bundle_manifest(bundle_path)
@@ -4067,6 +4272,12 @@ def build_cli_parser() -> Any:
     release_lint_parser = subparsers.add_parser("release-lint", help="Check release_manifest.json, bundle_index.json, and referenced bundle manifests without signature verification")
     release_lint_parser.add_argument("release_dir", help="Path to a SATROOT release directory")
 
+    release_catalog_summary_parser = subparsers.add_parser("release-catalog-summary", help="Read release_catalog_manifest.json plus release_catalog.json and print a catalog-level summary without signature verification")
+    release_catalog_summary_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory")
+
+    release_catalog_lint_parser = subparsers.add_parser("release-catalog-lint", help="Check release_catalog_manifest.json, release_catalog.json, and referenced release publications without signature verification")
+    release_catalog_lint_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory")
+
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
     bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
@@ -5106,6 +5317,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "release-lint":
         report = lint_signed_release_publication(args.release_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "release-catalog-summary":
+        summary = summarize_signed_release_catalog_publication(args.release_catalog_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "release-catalog-lint":
+        report = lint_signed_release_catalog_publication(args.release_catalog_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 

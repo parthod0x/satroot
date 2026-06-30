@@ -117,6 +117,24 @@ def make_demo_release_dirs(tmp_path: Path) -> tuple[str, str]:
     return stable["release_dir"], machine["release_dir"]
 
 
+def make_demo_release_catalog_dir(tmp_path: Path) -> Path:
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+    output_dir = tmp_path / "release_catalog_publication"
+    published = bootstrap_release_catalog_publication(
+        [stable_release_dir, machine_release_dir],
+        output_dir=output_dir,
+        signature_scheme="hmac-sha256",
+        key_id="catalog-key",
+        catalog_metadata={
+            "channel": "stable",
+            "label": "SATROOT Catalog of Releases",
+            "published_at": "2026-06-30T05:00:00Z",
+        },
+    )
+    assert Path(published["release_catalog_manifest_path"]).is_file()
+    return output_dir
+
+
 def build_rotation_ledger():
     genesis = copy.deepcopy(load_events()[0])
     genesis["max_supply"] = "1000000000"
@@ -3323,6 +3341,52 @@ def test_cli_release_lint_reports_findings(tmp_path, capsys):
     assert '"bundle_index_hash_matches":false' in captured.out
     assert '"release_metadata_matches":false' in captured.out
     assert '"missing_bundle_manifests":["../bundle/bundle_manifest.json"]' in captured.out
+
+
+def test_cli_release_catalog_summary_reads_manifest_and_catalog(tmp_path, capsys):
+    catalog_dir = make_demo_release_catalog_dir(tmp_path)
+
+    exit_code = main(["release-catalog-summary", str(catalog_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"catalog-key"' in captured.out
+    assert '"release_count":2' in captured.out
+    assert '"release_labels":["Machine Release Workspace","Stable Release Workspace"]' in captured.out
+
+
+def test_cli_release_catalog_lint_accepts_clean_catalog(tmp_path, capsys):
+    catalog_dir = make_demo_release_catalog_dir(tmp_path)
+
+    exit_code = main(["release-catalog-lint", str(catalog_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"release_catalog_hash_matches":true' in captured.out
+    assert '"missing_release_manifests":[]' in captured.out
+    assert '"release_publication_metadata_mismatches":[]' in captured.out
+
+
+def test_cli_release_catalog_lint_reports_findings(tmp_path, capsys):
+    catalog_dir = make_demo_release_catalog_dir(tmp_path)
+
+    catalog_path = catalog_dir / "release_catalog.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    catalog["catalog"]["label"] = "Tampered Catalog Label"
+    write_json(catalog_path, catalog)
+    first_release = Path(catalog_dir / catalog["releases"][0]["release_manifest_path"])
+    first_release.unlink()
+
+    exit_code = main(["release-catalog-lint", str(catalog_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"release_catalog_hash_matches":false' in captured.out
+    assert '"catalog_metadata_matches":false' in captured.out
+    assert '"missing_release_manifests":[' in captured.out
 
 
 def test_cli_build_bundle_index(tmp_path):

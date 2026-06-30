@@ -100,6 +100,8 @@ The v0.1 kernel defines:
 - release-key bootstrap helpers for HMAC and Ed25519 publication signing workflows,
 - one-shot `publish-release` orchestration for ready-to-verify release directories,
 - deterministic release-catalog generation for aggregating multiple signed release publications,
+- catalog-level inspection via `release-catalog-summary` when signature verification is unnecessary,
+- structural release-catalog linting via `release-catalog-lint` for catalog and nested release drift,
 - signed release-catalog-manifest generation for authenticating multi-release catalogs,
 - one-shot `publish-release-catalog` orchestration for ready-to-verify release-catalog directories,
 - one-shot `bootstrap-genesis-bundle` scaffolding for signed starter bundles from profile-aware genesis defaults,
@@ -193,7 +195,7 @@ python -m pytest
 Expected result:
 
 ```text
-194 passed
+197 passed
 ```
 
 ## Signing utilities
@@ -522,6 +524,18 @@ Or bootstrap fresh signing material for that release catalog publication:
 
 ```bash
 satroot1 bootstrap-release-catalog-publication stable_release machine_release --output-dir release_catalog_bootstrap --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
+Inspect a release catalog publication without signature verification:
+
+```bash
+satroot1 release-catalog-summary release_catalog_bootstrap
+```
+
+Lint a release catalog publication and all referenced release directories:
+
+```bash
+satroot1 release-catalog-lint release_catalog_bootstrap
 ```
 
 Validate a bundle manifest directly against the SATROOT manifest schema:
