@@ -46,6 +46,7 @@ from satroot1 import (
     load_demo_catalog_preset,
     load_protocol_schema,
     load_profile_registry,
+    load_publication_network_preset,
     load_publication_stack_preset,
     load_release_catalog_index_manifest_schema,
     load_release_catalog_index_preset,
@@ -611,6 +612,12 @@ def test_load_publication_stack_preset_example():
     preset = load_publication_stack_preset(ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack.json")
     assert preset["catalog_preset_paths"] == [str((ROOT / "examples" / "catalog_presets" / "ai_compute_catalog.json").resolve())]
     assert preset["release_catalog_metadata"]["label"] == "SATROOT AI Compute Publication Stack"
+
+
+def test_load_publication_network_preset_example():
+    preset = load_publication_network_preset(ROOT / "examples" / "network_presets" / "ai_compute_publication_network.json")
+    assert preset["stack_preset_paths"] == [str((ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack.json").resolve())]
+    assert preset["release_catalog_index_metadata"]["label"] == "SATROOT AI Compute Publication Network"
 
 
 def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
@@ -2310,6 +2317,214 @@ def test_cli_bootstrap_publication_stack_with_stack_preset_json(tmp_path, capsys
     identity_summary = json.loads((output_dir / "catalog_workspaces" / "identity_catalog" / "summary.json").read_text(encoding="utf-8"))
     assert identity_summary["bundle_count"] == 1
     assert {entry["symbol"] for entry in identity_summary["bundles"]} == {"STKID1"}
+
+
+def test_cli_bootstrap_publication_network_from_presets(tmp_path, capsys):
+    stable_catalog_preset = tmp_path / "stable_catalog.json"
+    write_json(
+        stable_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "NETSTB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Network Stable Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Network Stable Release",
+                "published_at": "2026-07-03T01:00:00Z",
+            },
+        },
+    )
+    machine_catalog_preset = tmp_path / "machine_catalog.json"
+    write_json(
+        machine_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "NETMCH1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Network Machine Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Network Machine Release",
+                "published_at": "2026-07-03T02:00:00Z",
+            },
+        },
+    )
+    stack_preset_a = tmp_path / "stack_a.json"
+    write_json(
+        stack_preset_a,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(stable_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "stable",
+                "label": "Network Stack Alpha",
+                "published_at": "2026-07-03T03:00:00Z",
+            },
+        },
+    )
+    stack_preset_b = tmp_path / "stack_b.json"
+    write_json(
+        stack_preset_b,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(machine_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "beta",
+                "label": "Network Stack Beta",
+                "published_at": "2026-07-03T04:00:00Z",
+            },
+        },
+    )
+    index_preset = tmp_path / "network_index.json"
+    write_json(
+        index_preset,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
+            "version": "0.1",
+            "index": {
+                "channel": "network",
+                "label": "SATROOT Network Index",
+                "published_at": "2026-07-03T05:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_network"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-network",
+            "--stack-preset-json",
+            str(stack_preset_a),
+            "--stack-preset-json",
+            str(stack_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-preset-json",
+            str(index_preset),
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication network to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["release_catalog_index"]["release_catalog_count"] == 2
+    assert summary["release_catalog_index"]["index"]["label"] == "SATROOT Network Override"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stack_a", "stack_b"}
+
+    alpha_summary = json.loads((output_dir / "stack_workspaces" / "stack_a" / "summary.json").read_text(encoding="utf-8"))
+    beta_summary = json.loads((output_dir / "stack_workspaces" / "stack_b" / "summary.json").read_text(encoding="utf-8"))
+    assert alpha_summary["workspace_count"] == 1
+    assert beta_summary["workspace_count"] == 1
+    assert alpha_summary["release_catalog"]["catalog"]["label"] == "Network Stack Alpha"
+    assert beta_summary["release_catalog"]["catalog"]["label"] == "Network Stack Beta"
+
+    secrets = json.loads((output_dir / "release_catalog_index" / "release_catalog_index_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 2
+    assert verified["index"]["label"] == "SATROOT Network Override"
+
+
+def test_cli_bootstrap_publication_network_with_network_preset_json(tmp_path, capsys):
+    identity_catalog_preset = tmp_path / "identity_catalog.json"
+    write_json(
+        identity_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-IDENTITY-1"],
+            "symbol_overrides": {"SATROOT-IDENTITY-1": "NETID1"},
+            "name_overrides": {"SATROOT-IDENTITY-1": "Network Identity Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Network Identity Release",
+                "published_at": "2026-07-03T06:00:00Z",
+            },
+        },
+    )
+    stack_preset = tmp_path / "stack_single.json"
+    write_json(
+        stack_preset,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(identity_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "stable",
+                "label": "Embedded Network Stack",
+                "published_at": "2026-07-03T07:00:00Z",
+            },
+        },
+    )
+    network_preset = tmp_path / "publication_network.json"
+    write_json(
+        network_preset,
+        {
+            "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
+            "version": "0.1",
+            "stack_presets": [str(Path(stack_preset).relative_to(tmp_path))],
+            "release_catalog_index": {
+                "channel": "mesh",
+                "label": "SATROOT Embedded Network",
+                "published_at": "2026-07-03T08:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_network_single"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-network",
+            "--network-preset-json",
+            str(network_preset),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Embedded Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication network to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["network_preset_path"] == str(network_preset.resolve())
+    assert summary["release_catalog_index"]["index"]["channel"] == "mesh"
+    assert summary["release_catalog_index"]["index"]["label"] == "SATROOT Embedded Network Override"
+
+    stack_summary = json.loads((output_dir / "stack_workspaces" / "stack_single" / "summary.json").read_text(encoding="utf-8"))
+    assert stack_summary["workspace_count"] == 1
+    assert {entry["symbol"] for entry in json.loads((output_dir / "stack_workspaces" / "stack_single" / "catalog_workspaces" / "identity_catalog" / "summary.json").read_text(encoding="utf-8"))["bundles"]} == {"NETID1"}
 
 
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):

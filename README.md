@@ -37,6 +37,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `examples/release_catalog_presets/` - reusable SATROOT release-catalog publication presets.
 - `examples/release_catalog_index_presets/` - reusable SATROOT release-catalog-index publication presets.
+- `examples/network_presets/` - reusable SATROOT publication-network presets.
 - `examples/stack_presets/` - reusable SATROOT end-to-end publication-stack presets.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
@@ -119,6 +120,7 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-release-catalog-publication` orchestration for release-catalog material plus signed publication outputs,
 - one-shot `bootstrap-release-catalog-index-publication` orchestration for release-catalog-index material plus signed publication outputs,
 - one-shot `bootstrap-publication-stack` orchestration for preset-driven bundles, releases, and release-catalog outputs in one workspace,
+- one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, and release-catalog-index-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -207,7 +209,7 @@ python -m pytest
 Expected result:
 
 ```text
-211 passed
+214 passed
 ```
 
 ## Signing utilities
@@ -561,6 +563,18 @@ If you want the whole stack described in one checked-in file, `bootstrap-publica
 
 ```bash
 satroot1 bootstrap-publication-stack --stack-preset-json examples/stack_presets/ai_compute_publication_stack.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir publication_stack --label "SATROOT Stack Override"
+```
+
+To generate multiple stack workspaces and a top-level signed release-catalog index in one pass, use `bootstrap-publication-network` with one or more stack presets:
+
+```bash
+satroot1 bootstrap-publication-network --stack-preset-json examples/stack_presets/ai_compute_publication_stack.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-preset-json examples/release_catalog_index_presets/ai_compute_catalog_network.json --release-catalog-index-key-id index-key --output-dir publication_network --label "SATROOT Network Override"
+```
+
+If you want the whole network described in one checked-in file, `bootstrap-publication-network` also accepts a dedicated network preset:
+
+```bash
+satroot1 bootstrap-publication-network --network-preset-json examples/network_presets/ai_compute_publication_network.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --output-dir publication_network --label "SATROOT Network Override"
 ```
 
 Inspect a release catalog publication without signature verification:
