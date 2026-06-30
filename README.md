@@ -108,6 +108,7 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-genesis-bundle` scaffolding for signed starter bundles from profile-aware genesis defaults,
 - one-shot `bootstrap-release-publication` orchestration for release material plus signed publication outputs,
 - one-shot `bootstrap-release-catalog-publication` orchestration for release-catalog material plus signed publication outputs,
+- one-shot `bootstrap-publication-stack` orchestration for preset-driven bundles, releases, and release-catalog outputs in one workspace,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, release-manifest, release-catalog, and release-catalog-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -196,7 +197,7 @@ python -m pytest
 Expected result:
 
 ```text
-199 passed
+200 passed
 ```
 
 ## Signing utilities
@@ -531,6 +532,12 @@ For repeatable multi-release packaging, the release-catalog commands can also lo
 
 ```bash
 satroot1 bootstrap-release-catalog-publication --preset-json examples/release_catalog_presets/ai_compute_release_stack.json --output-dir release_catalog_bootstrap --label "SATROOT AI Compute Release Stack Override" --scheme hmac-sha256 --key-id catalog-key
+```
+
+For a single end-to-end workspace, `bootstrap-publication-stack` can take multiple demo-catalog presets plus an optional release-catalog preset and emit catalog workspaces and a top-level release catalog in one shot:
+
+```bash
+satroot1 bootstrap-publication-stack --catalog-preset-json examples/catalog_presets/ai_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-preset-json examples/release_catalog_presets/ai_compute_release_stack.json --release-catalog-key-id catalog-key --output-dir publication_stack --label "SATROOT Stack Override"
 ```
 
 Inspect a release catalog publication without signature verification:

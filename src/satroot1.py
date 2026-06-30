@@ -730,6 +730,17 @@ def load_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
     }
 
 
+def _unique_workspace_names(paths: Sequence[str | Path]) -> list[str]:
+    used: Dict[str, int] = {}
+    names: list[str] = []
+    for value in paths:
+        stem = Path(value).stem or "workspace"
+        count = used.get(stem, 0)
+        used[stem] = count + 1
+        names.append(stem if count == 0 else f"{stem}-{count + 1}")
+    return names
+
+
 def scaffold_event_record(
     *,
     action: str,
@@ -3858,6 +3869,76 @@ def _merge_nested_override_maps(
     return merged
 
 
+def write_demo_catalog_workspace(
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    profiles: Optional[Sequence[str]] = None,
+    symbol_overrides: Optional[Mapping[str, str]] = None,
+    name_overrides: Optional[Mapping[str, str]] = None,
+    profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
+    profile_structure_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata: Optional[Mapping[str, str]] = None,
+    preset_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    catalog = bootstrap_demo_catalog_release(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        output_dir=output_dir,
+        profiles=profiles,
+        symbol_overrides=symbol_overrides,
+        name_overrides=name_overrides,
+        profile_field_overrides=profile_field_overrides,
+        profile_structure_overrides=profile_structure_overrides,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata=release_metadata,
+    )
+    summary = {
+        "bundle_scheme": catalog["bundle_scheme"],
+        "release_scheme": catalog["release_scheme"],
+        "bundle_count": catalog["bundle_count"],
+        "bundles_dir": catalog["bundles_dir"],
+        "release_dir": catalog["release_dir"],
+        "preset_path": None if preset_path is None else str(Path(preset_path).resolve()),
+        "release": {key: value for key, value in (release_metadata or {}).items() if isinstance(value, str) and value.strip()},
+        "bundles": [
+            {
+                "bundle_name": entry["bundle_name"],
+                "profile": entry["profile"],
+                "symbol": entry["symbol"],
+                "name": entry["name"],
+                "profile_fields": entry["profile_fields"],
+                "structure_overrides": entry["structure_overrides"],
+                "bundle_dir": entry["bundle_dir"],
+            }
+            for entry in catalog["bundles"]
+        ],
+        "release_manifest_path": catalog["release_publication"]["release_manifest_path"],
+        "bundle_index_path": catalog["release_publication"]["bundle_index_path"],
+    }
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    summary_path = output_path / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "catalog": catalog,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -4169,6 +4250,24 @@ def build_cli_parser() -> Any:
     bootstrap_demo_catalog_parser.add_argument("--channel", help="Optional release channel metadata for the catalog bundle index")
     bootstrap_demo_catalog_parser.add_argument("--label", help="Optional human-readable release label for the catalog bundle index")
     bootstrap_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the catalog bundle index")
+
+    bootstrap_publication_stack_parser = subparsers.add_parser("bootstrap-publication-stack", help="Generate one or more demo catalog workspaces from presets and publish them as a signed release catalog stack")
+    bootstrap_publication_stack_parser.add_argument("--catalog-preset-json", action="append", dest="catalog_preset_jsons", required=True, help="SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
+    bootstrap_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
+    bootstrap_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each workspace release manifest")
+    bootstrap_publication_stack_parser.add_argument("--release-catalog-preset-json", help="Optional SATROOT release catalog preset JSON file for top-level catalog metadata defaults")
+    bootstrap_publication_stack_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_publication_stack_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the top-level release catalog manifest")
+    bootstrap_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where catalog_workspaces/, release_catalog/, and summary.json will be written")
+    bootstrap_publication_stack_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_publication_stack_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_publication_stack_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_publication_stack_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_publication_stack_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_publication_stack_parser.add_argument("--channel", help="Optional release catalog channel metadata override")
+    bootstrap_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label override")
+    bootstrap_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -5157,7 +5256,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 allowed_profiles=DEMO_CATALOG_PROFILES,
             ),
         )
-        catalog = bootstrap_demo_catalog_release(
+        workspace = write_demo_catalog_workspace(
             bundle_scheme=args.scheme,
             release_scheme=args.release_scheme,
             release_key_id=args.release_key_id,
@@ -5173,34 +5272,93 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             include_annotation=not args.no_annotated_output,
             verifier_only=args.verifier_only,
             release_metadata=release_metadata,
+            preset_path=preset_path,
+        )
+        output_dir = Path(args.output_dir)
+        print(f"wrote SATROOT demo catalog workspace to {output_dir}")
+        return 0
+
+    if args.command == "bootstrap-publication-stack":
+        catalog_preset_paths = [Path(value).resolve() for value in args.catalog_preset_jsons]
+        catalog_workspace_names = _unique_workspace_names(catalog_preset_paths)
+        root_output_dir = Path(args.output_dir).resolve()
+        catalog_workspaces_dir = root_output_dir / "catalog_workspaces"
+        release_catalog_dir = root_output_dir / "release_catalog"
+        release_dirs: list[str] = []
+        workspace_entries: list[Dict[str, Any]] = []
+
+        for preset_path, workspace_name in zip(catalog_preset_paths, catalog_workspace_names):
+            preset = load_demo_catalog_preset(preset_path)
+            workspace_dir = catalog_workspaces_dir / workspace_name
+            workspace = write_demo_catalog_workspace(
+                bundle_scheme=args.scheme,
+                release_scheme=args.release_scheme,
+                release_key_id=args.release_key_id,
+                output_dir=workspace_dir,
+                profiles=preset.get("profiles"),
+                symbol_overrides=preset.get("symbol_overrides"),
+                name_overrides=preset.get("name_overrides"),
+                profile_field_overrides=preset.get("profile_field_overrides"),
+                profile_structure_overrides=preset.get("profile_structure_overrides"),
+                key_prefix=args.key_prefix,
+                key_suffix=args.key_suffix,
+                include_state_hash=not args.no_state_hash,
+                include_annotation=not args.no_annotated_output,
+                verifier_only=args.verifier_only,
+                release_metadata=preset.get("release_metadata"),
+                preset_path=preset_path,
+            )
+            release_dirs.append(workspace["summary"]["release_dir"])
+            workspace_entries.append(
+                {
+                    "workspace_name": workspace_name,
+                    "preset_path": str(preset_path),
+                    "workspace_dir": str(workspace_dir.resolve()),
+                    "summary_path": workspace["summary_path"],
+                    "bundle_count": workspace["summary"]["bundle_count"],
+                    "release_dir": workspace["summary"]["release_dir"],
+                    "release_manifest_path": workspace["summary"]["release_manifest_path"],
+                }
+            )
+
+        release_catalog_preset_path = None if not args.release_catalog_preset_json else Path(args.release_catalog_preset_json).resolve()
+        release_catalog_preset = (
+            load_release_catalog_preset(release_catalog_preset_path)
+            if release_catalog_preset_path is not None
+            else None
+        )
+        catalog_metadata = dict((release_catalog_preset or {}).get("catalog_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+
+        published = bootstrap_release_catalog_publication(
+            release_dirs,
+            output_dir=release_catalog_dir,
+            signature_scheme=args.release_catalog_scheme or args.scheme,
+            key_id=args.release_catalog_key_id,
+            catalog_metadata=catalog_metadata,
         )
         summary = {
-            "bundle_scheme": catalog["bundle_scheme"],
-            "release_scheme": catalog["release_scheme"],
-            "bundle_count": catalog["bundle_count"],
-            "bundles_dir": catalog["bundles_dir"],
-            "release_dir": catalog["release_dir"],
-            "preset_path": None if preset_path is None else str(preset_path),
-            "release": {key: value for key, value in release_metadata.items() if isinstance(value, str) and value.strip()},
-            "bundles": [
-                {
-                    "bundle_name": entry["bundle_name"],
-                    "profile": entry["profile"],
-                    "symbol": entry["symbol"],
-                    "name": entry["name"],
-                    "profile_fields": entry["profile_fields"],
-                    "structure_overrides": entry["structure_overrides"],
-                    "bundle_dir": entry["bundle_dir"],
-                }
-                for entry in catalog["bundles"]
-            ],
-            "release_manifest_path": catalog["release_publication"]["release_manifest_path"],
-            "bundle_index_path": catalog["release_publication"]["bundle_index_path"],
+            "bundle_scheme": args.scheme,
+            "release_scheme": args.release_scheme or args.scheme,
+            "release_catalog_scheme": args.release_catalog_scheme or args.scheme,
+            "workspace_count": len(workspace_entries),
+            "catalog_workspaces_dir": str(catalog_workspaces_dir.resolve()),
+            "release_catalog_dir": str(release_catalog_dir.resolve()),
+            "catalog_preset_paths": [str(path) for path in catalog_preset_paths],
+            "release_catalog_preset_path": None if release_catalog_preset_path is None else str(release_catalog_preset_path),
+            "release_catalog": copy.deepcopy(published["release_catalog"]),
+            "release_catalog_manifest_path": published["release_catalog_manifest_path"],
+            "workspaces": workspace_entries,
         }
-        output_dir = Path(args.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        _write_json_file(output_dir / "summary.json", summary)
-        print(f"wrote SATROOT demo catalog workspace to {output_dir}")
+        root_output_dir.mkdir(parents=True, exist_ok=True)
+        _write_json_file(root_output_dir / "summary.json", summary)
+        print(f"wrote SATROOT publication stack to {root_output_dir}")
         return 0
 
     if args.command == "bootstrap-genesis-bundle":

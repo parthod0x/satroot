@@ -1915,6 +1915,102 @@ def test_cli_bootstrap_release_catalog_publication_with_preset_json_and_cli_over
     assert catalog["catalog"]["published_at"] == "2026-07-01T01:00:00Z"
 
 
+def test_cli_bootstrap_publication_stack_from_presets(tmp_path, capsys):
+    catalog_preset_a = tmp_path / "stable_catalog.json"
+    write_json(
+        catalog_preset_a,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "STKSTB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stack Stable Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Stack Stable Release",
+                "published_at": "2026-07-01T02:00:00Z",
+            },
+        },
+    )
+    catalog_preset_b = tmp_path / "machine_catalog.json"
+    write_json(
+        catalog_preset_b,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "STKMCH1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Stack Machine Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Stack Machine Release",
+                "published_at": "2026-07-01T03:00:00Z",
+            },
+        },
+    )
+    release_catalog_preset = tmp_path / "release_stack.json"
+    write_json(
+        release_catalog_preset,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-PRESET",
+            "version": "0.1",
+            "catalog": {
+                "channel": "stable",
+                "label": "SATROOT Stack Releases",
+                "published_at": "2026-07-01T04:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_stack"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-stack",
+            "--catalog-preset-json",
+            str(catalog_preset_a),
+            "--catalog-preset-json",
+            str(catalog_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-preset-json",
+            str(release_catalog_preset),
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication stack to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["release_count"] == 2
+    assert summary["release_catalog"]["catalog"]["label"] == "SATROOT Stack Override"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stable_catalog", "machine_catalog"}
+
+    stable_summary = json.loads((output_dir / "catalog_workspaces" / "stable_catalog" / "summary.json").read_text(encoding="utf-8"))
+    machine_summary = json.loads((output_dir / "catalog_workspaces" / "machine_catalog" / "summary.json").read_text(encoding="utf-8"))
+    assert stable_summary["bundle_count"] == 1
+    assert machine_summary["bundle_count"] == 1
+    assert {entry["symbol"] for entry in stable_summary["bundles"]} == {"STKSTB1"}
+    assert {entry["symbol"] for entry in machine_summary["bundles"]} == {"STKMCH1"}
+
+    secrets = json.loads((output_dir / "release_catalog" / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog" / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"]["label"] == "SATROOT Stack Override"
+
+
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     manifest = build_signed_ledger_bundle_manifest(
