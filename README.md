@@ -216,7 +216,7 @@ python -m pytest
 Expected result:
 
 ```text
-229 passed
+230 passed
 ```
 
 ## Signing utilities
@@ -626,7 +626,7 @@ Inspect a publication stack workspace without signature verification:
 satroot1 publication-stack-summary publication_stack
 ```
 
-Lint a publication stack workspace, its nested release catalog, and all referenced catalog workspace summaries:
+Lint a publication stack workspace, its nested release catalog, and all referenced catalog workspaces:
 
 ```bash
 satroot1 publication-stack-lint publication_stack

@@ -3775,6 +3775,7 @@ def lint_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[
     missing_workspace_dirs: list[str] = []
     missing_workspace_summaries: list[str] = []
     workspace_summary_metadata_mismatches: list[Dict[str, Any]] = []
+    workspace_lint_failures: list[str] = []
 
     for entry in workspaces:
         if not isinstance(entry, dict):
@@ -3819,6 +3820,9 @@ def lint_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[
                 }
             )
 
+        if not lint_demo_catalog_workspace(resolved_workspace_dir).get("ok", False):
+            workspace_lint_failures.append(workspace_name)
+
     return {
         "ok": not any(
             [
@@ -3834,6 +3838,7 @@ def lint_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[
                 missing_workspace_dirs,
                 missing_workspace_summaries,
                 workspace_summary_metadata_mismatches,
+                workspace_lint_failures,
             ]
         ),
         "workspace_count_matches": workspace_count_matches,
@@ -3847,6 +3852,7 @@ def lint_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[
         "missing_workspace_dirs": sorted(missing_workspace_dirs),
         "missing_workspace_summaries": sorted(missing_workspace_summaries),
         "workspace_summary_metadata_mismatches": workspace_summary_metadata_mismatches,
+        "workspace_lint_failures": sorted(workspace_lint_failures),
         "release_catalog_lint": release_catalog_lint,
     }
 

@@ -4421,6 +4421,26 @@ def test_cli_publication_stack_lint_accepts_clean_stack(tmp_path, capsys):
     assert '"ok":true' in captured.out
     assert '"release_catalog_lint":' in captured.out
     assert '"workspace_summary_metadata_mismatches":[]' in captured.out
+    assert '"workspace_lint_failures":[]' in captured.out
+
+
+def test_cli_publication_stack_lint_reports_nested_workspace_failures(tmp_path, capsys):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+    (
+        stack_dir
+        / "catalog_workspaces"
+        / "stable_catalog"
+        / "bundles"
+        / "stable"
+        / "bundle_manifest.json"
+    ).unlink()
+
+    exit_code = main(["publication-stack-lint", str(stack_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"workspace_lint_failures":["stable_catalog"]' in captured.out
 
 
 def test_cli_publication_stack_lint_reports_findings(tmp_path, capsys):
