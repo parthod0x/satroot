@@ -3465,6 +3465,324 @@ def lint_signed_release_catalog_index_publication(release_catalog_index_dir: str
     }
 
 
+def _load_workspace_summary(
+    workspace_dir: str | Path,
+    *,
+    label: str,
+) -> tuple[Path, Dict[str, Any]]:
+    workspace_path = Path(workspace_dir).resolve()
+    if not workspace_path.is_dir():
+        raise SatRootError(f"{label} directory must be an existing directory")
+    summary_path = workspace_path / "summary.json"
+    if not summary_path.is_file():
+        raise SatRootError(f"summary.json is required for {label} operations")
+    summary = _load_json_object_file(str(summary_path), label=f"{label} summary")
+    return workspace_path, summary
+
+
+def summarize_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
+    stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
+    workspaces = summary.get("workspaces")
+    if not isinstance(workspaces, list):
+        raise SatRootError("publication stack summary workspaces must be an array")
+    release_catalog_dir = stack_path / "release_catalog"
+    release_catalog_summary = summarize_signed_release_catalog_publication(release_catalog_dir)
+    return {
+        "bundle_scheme": summary.get("bundle_scheme"),
+        "release_scheme": summary.get("release_scheme"),
+        "release_catalog_scheme": summary.get("release_catalog_scheme"),
+        "workspace_count": summary.get("workspace_count"),
+        "catalog_workspaces_dir": summary.get("catalog_workspaces_dir"),
+        "release_catalog_dir": summary.get("release_catalog_dir"),
+        "stack_preset_path": summary.get("stack_preset_path"),
+        "release_catalog_preset_path": summary.get("release_catalog_preset_path"),
+        "workspace_names": sorted(
+            str(entry.get("workspace_name"))
+            for entry in workspaces
+            if isinstance(entry, dict) and isinstance(entry.get("workspace_name"), str)
+        ),
+        "workspace_preset_paths": sorted(
+            str(entry.get("preset_path"))
+            for entry in workspaces
+            if isinstance(entry, dict) and isinstance(entry.get("preset_path"), str)
+        ),
+        "release_catalog_summary": release_catalog_summary,
+        "workspaces": copy.deepcopy(workspaces),
+    }
+
+
+def lint_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
+    stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
+    workspaces = summary.get("workspaces")
+    if not isinstance(workspaces, list):
+        raise SatRootError("publication stack summary workspaces must be an array")
+    workspace_count_matches = isinstance(summary.get("workspace_count"), int) and summary.get("workspace_count") == len(workspaces)
+
+    actual_catalog_workspaces_dir = (stack_path / "catalog_workspaces").resolve()
+    actual_release_catalog_dir = (stack_path / "release_catalog").resolve()
+    actual_release_catalog_manifest_path = (actual_release_catalog_dir / "release_catalog_manifest.json").resolve()
+
+    catalog_workspaces_dir_matches = summary.get("catalog_workspaces_dir") == str(actual_catalog_workspaces_dir)
+    release_catalog_dir_matches = summary.get("release_catalog_dir") == str(actual_release_catalog_dir)
+    release_catalog_manifest_path_matches = summary.get("release_catalog_manifest_path") == str(actual_release_catalog_manifest_path)
+
+    release_catalog_lint = lint_signed_release_catalog_publication(actual_release_catalog_dir)
+
+    workspace_name_counts: Dict[str, int] = {}
+    summary_path_counts: Dict[str, int] = {}
+    workspace_dir_counts: Dict[str, int] = {}
+    for entry in workspaces:
+        if not isinstance(entry, dict):
+            continue
+        workspace_name = entry.get("workspace_name")
+        workspace_dir = entry.get("workspace_dir")
+        summary_path = entry.get("summary_path")
+        if isinstance(workspace_name, str):
+            workspace_name_counts[workspace_name] = workspace_name_counts.get(workspace_name, 0) + 1
+        if isinstance(workspace_dir, str):
+            workspace_dir_counts[workspace_dir] = workspace_dir_counts.get(workspace_dir, 0) + 1
+        if isinstance(summary_path, str):
+            summary_path_counts[summary_path] = summary_path_counts.get(summary_path, 0) + 1
+
+    duplicate_workspace_names = sorted(value for value, count in workspace_name_counts.items() if count > 1)
+    duplicate_workspace_dirs = sorted(value for value, count in workspace_dir_counts.items() if count > 1)
+    duplicate_workspace_summary_paths = sorted(value for value, count in summary_path_counts.items() if count > 1)
+
+    workspace_summary_path_mismatches: list[str] = []
+    missing_workspace_dirs: list[str] = []
+    missing_workspace_summaries: list[str] = []
+    workspace_summary_metadata_mismatches: list[Dict[str, Any]] = []
+
+    for entry in workspaces:
+        if not isinstance(entry, dict):
+            continue
+        workspace_name = entry.get("workspace_name")
+        workspace_dir_ref = entry.get("workspace_dir")
+        summary_path_ref = entry.get("summary_path")
+        if not isinstance(workspace_name, str):
+            continue
+        if not isinstance(workspace_dir_ref, str) or not workspace_dir_ref.strip():
+            continue
+        if not isinstance(summary_path_ref, str) or not summary_path_ref.strip():
+            continue
+
+        resolved_workspace_dir = Path(workspace_dir_ref).resolve()
+        resolved_summary_path = Path(summary_path_ref).resolve()
+        expected_summary_path = resolved_workspace_dir / "summary.json"
+        if resolved_summary_path != expected_summary_path:
+            workspace_summary_path_mismatches.append(workspace_name)
+        if not resolved_workspace_dir.is_dir():
+            missing_workspace_dirs.append(workspace_name)
+            continue
+        if not resolved_summary_path.is_file():
+            missing_workspace_summaries.append(workspace_name)
+            continue
+
+        workspace_summary = _load_json_object_file(str(resolved_summary_path), label="demo catalog workspace summary")
+        mismatched_fields = []
+        if entry.get("bundle_count") != workspace_summary.get("bundle_count"):
+            mismatched_fields.append("bundle_count")
+        if entry.get("release_dir") != workspace_summary.get("release_dir"):
+            mismatched_fields.append("release_dir")
+        if entry.get("release_manifest_path") != workspace_summary.get("release_manifest_path"):
+            mismatched_fields.append("release_manifest_path")
+        if entry.get("preset_path") != workspace_summary.get("preset_path"):
+            mismatched_fields.append("preset_path")
+        if mismatched_fields:
+            workspace_summary_metadata_mismatches.append(
+                {
+                    "workspace_name": workspace_name,
+                    "fields": sorted(mismatched_fields),
+                }
+            )
+
+    return {
+        "ok": not any(
+            [
+                not workspace_count_matches,
+                not catalog_workspaces_dir_matches,
+                not release_catalog_dir_matches,
+                not release_catalog_manifest_path_matches,
+                not release_catalog_lint["ok"],
+                duplicate_workspace_names,
+                duplicate_workspace_dirs,
+                duplicate_workspace_summary_paths,
+                workspace_summary_path_mismatches,
+                missing_workspace_dirs,
+                missing_workspace_summaries,
+                workspace_summary_metadata_mismatches,
+            ]
+        ),
+        "workspace_count_matches": workspace_count_matches,
+        "catalog_workspaces_dir_matches": catalog_workspaces_dir_matches,
+        "release_catalog_dir_matches": release_catalog_dir_matches,
+        "release_catalog_manifest_path_matches": release_catalog_manifest_path_matches,
+        "duplicate_workspace_names": duplicate_workspace_names,
+        "duplicate_workspace_dirs": duplicate_workspace_dirs,
+        "duplicate_workspace_summary_paths": duplicate_workspace_summary_paths,
+        "workspace_summary_path_mismatches": sorted(workspace_summary_path_mismatches),
+        "missing_workspace_dirs": sorted(missing_workspace_dirs),
+        "missing_workspace_summaries": sorted(missing_workspace_summaries),
+        "workspace_summary_metadata_mismatches": workspace_summary_metadata_mismatches,
+        "release_catalog_lint": release_catalog_lint,
+    }
+
+
+def summarize_publication_network_workspace(publication_network_dir: str | Path) -> Dict[str, Any]:
+    network_path, summary = _load_workspace_summary(publication_network_dir, label="publication network")
+    workspaces = summary.get("workspaces")
+    if not isinstance(workspaces, list):
+        raise SatRootError("publication network summary workspaces must be an array")
+    release_catalog_index_dir = network_path / "release_catalog_index"
+    release_catalog_index_summary = summarize_signed_release_catalog_index_publication(release_catalog_index_dir)
+    return {
+        "bundle_scheme": summary.get("bundle_scheme"),
+        "release_scheme": summary.get("release_scheme"),
+        "release_catalog_scheme": summary.get("release_catalog_scheme"),
+        "release_catalog_index_scheme": summary.get("release_catalog_index_scheme"),
+        "stack_count": summary.get("stack_count"),
+        "stack_workspaces_dir": summary.get("stack_workspaces_dir"),
+        "release_catalog_index_dir": summary.get("release_catalog_index_dir"),
+        "network_preset_path": summary.get("network_preset_path"),
+        "release_catalog_index_preset_path": summary.get("release_catalog_index_preset_path"),
+        "workspace_names": sorted(
+            str(entry.get("workspace_name"))
+            for entry in workspaces
+            if isinstance(entry, dict) and isinstance(entry.get("workspace_name"), str)
+        ),
+        "workspace_preset_paths": sorted(
+            str(entry.get("preset_path"))
+            for entry in workspaces
+            if isinstance(entry, dict) and isinstance(entry.get("preset_path"), str)
+        ),
+        "release_catalog_index_summary": release_catalog_index_summary,
+        "workspaces": copy.deepcopy(workspaces),
+    }
+
+
+def lint_publication_network_workspace(publication_network_dir: str | Path) -> Dict[str, Any]:
+    network_path, summary = _load_workspace_summary(publication_network_dir, label="publication network")
+    workspaces = summary.get("workspaces")
+    if not isinstance(workspaces, list):
+        raise SatRootError("publication network summary workspaces must be an array")
+    stack_count_matches = isinstance(summary.get("stack_count"), int) and summary.get("stack_count") == len(workspaces)
+
+    actual_stack_workspaces_dir = (network_path / "stack_workspaces").resolve()
+    actual_release_catalog_index_dir = (network_path / "release_catalog_index").resolve()
+    actual_release_catalog_index_manifest_path = (actual_release_catalog_index_dir / "release_catalog_index_manifest.json").resolve()
+
+    stack_workspaces_dir_matches = summary.get("stack_workspaces_dir") == str(actual_stack_workspaces_dir)
+    release_catalog_index_dir_matches = summary.get("release_catalog_index_dir") == str(actual_release_catalog_index_dir)
+    release_catalog_index_manifest_path_matches = summary.get("release_catalog_index_manifest_path") == str(actual_release_catalog_index_manifest_path)
+
+    release_catalog_index_lint = lint_signed_release_catalog_index_publication(actual_release_catalog_index_dir)
+
+    workspace_name_counts: Dict[str, int] = {}
+    summary_path_counts: Dict[str, int] = {}
+    workspace_dir_counts: Dict[str, int] = {}
+    for entry in workspaces:
+        if not isinstance(entry, dict):
+            continue
+        workspace_name = entry.get("workspace_name")
+        workspace_dir = entry.get("workspace_dir")
+        summary_path = entry.get("summary_path")
+        if isinstance(workspace_name, str):
+            workspace_name_counts[workspace_name] = workspace_name_counts.get(workspace_name, 0) + 1
+        if isinstance(workspace_dir, str):
+            workspace_dir_counts[workspace_dir] = workspace_dir_counts.get(workspace_dir, 0) + 1
+        if isinstance(summary_path, str):
+            summary_path_counts[summary_path] = summary_path_counts.get(summary_path, 0) + 1
+
+    duplicate_workspace_names = sorted(value for value, count in workspace_name_counts.items() if count > 1)
+    duplicate_workspace_dirs = sorted(value for value, count in workspace_dir_counts.items() if count > 1)
+    duplicate_workspace_summary_paths = sorted(value for value, count in summary_path_counts.items() if count > 1)
+
+    workspace_summary_path_mismatches: list[str] = []
+    missing_workspace_dirs: list[str] = []
+    missing_workspace_summaries: list[str] = []
+    workspace_summary_metadata_mismatches: list[Dict[str, Any]] = []
+    workspace_lint_failures: list[str] = []
+
+    for entry in workspaces:
+        if not isinstance(entry, dict):
+            continue
+        workspace_name = entry.get("workspace_name")
+        workspace_dir_ref = entry.get("workspace_dir")
+        summary_path_ref = entry.get("summary_path")
+        if not isinstance(workspace_name, str):
+            continue
+        if not isinstance(workspace_dir_ref, str) or not workspace_dir_ref.strip():
+            continue
+        if not isinstance(summary_path_ref, str) or not summary_path_ref.strip():
+            continue
+
+        resolved_workspace_dir = Path(workspace_dir_ref).resolve()
+        resolved_summary_path = Path(summary_path_ref).resolve()
+        expected_summary_path = resolved_workspace_dir / "summary.json"
+        if resolved_summary_path != expected_summary_path:
+            workspace_summary_path_mismatches.append(workspace_name)
+        if not resolved_workspace_dir.is_dir():
+            missing_workspace_dirs.append(workspace_name)
+            continue
+        if not resolved_summary_path.is_file():
+            missing_workspace_summaries.append(workspace_name)
+            continue
+
+        workspace_summary = _load_json_object_file(str(resolved_summary_path), label="publication stack summary")
+        mismatched_fields = []
+        if entry.get("catalog_workspace_count") != workspace_summary.get("workspace_count"):
+            mismatched_fields.append("catalog_workspace_count")
+        if entry.get("release_catalog_dir") != workspace_summary.get("release_catalog_dir"):
+            mismatched_fields.append("release_catalog_dir")
+        if entry.get("release_catalog_manifest_path") != workspace_summary.get("release_catalog_manifest_path"):
+            mismatched_fields.append("release_catalog_manifest_path")
+        if entry.get("preset_path") != workspace_summary.get("stack_preset_path"):
+            mismatched_fields.append("preset_path")
+        if mismatched_fields:
+            workspace_summary_metadata_mismatches.append(
+                {
+                    "workspace_name": workspace_name,
+                    "fields": sorted(mismatched_fields),
+                }
+            )
+
+        if not lint_publication_stack_workspace(resolved_workspace_dir).get("ok", False):
+            workspace_lint_failures.append(workspace_name)
+
+    return {
+        "ok": not any(
+            [
+                not stack_count_matches,
+                not stack_workspaces_dir_matches,
+                not release_catalog_index_dir_matches,
+                not release_catalog_index_manifest_path_matches,
+                not release_catalog_index_lint["ok"],
+                duplicate_workspace_names,
+                duplicate_workspace_dirs,
+                duplicate_workspace_summary_paths,
+                workspace_summary_path_mismatches,
+                missing_workspace_dirs,
+                missing_workspace_summaries,
+                workspace_summary_metadata_mismatches,
+                workspace_lint_failures,
+            ]
+        ),
+        "stack_count_matches": stack_count_matches,
+        "stack_workspaces_dir_matches": stack_workspaces_dir_matches,
+        "release_catalog_index_dir_matches": release_catalog_index_dir_matches,
+        "release_catalog_index_manifest_path_matches": release_catalog_index_manifest_path_matches,
+        "duplicate_workspace_names": duplicate_workspace_names,
+        "duplicate_workspace_dirs": duplicate_workspace_dirs,
+        "duplicate_workspace_summary_paths": duplicate_workspace_summary_paths,
+        "workspace_summary_path_mismatches": sorted(workspace_summary_path_mismatches),
+        "missing_workspace_dirs": sorted(missing_workspace_dirs),
+        "missing_workspace_summaries": sorted(missing_workspace_summaries),
+        "workspace_summary_metadata_mismatches": workspace_summary_metadata_mismatches,
+        "workspace_lint_failures": sorted(workspace_lint_failures),
+        "release_catalog_index_lint": release_catalog_index_lint,
+    }
+
+
 def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
     bundle_path = Path(bundle_dir)
     manifest = _load_validated_bundle_manifest(bundle_path)
@@ -5261,6 +5579,18 @@ def build_cli_parser() -> Any:
     release_catalog_index_lint_parser = subparsers.add_parser("release-catalog-index-lint", help="Check release_catalog_index_manifest.json, release_catalog_index.json, and referenced release catalog publications without signature verification")
     release_catalog_index_lint_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
 
+    publication_stack_summary_parser = subparsers.add_parser("publication-stack-summary", help="Read summary.json plus release_catalog/ and print a publication-stack summary without signature verification")
+    publication_stack_summary_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack directory")
+
+    publication_stack_lint_parser = subparsers.add_parser("publication-stack-lint", help="Check summary.json, release_catalog/, and referenced catalog workspace summaries without signature verification")
+    publication_stack_lint_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack directory")
+
+    publication_network_summary_parser = subparsers.add_parser("publication-network-summary", help="Read summary.json plus release_catalog_index/ and print a publication-network summary without signature verification")
+    publication_network_summary_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network directory")
+
+    publication_network_lint_parser = subparsers.add_parser("publication-network-lint", help="Check summary.json, release_catalog_index/, and referenced publication stack summaries without signature verification")
+    publication_network_lint_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network directory")
+
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
     bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
@@ -6463,6 +6793,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "release-catalog-index-lint":
         report = lint_signed_release_catalog_index_publication(args.release_catalog_index_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-stack-summary":
+        summary = summarize_publication_stack_workspace(args.publication_stack_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-stack-lint":
+        report = lint_publication_stack_workspace(args.publication_stack_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-network-summary":
+        summary = summarize_publication_network_workspace(args.publication_network_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-network-lint":
+        report = lint_publication_network_workspace(args.publication_network_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 

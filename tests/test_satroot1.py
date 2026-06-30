@@ -194,6 +194,180 @@ def make_demo_release_catalog_index_dir(tmp_path: Path) -> Path:
     return output_dir
 
 
+def make_demo_publication_stack_dir(tmp_path: Path) -> Path:
+    catalog_preset_a = tmp_path / "stable_catalog.json"
+    write_json(
+        catalog_preset_a,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "PSTSTB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Publication Stable Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Publication Stable Release",
+                "published_at": "2026-07-04T01:00:00Z",
+            },
+        },
+    )
+    catalog_preset_b = tmp_path / "machine_catalog.json"
+    write_json(
+        catalog_preset_b,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "PSTMCH1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Publication Machine Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Publication Machine Release",
+                "published_at": "2026-07-04T02:00:00Z",
+            },
+        },
+    )
+    release_catalog_preset = tmp_path / "release_stack.json"
+    write_json(
+        release_catalog_preset,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-PRESET",
+            "version": "0.1",
+            "catalog": {
+                "channel": "stable",
+                "label": "Publication Stack Releases",
+                "published_at": "2026-07-04T03:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_stack"
+    exit_code = main(
+        [
+            "bootstrap-publication-stack",
+            "--catalog-preset-json",
+            str(catalog_preset_a),
+            "--catalog-preset-json",
+            str(catalog_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-preset-json",
+            str(release_catalog_preset),
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Publication Stack Override",
+        ]
+    )
+    assert exit_code == 0
+    return output_dir
+
+
+def make_demo_publication_network_dir(tmp_path: Path) -> Path:
+    stable_catalog_preset = tmp_path / "stable_catalog.json"
+    write_json(
+        stable_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "PNWSTB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Publication Network Stable Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Publication Network Stable Release",
+                "published_at": "2026-07-04T04:00:00Z",
+            },
+        },
+    )
+    machine_catalog_preset = tmp_path / "machine_catalog.json"
+    write_json(
+        machine_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "PNWMCH1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Publication Network Machine Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Publication Network Machine Release",
+                "published_at": "2026-07-04T05:00:00Z",
+            },
+        },
+    )
+    stack_preset_a = tmp_path / "stack_a.json"
+    write_json(
+        stack_preset_a,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(stable_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "stable",
+                "label": "Publication Network Stack Alpha",
+                "published_at": "2026-07-04T06:00:00Z",
+            },
+        },
+    )
+    stack_preset_b = tmp_path / "stack_b.json"
+    write_json(
+        stack_preset_b,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(machine_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "beta",
+                "label": "Publication Network Stack Beta",
+                "published_at": "2026-07-04T07:00:00Z",
+            },
+        },
+    )
+    index_preset = tmp_path / "network_index.json"
+    write_json(
+        index_preset,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
+            "version": "0.1",
+            "index": {
+                "channel": "network",
+                "label": "Publication Network Index",
+                "published_at": "2026-07-04T08:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_network"
+    exit_code = main(
+        [
+            "bootstrap-publication-network",
+            "--stack-preset-json",
+            str(stack_preset_a),
+            "--stack-preset-json",
+            str(stack_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-preset-json",
+            str(index_preset),
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Publication Network Override",
+        ]
+    )
+    assert exit_code == 0
+    return output_dir
+
+
 def build_rotation_ledger():
     genesis = copy.deepcopy(load_events()[0])
     genesis["max_supply"] = "1000000000"
@@ -4103,6 +4277,90 @@ def test_cli_release_catalog_index_lint_reports_findings(tmp_path, capsys):
     assert '"release_catalog_index_hash_matches":false' in captured.out
     assert '"index_metadata_matches":false' in captured.out
     assert '"missing_release_catalog_manifests":[' in captured.out
+
+
+def test_cli_publication_stack_summary_reads_summary_and_catalog(tmp_path, capsys):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+
+    exit_code = main(["publication-stack-summary", str(stack_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"workspace_count":2' in captured.out
+    assert '"workspace_names":["machine_catalog","stable_catalog"]' in captured.out
+    assert '"release_catalog_summary":' in captured.out
+
+
+def test_cli_publication_stack_lint_accepts_clean_stack(tmp_path, capsys):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+
+    exit_code = main(["publication-stack-lint", str(stack_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"release_catalog_lint":' in captured.out
+    assert '"workspace_summary_metadata_mismatches":[]' in captured.out
+
+
+def test_cli_publication_stack_lint_reports_findings(tmp_path, capsys):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+
+    summary_path = stack_dir / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["release_catalog_manifest_path"] = "tampered"
+    write_json(summary_path, summary)
+    (stack_dir / "catalog_workspaces" / "stable_catalog" / "summary.json").unlink()
+
+    exit_code = main(["publication-stack-lint", str(stack_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"release_catalog_manifest_path_matches":false' in captured.out
+    assert '"missing_workspace_summaries":["stable_catalog"]' in captured.out
+
+
+def test_cli_publication_network_summary_reads_summary_and_index(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    exit_code = main(["publication-network-summary", str(network_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"stack_count":2' in captured.out
+    assert '"workspace_names":["stack_a","stack_b"]' in captured.out
+    assert '"release_catalog_index_summary":' in captured.out
+
+
+def test_cli_publication_network_lint_accepts_clean_network(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    exit_code = main(["publication-network-lint", str(network_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"release_catalog_index_lint":' in captured.out
+    assert '"workspace_lint_failures":[]' in captured.out
+
+
+def test_cli_publication_network_lint_reports_findings(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    summary_path = network_dir / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["release_catalog_index_manifest_path"] = "tampered"
+    write_json(summary_path, summary)
+    (network_dir / "stack_workspaces" / "stack_a" / "summary.json").unlink()
+
+    exit_code = main(["publication-network-lint", str(network_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"release_catalog_index_manifest_path_matches":false' in captured.out
+    assert '"missing_workspace_summaries":["stack_a"]' in captured.out
 
 
 def test_cli_build_bundle_index(tmp_path):

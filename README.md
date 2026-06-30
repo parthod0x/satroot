@@ -120,7 +120,9 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-release-catalog-publication` orchestration for release-catalog material plus signed publication outputs,
 - one-shot `bootstrap-release-catalog-index-publication` orchestration for release-catalog-index material plus signed publication outputs,
 - one-shot `bootstrap-publication-stack` orchestration for preset-driven bundles, releases, and release-catalog outputs in one workspace,
+- publication-stack inspection via `publication-stack-summary` and structural linting via `publication-stack-lint`,
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
+- publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, and release-catalog-index-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
@@ -209,7 +211,7 @@ python -m pytest
 Expected result:
 
 ```text
-214 passed
+220 passed
 ```
 
 ## Signing utilities
@@ -599,6 +601,30 @@ Lint a release-catalog index publication and all referenced release-catalog dire
 
 ```bash
 satroot1 release-catalog-index-lint release_catalog_index_bootstrap
+```
+
+Inspect a publication stack workspace without signature verification:
+
+```bash
+satroot1 publication-stack-summary publication_stack
+```
+
+Lint a publication stack workspace, its nested release catalog, and all referenced catalog workspace summaries:
+
+```bash
+satroot1 publication-stack-lint publication_stack
+```
+
+Inspect a publication network workspace without signature verification:
+
+```bash
+satroot1 publication-network-summary publication_network
+```
+
+Lint a publication network workspace, its nested release-catalog index, and all referenced stack summaries:
+
+```bash
+satroot1 publication-network-lint publication_network
 ```
 
 Validate a bundle manifest directly against the SATROOT manifest schema:
