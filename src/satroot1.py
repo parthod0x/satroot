@@ -40,6 +40,7 @@ RELEASE_CATALOG_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" /
 RELEASE_CATALOG_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-manifest.schema.json"
 RELEASE_CATALOG_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-index.schema.json"
 RELEASE_CATALOG_INDEX_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-index-manifest.schema.json"
+DEMO_CATALOG_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.demo-catalog-summary.schema.json"
 PUBLICATION_STACK_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-stack-summary.schema.json"
 PUBLICATION_NETWORK_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-network-summary.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
@@ -312,6 +313,12 @@ def load_release_catalog_index_schema() -> Dict[str, Any]:
 @functools.lru_cache(maxsize=1)
 def load_release_catalog_index_manifest_schema() -> Dict[str, Any]:
     with RELEASE_CATALOG_INDEX_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_demo_catalog_summary_schema() -> Dict[str, Any]:
+    with DEMO_CATALOG_SUMMARY_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -3494,6 +3501,15 @@ def _load_workspace_summary(
     return workspace_path, summary
 
 
+def validate_demo_catalog_summary_consistency(summary: Mapping[str, Any]) -> None:
+    bundles = summary.get("bundles")
+    bundle_count = summary.get("bundle_count")
+    if not isinstance(bundles, list):
+        raise SatRootError("demo catalog summary bundles must be an array")
+    if not isinstance(bundle_count, int) or bundle_count != len(bundles):
+        raise SatRootError("demo catalog summary bundle_count mismatch")
+
+
 def validate_publication_stack_summary_consistency(summary: Mapping[str, Any]) -> None:
     workspaces = summary.get("workspaces")
     workspace_count = summary.get("workspace_count")
@@ -5161,6 +5177,10 @@ def build_cli_parser() -> Any:
     validate_release_catalog_index_manifest_parser.add_argument("release_catalog_index_manifest_json", help="Path to release_catalog_index_manifest.json")
     validate_release_catalog_index_manifest_parser.add_argument("--schema-json", help="Optional path to a release-catalog-index-manifest JSON Schema file")
 
+    validate_demo_catalog_summary_parser = subparsers.add_parser("validate-demo-catalog-summary", help="Validate a SATROOT demo catalog summary against the demo-catalog-summary schema")
+    validate_demo_catalog_summary_parser.add_argument("demo_catalog_summary_json", help="Path to demo catalog summary.json")
+    validate_demo_catalog_summary_parser.add_argument("--schema-json", help="Optional path to a demo-catalog-summary JSON Schema file")
+
     validate_publication_stack_summary_parser = subparsers.add_parser("validate-publication-stack-summary", help="Validate a SATROOT publication stack summary against the publication-stack-summary schema")
     validate_publication_stack_summary_parser.add_argument("publication_stack_summary_json", help="Path to publication stack summary.json")
     validate_publication_stack_summary_parser.add_argument("--schema-json", help="Optional path to a publication-stack-summary JSON Schema file")
@@ -6732,6 +6752,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_release_catalog_index_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(manifest, schema)
         print(f"valid SATROOT-1 release catalog index manifest: {count} record(s)")
+        return 0
+
+    if args.command == "validate-demo-catalog-summary":
+        summary = _load_json_file(args.demo_catalog_summary_json)
+        schema = load_demo_catalog_summary_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(summary, schema)
+        if not isinstance(summary, dict):
+            raise SatRootError("demo catalog summary must contain an object")
+        validate_demo_catalog_summary_consistency(summary)
+        print(f"valid SATROOT demo catalog summary: {count} record(s)")
         return 0
 
     if args.command == "validate-publication-stack-summary":

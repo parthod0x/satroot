@@ -43,6 +43,7 @@ from satroot1 import (
     hmac_sha256_sign,
     load_bundle_index_schema,
     load_bundle_manifest_schema,
+    load_demo_catalog_summary_schema,
     load_demo_catalog_preset,
     load_protocol_schema,
     load_profile_registry,
@@ -81,6 +82,7 @@ from satroot1 import (
     summarize_signed_ledger_bundle,
     validate_instance_against_schema,
     validate_bundle_index_consistency,
+    validate_demo_catalog_summary_consistency,
     validate_publication_network_summary_consistency,
     validate_publication_stack_summary_consistency,
     validate_release_catalog_index_consistency,
@@ -814,6 +816,33 @@ def test_validate_publication_network_summary_schema_accepts_generated_summary(t
     count = validate_instance_against_schema(summary, load_publication_network_summary_schema())
     assert count == 1
     validate_publication_network_summary_consistency(summary)
+
+
+def test_validate_demo_catalog_summary_schema_accepts_generated_summary(tmp_path):
+    output_dir = tmp_path / "catalog_workspace"
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Schema Demo Catalog",
+            "--published-at",
+            "2026-07-05T01:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    count = validate_instance_against_schema(summary, load_demo_catalog_summary_schema())
+    assert count == 1
+    validate_demo_catalog_summary_consistency(summary)
 
 
 def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
@@ -4403,6 +4432,35 @@ def test_cli_validate_publication_network_summary(tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert "valid SATROOT publication network summary: 1 record(s)" in captured.out
+
+
+def test_cli_validate_demo_catalog_summary(tmp_path, capsys):
+    output_dir = tmp_path / "catalog_workspace"
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "CLI Demo Catalog",
+            "--published-at",
+            "2026-07-05T02:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+    capsys.readouterr()
+
+    exit_code = main(["validate-demo-catalog-summary", str(output_dir / "summary.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "valid SATROOT demo catalog summary: 1 record(s)" in captured.out
 
 
 def test_cli_build_bundle_index(tmp_path):
