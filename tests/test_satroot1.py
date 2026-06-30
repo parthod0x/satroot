@@ -7,9 +7,13 @@ import pytest
 from satroot1 import (
     annotate_ledger_events,
     build_signed_ledger_bundle_index,
+    build_signed_release_catalog,
+    build_signed_release_catalog_manifest,
     build_signed_release_manifest,
     append_signed_event_to_ledger,
     bootstrap_machine_credit_demo_ledger,
+    bootstrap_machine_credit_demo_release,
+    bootstrap_release_catalog_publication,
     bootstrap_release_ed25519_material,
     bootstrap_release_publication,
     bootstrap_release_hmac_material,
@@ -39,6 +43,8 @@ from satroot1 import (
     load_demo_catalog_preset,
     load_protocol_schema,
     load_profile_registry,
+    load_release_catalog_manifest_schema,
+    load_release_catalog_schema,
     load_release_manifest_schema,
     main,
     make_ed25519_verifier,
@@ -64,6 +70,8 @@ from satroot1 import (
     summarize_signed_ledger_bundle,
     validate_instance_against_schema,
     validate_bundle_index_consistency,
+    validate_release_catalog_consistency,
+    verify_signed_release_catalog_manifest,
     verify_signed_release_manifest,
     verify_signed_ledger_bundle,
 )
@@ -79,6 +87,34 @@ def load_events(name="events_floor1.json"):
 def write_json(path: Path, data):
     with path.open("w", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def make_demo_release_dirs(tmp_path: Path) -> tuple[str, str]:
+    stable = bootstrap_stable_reference_demo_release(
+        symbol="RELSTB1",
+        name="Release Stable Demo",
+        bundle_scheme="hmac-sha256",
+        output_dir=tmp_path / "stable_workspace",
+        release_key_id="release-key",
+        release_metadata={
+            "channel": "stable",
+            "label": "Stable Release Workspace",
+            "published_at": "2026-06-30T02:00:00Z",
+        },
+    )
+    machine = bootstrap_machine_credit_demo_release(
+        symbol="RELMCH1",
+        name="Release Machine Demo",
+        bundle_scheme="hmac-sha256",
+        output_dir=tmp_path / "machine_workspace",
+        release_key_id="release-key",
+        release_metadata={
+            "channel": "stable",
+            "label": "Machine Release Workspace",
+            "published_at": "2026-06-30T03:00:00Z",
+        },
+    )
+    return stable["release_dir"], machine["release_dir"]
 
 
 def build_rotation_ledger():
@@ -1692,6 +1728,115 @@ def test_verify_signed_release_manifest_rejects_index_hash_mismatch(tmp_path):
             release_manifest_path,
             verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
         )
+
+
+def test_build_signed_release_catalog_from_release_dirs(tmp_path):
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+
+    catalog = build_signed_release_catalog(
+        [stable_release_dir, machine_release_dir],
+        base_dir=tmp_path,
+        catalog_metadata={
+            "channel": "stable",
+            "label": "SATROOT Multi Release Catalog",
+            "published_at": "2026-06-30T04:00:00Z",
+        },
+    )
+    assert catalog["protocol"] == "SATROOT-1"
+    assert catalog["catalog_type"] == "release-catalog"
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "SATROOT Multi Release Catalog"
+    assert {entry["signature_scheme"] for entry in catalog["releases"]} == {"hmac-sha256"}
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"RELSTB1", "RELMCH1"}
+
+
+def test_validate_release_catalog_schema_accepts_generated_catalog(tmp_path):
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+    catalog = build_signed_release_catalog([stable_release_dir, machine_release_dir], base_dir=tmp_path)
+
+    count = validate_instance_against_schema(catalog, load_release_catalog_schema())
+    assert count == 1
+    validate_release_catalog_consistency(catalog)
+
+
+def test_build_and_verify_signed_release_catalog_manifest_hmac(tmp_path):
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+    catalog = build_signed_release_catalog(
+        [stable_release_dir, machine_release_dir],
+        base_dir=tmp_path,
+        catalog_metadata={
+            "channel": "stable",
+            "label": "SATROOT Multi Release Catalog",
+            "published_at": "2026-06-30T04:30:00Z",
+        },
+    )
+    catalog_path = tmp_path / "release_catalog.json"
+    write_json(catalog_path, catalog)
+
+    manifest = build_signed_release_catalog_manifest(
+        catalog_path,
+        signature_scheme="hmac-sha256",
+        key_id="catalog-key",
+        signer=make_hmac_sha256_signer({"catalog-key": "catalog-secret"}),
+        base_dir=tmp_path,
+    )
+    count = validate_instance_against_schema(manifest, load_release_catalog_manifest_schema())
+    assert count == 1
+
+    manifest_path = tmp_path / "release_catalog_manifest.json"
+    write_json(manifest_path, manifest)
+    summary = verify_signed_release_catalog_manifest(
+        manifest_path,
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert summary["signature_scheme"] == "hmac-sha256"
+    assert summary["signature_key_id"] == "catalog-key"
+    assert summary["release_catalog_path"] == "release_catalog.json"
+    assert summary["catalog"] == catalog["catalog"]
+
+
+def test_cli_bootstrap_release_catalog_publication(tmp_path, capsys):
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+    output_dir = tmp_path / "release_catalog_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-release-catalog-publication",
+            stable_release_dir,
+            machine_release_dir,
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Catalog of Releases",
+            "--published-at",
+            "2026-06-30T05:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "SATROOT Catalog of Releases"
+    assert manifest["signature_key_id"] == "catalog-key"
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"] == catalog["catalog"]
 
 
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):

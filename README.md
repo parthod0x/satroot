@@ -27,6 +27,8 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `protocol/satroot1.bundle-manifest.schema.json` - JSON schema for signed bundle manifests.
 - `protocol/satroot1.bundle-index.schema.json` - JSON schema for bundle index catalogs.
 - `protocol/satroot1.release-manifest.schema.json` - JSON schema for signed release manifests.
+- `protocol/satroot1.release-catalog.schema.json` - JSON schema for multi-release catalogs.
+- `protocol/satroot1.release-catalog-manifest.schema.json` - JSON schema for signed multi-release catalog manifests.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
@@ -97,10 +99,14 @@ The v0.1 kernel defines:
 - signed release-manifest generation for authenticating distributable bundle-index publications,
 - release-key bootstrap helpers for HMAC and Ed25519 publication signing workflows,
 - one-shot `publish-release` orchestration for ready-to-verify release directories,
+- deterministic release-catalog generation for aggregating multiple signed release publications,
+- signed release-catalog-manifest generation for authenticating multi-release catalogs,
+- one-shot `publish-release-catalog` orchestration for ready-to-verify release-catalog directories,
 - one-shot `bootstrap-genesis-bundle` scaffolding for signed starter bundles from profile-aware genesis defaults,
 - one-shot `bootstrap-release-publication` orchestration for release material plus signed publication outputs,
+- one-shot `bootstrap-release-catalog-publication` orchestration for release-catalog material plus signed publication outputs,
 - signed bundle verification against manifest and verifier material,
-- bundle-manifest, bundle-index, and release-manifest schema validation for exported signed artifacts,
+- bundle-manifest, bundle-index, release-manifest, release-catalog, and release-catalog-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -187,7 +193,7 @@ python -m pytest
 Expected result:
 
 ```text
-190 passed
+194 passed
 ```
 
 ## Signing utilities
@@ -500,6 +506,24 @@ For catalog-style packaging, you can point that bootstrap flow at a parent direc
 satroot1 bootstrap-release-publication --discover-under generated_artifacts --output-dir catalog_bootstrap --channel stable --label "SATROOT Catalog Release" --published-at 2026-06-28T19:00:00Z --scheme hmac-sha256 --key-id release-key
 ```
 
+Build a higher-level release catalog from multiple signed release directories:
+
+```bash
+satroot1 build-release-catalog stable_release machine_release --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --output release_catalog.json
+```
+
+Publish a signed release catalog directory in one step:
+
+```bash
+satroot1 publish-release-catalog stable_release machine_release --output-dir release_catalog_pub --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --scheme hmac-sha256 --key-id catalog-key --secrets-json release_hmac/release_secrets.json
+```
+
+Or bootstrap fresh signing material for that release catalog publication:
+
+```bash
+satroot1 bootstrap-release-catalog-publication stable_release machine_release --output-dir release_catalog_bootstrap --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
 Validate a bundle manifest directly against the SATROOT manifest schema:
 
 ```bash
@@ -518,10 +542,23 @@ Validate a signed release manifest directly against the SATROOT release-manifest
 satroot1 validate-release-manifest release_manifest.json
 ```
 
+Validate a release catalog and its signed manifest directly against the SATROOT schemas:
+
+```bash
+satroot1 validate-release-catalog release_catalog.json
+satroot1 validate-release-catalog-manifest release_catalog_manifest.json
+```
+
 Verify a signed release manifest against its bundle index:
 
 ```bash
 satroot1 verify-release-manifest release_manifest.json --secrets-json release_secrets.json
+```
+
+Verify a signed release catalog manifest against its release catalog:
+
+```bash
+satroot1 verify-release-catalog-manifest release_catalog_manifest.json --secrets-json release_catalog_secrets.json
 ```
 
 Sign a full demo ledger with the built-in demo signature mode:
