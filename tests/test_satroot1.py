@@ -8,11 +8,14 @@ from satroot1 import (
     annotate_ledger_events,
     build_signed_ledger_bundle_index,
     build_signed_release_catalog,
+    build_signed_release_catalog_index,
+    build_signed_release_catalog_index_manifest,
     build_signed_release_catalog_manifest,
     build_signed_release_manifest,
     append_signed_event_to_ledger,
     bootstrap_machine_credit_demo_ledger,
     bootstrap_machine_credit_demo_release,
+    bootstrap_release_catalog_index_publication,
     bootstrap_release_catalog_publication,
     bootstrap_release_ed25519_material,
     bootstrap_release_publication,
@@ -44,6 +47,9 @@ from satroot1 import (
     load_protocol_schema,
     load_profile_registry,
     load_publication_stack_preset,
+    load_release_catalog_index_manifest_schema,
+    load_release_catalog_index_preset,
+    load_release_catalog_index_schema,
     load_release_catalog_preset,
     load_release_catalog_manifest_schema,
     load_release_catalog_schema,
@@ -72,7 +78,9 @@ from satroot1 import (
     summarize_signed_ledger_bundle,
     validate_instance_against_schema,
     validate_bundle_index_consistency,
+    validate_release_catalog_index_consistency,
     validate_release_catalog_consistency,
+    verify_signed_release_catalog_index_manifest,
     verify_signed_release_catalog_manifest,
     verify_signed_release_manifest,
     verify_signed_ledger_bundle,
@@ -134,6 +142,54 @@ def make_demo_release_catalog_dir(tmp_path: Path) -> Path:
         },
     )
     assert Path(published["release_catalog_manifest_path"]).is_file()
+    return output_dir
+
+
+def make_demo_release_catalog_index_dir(tmp_path: Path) -> Path:
+    catalog_alpha_root = tmp_path / "catalog_alpha_root"
+    catalog_beta_root = tmp_path / "catalog_beta_root"
+    alpha_release_dirs = make_demo_release_dirs(catalog_alpha_root)
+    beta_release_dirs = make_demo_release_dirs(catalog_beta_root)
+
+    catalog_alpha_dir = tmp_path / "catalog_alpha"
+    bootstrap_release_catalog_publication(
+        list(alpha_release_dirs),
+        output_dir=catalog_alpha_dir,
+        signature_scheme="hmac-sha256",
+        key_id="catalog-alpha-key",
+        catalog_metadata={
+            "channel": "stable",
+            "label": "SATROOT Catalog Alpha",
+            "published_at": "2026-07-02T01:00:00Z",
+        },
+    )
+
+    catalog_beta_dir = tmp_path / "catalog_beta"
+    bootstrap_release_catalog_publication(
+        list(beta_release_dirs),
+        output_dir=catalog_beta_dir,
+        signature_scheme="hmac-sha256",
+        key_id="catalog-beta-key",
+        catalog_metadata={
+            "channel": "beta",
+            "label": "SATROOT Catalog Beta",
+            "published_at": "2026-07-02T02:00:00Z",
+        },
+    )
+
+    output_dir = tmp_path / "release_catalog_index_publication"
+    published = bootstrap_release_catalog_index_publication(
+        [catalog_alpha_dir, catalog_beta_dir],
+        output_dir=output_dir,
+        signature_scheme="hmac-sha256",
+        key_id="index-key",
+        index_metadata={
+            "channel": "network",
+            "label": "SATROOT Catalog Network",
+            "published_at": "2026-07-02T03:00:00Z",
+        },
+    )
+    assert Path(published["release_catalog_index_manifest_path"]).is_file()
     return output_dir
 
 
@@ -541,6 +597,14 @@ def test_load_release_catalog_preset_example():
     assert preset["discover_under"] == [str((ROOT / "generated_release_workspaces").resolve())]
     assert preset["recursive"] is True
     assert preset["catalog_metadata"]["label"] == "SATROOT AI Compute Release Stack"
+
+
+def test_load_release_catalog_index_preset_example():
+    preset = load_release_catalog_index_preset(ROOT / "examples" / "release_catalog_index_presets" / "ai_compute_catalog_network.json")
+    assert preset["release_catalog_dirs"] == []
+    assert preset["discover_under"] == [str((ROOT / "generated_release_catalogs").resolve())]
+    assert preset["recursive"] is True
+    assert preset["index_metadata"]["label"] == "SATROOT AI Compute Catalog Network"
 
 
 def test_load_publication_stack_preset_example():
@@ -1920,6 +1984,170 @@ def test_cli_bootstrap_release_catalog_publication_with_preset_json_and_cli_over
     assert catalog["catalog"]["channel"] == "beta"
     assert catalog["catalog"]["label"] == "SATROOT Preset Override Stack"
     assert catalog["catalog"]["published_at"] == "2026-07-01T01:00:00Z"
+
+
+def test_build_signed_release_catalog_index_from_catalog_dirs(tmp_path):
+    index_dir = make_demo_release_catalog_index_dir(tmp_path)
+    catalog_alpha_dir = tmp_path / "catalog_alpha"
+    catalog_beta_dir = tmp_path / "catalog_beta"
+
+    index = build_signed_release_catalog_index(
+        [catalog_alpha_dir, catalog_beta_dir],
+        base_dir=index_dir,
+        index_metadata={
+            "channel": "network",
+            "label": "SATROOT Catalog Network",
+            "published_at": "2026-07-02T03:30:00Z",
+        },
+    )
+    assert index["protocol"] == "SATROOT-1"
+    assert index["index_type"] == "release-catalog-index"
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "SATROOT Catalog Network"
+    assert {entry["signature_scheme"] for entry in index["release_catalogs"]} == {"hmac-sha256"}
+    assert sorted(index["release_catalogs"][0]["release_paths"])
+
+
+def test_validate_release_catalog_index_schema_accepts_generated_index(tmp_path):
+    catalog_alpha_dir = make_demo_release_catalog_dir(tmp_path / "catalog_alpha_root")
+    catalog_beta_dir = make_demo_release_catalog_dir(tmp_path / "catalog_beta_root")
+    index = build_signed_release_catalog_index([catalog_alpha_dir, catalog_beta_dir], base_dir=tmp_path)
+
+    count = validate_instance_against_schema(index, load_release_catalog_index_schema())
+    assert count == 1
+    validate_release_catalog_index_consistency(index)
+
+
+def test_build_and_verify_signed_release_catalog_index_manifest_hmac(tmp_path):
+    catalog_alpha_dir = make_demo_release_catalog_dir(tmp_path / "catalog_alpha_root")
+    catalog_beta_dir = make_demo_release_catalog_dir(tmp_path / "catalog_beta_root")
+    index = build_signed_release_catalog_index(
+        [catalog_alpha_dir, catalog_beta_dir],
+        base_dir=tmp_path,
+        index_metadata={
+            "channel": "network",
+            "label": "SATROOT Release Catalog Mesh",
+            "published_at": "2026-07-02T04:00:00Z",
+        },
+    )
+    index_path = tmp_path / "release_catalog_index.json"
+    write_json(index_path, index)
+
+    manifest = build_signed_release_catalog_index_manifest(
+        index_path,
+        signature_scheme="hmac-sha256",
+        key_id="index-key",
+        signer=make_hmac_sha256_signer({"index-key": "index-secret"}),
+        base_dir=tmp_path,
+    )
+    count = validate_instance_against_schema(manifest, load_release_catalog_index_manifest_schema())
+    assert count == 1
+
+    manifest_path = tmp_path / "release_catalog_index_manifest.json"
+    write_json(manifest_path, manifest)
+    summary = verify_signed_release_catalog_index_manifest(
+        manifest_path,
+        verifier=make_hmac_sha256_verifier({"index-key": "index-secret"}),
+    )
+    assert summary["signature_scheme"] == "hmac-sha256"
+    assert summary["signature_key_id"] == "index-key"
+    assert summary["release_catalog_index_path"] == "release_catalog_index.json"
+    assert summary["index"] == index["index"]
+
+
+def test_cli_bootstrap_release_catalog_index_publication(tmp_path, capsys):
+    catalog_alpha_dir = make_demo_release_catalog_dir(tmp_path / "catalog_alpha_root")
+    catalog_beta_dir = make_demo_release_catalog_dir(tmp_path / "catalog_beta_root")
+    output_dir = tmp_path / "release_catalog_index_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-release-catalog-index-publication",
+            str(catalog_alpha_dir),
+            str(catalog_beta_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Catalog Network",
+            "--published-at",
+            "2026-07-02T05:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_index_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "release_catalog_index_secrets.json").read_text(encoding="utf-8"))
+
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "SATROOT Catalog Network"
+    assert manifest["signature_key_id"] == "index-key"
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 2
+    assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_release_catalog_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    catalog_alpha_dir = make_demo_release_catalog_dir(tmp_path / "catalog_alpha_root")
+    catalog_beta_dir = make_demo_release_catalog_dir(tmp_path / "catalog_beta_root")
+    preset_path = tmp_path / "release_catalog_index_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
+            "version": "0.1",
+            "release_catalog_dirs": [
+                str(Path(catalog_alpha_dir).relative_to(tmp_path)),
+                str(Path(catalog_beta_dir).relative_to(tmp_path)),
+            ],
+            "recursive": True,
+            "index": {
+                "channel": "network",
+                "label": "SATROOT Preset Catalog Network",
+                "published_at": "2026-07-02T06:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "release_catalog_index_preset_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-release-catalog-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Preset Override Network",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["channel"] == "network"
+    assert index["index"]["label"] == "SATROOT Preset Override Network"
+    assert index["index"]["published_at"] == "2026-07-02T06:00:00Z"
 
 
 def test_cli_bootstrap_publication_stack_from_presets(tmp_path, capsys):
@@ -3614,6 +3842,52 @@ def test_cli_release_catalog_lint_reports_findings(tmp_path, capsys):
     assert '"release_catalog_hash_matches":false' in captured.out
     assert '"catalog_metadata_matches":false' in captured.out
     assert '"missing_release_manifests":[' in captured.out
+
+
+def test_cli_release_catalog_index_summary_reads_manifest_and_index(tmp_path, capsys):
+    index_dir = make_demo_release_catalog_index_dir(tmp_path)
+
+    exit_code = main(["release-catalog-index-summary", str(index_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"index-key"' in captured.out
+    assert '"release_catalog_count":2' in captured.out
+    assert '"catalog_labels":["SATROOT Catalog Alpha","SATROOT Catalog Beta"]' in captured.out
+
+
+def test_cli_release_catalog_index_lint_accepts_clean_index(tmp_path, capsys):
+    index_dir = make_demo_release_catalog_index_dir(tmp_path)
+
+    exit_code = main(["release-catalog-index-lint", str(index_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"release_catalog_index_hash_matches":true' in captured.out
+    assert '"missing_release_catalog_manifests":[]' in captured.out
+    assert '"release_catalog_publication_metadata_mismatches":[]' in captured.out
+
+
+def test_cli_release_catalog_index_lint_reports_findings(tmp_path, capsys):
+    index_dir = make_demo_release_catalog_index_dir(tmp_path)
+
+    index_path = index_dir / "release_catalog_index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["index"]["label"] = "Tampered Index Label"
+    write_json(index_path, index)
+    first_catalog_manifest = Path(index_dir / index["release_catalogs"][0]["release_catalog_manifest_path"])
+    first_catalog_manifest.unlink()
+
+    exit_code = main(["release-catalog-index-lint", str(index_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"release_catalog_index_hash_matches":false' in captured.out
+    assert '"index_metadata_matches":false' in captured.out
+    assert '"missing_release_catalog_manifests":[' in captured.out
 
 
 def test_cli_build_bundle_index(tmp_path):

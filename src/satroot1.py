@@ -38,6 +38,8 @@ BUNDLE_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "s
 RELEASE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-manifest.schema.json"
 RELEASE_CATALOG_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog.schema.json"
 RELEASE_CATALOG_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-manifest.schema.json"
+RELEASE_CATALOG_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-index.schema.json"
+RELEASE_CATALOG_INDEX_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-index-manifest.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -296,6 +298,18 @@ def load_release_catalog_schema() -> Dict[str, Any]:
 @functools.lru_cache(maxsize=1)
 def load_release_catalog_manifest_schema() -> Dict[str, Any]:
     with RELEASE_CATALOG_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_release_catalog_index_schema() -> Dict[str, Any]:
+    with RELEASE_CATALOG_INDEX_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_release_catalog_index_manifest_schema() -> Dict[str, Any]:
+    with RELEASE_CATALOG_INDEX_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -758,6 +772,52 @@ def load_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
     return {
         "catalog_preset_paths": catalog_preset_paths,
         "release_catalog_metadata": validate_release_metadata_mapping(preset.get("release_catalog")),
+    }
+
+
+def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="release catalog index preset")
+    if preset.get("type") != "SATROOT-RELEASE-CATALOG-INDEX-PRESET":
+        raise SatRootError("unsupported release catalog index preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported release catalog index preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "release_catalog_dirs",
+        "discover_under",
+        "recursive",
+        "index",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported release catalog index preset keys: {sorted(unexpected)}")
+
+    release_catalog_dirs = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("release_catalog_dirs"),
+            label="release catalog index preset release_catalog_dirs",
+        )
+    ]
+    discover_under = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("discover_under"),
+            label="release catalog index preset discover_under",
+        )
+    ]
+    recursive = preset.get("recursive", True)
+    if not isinstance(recursive, bool):
+        raise SatRootError("release catalog index preset recursive must be a boolean")
+
+    return {
+        "release_catalog_dirs": release_catalog_dirs,
+        "discover_under": discover_under,
+        "recursive": recursive,
+        "index_metadata": validate_release_metadata_mapping(preset.get("index")),
     }
 
 
@@ -2887,6 +2947,493 @@ def lint_signed_release_catalog_publication(release_catalog_dir: str | Path) -> 
     }
 
 
+def build_signed_release_catalog_index(
+    release_catalog_dirs: Sequence[str | Path],
+    *,
+    base_dir: str | Path = ".",
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    if not release_catalog_dirs:
+        raise SatRootError("at least one release catalog directory is required")
+
+    release_catalogs: list[Dict[str, Any]] = []
+    for release_catalog_dir in release_catalog_dirs:
+        release_catalog_dir_path = Path(release_catalog_dir).resolve()
+        manifest_path, release_catalog_path, manifest, catalog = _load_release_catalog_publication(release_catalog_dir_path)
+        release_catalog_ref = _relative_output_path(release_catalog_dir_path, base_dir=base_dir)
+        releases = catalog.get("releases")
+        assert isinstance(releases, list)
+        entry = {
+            "release_catalog_id": "sha256:" + sha256_hex(release_catalog_ref),
+            "release_catalog_path": release_catalog_ref,
+            "release_catalog_manifest_path": _relative_output_path(manifest_path, base_dir=base_dir),
+            "release_catalog_manifest_hash": "sha256:" + sha256_hex_bytes(manifest_path.read_bytes()),
+            "release_catalog_json_path": _relative_output_path(release_catalog_path, base_dir=base_dir),
+            "release_catalog_hash": "sha256:" + sha256_hex_bytes(release_catalog_path.read_bytes()),
+            "signature_scheme": manifest.get("signature_scheme"),
+            "signature_key_id": manifest.get("signature_key_id"),
+            "release_count": catalog.get("release_count"),
+            "release_paths": sorted(str(release.get("release_path")) for release in releases),
+            "release_labels": sorted(
+                {
+                    str(release["release"].get("label"))
+                    for release in releases
+                    if isinstance(release.get("release"), dict) and isinstance(release["release"].get("label"), str)
+                }
+            ),
+        }
+        if isinstance(catalog.get("catalog"), dict) and catalog.get("catalog"):
+            entry["catalog"] = copy.deepcopy(catalog["catalog"])
+        release_catalogs.append(entry)
+
+    release_catalogs.sort(key=lambda entry: (str(entry["release_catalog_path"]), str(entry["release_catalog_manifest_hash"])))
+    index = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "index_type": "release-catalog-index",
+        "release_catalog_count": len(release_catalogs),
+        "release_catalogs": release_catalogs,
+    }
+    if index_metadata:
+        index["index"] = {
+            key: value for key, value in index_metadata.items() if isinstance(value, str) and value.strip()
+        }
+    return index
+
+
+def discover_signed_release_catalog_publication_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    if not search_roots:
+        raise SatRootError("at least one release catalog discovery root is required")
+
+    discovered: Dict[str, str] = {}
+    for search_root in search_roots:
+        root_path = Path(search_root).resolve()
+        if not root_path.exists():
+            raise SatRootError(f"release catalog discovery root not found: {search_root}")
+        if not root_path.is_dir():
+            raise SatRootError(f"release catalog discovery root must be a directory: {search_root}")
+
+        manifest_paths = root_path.rglob("release_catalog_manifest.json") if recursive else root_path.glob("release_catalog_manifest.json")
+        for manifest_path in manifest_paths:
+            release_catalog_dir = str(manifest_path.parent.resolve())
+            discovered.setdefault(release_catalog_dir, release_catalog_dir)
+
+    if not discovered:
+        raise SatRootError("no signed release catalog directories found under the provided discovery roots")
+    return sorted(discovered.values())
+
+
+def resolve_release_catalog_directory_inputs(
+    release_catalog_dirs: Sequence[str | Path],
+    *,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> list[str | Path]:
+    resolved: list[str | Path] = []
+    seen: set[str] = set()
+
+    for release_catalog_dir in release_catalog_dirs:
+        release_catalog_path = str(Path(release_catalog_dir).resolve())
+        if release_catalog_path not in seen:
+            resolved.append(release_catalog_dir)
+            seen.add(release_catalog_path)
+
+    if discover_under:
+        for release_catalog_dir in discover_signed_release_catalog_publication_dirs(discover_under, recursive=recursive):
+            if release_catalog_dir not in seen:
+                resolved.append(release_catalog_dir)
+                seen.add(release_catalog_dir)
+
+    if not resolved:
+        raise SatRootError("at least one release catalog directory or --discover-under path is required")
+    return resolved
+
+
+def validate_release_catalog_index_consistency(index: Mapping[str, Any]) -> None:
+    release_catalogs = index.get("release_catalogs")
+    release_catalog_count = index.get("release_catalog_count")
+    if not isinstance(release_catalogs, list):
+        raise SatRootError("release catalog index release_catalogs must be an array")
+    if not isinstance(release_catalog_count, int) or release_catalog_count != len(release_catalogs):
+        raise SatRootError("release catalog index release_catalog_count mismatch")
+
+
+def release_catalog_index_manifest_signing_payload(manifest: Mapping[str, Any]) -> str:
+    cleaned = {k: v for k, v in manifest.items() if k != "signature"}
+    return canonical_json(cleaned)
+
+
+def build_signed_release_catalog_index_manifest(
+    release_catalog_index_json: str | Path,
+    *,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    base_dir: str | Path = ".",
+) -> Dict[str, Any]:
+    if signature_scheme not in {"hmac-sha256", "ed25519"}:
+        raise SatRootError(f"unsupported release catalog index signature scheme: {signature_scheme}")
+    release_catalog_index_path = Path(release_catalog_index_json).resolve()
+    index = _load_json_file(str(release_catalog_index_path))
+    validate_instance_against_schema(index, load_release_catalog_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("release catalog index must contain an object")
+    validate_release_catalog_index_consistency(index)
+
+    relative_index_path = _relative_output_path(release_catalog_index_path, base_dir=base_dir)
+    manifest = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "manifest_type": "release-catalog-index-manifest",
+        "release_catalog_index_path": relative_index_path,
+        "release_catalog_index_hash": "sha256:" + sha256_hex_bytes(release_catalog_index_path.read_bytes()),
+        "release_catalog_count": index.get("release_catalog_count"),
+        "signature_scheme": signature_scheme,
+        "signature_key_id": key_id,
+    }
+    index_metadata = index.get("index")
+    if isinstance(index_metadata, dict) and index_metadata:
+        manifest["index"] = copy.deepcopy(index_metadata)
+    manifest["signature"] = signer(release_catalog_index_manifest_signing_payload(manifest), key_id)
+    return manifest
+
+
+def verify_signed_release_catalog_index_manifest(
+    release_catalog_index_manifest_json: str | Path,
+    *,
+    verifier: SignatureVerifier,
+) -> Dict[str, Any]:
+    manifest_path = Path(release_catalog_index_manifest_json).resolve()
+    manifest = _load_json_object_file(str(manifest_path), label="release-catalog-index-manifest")
+    validate_instance_against_schema(manifest, load_release_catalog_index_manifest_schema())
+
+    release_catalog_index_ref = manifest.get("release_catalog_index_path")
+    if not isinstance(release_catalog_index_ref, str) or not release_catalog_index_ref.strip():
+        raise SatRootError("release catalog index manifest release_catalog_index_path must be a non-empty string")
+    release_catalog_index_path = (manifest_path.parent / release_catalog_index_ref).resolve()
+    if not release_catalog_index_path.exists():
+        raise SatRootError(f"release catalog index file not found: {release_catalog_index_ref}")
+
+    index = _load_json_file(str(release_catalog_index_path))
+    validate_instance_against_schema(index, load_release_catalog_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("release catalog index must contain an object")
+    validate_release_catalog_index_consistency(index)
+
+    actual_index_hash = "sha256:" + sha256_hex_bytes(release_catalog_index_path.read_bytes())
+    if manifest.get("release_catalog_index_hash") != actual_index_hash:
+        raise SatRootError("release catalog index manifest release_catalog_index_hash mismatch")
+    if manifest.get("release_catalog_count") != index.get("release_catalog_count"):
+        raise SatRootError("release catalog index manifest release_catalog_count mismatch")
+    if manifest.get("index") != index.get("index"):
+        raise SatRootError("release catalog index manifest index metadata mismatch")
+    if not verifier(manifest, release_catalog_index_manifest_signing_payload(manifest)):
+        raise SatRootError("release catalog index manifest signature verification failed")
+
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "release_catalog_index_path": release_catalog_index_ref,
+        "release_catalog_index_hash": actual_index_hash,
+        "release_catalog_count": index.get("release_catalog_count"),
+        "index": copy.deepcopy(index.get("index")),
+    }
+
+
+def publish_signed_release_catalog_index(
+    release_catalog_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    release_catalog_index = build_signed_release_catalog_index(
+        release_catalog_dirs,
+        base_dir=output_path,
+        index_metadata=index_metadata,
+    )
+    release_catalog_index_path = output_path / "release_catalog_index.json"
+    _write_json_file(release_catalog_index_path, release_catalog_index)
+
+    release_catalog_index_manifest = build_signed_release_catalog_index_manifest(
+        release_catalog_index_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        base_dir=output_path,
+    )
+    release_catalog_index_manifest_path = output_path / "release_catalog_index_manifest.json"
+    _write_json_file(release_catalog_index_manifest_path, release_catalog_index_manifest)
+
+    return {
+        "release_catalog_index": release_catalog_index,
+        "release_catalog_index_path": str(release_catalog_index_path),
+        "release_catalog_index_manifest": release_catalog_index_manifest,
+        "release_catalog_index_manifest_path": str(release_catalog_index_manifest_path),
+    }
+
+
+def bootstrap_release_catalog_index_publication(
+    release_catalog_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    if signature_scheme == "hmac-sha256":
+        material = bootstrap_release_hmac_material([key_id])
+        signer = make_hmac_sha256_signer(material["shared_secrets"])
+        _write_json_file(output_path / "release_catalog_index_secrets.json", material["shared_secrets"])
+    elif signature_scheme == "ed25519":
+        material = bootstrap_release_ed25519_material([key_id])
+        signer = make_ed25519_signer(material["private_keys"])
+        _write_json_file(output_path / "release_catalog_index_private_keys.json", material["private_keys"])
+        _write_json_file(output_path / "release_catalog_index_public_keys.json", material["public_keys"])
+    else:
+        raise SatRootError(f"unsupported release catalog index signature scheme: {signature_scheme}")
+
+    published = publish_signed_release_catalog_index(
+        release_catalog_dirs,
+        output_dir=output_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        index_metadata=index_metadata,
+    )
+    published["release_catalog_index_material"] = material
+    return published
+
+
+def _load_release_catalog_index_publication(
+    release_catalog_index_dir: str | Path,
+) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
+    index_path = Path(release_catalog_index_dir).resolve()
+    if not index_path.is_dir():
+        raise SatRootError("release catalog index directory must be an existing directory")
+
+    manifest_path = index_path / "release_catalog_index_manifest.json"
+    if not manifest_path.is_file():
+        raise SatRootError("release_catalog_index_manifest.json is required for release catalog index publication operations")
+    manifest = _load_json_object_file(str(manifest_path), label="release-catalog-index-manifest")
+    validate_instance_against_schema(manifest, load_release_catalog_index_manifest_schema())
+
+    release_catalog_index_ref = manifest.get("release_catalog_index_path")
+    if not isinstance(release_catalog_index_ref, str) or not release_catalog_index_ref.strip():
+        raise SatRootError("release catalog index manifest release_catalog_index_path must be a non-empty string")
+    release_catalog_index_path = (manifest_path.parent / release_catalog_index_ref).resolve()
+    if not release_catalog_index_path.is_file():
+        raise SatRootError(f"release catalog index file not found: {release_catalog_index_ref}")
+
+    index = _load_json_file(str(release_catalog_index_path))
+    validate_instance_against_schema(index, load_release_catalog_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("release catalog index must contain an object")
+    validate_release_catalog_index_consistency(index)
+    return manifest_path, release_catalog_index_path, manifest, index
+
+
+def summarize_signed_release_catalog_index_publication(release_catalog_index_dir: str | Path) -> Dict[str, Any]:
+    _, release_catalog_index_path, manifest, index = _load_release_catalog_index_publication(release_catalog_index_dir)
+    release_catalogs = index.get("release_catalogs")
+    assert isinstance(release_catalogs, list)
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "release_catalog_index_path": manifest.get("release_catalog_index_path"),
+        "release_catalog_index_hash": manifest.get("release_catalog_index_hash"),
+        "release_catalog_index_resolved_path": str(release_catalog_index_path),
+        "release_catalog_count": index.get("release_catalog_count"),
+        "index": copy.deepcopy(index.get("index")),
+        "release_catalog_paths": sorted(str(entry.get("release_catalog_path")) for entry in release_catalogs),
+        "catalog_labels": sorted(
+            {
+                str(entry["catalog"].get("label"))
+                for entry in release_catalogs
+                if isinstance(entry.get("catalog"), dict) and isinstance(entry["catalog"].get("label"), str)
+            }
+        ),
+        "release_catalogs": copy.deepcopy(release_catalogs),
+    }
+
+
+def lint_signed_release_catalog_index_publication(release_catalog_index_dir: str | Path) -> Dict[str, Any]:
+    manifest_path, release_catalog_index_path, manifest, index = _load_release_catalog_index_publication(release_catalog_index_dir)
+    release_catalogs = index.get("release_catalogs")
+    assert isinstance(release_catalogs, list)
+
+    actual_index_hash = "sha256:" + sha256_hex_bytes(release_catalog_index_path.read_bytes())
+    release_catalog_index_hash_matches = manifest.get("release_catalog_index_hash") == actual_index_hash
+    release_catalog_count_matches = manifest.get("release_catalog_count") == index.get("release_catalog_count")
+    index_metadata_matches = manifest.get("index") == index.get("index")
+
+    release_catalog_id_counts: Dict[str, int] = {}
+    release_catalog_path_counts: Dict[str, int] = {}
+    release_catalog_manifest_path_counts: Dict[str, int] = {}
+    release_catalog_json_path_counts: Dict[str, int] = {}
+    for entry in release_catalogs:
+        release_catalog_id = entry.get("release_catalog_id")
+        release_catalog_path_ref = entry.get("release_catalog_path")
+        release_catalog_manifest_path_ref = entry.get("release_catalog_manifest_path")
+        release_catalog_json_path_ref = entry.get("release_catalog_json_path")
+        if isinstance(release_catalog_id, str):
+            release_catalog_id_counts[release_catalog_id] = release_catalog_id_counts.get(release_catalog_id, 0) + 1
+        if isinstance(release_catalog_path_ref, str):
+            release_catalog_path_counts[release_catalog_path_ref] = release_catalog_path_counts.get(release_catalog_path_ref, 0) + 1
+        if isinstance(release_catalog_manifest_path_ref, str):
+            release_catalog_manifest_path_counts[release_catalog_manifest_path_ref] = release_catalog_manifest_path_counts.get(release_catalog_manifest_path_ref, 0) + 1
+        if isinstance(release_catalog_json_path_ref, str):
+            release_catalog_json_path_counts[release_catalog_json_path_ref] = release_catalog_json_path_counts.get(release_catalog_json_path_ref, 0) + 1
+
+    duplicate_release_catalog_ids = sorted(value for value, count in release_catalog_id_counts.items() if count > 1)
+    duplicate_release_catalog_paths = sorted(value for value, count in release_catalog_path_counts.items() if count > 1)
+    duplicate_release_catalog_manifest_paths = sorted(value for value, count in release_catalog_manifest_path_counts.items() if count > 1)
+    duplicate_release_catalog_json_paths = sorted(value for value, count in release_catalog_json_path_counts.items() if count > 1)
+
+    release_catalog_manifest_path_mismatches: list[str] = []
+    release_catalog_json_path_mismatches: list[str] = []
+    missing_release_catalog_directories: list[str] = []
+    missing_release_catalog_manifests: list[str] = []
+    missing_release_catalog_json_files: list[str] = []
+    release_catalog_manifest_hash_mismatches: list[str] = []
+    release_catalog_hash_mismatches: list[str] = []
+    release_catalog_publication_metadata_mismatches: list[Dict[str, Any]] = []
+
+    for entry in release_catalogs:
+        release_catalog_path_ref = entry.get("release_catalog_path")
+        release_catalog_manifest_path_ref = entry.get("release_catalog_manifest_path")
+        release_catalog_json_path_ref = entry.get("release_catalog_json_path")
+        if not isinstance(release_catalog_path_ref, str) or not release_catalog_path_ref.strip():
+            continue
+        if not isinstance(release_catalog_manifest_path_ref, str) or not release_catalog_manifest_path_ref.strip():
+            continue
+        if not isinstance(release_catalog_json_path_ref, str) or not release_catalog_json_path_ref.strip():
+            continue
+
+        expected_manifest_path = (
+            "release_catalog_manifest.json"
+            if release_catalog_path_ref in {"", "."}
+            else f"{release_catalog_path_ref}/release_catalog_manifest.json"
+        )
+        if release_catalog_manifest_path_ref != expected_manifest_path:
+            release_catalog_manifest_path_mismatches.append(release_catalog_path_ref)
+
+        expected_catalog_json_path = (
+            "release_catalog.json"
+            if release_catalog_path_ref in {"", "."}
+            else f"{release_catalog_path_ref}/release_catalog.json"
+        )
+        if release_catalog_json_path_ref != expected_catalog_json_path:
+            release_catalog_json_path_mismatches.append(release_catalog_path_ref)
+
+        resolved_release_catalog_dir = (manifest_path.parent / release_catalog_path_ref).resolve()
+        resolved_manifest_path = (manifest_path.parent / release_catalog_manifest_path_ref).resolve()
+        resolved_catalog_json_path = (manifest_path.parent / release_catalog_json_path_ref).resolve()
+        if not resolved_release_catalog_dir.is_dir():
+            missing_release_catalog_directories.append(release_catalog_path_ref)
+        if not resolved_manifest_path.is_file():
+            missing_release_catalog_manifests.append(release_catalog_manifest_path_ref)
+            continue
+        if not resolved_catalog_json_path.is_file():
+            missing_release_catalog_json_files.append(release_catalog_json_path_ref)
+            continue
+
+        actual_manifest_hash = "sha256:" + sha256_hex_bytes(resolved_manifest_path.read_bytes())
+        if entry.get("release_catalog_manifest_hash") != actual_manifest_hash:
+            release_catalog_manifest_hash_mismatches.append(release_catalog_manifest_path_ref)
+
+        actual_catalog_hash = "sha256:" + sha256_hex_bytes(resolved_catalog_json_path.read_bytes())
+        if entry.get("release_catalog_hash") != actual_catalog_hash:
+            release_catalog_hash_mismatches.append(release_catalog_json_path_ref)
+
+        _, _, release_catalog_manifest, release_catalog = _load_release_catalog_publication(resolved_release_catalog_dir)
+        nested_releases = release_catalog.get("releases")
+        assert isinstance(nested_releases, list)
+        expected_release_paths = sorted(str(release.get("release_path")) for release in nested_releases)
+        expected_release_labels = sorted(
+            {
+                str(release["release"].get("label"))
+                for release in nested_releases
+                if isinstance(release.get("release"), dict) and isinstance(release["release"].get("label"), str)
+            }
+        )
+        mismatched_fields = []
+        if entry.get("signature_scheme") != release_catalog_manifest.get("signature_scheme"):
+            mismatched_fields.append("signature_scheme")
+        if entry.get("signature_key_id") != release_catalog_manifest.get("signature_key_id"):
+            mismatched_fields.append("signature_key_id")
+        if entry.get("release_count") != release_catalog.get("release_count"):
+            mismatched_fields.append("release_count")
+        if entry.get("catalog") != release_catalog.get("catalog"):
+            mismatched_fields.append("catalog")
+        if sorted(entry.get("release_paths", [])) != expected_release_paths:
+            mismatched_fields.append("release_paths")
+        if sorted(entry.get("release_labels", [])) != expected_release_labels:
+            mismatched_fields.append("release_labels")
+
+        if mismatched_fields:
+            release_catalog_publication_metadata_mismatches.append(
+                {
+                    "release_catalog_path": release_catalog_path_ref,
+                    "fields": sorted(set(mismatched_fields)),
+                }
+            )
+
+    return {
+        "ok": not any(
+            [
+                not release_catalog_index_hash_matches,
+                not release_catalog_count_matches,
+                not index_metadata_matches,
+                duplicate_release_catalog_ids,
+                duplicate_release_catalog_paths,
+                duplicate_release_catalog_manifest_paths,
+                duplicate_release_catalog_json_paths,
+                release_catalog_manifest_path_mismatches,
+                release_catalog_json_path_mismatches,
+                missing_release_catalog_directories,
+                missing_release_catalog_manifests,
+                missing_release_catalog_json_files,
+                release_catalog_manifest_hash_mismatches,
+                release_catalog_hash_mismatches,
+                release_catalog_publication_metadata_mismatches,
+            ]
+        ),
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "release_catalog_index_path": manifest.get("release_catalog_index_path"),
+        "release_catalog_index_hash_matches": release_catalog_index_hash_matches,
+        "release_catalog_count_matches": release_catalog_count_matches,
+        "index_metadata_matches": index_metadata_matches,
+        "declared_release_catalog_count": len(release_catalogs),
+        "release_catalog_count": index.get("release_catalog_count"),
+        "duplicate_release_catalog_ids": duplicate_release_catalog_ids,
+        "duplicate_release_catalog_paths": duplicate_release_catalog_paths,
+        "duplicate_release_catalog_manifest_paths": duplicate_release_catalog_manifest_paths,
+        "duplicate_release_catalog_json_paths": duplicate_release_catalog_json_paths,
+        "release_catalog_manifest_path_mismatches": sorted(release_catalog_manifest_path_mismatches),
+        "release_catalog_json_path_mismatches": sorted(release_catalog_json_path_mismatches),
+        "missing_release_catalog_directories": sorted(missing_release_catalog_directories),
+        "missing_release_catalog_manifests": sorted(missing_release_catalog_manifests),
+        "missing_release_catalog_json_files": sorted(missing_release_catalog_json_files),
+        "release_catalog_manifest_hash_mismatches": sorted(release_catalog_manifest_hash_mismatches),
+        "release_catalog_hash_mismatches": sorted(release_catalog_hash_mismatches),
+        "release_catalog_publication_metadata_mismatches": release_catalog_publication_metadata_mismatches,
+    }
+
+
 def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
     bundle_path = Path(bundle_dir)
     manifest = _load_validated_bundle_manifest(bundle_path)
@@ -4034,6 +4581,14 @@ def build_cli_parser() -> Any:
     validate_release_catalog_manifest_parser.add_argument("release_catalog_manifest_json", help="Path to release_catalog_manifest.json")
     validate_release_catalog_manifest_parser.add_argument("--schema-json", help="Optional path to a release-catalog-manifest JSON Schema file")
 
+    validate_release_catalog_index_parser = subparsers.add_parser("validate-release-catalog-index", help="Validate a SATROOT-1 release catalog index against the release-catalog-index schema")
+    validate_release_catalog_index_parser.add_argument("release_catalog_index_json", help="Path to release_catalog_index.json")
+    validate_release_catalog_index_parser.add_argument("--schema-json", help="Optional path to a release-catalog-index JSON Schema file")
+
+    validate_release_catalog_index_manifest_parser = subparsers.add_parser("validate-release-catalog-index-manifest", help="Validate a SATROOT-1 release catalog index manifest against the release-catalog-index-manifest schema")
+    validate_release_catalog_index_manifest_parser.add_argument("release_catalog_index_manifest_json", help="Path to release_catalog_index_manifest.json")
+    validate_release_catalog_index_manifest_parser.add_argument("--schema-json", help="Optional path to a release-catalog-index-manifest JSON Schema file")
+
     init_genesis_parser = subparsers.add_parser("init-genesis", help="Scaffold a SATROOT-1 genesis record with optional profile-aware defaults")
     init_genesis_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
     init_genesis_parser.add_argument("--name", required=True, help="Human-readable asset name for the genesis record")
@@ -4457,6 +5012,12 @@ def build_cli_parser() -> Any:
     release_catalog_lint_parser = subparsers.add_parser("release-catalog-lint", help="Check release_catalog_manifest.json, release_catalog.json, and referenced release publications without signature verification")
     release_catalog_lint_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory")
 
+    release_catalog_index_summary_parser = subparsers.add_parser("release-catalog-index-summary", help="Read release_catalog_index_manifest.json plus release_catalog_index.json and print an index-level summary without signature verification")
+    release_catalog_index_summary_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
+
+    release_catalog_index_lint_parser = subparsers.add_parser("release-catalog-index-lint", help="Check release_catalog_index_manifest.json, release_catalog_index.json, and referenced release catalog publications without signature verification")
+    release_catalog_index_lint_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
+
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
     bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
@@ -4522,6 +5083,26 @@ def build_cli_parser() -> Any:
     release_catalog_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-manifest signing")
     release_catalog_manifest_parser.add_argument("--output", help="Optional output path")
 
+    release_catalog_index_parser = subparsers.add_parser("build-release-catalog-index", help="Build a SATROOT-1 release catalog index from one or more signed release catalog directories")
+    release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory")
+    release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
+    release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
+    release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    release_catalog_index_parser.add_argument("--channel", help="Optional index channel metadata")
+    release_catalog_index_parser.add_argument("--label", help="Optional human-readable index label")
+    release_catalog_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+    release_catalog_index_parser.add_argument("--output", help="Optional output path")
+
+    release_catalog_index_manifest_parser = subparsers.add_parser("build-release-catalog-index-manifest", help="Build a signed SATROOT-1 release catalog index manifest from a release catalog index")
+    release_catalog_index_manifest_parser.add_argument("release_catalog_index_json", help="Path to release_catalog_index.json")
+    release_catalog_index_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    release_catalog_index_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release catalog index manifest")
+    release_catalog_index_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    release_catalog_index_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-catalog-index-manifest signing")
+    release_catalog_index_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    release_catalog_index_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-index-manifest signing")
+    release_catalog_index_manifest_parser.add_argument("--output", help="Optional output path")
+
     publish_release_catalog_parser = subparsers.add_parser("publish-release-catalog", help="Build release_catalog.json plus release_catalog_manifest.json in one SATROOT-1 catalog directory")
     publish_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory")
     publish_release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
@@ -4538,6 +5119,22 @@ def build_cli_parser() -> Any:
     publish_release_catalog_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
     publish_release_catalog_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-manifest signing")
 
+    publish_release_catalog_index_parser = subparsers.add_parser("publish-release-catalog-index", help="Build release_catalog_index.json plus release_catalog_index_manifest.json in one SATROOT-1 index directory")
+    publish_release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory")
+    publish_release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
+    publish_release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
+    publish_release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    publish_release_catalog_index_parser.add_argument("--output-dir", required=True, help="Directory where release_catalog_index.json and release_catalog_index_manifest.json will be written")
+    publish_release_catalog_index_parser.add_argument("--channel", help="Optional index channel metadata")
+    publish_release_catalog_index_parser.add_argument("--label", help="Optional human-readable index label")
+    publish_release_catalog_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+    publish_release_catalog_index_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_release_catalog_index_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release catalog index manifest")
+    publish_release_catalog_index_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_release_catalog_index_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-catalog-index-manifest signing")
+    publish_release_catalog_index_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_release_catalog_index_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-index-manifest signing")
+
     bootstrap_release_catalog_publication_parser = subparsers.add_parser("bootstrap-release-catalog-publication", help="Generate signing material and write a ready-to-verify SATROOT-1 release catalog directory")
     bootstrap_release_catalog_publication_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory")
     bootstrap_release_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
@@ -4549,6 +5146,18 @@ def build_cli_parser() -> Any:
     bootstrap_release_catalog_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
     bootstrap_release_catalog_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_release_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
+
+    bootstrap_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-release-catalog-index-publication", help="Generate signing material and write a ready-to-verify SATROOT-1 release catalog index directory")
+    bootstrap_release_catalog_index_publication_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--output-dir", required=True, help="Directory where index material plus release_catalog_index.json and release_catalog_index_manifest.json will be written")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--channel", help="Optional index channel metadata")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--label", help="Optional human-readable index label")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_release_catalog_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog index manifest")
 
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
@@ -4564,6 +5173,12 @@ def build_cli_parser() -> Any:
     verify_release_catalog_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification")
     verify_release_catalog_manifest_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
     verify_release_catalog_manifest_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for verification")
+
+    verify_release_catalog_index_manifest_parser = subparsers.add_parser("verify-release-catalog-index-manifest", help="Verify a signed SATROOT-1 release catalog index manifest against its release catalog index")
+    verify_release_catalog_index_manifest_parser.add_argument("release_catalog_index_manifest_json", help="Path to release_catalog_index_manifest.json")
+    verify_release_catalog_index_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification")
+    verify_release_catalog_index_manifest_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
+    verify_release_catalog_index_manifest_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for verification")
 
     generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
@@ -5488,6 +6103,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"valid SATROOT-1 release catalog manifest: {count} record(s)")
         return 0
 
+    if args.command == "validate-release-catalog-index":
+        index = _load_json_file(args.release_catalog_index_json)
+        schema = load_release_catalog_index_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(index, schema)
+        if not isinstance(index, dict):
+            raise SatRootError("release catalog index must contain an object")
+        validate_release_catalog_index_consistency(index)
+        print(f"valid SATROOT-1 release catalog index: {count} record(s)")
+        return 0
+
+    if args.command == "validate-release-catalog-index-manifest":
+        manifest = _load_json_file(args.release_catalog_index_manifest_json)
+        schema = load_release_catalog_index_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(manifest, schema)
+        print(f"valid SATROOT-1 release catalog index manifest: {count} record(s)")
+        return 0
+
     if args.command == "init-signer-key-map":
         events = _load_json_file(args.events_json)
         if not isinstance(events, list):
@@ -5580,6 +6212,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 
+    if args.command == "release-catalog-index-summary":
+        summary = summarize_signed_release_catalog_index_publication(args.release_catalog_index_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "release-catalog-index-lint":
+        report = lint_signed_release_catalog_index_publication(args.release_catalog_index_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
     if args.command == "build-bundle-index":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
@@ -5646,6 +6288,45 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(manifest, output_path)
         return 0
 
+    if args.command == "build-release-catalog-index":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        index_metadata = dict((preset or {}).get("index_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        release_catalog_dirs = resolve_release_catalog_directory_inputs(
+            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+        )
+        index = build_signed_release_catalog_index(
+            release_catalog_dirs,
+            base_dir=base_dir,
+            index_metadata=index_metadata,
+        )
+        _write_output(index, output_path)
+        return 0
+
+    if args.command == "build-release-catalog-index-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        manifest = build_signed_release_catalog_index_manifest(
+            args.release_catalog_index_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
     if args.command == "publish-release":
         signer = _release_manifest_signer_from_args(args)
         release_metadata = {
@@ -5696,6 +6377,33 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote SATROOT release catalog publication to {Path(published['release_catalog_manifest_path']).parent}")
         return 0
 
+    if args.command == "publish-release-catalog-index":
+        signer = _release_manifest_signer_from_args(args)
+        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        index_metadata = dict((preset or {}).get("index_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        release_catalog_dirs = resolve_release_catalog_directory_inputs(
+            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+        )
+        published = publish_signed_release_catalog_index(
+            release_catalog_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            index_metadata=index_metadata,
+        )
+        print(f"wrote SATROOT release catalog index publication to {Path(published['release_catalog_index_manifest_path']).parent}")
+        return 0
+
     if args.command == "bootstrap-release-publication":
         release_metadata = {
             "channel": args.channel,
@@ -5742,6 +6450,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote bootstrapped SATROOT release catalog publication to {Path(published['release_catalog_manifest_path']).parent}")
         return 0
 
+    if args.command == "bootstrap-release-catalog-index-publication":
+        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        index_metadata = dict((preset or {}).get("index_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        release_catalog_dirs = resolve_release_catalog_directory_inputs(
+            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+        )
+        published = bootstrap_release_catalog_index_publication(
+            release_catalog_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            index_metadata=index_metadata,
+        )
+        print(f"wrote bootstrapped SATROOT release catalog index publication to {Path(published['release_catalog_index_manifest_path']).parent}")
+        return 0
+
     if args.command == "verify-bundle":
         summary = verify_signed_ledger_bundle(args.bundle_dir)
         print(canonical_json(summary))
@@ -5758,6 +6491,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         manifest = _load_json_object_file(args.release_catalog_manifest_json, label="release-catalog-manifest")
         verifier = _release_manifest_verifier_from_args(args, manifest)
         summary = verify_signed_release_catalog_manifest(args.release_catalog_manifest_json, verifier=verifier)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "verify-release-catalog-index-manifest":
+        manifest = _load_json_object_file(args.release_catalog_index_manifest_json, label="release-catalog-index-manifest")
+        verifier = _release_manifest_verifier_from_args(args, manifest)
+        summary = verify_signed_release_catalog_index_manifest(args.release_catalog_index_manifest_json, verifier=verifier)
         print(canonical_json(summary))
         return 0
 

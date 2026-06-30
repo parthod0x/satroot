@@ -29,11 +29,14 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `protocol/satroot1.release-manifest.schema.json` - JSON schema for signed release manifests.
 - `protocol/satroot1.release-catalog.schema.json` - JSON schema for multi-release catalogs.
 - `protocol/satroot1.release-catalog-manifest.schema.json` - JSON schema for signed multi-release catalog manifests.
+- `protocol/satroot1.release-catalog-index.schema.json` - JSON schema for multi-catalog release index exports.
+- `protocol/satroot1.release-catalog-index-manifest.schema.json` - JSON schema for signed multi-catalog release index manifests.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `examples/release_catalog_presets/` - reusable SATROOT release-catalog publication presets.
+- `examples/release_catalog_index_presets/` - reusable SATROOT release-catalog-index publication presets.
 - `examples/stack_presets/` - reusable SATROOT end-to-end publication-stack presets.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
@@ -106,12 +109,18 @@ The v0.1 kernel defines:
 - structural release-catalog linting via `release-catalog-lint` for catalog and nested release drift,
 - signed release-catalog-manifest generation for authenticating multi-release catalogs,
 - one-shot `publish-release-catalog` orchestration for ready-to-verify release-catalog directories,
+- deterministic release-catalog-index generation for aggregating multiple signed release-catalog publications,
+- index-level inspection via `release-catalog-index-summary` when signature verification is unnecessary,
+- structural release-catalog-index linting via `release-catalog-index-lint` for index and nested catalog drift,
+- signed release-catalog-index-manifest generation for authenticating multi-catalog release indexes,
+- one-shot `publish-release-catalog-index` orchestration for ready-to-verify release-catalog-index directories,
 - one-shot `bootstrap-genesis-bundle` scaffolding for signed starter bundles from profile-aware genesis defaults,
 - one-shot `bootstrap-release-publication` orchestration for release material plus signed publication outputs,
 - one-shot `bootstrap-release-catalog-publication` orchestration for release-catalog material plus signed publication outputs,
+- one-shot `bootstrap-release-catalog-index-publication` orchestration for release-catalog-index material plus signed publication outputs,
 - one-shot `bootstrap-publication-stack` orchestration for preset-driven bundles, releases, and release-catalog outputs in one workspace,
 - signed bundle verification against manifest and verifier material,
-- bundle-manifest, bundle-index, release-manifest, release-catalog, and release-catalog-manifest schema validation for exported signed artifacts,
+- bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, and release-catalog-index-manifest schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -198,7 +207,7 @@ python -m pytest
 Expected result:
 
 ```text
-202 passed
+211 passed
 ```
 
 ## Signing utilities
@@ -535,6 +544,13 @@ For repeatable multi-release packaging, the release-catalog commands can also lo
 satroot1 bootstrap-release-catalog-publication --preset-json examples/release_catalog_presets/ai_compute_release_stack.json --output-dir release_catalog_bootstrap --label "SATROOT AI Compute Release Stack Override" --scheme hmac-sha256 --key-id catalog-key
 ```
 
+For a higher-level network of signed release catalogs, you can build and publish a release-catalog index the same way:
+
+```bash
+satroot1 build-release-catalog-index release_catalog_bootstrap another_release_catalog --channel network --label "SATROOT Catalog Network" --published-at 2026-07-02T05:00:00Z --output release_catalog_index.json
+satroot1 bootstrap-release-catalog-index-publication --preset-json examples/release_catalog_index_presets/ai_compute_catalog_network.json --output-dir release_catalog_index_bootstrap --label "SATROOT AI Compute Catalog Network Override" --scheme hmac-sha256 --key-id index-key
+```
+
 For a single end-to-end workspace, `bootstrap-publication-stack` can take multiple demo-catalog presets plus an optional release-catalog preset and emit catalog workspaces and a top-level release catalog in one shot:
 
 ```bash
@@ -559,6 +575,18 @@ Lint a release catalog publication and all referenced release directories:
 satroot1 release-catalog-lint release_catalog_bootstrap
 ```
 
+Inspect a release-catalog index publication without signature verification:
+
+```bash
+satroot1 release-catalog-index-summary release_catalog_index_bootstrap
+```
+
+Lint a release-catalog index publication and all referenced release-catalog directories:
+
+```bash
+satroot1 release-catalog-index-lint release_catalog_index_bootstrap
+```
+
 Validate a bundle manifest directly against the SATROOT manifest schema:
 
 ```bash
@@ -577,11 +605,13 @@ Validate a signed release manifest directly against the SATROOT release-manifest
 satroot1 validate-release-manifest release_manifest.json
 ```
 
-Validate a release catalog and its signed manifest directly against the SATROOT schemas:
+Validate a release catalog, release-catalog index, and their signed manifests directly against the SATROOT schemas:
 
 ```bash
 satroot1 validate-release-catalog release_catalog.json
 satroot1 validate-release-catalog-manifest release_catalog_manifest.json
+satroot1 validate-release-catalog-index release_catalog_index.json
+satroot1 validate-release-catalog-index-manifest release_catalog_index_manifest.json
 ```
 
 Verify a signed release manifest against its bundle index:
@@ -594,6 +624,12 @@ Verify a signed release catalog manifest against its release catalog:
 
 ```bash
 satroot1 verify-release-catalog-manifest release_catalog_manifest.json --secrets-json release_catalog_secrets.json
+```
+
+Verify a signed release-catalog index manifest against its release-catalog index:
+
+```bash
+satroot1 verify-release-catalog-index-manifest release_catalog_index_manifest.json --secrets-json release_catalog_index_secrets.json
 ```
 
 Sign a full demo ledger with the built-in demo signature mode:
