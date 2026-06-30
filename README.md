@@ -124,8 +124,10 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-release-catalog-index-publication` orchestration for release-catalog-index material plus signed publication outputs,
 - demo-catalog inspection via `demo-catalog-summary` and structural linting via `demo-catalog-lint`,
 - one-shot `bootstrap-publication-stack` orchestration for preset-driven bundles, releases, and release-catalog outputs in one workspace,
+- `publish-publication-stack` for consolidating existing demo catalog workspaces into one signed release-catalog stack,
 - publication-stack inspection via `publication-stack-summary` and structural linting via `publication-stack-lint`,
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
+- `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
 - signed bundle verification against manifest and verifier material,
@@ -216,7 +218,7 @@ python -m pytest
 Expected result:
 
 ```text
-230 passed
+232 passed
 ```
 
 ## Signing utilities
@@ -582,6 +584,18 @@ If you want the whole network described in one checked-in file, `bootstrap-publi
 
 ```bash
 satroot1 bootstrap-publication-network --network-preset-json examples/network_presets/ai_compute_publication_network.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --output-dir publication_network --label "SATROOT Network Override"
+```
+
+If you already have generated demo catalog workspaces and just want to consolidate them into one signed publication stack, use `publish-publication-stack`:
+
+```bash
+satroot1 publish-publication-stack generated_catalogs/stable_workspace generated_catalogs/machine_workspace --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_existing --label "Published Existing Stack"
+```
+
+If you already have generated publication stack workspaces and want a top-level signed network without regenerating the nested stacks, use `publish-publication-network`:
+
+```bash
+satroot1 publish-publication-network generated_stacks/stack_alpha generated_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Published Existing Network"
 ```
 
 Inspect a release catalog publication without signature verification:

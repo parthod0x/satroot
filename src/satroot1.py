@@ -18,6 +18,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -882,6 +883,36 @@ def _unique_workspace_names(paths: Sequence[str | Path]) -> list[str]:
         used[stem] = count + 1
         names.append(stem if count == 0 else f"{stem}-{count + 1}")
     return names
+
+
+def _copy_workspace_directory(source_dir: str | Path, target_dir: str | Path, *, label: str) -> Path:
+    source_path = Path(source_dir).resolve()
+    target_path = Path(target_dir).resolve()
+    if not source_path.is_dir():
+        raise SatRootError(f"{label} directory must be an existing directory")
+    if target_path.exists():
+        raise SatRootError(f"refusing to overwrite existing {label} target directory: {target_path}")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source_path, target_path)
+    return target_path
+
+
+def _require_consistent_workspace_scheme(
+    summaries: Sequence[Mapping[str, Any]],
+    *,
+    field_name: str,
+    label: str,
+) -> str:
+    values = {
+        str(summary.get(field_name))
+        for summary in summaries
+        if isinstance(summary.get(field_name), str) and str(summary.get(field_name)).strip()
+    }
+    if not values:
+        raise SatRootError(f"{label} requires at least one non-empty {field_name}")
+    if len(values) != 1:
+        raise SatRootError(f"{label} requires a consistent {field_name} across all nested workspaces")
+    return next(iter(values))
 
 
 def scaffold_event_record(
@@ -3105,6 +3136,117 @@ def resolve_release_catalog_directory_inputs(
     return resolved
 
 
+def _discover_workspace_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool,
+    label: str,
+    summary_validator: Callable[[Mapping[str, Any]], None],
+) -> list[str]:
+    if not search_roots:
+        raise SatRootError(f"at least one {label} discovery root is required")
+
+    discovered: Dict[str, str] = {}
+    for search_root in search_roots:
+        root_path = Path(search_root).resolve()
+        if not root_path.exists():
+            raise SatRootError(f"{label} discovery root not found: {search_root}")
+        if not root_path.is_dir():
+            raise SatRootError(f"{label} discovery root must be a directory: {search_root}")
+
+        summary_paths = root_path.rglob("summary.json") if recursive else root_path.glob("summary.json")
+        for summary_path in summary_paths:
+            try:
+                summary = _load_json_object_file(str(summary_path), label=f"{label} summary")
+                summary_validator(summary)
+            except SatRootError:
+                continue
+            workspace_dir = str(summary_path.parent.resolve())
+            discovered.setdefault(workspace_dir, workspace_dir)
+
+    if not discovered:
+        raise SatRootError(f"no {label} directories found under the provided discovery roots")
+    return sorted(discovered.values())
+
+
+def discover_demo_catalog_workspace_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    return _discover_workspace_dirs(
+        search_roots,
+        recursive=recursive,
+        label="demo catalog workspace",
+        summary_validator=validate_demo_catalog_summary_consistency,
+    )
+
+
+def discover_publication_stack_workspace_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    return _discover_workspace_dirs(
+        search_roots,
+        recursive=recursive,
+        label="publication stack workspace",
+        summary_validator=validate_publication_stack_summary_consistency,
+    )
+
+
+def resolve_demo_catalog_workspace_inputs(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> list[str | Path]:
+    resolved: list[str | Path] = []
+    seen: set[str] = set()
+
+    for workspace_dir in workspace_dirs:
+        workspace_path = str(Path(workspace_dir).resolve())
+        if workspace_path not in seen:
+            resolved.append(workspace_dir)
+            seen.add(workspace_path)
+
+    if discover_under:
+        for workspace_dir in discover_demo_catalog_workspace_dirs(discover_under, recursive=recursive):
+            if workspace_dir not in seen:
+                resolved.append(workspace_dir)
+                seen.add(workspace_dir)
+
+    if not resolved:
+        raise SatRootError("at least one demo catalog workspace directory or --discover-under path is required")
+    return resolved
+
+
+def resolve_publication_stack_workspace_inputs(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> list[str | Path]:
+    resolved: list[str | Path] = []
+    seen: set[str] = set()
+
+    for workspace_dir in workspace_dirs:
+        workspace_path = str(Path(workspace_dir).resolve())
+        if workspace_path not in seen:
+            resolved.append(workspace_dir)
+            seen.add(workspace_path)
+
+    if discover_under:
+        for workspace_dir in discover_publication_stack_workspace_dirs(discover_under, recursive=recursive):
+            if workspace_dir not in seen:
+                resolved.append(workspace_dir)
+                seen.add(workspace_dir)
+
+    if not resolved:
+        raise SatRootError("at least one publication stack workspace directory or --discover-under path is required")
+    return resolved
+
+
 def validate_release_catalog_index_consistency(index: Mapping[str, Any]) -> None:
     release_catalogs = index.get("release_catalogs")
     release_catalog_count = index.get("release_catalog_count")
@@ -5095,6 +5237,28 @@ def write_demo_catalog_workspace(
     }
 
 
+def relocate_demo_catalog_workspace_summary(demo_catalog_dir: str | Path) -> Dict[str, Any]:
+    workspace_path, summary = _load_workspace_summary(demo_catalog_dir, label="demo catalog workspace")
+    validate_demo_catalog_summary_consistency(summary)
+    bundles = summary.get("bundles")
+    assert isinstance(bundles, list)
+
+    summary["bundles_dir"] = str((workspace_path / "bundles").resolve())
+    summary["release_dir"] = str((workspace_path / "release").resolve())
+    summary["release_manifest_path"] = str((workspace_path / "release" / "release_manifest.json").resolve())
+    summary["bundle_index_path"] = str((workspace_path / "release" / "bundle_index.json").resolve())
+
+    for entry in bundles:
+        if not isinstance(entry, dict):
+            continue
+        bundle_name = entry.get("bundle_name")
+        if isinstance(bundle_name, str) and bundle_name.strip():
+            entry["bundle_dir"] = str((workspace_path / "bundles" / bundle_name).resolve())
+
+    _write_json_file(workspace_path / "summary.json", summary)
+    return summary
+
+
 def write_publication_stack_workspace(
     *,
     bundle_scheme: str,
@@ -5190,6 +5354,34 @@ def write_publication_stack_workspace(
     }
 
 
+def relocate_publication_stack_workspace_summary(publication_stack_dir: str | Path) -> Dict[str, Any]:
+    stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
+    validate_publication_stack_summary_consistency(summary)
+    workspaces = summary.get("workspaces")
+    assert isinstance(workspaces, list)
+
+    summary["catalog_workspaces_dir"] = str((stack_path / "catalog_workspaces").resolve())
+    summary["release_catalog_dir"] = str((stack_path / "release_catalog").resolve())
+    summary["release_catalog_manifest_path"] = str((stack_path / "release_catalog" / "release_catalog_manifest.json").resolve())
+
+    for entry in workspaces:
+        if not isinstance(entry, dict):
+            continue
+        workspace_name = entry.get("workspace_name")
+        if not isinstance(workspace_name, str) or not workspace_name.strip():
+            continue
+        workspace_dir = (stack_path / "catalog_workspaces" / workspace_name).resolve()
+        nested_summary = relocate_demo_catalog_workspace_summary(workspace_dir)
+        entry["workspace_dir"] = str(workspace_dir)
+        entry["summary_path"] = str((workspace_dir / "summary.json").resolve())
+        entry["bundle_count"] = nested_summary.get("bundle_count")
+        entry["release_dir"] = nested_summary.get("release_dir")
+        entry["release_manifest_path"] = nested_summary.get("release_manifest_path")
+
+    _write_json_file(stack_path / "summary.json", summary)
+    return summary
+
+
 def write_publication_network_workspace(
     *,
     bundle_scheme: str,
@@ -5271,6 +5463,216 @@ def write_publication_network_workspace(
         "stack_preset_paths": [str(path) for path in resolved_stack_preset_paths],
         "network_preset_path": None if network_preset_path is None else str(Path(network_preset_path).resolve()),
         "release_catalog_index_preset_path": None if release_catalog_index_preset_path is None else str(Path(release_catalog_index_preset_path).resolve()),
+        "release_catalog_index": copy.deepcopy(published["release_catalog_index"]),
+        "release_catalog_index_manifest_path": published["release_catalog_index_manifest_path"],
+        "workspaces": workspace_entries,
+    }
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+        "release_catalog_index_dir": str(release_catalog_index_dir.resolve()),
+        "release_catalog_index_publication": published,
+    }
+
+
+def relocate_publication_network_workspace_summary(publication_network_dir: str | Path) -> Dict[str, Any]:
+    network_path, summary = _load_workspace_summary(publication_network_dir, label="publication network")
+    validate_publication_network_summary_consistency(summary)
+    workspaces = summary.get("workspaces")
+    assert isinstance(workspaces, list)
+
+    summary["stack_workspaces_dir"] = str((network_path / "stack_workspaces").resolve())
+    summary["release_catalog_index_dir"] = str((network_path / "release_catalog_index").resolve())
+    summary["release_catalog_index_manifest_path"] = str((network_path / "release_catalog_index" / "release_catalog_index_manifest.json").resolve())
+
+    for entry in workspaces:
+        if not isinstance(entry, dict):
+            continue
+        workspace_name = entry.get("workspace_name")
+        if not isinstance(workspace_name, str) or not workspace_name.strip():
+            continue
+        workspace_dir = (network_path / "stack_workspaces" / workspace_name).resolve()
+        nested_summary = relocate_publication_stack_workspace_summary(workspace_dir)
+        entry["workspace_dir"] = str(workspace_dir)
+        entry["summary_path"] = str((workspace_dir / "summary.json").resolve())
+        entry["catalog_workspace_count"] = nested_summary.get("workspace_count")
+        entry["release_catalog_dir"] = nested_summary.get("release_catalog_dir")
+        entry["release_catalog_manifest_path"] = nested_summary.get("release_catalog_manifest_path")
+
+    _write_json_file(network_path / "summary.json", summary)
+    return summary
+
+
+def publish_publication_stack_workspace(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = [Path(value).resolve() for value in workspace_dirs]
+    if not resolved_workspace_dirs:
+        raise SatRootError("publication stack publishing requires at least one demo catalog workspace")
+
+    source_summaries: list[Dict[str, Any]] = []
+    for workspace_dir in resolved_workspace_dirs:
+        _, summary = _load_workspace_summary(workspace_dir, label="demo catalog workspace")
+        validate_demo_catalog_summary_consistency(summary)
+        source_summaries.append(summary)
+
+    bundle_scheme = _require_consistent_workspace_scheme(
+        source_summaries,
+        field_name="bundle_scheme",
+        label="publication stack publishing",
+    )
+    release_scheme = _require_consistent_workspace_scheme(
+        source_summaries,
+        field_name="release_scheme",
+        label="publication stack publishing",
+    )
+
+    workspace_names = _unique_workspace_names(resolved_workspace_dirs)
+    root_output_dir = Path(output_dir).resolve()
+    catalog_workspaces_dir = root_output_dir / "catalog_workspaces"
+    release_catalog_dir = root_output_dir / "release_catalog"
+    release_dirs: list[str] = []
+    workspace_entries: list[Dict[str, Any]] = []
+
+    for source_dir, workspace_name in zip(resolved_workspace_dirs, workspace_names):
+        target_dir = _copy_workspace_directory(
+            source_dir,
+            catalog_workspaces_dir / workspace_name,
+            label="demo catalog workspace",
+        )
+        copied_summary = relocate_demo_catalog_workspace_summary(target_dir)
+        release_dirs.append(str((target_dir / "release").resolve()))
+        workspace_entries.append(
+            {
+                "workspace_name": workspace_name,
+                "preset_path": copied_summary.get("preset_path"),
+                "workspace_dir": str(target_dir.resolve()),
+                "summary_path": str((target_dir / "summary.json").resolve()),
+                "bundle_count": copied_summary.get("bundle_count"),
+                "release_dir": copied_summary.get("release_dir"),
+                "release_manifest_path": copied_summary.get("release_manifest_path"),
+            }
+        )
+
+    published = bootstrap_release_catalog_publication(
+        release_dirs,
+        output_dir=release_catalog_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        catalog_metadata=release_catalog_metadata,
+    )
+    summary = {
+        "bundle_scheme": bundle_scheme,
+        "release_scheme": release_scheme,
+        "release_catalog_scheme": signature_scheme,
+        "workspace_count": len(workspace_entries),
+        "catalog_workspaces_dir": str(catalog_workspaces_dir.resolve()),
+        "release_catalog_dir": str(release_catalog_dir.resolve()),
+        "catalog_preset_paths": [],
+        "stack_preset_path": None,
+        "release_catalog_preset_path": None,
+        "release_catalog": copy.deepcopy(published["release_catalog"]),
+        "release_catalog_manifest_path": published["release_catalog_manifest_path"],
+        "workspaces": workspace_entries,
+    }
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+        "release_catalog_dir": str(release_catalog_dir.resolve()),
+        "release_catalog_publication": published,
+    }
+
+
+def publish_publication_network_workspace(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    release_catalog_index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = [Path(value).resolve() for value in workspace_dirs]
+    if not resolved_workspace_dirs:
+        raise SatRootError("publication network publishing requires at least one publication stack workspace")
+
+    source_summaries: list[Dict[str, Any]] = []
+    for workspace_dir in resolved_workspace_dirs:
+        _, summary = _load_workspace_summary(workspace_dir, label="publication stack")
+        validate_publication_stack_summary_consistency(summary)
+        source_summaries.append(summary)
+
+    bundle_scheme = _require_consistent_workspace_scheme(
+        source_summaries,
+        field_name="bundle_scheme",
+        label="publication network publishing",
+    )
+    release_scheme = _require_consistent_workspace_scheme(
+        source_summaries,
+        field_name="release_scheme",
+        label="publication network publishing",
+    )
+    release_catalog_scheme = _require_consistent_workspace_scheme(
+        source_summaries,
+        field_name="release_catalog_scheme",
+        label="publication network publishing",
+    )
+
+    workspace_names = _unique_workspace_names(resolved_workspace_dirs)
+    root_output_dir = Path(output_dir).resolve()
+    stack_workspaces_dir = root_output_dir / "stack_workspaces"
+    release_catalog_index_dir = root_output_dir / "release_catalog_index"
+    release_catalog_dirs: list[str] = []
+    workspace_entries: list[Dict[str, Any]] = []
+
+    for source_dir, workspace_name in zip(resolved_workspace_dirs, workspace_names):
+        target_dir = _copy_workspace_directory(
+            source_dir,
+            stack_workspaces_dir / workspace_name,
+            label="publication stack workspace",
+        )
+        copied_summary = relocate_publication_stack_workspace_summary(target_dir)
+        release_catalog_dirs.append(str((target_dir / "release_catalog").resolve()))
+        workspace_entries.append(
+            {
+                "workspace_name": workspace_name,
+                "preset_path": copied_summary.get("stack_preset_path"),
+                "workspace_dir": str(target_dir.resolve()),
+                "summary_path": str((target_dir / "summary.json").resolve()),
+                "catalog_workspace_count": copied_summary.get("workspace_count"),
+                "release_catalog_dir": copied_summary.get("release_catalog_dir"),
+                "release_catalog_manifest_path": copied_summary.get("release_catalog_manifest_path"),
+            }
+        )
+
+    published = bootstrap_release_catalog_index_publication(
+        release_catalog_dirs,
+        output_dir=release_catalog_index_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        index_metadata=release_catalog_index_metadata,
+    )
+    summary = {
+        "bundle_scheme": bundle_scheme,
+        "release_scheme": release_scheme,
+        "release_catalog_scheme": release_catalog_scheme,
+        "release_catalog_index_scheme": signature_scheme,
+        "stack_count": len(workspace_entries),
+        "stack_workspaces_dir": str(stack_workspaces_dir.resolve()),
+        "release_catalog_index_dir": str(release_catalog_index_dir.resolve()),
+        "stack_preset_paths": [],
+        "network_preset_path": None,
+        "release_catalog_index_preset_path": None,
         "release_catalog_index": copy.deepcopy(published["release_catalog_index"]),
         "release_catalog_index_manifest_path": published["release_catalog_index_manifest_path"],
         "workspaces": workspace_entries,
@@ -5657,6 +6059,28 @@ def build_cli_parser() -> Any:
     bootstrap_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata override")
     bootstrap_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label override")
     bootstrap_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
+
+    publish_publication_stack_parser = subparsers.add_parser("publish-publication-stack", help="Copy existing demo catalog workspaces into one SATROOT publication stack and publish a signed release catalog")
+    publish_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT demo catalog workspace directory")
+    publish_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested demo catalog workspaces; may be repeated")
+    publish_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    publish_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where copied catalog workspaces, release_catalog/, and summary.json will be written")
+    publish_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated release-catalog manifest")
+    publish_publication_stack_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the top-level release catalog manifest")
+    publish_publication_stack_parser.add_argument("--channel", help="Optional release catalog channel metadata")
+    publish_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label metadata")
+    publish_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
+
+    publish_publication_network_parser = subparsers.add_parser("publish-publication-network", help="Copy existing publication stack workspaces into one SATROOT publication network and publish a signed release-catalog index")
+    publish_publication_network_parser.add_argument("publication_stack_dir", nargs="*", help="Path to an existing SATROOT publication stack workspace directory")
+    publish_publication_network_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication stack workspaces; may be repeated")
+    publish_publication_network_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    publish_publication_network_parser.add_argument("--output-dir", required=True, help="Directory where copied stack workspaces, release_catalog_index/, and summary.json will be written")
+    publish_publication_network_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated release-catalog-index manifest")
+    publish_publication_network_parser.add_argument("--release-catalog-index-key-id", required=True, help="Signature key identifier to generate and use for the top-level release catalog index manifest")
+    publish_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata")
+    publish_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label metadata")
+    publish_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -6836,6 +7260,48 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_catalog_index_preset_path=release_catalog_index_preset_path,
         )
         print(f"wrote SATROOT publication network to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-publication-stack":
+        catalog_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        workspace_dirs = resolve_demo_catalog_workspace_inputs(
+            args.catalog_workspace_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        publish_publication_stack_workspace(
+            workspace_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.release_catalog_key_id,
+            release_catalog_metadata=catalog_metadata,
+        )
+        print(f"wrote SATROOT publication stack from existing workspaces to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-publication-network":
+        index_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        workspace_dirs = resolve_publication_stack_workspace_inputs(
+            args.publication_stack_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        publish_publication_network_workspace(
+            workspace_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.release_catalog_index_key_id,
+            release_catalog_index_metadata=index_metadata,
+        )
+        print(f"wrote SATROOT publication network from existing workspaces to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-genesis-bundle":

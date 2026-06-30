@@ -2779,6 +2779,150 @@ def test_cli_bootstrap_publication_network_with_network_preset_json(tmp_path, ca
     assert {entry["symbol"] for entry in json.loads((output_dir / "stack_workspaces" / "stack_single" / "catalog_workspaces" / "identity_catalog" / "summary.json").read_text(encoding="utf-8"))["bundles"]} == {"NETID1"}
 
 
+def test_cli_publish_publication_stack_from_existing_catalog_workspaces(tmp_path, capsys):
+    stable_dir = tmp_path / "stable_workspace"
+    machine_dir = tmp_path / "machine_workspace"
+
+    assert main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(stable_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Existing Workspace",
+            "--published-at",
+            "2026-07-06T01:00:00Z",
+        ]
+    ) == 0
+    capsys.readouterr()
+    assert main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-MACHINE-1",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(machine_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Machine Existing Workspace",
+            "--published-at",
+            "2026-07-06T02:00:00Z",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    output_dir = tmp_path / "published_stack"
+    exit_code = main(
+        [
+            "publish-publication-stack",
+            str(stable_dir),
+            str(machine_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Published Existing Stack",
+            "--published-at",
+            "2026-07-06T03:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication stack from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["catalog_preset_paths"] == []
+    assert summary["release_catalog"]["catalog"]["label"] == "Published Existing Stack"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stable_workspace", "machine_workspace"}
+    assert (output_dir / "catalog_workspaces" / "stable_workspace" / "summary.json").is_file()
+    assert (output_dir / "catalog_workspaces" / "machine_workspace" / "summary.json").is_file()
+
+    secrets = json.loads((output_dir / "release_catalog" / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog" / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"]["label"] == "Published Existing Stack"
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_publication_network_from_existing_stack_workspaces(tmp_path, capsys):
+    stack_alpha = tmp_path / "stack_alpha_root" / "publication_stack"
+    stack_beta = tmp_path / "stack_beta_root" / "publication_stack"
+    (tmp_path / "stack_alpha_root").mkdir()
+    (tmp_path / "stack_beta_root").mkdir()
+    alpha_dir = make_demo_publication_stack_dir(tmp_path / "stack_alpha_root")
+    beta_dir = make_demo_publication_stack_dir(tmp_path / "stack_beta_root")
+    assert alpha_dir == stack_alpha
+    assert beta_dir == stack_beta
+    capsys.readouterr()
+
+    output_dir = tmp_path / "published_network"
+    exit_code = main(
+        [
+            "publish-publication-network",
+            str(alpha_dir),
+            str(beta_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Published Existing Network",
+            "--published-at",
+            "2026-07-06T04:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication network from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["stack_preset_paths"] == []
+    assert summary["release_catalog_index"]["index"]["label"] == "Published Existing Network"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"publication_stack", "publication_stack-2"}
+    assert (output_dir / "stack_workspaces" / "publication_stack" / "summary.json").is_file()
+    assert (output_dir / "stack_workspaces" / "publication_stack-2" / "summary.json").is_file()
+
+    secrets = json.loads((output_dir / "release_catalog_index" / "release_catalog_index_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 2
+    assert verified["index"]["label"] == "Published Existing Network"
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     manifest = build_signed_ledger_bundle_manifest(
