@@ -129,6 +129,7 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
 - `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
+- `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, and workspace layers,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
@@ -218,7 +219,7 @@ python -m pytest
 Expected result:
 
 ```text
-232 passed
+234 passed
 ```
 
 ## Signing utilities
@@ -596,6 +597,18 @@ If you already have generated publication stack workspaces and want a top-level 
 
 ```bash
 satroot1 publish-publication-network generated_stacks/stack_alpha generated_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Published Existing Network"
+```
+
+To scan a generated tree and see which SATROOT bundles, releases, catalogs, indexes, and workspaces are present, use `inventory-artifacts`:
+
+```bash
+satroot1 inventory-artifacts publication_network
+```
+
+If you only want to report artifacts rooted directly at the given path and skip nested directories, add `--non-recursive`:
+
+```bash
+satroot1 inventory-artifacts publication_network --non-recursive
 ```
 
 Inspect a release catalog publication without signature verification:

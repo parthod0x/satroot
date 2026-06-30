@@ -2923,6 +2923,39 @@ def test_cli_publish_publication_network_from_existing_stack_workspaces(tmp_path
     capsys.readouterr()
 
 
+def test_cli_inventory_artifacts_reports_recursive_publication_network(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    exit_code = main(["inventory-artifacts", str(network_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"publication_network_count":1' in captured.out
+    assert '"publication_stack_count":2' in captured.out
+    assert '"demo_catalog_workspace_count":2' in captured.out
+    assert '"release_catalog_index_count":1' in captured.out
+    assert '"release_catalog_count":2' in captured.out
+    assert '"release_count":2' in captured.out
+    assert '"bundle_count":2' in captured.out
+    assert '"workspace_names":["stack_a","stack_b"]' in captured.out
+
+
+def test_cli_inventory_artifacts_non_recursive_reports_top_level_only(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    exit_code = main(["inventory-artifacts", str(network_dir), "--non-recursive"])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"publication_network_count":1' in captured.out
+    assert '"publication_stack_count":0' in captured.out
+    assert '"demo_catalog_workspace_count":0' in captured.out
+    assert '"release_catalog_index_count":0' in captured.out
+    assert '"release_catalog_count":0' in captured.out
+    assert '"release_count":0' in captured.out
+    assert '"bundle_count":0' in captured.out
+
+
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     manifest = build_signed_ledger_bundle_manifest(

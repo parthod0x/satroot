@@ -3136,6 +3136,32 @@ def resolve_release_catalog_directory_inputs(
     return resolved
 
 
+def discover_signed_release_catalog_index_publication_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    if not search_roots:
+        raise SatRootError("at least one release catalog index discovery root is required")
+
+    discovered: Dict[str, str] = {}
+    for search_root in search_roots:
+        root_path = Path(search_root).resolve()
+        if not root_path.exists():
+            raise SatRootError(f"release catalog index discovery root not found: {search_root}")
+        if not root_path.is_dir():
+            raise SatRootError(f"release catalog index discovery root must be a directory: {search_root}")
+
+        manifest_paths = root_path.rglob("release_catalog_index_manifest.json") if recursive else root_path.glob("release_catalog_index_manifest.json")
+        for manifest_path in manifest_paths:
+            release_catalog_index_dir = str(manifest_path.parent.resolve())
+            discovered.setdefault(release_catalog_index_dir, release_catalog_index_dir)
+
+    if not discovered:
+        raise SatRootError("no signed release catalog index directories found under the provided discovery roots")
+    return sorted(discovered.values())
+
+
 def _discover_workspace_dirs(
     search_roots: Sequence[str | Path],
     *,
@@ -3195,6 +3221,19 @@ def discover_publication_stack_workspace_dirs(
     )
 
 
+def discover_publication_network_workspace_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    return _discover_workspace_dirs(
+        search_roots,
+        recursive=recursive,
+        label="publication network workspace",
+        summary_validator=validate_publication_network_summary_consistency,
+    )
+
+
 def resolve_demo_catalog_workspace_inputs(
     workspace_dirs: Sequence[str | Path],
     *,
@@ -3245,6 +3284,20 @@ def resolve_publication_stack_workspace_inputs(
     if not resolved:
         raise SatRootError("at least one publication stack workspace directory or --discover-under path is required")
     return resolved
+
+
+def _discover_optional_paths(
+    discoverer: Callable[..., list[str]],
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool,
+) -> list[str]:
+    try:
+        return discoverer(search_roots, recursive=recursive)
+    except SatRootError as exc:
+        if str(exc).startswith("no "):
+            return []
+        raise
 
 
 def validate_release_catalog_index_consistency(index: Mapping[str, Any]) -> None:
@@ -5688,6 +5741,147 @@ def publish_publication_network_workspace(
     }
 
 
+def inventory_workspace_artifacts(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_search_roots = [str(Path(value).resolve()) for value in search_roots]
+    if not resolved_search_roots:
+        raise SatRootError("inventory-artifacts requires at least one directory path or --discover-under root")
+
+    bundle_dirs = _discover_optional_paths(discover_signed_ledger_bundle_dirs, resolved_search_roots, recursive=recursive)
+    release_dirs = _discover_optional_paths(discover_signed_release_publication_dirs, resolved_search_roots, recursive=recursive)
+    release_catalog_dirs = _discover_optional_paths(discover_signed_release_catalog_publication_dirs, resolved_search_roots, recursive=recursive)
+    release_catalog_index_dirs = _discover_optional_paths(discover_signed_release_catalog_index_publication_dirs, resolved_search_roots, recursive=recursive)
+    demo_catalog_workspace_dirs = _discover_optional_paths(discover_demo_catalog_workspace_dirs, resolved_search_roots, recursive=recursive)
+    publication_stack_dirs = _discover_optional_paths(discover_publication_stack_workspace_dirs, resolved_search_roots, recursive=recursive)
+    publication_network_dirs = _discover_optional_paths(discover_publication_network_workspace_dirs, resolved_search_roots, recursive=recursive)
+
+    bundle_entries: list[Dict[str, Any]] = []
+    for bundle_dir in bundle_dirs:
+        bundle_summary = summarize_signed_ledger_bundle(bundle_dir)
+        final_snapshot = bundle_summary.get("final_state_snapshot")
+        assert isinstance(final_snapshot, dict)
+        bundle_entries.append(
+            {
+                "bundle_dir": str(Path(bundle_dir).resolve()),
+                "scheme": bundle_summary.get("scheme"),
+                "symbol": bundle_summary.get("symbol"),
+                "profile": final_snapshot.get("profile"),
+                "record_count": bundle_summary.get("record_count"),
+                "verification_material_scope": bundle_summary.get("verification_material_scope"),
+            }
+        )
+
+    release_entries: list[Dict[str, Any]] = []
+    for release_dir in release_dirs:
+        release_summary = summarize_signed_release_publication(release_dir)
+        release_entries.append(
+            {
+                "release_dir": str(Path(release_dir).resolve()),
+                "signature_scheme": release_summary.get("signature_scheme"),
+                "signature_key_id": release_summary.get("signature_key_id"),
+                "bundle_count": release_summary.get("bundle_count"),
+                "release": copy.deepcopy(release_summary.get("release")),
+                "bundle_symbols": copy.deepcopy(release_summary.get("bundle_symbols")),
+            }
+        )
+
+    release_catalog_entries: list[Dict[str, Any]] = []
+    for release_catalog_dir in release_catalog_dirs:
+        release_catalog_summary = summarize_signed_release_catalog_publication(release_catalog_dir)
+        release_catalog_entries.append(
+            {
+                "release_catalog_dir": str(Path(release_catalog_dir).resolve()),
+                "signature_scheme": release_catalog_summary.get("signature_scheme"),
+                "signature_key_id": release_catalog_summary.get("signature_key_id"),
+                "release_count": release_catalog_summary.get("release_count"),
+                "catalog": copy.deepcopy(release_catalog_summary.get("catalog")),
+                "release_labels": copy.deepcopy(release_catalog_summary.get("release_labels")),
+            }
+        )
+
+    release_catalog_index_entries: list[Dict[str, Any]] = []
+    for release_catalog_index_dir in release_catalog_index_dirs:
+        release_catalog_index_summary = summarize_signed_release_catalog_index_publication(release_catalog_index_dir)
+        release_catalog_index_entries.append(
+            {
+                "release_catalog_index_dir": str(Path(release_catalog_index_dir).resolve()),
+                "signature_scheme": release_catalog_index_summary.get("signature_scheme"),
+                "signature_key_id": release_catalog_index_summary.get("signature_key_id"),
+                "release_catalog_count": release_catalog_index_summary.get("release_catalog_count"),
+                "index": copy.deepcopy(release_catalog_index_summary.get("index")),
+                "catalog_labels": copy.deepcopy(release_catalog_index_summary.get("catalog_labels")),
+            }
+        )
+
+    demo_catalog_workspace_entries: list[Dict[str, Any]] = []
+    for workspace_dir in demo_catalog_workspace_dirs:
+        workspace_summary = summarize_demo_catalog_workspace(workspace_dir)
+        demo_catalog_workspace_entries.append(
+            {
+                "workspace_dir": str(Path(workspace_dir).resolve()),
+                "bundle_scheme": workspace_summary.get("bundle_scheme"),
+                "release_scheme": workspace_summary.get("release_scheme"),
+                "bundle_count": workspace_summary.get("bundle_count"),
+                "bundle_names": copy.deepcopy(workspace_summary.get("bundle_names")),
+                "bundle_profiles": copy.deepcopy(workspace_summary.get("bundle_profiles")),
+                "release": copy.deepcopy(workspace_summary.get("release")),
+            }
+        )
+
+    publication_stack_entries: list[Dict[str, Any]] = []
+    for workspace_dir in publication_stack_dirs:
+        workspace_summary = summarize_publication_stack_workspace(workspace_dir)
+        publication_stack_entries.append(
+            {
+                "workspace_dir": str(Path(workspace_dir).resolve()),
+                "bundle_scheme": workspace_summary.get("bundle_scheme"),
+                "release_scheme": workspace_summary.get("release_scheme"),
+                "release_catalog_scheme": workspace_summary.get("release_catalog_scheme"),
+                "workspace_count": workspace_summary.get("workspace_count"),
+                "workspace_names": copy.deepcopy(workspace_summary.get("workspace_names")),
+                "release_catalog": copy.deepcopy(workspace_summary.get("release_catalog_summary", {}).get("catalog")),
+            }
+        )
+
+    publication_network_entries: list[Dict[str, Any]] = []
+    for workspace_dir in publication_network_dirs:
+        workspace_summary = summarize_publication_network_workspace(workspace_dir)
+        publication_network_entries.append(
+            {
+                "workspace_dir": str(Path(workspace_dir).resolve()),
+                "bundle_scheme": workspace_summary.get("bundle_scheme"),
+                "release_scheme": workspace_summary.get("release_scheme"),
+                "release_catalog_scheme": workspace_summary.get("release_catalog_scheme"),
+                "release_catalog_index_scheme": workspace_summary.get("release_catalog_index_scheme"),
+                "stack_count": workspace_summary.get("stack_count"),
+                "workspace_names": copy.deepcopy(workspace_summary.get("workspace_names")),
+                "release_catalog_index": copy.deepcopy(workspace_summary.get("release_catalog_index_summary", {}).get("index")),
+            }
+        )
+
+    return {
+        "search_roots": resolved_search_roots,
+        "recursive": recursive,
+        "bundle_count": len(bundle_entries),
+        "release_count": len(release_entries),
+        "release_catalog_count": len(release_catalog_entries),
+        "release_catalog_index_count": len(release_catalog_index_entries),
+        "demo_catalog_workspace_count": len(demo_catalog_workspace_entries),
+        "publication_stack_count": len(publication_stack_entries),
+        "publication_network_count": len(publication_network_entries),
+        "bundles": bundle_entries,
+        "releases": release_entries,
+        "release_catalogs": release_catalog_entries,
+        "release_catalog_indexes": release_catalog_index_entries,
+        "demo_catalog_workspaces": demo_catalog_workspace_entries,
+        "publication_stacks": publication_stack_entries,
+        "publication_networks": publication_network_entries,
+    }
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -6081,6 +6275,11 @@ def build_cli_parser() -> Any:
     publish_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata")
     publish_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label metadata")
     publish_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
+
+    inventory_artifacts_parser = subparsers.add_parser("inventory-artifacts", help="Scan one or more directories and summarize discovered SATROOT artifacts and workspaces")
+    inventory_artifacts_parser.add_argument("search_root", nargs="*", help="Directory root to scan for SATROOT artifacts")
+    inventory_artifacts_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Additional directory root to scan for SATROOT artifacts; may be repeated")
+    inventory_artifacts_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while scanning")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -7302,6 +7501,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_catalog_index_metadata=index_metadata,
         )
         print(f"wrote SATROOT publication network from existing workspaces to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "inventory-artifacts":
+        search_roots = [*(args.search_root or []), *((args.discover_under or []))]
+        if not search_roots:
+            raise SatRootError("inventory-artifacts requires at least one search_root or --discover-under path")
+        inventory = inventory_workspace_artifacts(search_roots, recursive=not args.non_recursive)
+        print(canonical_json(inventory))
         return 0
 
     if args.command == "bootstrap-genesis-bundle":
