@@ -43,6 +43,7 @@ from satroot1 import (
     load_demo_catalog_preset,
     load_protocol_schema,
     load_profile_registry,
+    load_release_catalog_preset,
     load_release_catalog_manifest_schema,
     load_release_catalog_schema,
     load_release_manifest_schema,
@@ -531,6 +532,14 @@ def test_load_demo_catalog_preset_example():
     assert preset["profile_structure_overrides"]["SATROOT-IDENTITY-1"]["next_holder"] is None
     assert preset["profile_structure_overrides"]["SATROOT-IDENTITY-1"]["retire"] is False
     assert preset["release_metadata"]["label"] == "SATROOT AI Compute Catalog"
+
+
+def test_load_release_catalog_preset_example():
+    preset = load_release_catalog_preset(ROOT / "examples" / "release_catalog_presets" / "ai_compute_release_stack.json")
+    assert preset["release_dirs"] == []
+    assert preset["discover_under"] == [str((ROOT / "generated_release_workspaces").resolve())]
+    assert preset["recursive"] is True
+    assert preset["catalog_metadata"]["label"] == "SATROOT AI Compute Release Stack"
 
 
 def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
@@ -1855,6 +1864,55 @@ def test_cli_bootstrap_release_catalog_publication(tmp_path, capsys):
     )
     assert verified["release_count"] == 2
     assert verified["catalog"] == catalog["catalog"]
+
+
+def test_cli_bootstrap_release_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+    preset_path = tmp_path / "release_catalog_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-PRESET",
+            "version": "0.1",
+            "release_dirs": [
+                str(Path(stable_release_dir).relative_to(tmp_path)),
+                str(Path(machine_release_dir).relative_to(tmp_path)),
+            ],
+            "recursive": True,
+            "catalog": {
+                "channel": "beta",
+                "label": "SATROOT Preset Release Stack",
+                "published_at": "2026-07-01T01:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "release_catalog_preset_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-release-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Preset Override Stack",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["channel"] == "beta"
+    assert catalog["catalog"]["label"] == "SATROOT Preset Override Stack"
+    assert catalog["catalog"]["published_at"] == "2026-07-01T01:00:00Z"
 
 
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):

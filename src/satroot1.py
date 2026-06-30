@@ -630,6 +630,14 @@ def validate_release_metadata_mapping(values: Optional[Mapping[str, Any]]) -> Di
     return metadata
 
 
+def _validate_string_sequence(values: Any, *, label: str) -> list[str]:
+    if values is None:
+        return []
+    if not isinstance(values, list) or not all(isinstance(value, str) and value.strip() for value in values):
+        raise SatRootError(f"{label} must contain an array of non-empty strings")
+    return list(values)
+
+
 def load_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
     preset = _load_json_object_file(str(path), label="demo catalog preset")
     if preset.get("type") != "SATROOT-DEMO-CATALOG-PRESET":
@@ -679,6 +687,46 @@ def load_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
             allowed_profiles=DEMO_CATALOG_PROFILES,
         ),
         "release_metadata": validate_release_metadata_mapping(preset.get("release")),
+    }
+
+
+def load_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="release catalog preset")
+    if preset.get("type") != "SATROOT-RELEASE-CATALOG-PRESET":
+        raise SatRootError("unsupported release catalog preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported release catalog preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "release_dirs",
+        "discover_under",
+        "recursive",
+        "catalog",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported release catalog preset keys: {sorted(unexpected)}")
+
+    release_dirs = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(preset.get("release_dirs"), label="release catalog preset release_dirs")
+    ]
+    discover_under = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(preset.get("discover_under"), label="release catalog preset discover_under")
+    ]
+    recursive = preset.get("recursive", True)
+    if not isinstance(recursive, bool):
+        raise SatRootError("release catalog preset recursive must be a boolean")
+
+    return {
+        "release_dirs": release_dirs,
+        "discover_under": discover_under,
+        "recursive": recursive,
+        "catalog_metadata": validate_release_metadata_mapping(preset.get("catalog")),
     }
 
 
@@ -4325,6 +4373,7 @@ def build_cli_parser() -> Any:
 
     release_catalog_parser = subparsers.add_parser("build-release-catalog", help="Build a SATROOT-1 release catalog from one or more signed release directories")
     release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory")
+    release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
     release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     release_catalog_parser.add_argument("--channel", help="Optional catalog channel metadata")
@@ -4344,6 +4393,7 @@ def build_cli_parser() -> Any:
 
     publish_release_catalog_parser = subparsers.add_parser("publish-release-catalog", help="Build release_catalog.json plus release_catalog_manifest.json in one SATROOT-1 catalog directory")
     publish_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory")
+    publish_release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
     publish_release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     publish_release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_release_catalog_parser.add_argument("--output-dir", required=True, help="Directory where release_catalog.json and release_catalog_manifest.json will be written")
@@ -4359,6 +4409,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_release_catalog_publication_parser = subparsers.add_parser("bootstrap-release-catalog-publication", help="Generate signing material and write a ready-to-verify SATROOT-1 release catalog directory")
     bootstrap_release_catalog_publication_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory")
+    bootstrap_release_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
     bootstrap_release_catalog_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     bootstrap_release_catalog_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bootstrap_release_catalog_publication_parser.add_argument("--output-dir", required=True, help="Directory where catalog material plus release_catalog.json and release_catalog_manifest.json will be written")
@@ -5364,15 +5415,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-release-catalog":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        catalog_metadata = {
+        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
         release_dirs = resolve_release_directory_inputs(
-            args.release_dir,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
         catalog = build_signed_release_catalog(release_dirs, base_dir=base_dir, catalog_metadata=catalog_metadata)
         _write_output(catalog, output_path)
@@ -5417,15 +5472,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-release-catalog":
         signer = _release_manifest_signer_from_args(args)
-        catalog_metadata = {
+        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
         release_dirs = resolve_release_directory_inputs(
-            args.release_dir,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
         published = publish_signed_release_catalog(
             release_dirs,
@@ -5460,15 +5519,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-release-catalog-publication":
-        catalog_metadata = {
+        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
         release_dirs = resolve_release_directory_inputs(
-            args.release_dir,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
         published = bootstrap_release_catalog_publication(
             release_dirs,

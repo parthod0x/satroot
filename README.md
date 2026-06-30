@@ -33,6 +33,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
+- `examples/release_catalog_presets/` - reusable SATROOT release-catalog publication presets.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
 - `profiles/machine/SATROOT-MACHINE-1.md` - prepaid machine-credit profile draft.
@@ -195,7 +196,7 @@ python -m pytest
 Expected result:
 
 ```text
-197 passed
+199 passed
 ```
 
 ## Signing utilities
@@ -524,6 +525,12 @@ Or bootstrap fresh signing material for that release catalog publication:
 
 ```bash
 satroot1 bootstrap-release-catalog-publication stable_release machine_release --output-dir release_catalog_bootstrap --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
+For repeatable multi-release packaging, the release-catalog commands can also load a checked-in preset file and still accept CLI overrides on top:
+
+```bash
+satroot1 bootstrap-release-catalog-publication --preset-json examples/release_catalog_presets/ai_compute_release_stack.json --output-dir release_catalog_bootstrap --label "SATROOT AI Compute Release Stack Override" --scheme hmac-sha256 --key-id catalog-key
 ```
 
 Inspect a release catalog publication without signature verification:
