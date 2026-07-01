@@ -29,7 +29,8 @@
         "release-catalog-index",
         "demo-catalog",
         "publication-stack",
-        "publication-network"
+        "publication-network",
+        "publication-registry"
       ]
     },
     "artifact_path": {"type": "string", "minLength": 1},

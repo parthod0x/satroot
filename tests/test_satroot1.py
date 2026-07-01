@@ -532,6 +532,33 @@ def make_publication_registry_component_dirs(tmp_path: Path) -> tuple[Path, Path
     return release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir
 
 
+def make_publication_registry_dir(tmp_path: Path) -> Path:
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "publication_registry_publication"
+    assert main(
+        [
+            "bootstrap-publication-registry-publication",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Publication Registry",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    ) == 0
+    return output_dir
+
+
 def build_rotation_ledger():
     genesis = copy.deepcopy(load_events()[0])
     genesis["max_supply"] = "1000000000"
@@ -3087,6 +3114,17 @@ def test_cli_inventory_artifacts_non_recursive_reports_top_level_only(tmp_path, 
     assert '"bundle_count":0' in captured.out
 
 
+def test_cli_inventory_artifacts_reports_publication_registry(tmp_path, capsys):
+    registry_dir = make_publication_registry_dir(tmp_path)
+
+    exit_code = main(["inventory-artifacts", str(registry_dir), "--non-recursive"])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"publication_registry_count":1' in captured.out
+    assert '"publication_network_count":0' in captured.out
+
+
 def test_cli_export_demo_catalog_preset_from_workspace(tmp_path):
     output_dir = make_demo_catalog_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_catalog.json"
@@ -3195,6 +3233,19 @@ def test_cli_render_publication_report_for_release(tmp_path, capsys):
     assert "- `RELSTB1`" in captured.out
 
 
+def test_cli_render_publication_report_for_registry(tmp_path, capsys):
+    registry_dir = make_publication_registry_dir(tmp_path)
+
+    exit_code = main(["render-publication-report", str(registry_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "# SATROOT Publication Registry Report" in captured.out
+    assert "- Component count: `3`" in captured.out
+    assert "## Components" in captured.out
+    assert "Release Catalog Index" in captured.out
+
+
 def test_cli_export_publication_descriptor_for_network(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_path = tmp_path / "network_descriptor.json"
@@ -3208,6 +3259,24 @@ def test_cli_export_publication_descriptor_for_network(tmp_path):
     assert descriptor["stack_count"] == 2
     assert descriptor["workspace_names"] == ["stack_a", "stack_b"]
     assert descriptor["release_catalog_index"]["label"] == "Publication Network Override"
+
+
+def test_cli_export_publication_descriptor_for_registry(tmp_path):
+    registry_dir = make_publication_registry_dir(tmp_path)
+    output_path = tmp_path / "registry_descriptor.json"
+
+    exit_code = main(["export-publication-descriptor", str(registry_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    descriptor = json.loads(output_path.read_text(encoding="utf-8"))
+    assert descriptor["descriptor_type"] == "SATROOT-ARTIFACT-DESCRIPTOR"
+    assert descriptor["artifact_kind"] == "publication-registry"
+    assert descriptor["component_count"] == 3
+    assert descriptor["components"] == [
+        "publication_descriptor_index_publication",
+        "publication_metadata_catalog_publication",
+        "release_catalog_index_publication",
+    ]
 
 
 def test_cli_export_publication_descriptor_for_release(tmp_path):
@@ -3280,6 +3349,19 @@ def test_cli_build_publication_descriptor_index_non_recursive(tmp_path):
     assert index["artifact_kind_counts"]["publication-network"] == 1
     assert index["artifact_kind_counts"]["publication-stack"] == 0
     assert index["artifacts"][0]["artifact_kind"] == "publication-network"
+
+
+def test_cli_build_publication_descriptor_index_for_registry_path(tmp_path):
+    registry_dir = make_publication_registry_dir(tmp_path)
+    output_path = tmp_path / "registry_descriptor_index.json"
+
+    exit_code = main(["build-publication-descriptor-index", str(registry_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-registry"] == 1
+    assert index["artifacts"][0]["artifact_kind"] == "publication-registry"
 
 
 def test_validate_publication_descriptor_index_schema_accepts_generated_index(tmp_path):
@@ -5492,6 +5574,46 @@ def test_cli_publication_network_lint_reports_findings(tmp_path, capsys):
     assert '"ok":false' in captured.out
     assert '"release_catalog_index_manifest_path_matches":false' in captured.out
     assert '"missing_workspace_summaries":["stack_a"]' in captured.out
+
+
+def test_cli_publication_registry_summary_reads_manifest_and_registry(tmp_path, capsys):
+    registry_dir = make_publication_registry_dir(tmp_path)
+
+    exit_code = main(["publication-registry-summary", str(registry_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"component_count":3' in captured.out
+    assert '"publication_descriptor_index_publication":' in captured.out
+    assert '"publication_metadata_catalog_publication":' in captured.out
+
+
+def test_cli_publication_registry_lint_accepts_clean_registry(tmp_path, capsys):
+    registry_dir = make_publication_registry_dir(tmp_path)
+
+    exit_code = main(["publication-registry-lint", str(registry_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"component_lint_failures":[]' in captured.out
+
+
+def test_cli_publication_registry_lint_reports_findings(tmp_path, capsys):
+    registry_dir = make_publication_registry_dir(tmp_path)
+
+    registry_path = registry_dir / "publication_registry.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["publication_descriptor_index_publication"]["publication_descriptor_index_manifest_path"] = "tampered.json"
+    write_json(registry_path, registry)
+    (registry_dir.parent / "publication_descriptor_index_publication" / "publication_descriptor_index_manifest.json").unlink()
+
+    exit_code = main(["publication-registry-lint", str(registry_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"missing_component_manifests":["tampered.json"]' in captured.out
 
 
 def test_cli_validate_publication_stack_summary(tmp_path, capsys):

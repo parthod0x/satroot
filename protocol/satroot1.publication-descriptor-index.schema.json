@@ -23,7 +23,8 @@
         "release-catalog-index",
         "demo-catalog",
         "publication-stack",
-        "publication-network"
+        "publication-network",
+        "publication-registry"
       ],
       "properties": {
         "bundle": {"type": "integer", "minimum": 0},
@@ -32,7 +33,8 @@
         "release-catalog-index": {"type": "integer", "minimum": 0},
         "demo-catalog": {"type": "integer", "minimum": 0},
         "publication-stack": {"type": "integer", "minimum": 0},
-        "publication-network": {"type": "integer", "minimum": 0}
+        "publication-network": {"type": "integer", "minimum": 0},
+        "publication-registry": {"type": "integer", "minimum": 0}
       },
       "additionalProperties": false
     },
@@ -70,7 +72,8 @@
               "release-catalog-index",
               "demo-catalog",
               "publication-stack",
-              "publication-network"
+              "publication-network",
+              "publication-registry"
             ]
           },
           "artifact_path": {"type": "string", "minLength": 1}

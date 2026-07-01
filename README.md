@@ -136,7 +136,8 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
 - `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
-- `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, and workspace layers,
+- publication-registry inspection via `publication-registry-summary` and structural linting via `publication-registry-lint`,
+- `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, registry, and workspace layers,
 - preset export commands for deriving reusable demo-catalog, publication-stack, and publication-network presets back from generated workspaces,
 - `render-publication-report` for turning detected SATROOT artifacts or workspaces into human-readable markdown reports,
 - `export-publication-descriptor` for emitting normalized JSON descriptors from detected SATROOT artifacts or workspaces,
@@ -239,7 +240,7 @@ python -m pytest
 Expected result:
 
 ```text
-258 passed
+265 passed
 ```
 
 ## Signing utilities
@@ -619,7 +620,7 @@ If you already have generated publication stack workspaces and want a top-level 
 satroot1 publish-publication-network generated_stacks/stack_alpha generated_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Published Existing Network"
 ```
 
-To scan a generated tree and see which SATROOT bundles, releases, catalogs, indexes, and workspaces are present, use `inventory-artifacts`:
+To scan a generated tree and see which SATROOT bundles, releases, catalogs, indexes, registries, and workspaces are present, use `inventory-artifacts`:
 
 ```bash
 satroot1 inventory-artifacts publication_network
@@ -655,7 +656,7 @@ To render a human-readable markdown report for a generated SATROOT artifact or w
 satroot1 render-publication-report publication_network
 ```
 
-The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, demo-catalog, publication-stack, and publication-network inputs, and it can also write to a file:
+The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, demo-catalog, publication-stack, publication-network, and publication-registry inputs, and it can also write to a file:
 
 ```bash
 satroot1 render-publication-report stable_release --output stable_release_report.md
@@ -773,6 +774,18 @@ Lint a publication network workspace, its nested release-catalog index, and all 
 
 ```bash
 satroot1 publication-network-lint publication_network
+```
+
+Inspect a publication registry without signature verification:
+
+```bash
+satroot1 publication-registry-summary publication_registry_publication
+```
+
+Lint a publication registry and its referenced descriptor, metadata, and release-catalog-index components:
+
+```bash
+satroot1 publication-registry-lint publication_registry_publication
 ```
 
 Validate a bundle manifest directly against the SATROOT manifest schema:
