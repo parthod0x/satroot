@@ -608,6 +608,43 @@ def make_publication_registry_dir(tmp_path: Path) -> Path:
     return output_dir
 
 
+def make_publication_registry_workspace_dir(tmp_path: Path) -> Path:
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "publication_registry_workspace"
+    assert main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--descriptor-index-channel",
+            "network",
+            "--descriptor-index-label",
+            "Workspace Descriptor Index",
+            "--publication-metadata-catalog-channel",
+            "network",
+            "--publication-metadata-catalog-label",
+            "Workspace Metadata Catalog",
+            "--publication-registry-channel",
+            "network",
+            "--publication-registry-label",
+            "Workspace Publication Registry",
+        ]
+    ) == 0
+    return output_dir
+
+
 def build_rotation_ledger():
     genesis = copy.deepcopy(load_events()[0])
     genesis["max_supply"] = "1000000000"
@@ -3151,6 +3188,71 @@ def test_cli_publish_publication_network_from_existing_stack_workspaces(tmp_path
     assert verified["release_catalog_count"] == 2
     assert verified["index"]["label"] == "Published Existing Network"
     assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_publication_registry_workspace_from_publication_network(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "publication_registry_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--descriptor-index-channel",
+            "network",
+            "--descriptor-index-label",
+            "Workspace Descriptor Index",
+            "--publication-metadata-catalog-channel",
+            "network",
+            "--publication-metadata-catalog-label",
+            "Workspace Metadata Catalog",
+            "--publication-registry-channel",
+            "network",
+            "--publication-registry-label",
+            "Workspace Publication Registry",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["artifact_count"] == 12
+    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Workspace Publication Registry"
+    assert summary["publication_network_dir"] == str((output_dir / "publication_network").resolve())
+    assert Path(summary["release_catalog_index_dir"]) == (output_dir / "publication_network" / "release_catalog_index").resolve()
+    assert (output_dir / "publication_network" / "release_catalog_index" / "release_catalog_index_manifest.json").is_file()
+    assert (output_dir / "publication_descriptor_index" / "publication_descriptor_index_manifest.json").is_file()
+    assert (output_dir / "publication_metadata_catalog" / "publication_metadata_catalog_manifest.json").is_file()
+    assert (output_dir / "publication_registry" / "publication_registry_manifest.json").is_file()
+
+    secrets = json.loads((output_dir / "publication_registry" / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry" / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"]["label"] == "Workspace Publication Registry"
+    assert main(["publication-registry-lint", str(output_dir / "publication_registry")]) == 0
     capsys.readouterr()
 
 

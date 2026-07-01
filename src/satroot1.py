@@ -6252,6 +6252,127 @@ def publish_publication_network_workspace(
     }
 
 
+def write_publication_registry_workspace(
+    *,
+    artifact_paths: Sequence[str | Path],
+    release_catalog_index_dir: str | Path,
+    output_dir: str | Path,
+    signature_scheme: str,
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    publication_registry_key_id: str,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    publication_network_dir: Optional[str | Path] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+    publication_registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_artifact_paths = resolve_satroot_artifact_inputs(
+        artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    root_output_dir = Path(output_dir).resolve()
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+
+    copied_publication_network_dir: Optional[Path] = None
+    resolved_release_catalog_index_dir = Path(release_catalog_index_dir).resolve()
+    if publication_network_dir is not None:
+        resolved_publication_network_dir = Path(publication_network_dir).resolve()
+        copied_publication_network_dir = _copy_workspace_directory(
+            resolved_publication_network_dir,
+            root_output_dir / "publication_network",
+            label="publication network workspace",
+        )
+        if resolved_release_catalog_index_dir == (resolved_publication_network_dir / "release_catalog_index").resolve():
+            copied_release_catalog_index_dir = copied_publication_network_dir / "release_catalog_index"
+        else:
+            copied_release_catalog_index_dir = _copy_workspace_directory(
+                resolved_release_catalog_index_dir,
+                root_output_dir / "release_catalog_index",
+                label="release catalog index publication",
+            )
+    else:
+        copied_release_catalog_index_dir = _copy_workspace_directory(
+            resolved_release_catalog_index_dir,
+            root_output_dir / "release_catalog_index",
+            label="release catalog index publication",
+        )
+    descriptor_index_dir = root_output_dir / "publication_descriptor_index"
+    metadata_bundles_dir = root_output_dir / "publication_metadata_bundles"
+    metadata_catalog_dir = root_output_dir / "publication_metadata_catalog"
+    registry_dir = root_output_dir / "publication_registry"
+
+    descriptor_index_publication = bootstrap_publication_descriptor_index_publication(
+        resolved_artifact_paths,
+        output_dir=descriptor_index_dir,
+        signature_scheme=signature_scheme,
+        key_id=publication_descriptor_index_key_id,
+        index_metadata=descriptor_index_metadata,
+    )
+    metadata_bundle_collection = bootstrap_publication_metadata_bundle_collection(
+        resolved_artifact_paths,
+        output_dir=metadata_bundles_dir,
+        signature_scheme=signature_scheme,
+        key_id=publication_metadata_key_id,
+    )
+    metadata_catalog_publication = bootstrap_publication_metadata_catalog_publication(
+        metadata_bundle_collection["bundle_dirs"],
+        output_dir=metadata_catalog_dir,
+        signature_scheme=signature_scheme,
+        key_id=publication_metadata_catalog_key_id,
+        catalog_metadata=publication_metadata_catalog_metadata,
+    )
+    publication_registry_publication = bootstrap_publication_registry_publication(
+        release_catalog_index_dir=copied_release_catalog_index_dir,
+        publication_descriptor_index_dir=descriptor_index_dir,
+        publication_metadata_catalog_dir=metadata_catalog_dir,
+        output_dir=registry_dir,
+        signature_scheme=signature_scheme,
+        key_id=publication_registry_key_id,
+        registry_metadata=publication_registry_metadata,
+    )
+
+    summary = {
+        "signature_scheme": signature_scheme,
+        "source_publication_network_dir": None if publication_network_dir is None else str(Path(publication_network_dir).resolve()),
+        "publication_network_dir": None if copied_publication_network_dir is None else str(copied_publication_network_dir.resolve()),
+        "artifact_count": len(resolved_artifact_paths),
+        "artifact_paths": resolved_artifact_paths,
+        "release_catalog_index_source_dir": str(resolved_release_catalog_index_dir),
+        "release_catalog_index_dir": str(copied_release_catalog_index_dir.resolve()),
+        "publication_descriptor_index_dir": str(descriptor_index_dir.resolve()),
+        "publication_metadata_bundles_dir": str(metadata_bundles_dir.resolve()),
+        "publication_metadata_bundle_count": len(metadata_bundle_collection["bundles"]),
+        "publication_metadata_catalog_dir": str(metadata_catalog_dir.resolve()),
+        "publication_registry_dir": str(registry_dir.resolve()),
+        "publication_descriptor_index_manifest_path": descriptor_index_publication["publication_descriptor_index_manifest_path"],
+        "publication_metadata_catalog_manifest_path": metadata_catalog_publication["publication_metadata_catalog_manifest_path"],
+        "publication_registry_manifest_path": publication_registry_publication["publication_registry_manifest_path"],
+        "publication_descriptor_index": copy.deepcopy(descriptor_index_publication["publication_descriptor_index"]),
+        "publication_metadata_bundles": copy.deepcopy(metadata_bundle_collection["bundles"]),
+        "publication_metadata_catalog": copy.deepcopy(metadata_catalog_publication["publication_metadata_catalog"]),
+        "publication_registry": copy.deepcopy(publication_registry_publication["publication_registry"]),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+        "release_catalog_index_dir": str(copied_release_catalog_index_dir.resolve()),
+        "publication_descriptor_index_dir": str(descriptor_index_dir.resolve()),
+        "publication_metadata_bundles_dir": str(metadata_bundles_dir.resolve()),
+        "publication_metadata_catalog_dir": str(metadata_catalog_dir.resolve()),
+        "publication_registry_dir": str(registry_dir.resolve()),
+        "publication_descriptor_index_publication": descriptor_index_publication,
+        "publication_metadata_bundle_collection": metadata_bundle_collection,
+        "publication_metadata_catalog_publication": metadata_catalog_publication,
+        "publication_registry_publication": publication_registry_publication,
+    }
+
+
 def inventory_workspace_artifacts(
     search_roots: Sequence[str | Path],
     *,
@@ -6961,13 +7082,12 @@ def discover_satroot_artifact_paths(
     return sorted(artifact_paths)
 
 
-def build_satroot_publication_descriptor_index(
+def resolve_satroot_artifact_inputs(
     artifact_paths: Sequence[str | Path],
     *,
     discover_under: Optional[Sequence[str | Path]] = None,
     recursive: bool = True,
-    index_metadata: Optional[Mapping[str, str]] = None,
-) -> Dict[str, Any]:
+) -> list[str]:
     resolved_paths: list[str] = []
     seen_paths: set[str] = set()
 
@@ -6984,7 +7104,22 @@ def build_satroot_publication_descriptor_index(
                 seen_paths.add(path)
 
     if not resolved_paths:
-        raise SatRootError("build-publication-descriptor-index requires at least one artifact path or --discover-under root")
+        raise SatRootError("at least one SATROOT artifact path or --discover-under root is required")
+    return resolved_paths
+
+
+def build_satroot_publication_descriptor_index(
+    artifact_paths: Sequence[str | Path],
+    *,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_paths = resolve_satroot_artifact_inputs(
+        artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
 
     descriptors = [build_satroot_artifact_descriptor(path) for path in resolved_paths]
     descriptors.sort(key=lambda entry: (str(entry.get("artifact_kind")), str(entry.get("artifact_path"))))
@@ -7363,6 +7498,49 @@ def bootstrap_publication_metadata_bundle(
         "publication_metadata_manifest": manifest,
         "publication_metadata_manifest_path": str(manifest_path),
         "publication_metadata_material": material,
+    }
+
+
+def bootstrap_publication_metadata_bundle_collection(
+    artifact_paths: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+) -> Dict[str, Any]:
+    resolved_artifact_paths = resolve_satroot_artifact_inputs(artifact_paths)
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    bundle_names = _unique_workspace_names(resolved_artifact_paths)
+    bundle_dirs: list[str] = []
+    bundles: list[Dict[str, Any]] = []
+
+    for artifact_path, bundle_name in zip(resolved_artifact_paths, bundle_names):
+        descriptor = build_satroot_artifact_descriptor(artifact_path)
+        bundle_dir = output_path / bundle_name
+        bundle = bootstrap_publication_metadata_bundle(
+            artifact_path,
+            output_dir=bundle_dir,
+            signature_scheme=signature_scheme,
+            key_id=key_id,
+        )
+        bundle_dirs.append(str(bundle_dir.resolve()))
+        bundles.append(
+            {
+                "bundle_name": bundle_name,
+                "artifact_path": artifact_path,
+                "artifact_kind": descriptor.get("artifact_kind"),
+                "bundle_dir": str(bundle_dir.resolve()),
+                "publication_metadata_manifest_path": bundle.get("publication_metadata_manifest_path"),
+                "publication_report_path": bundle.get("publication_report_path"),
+                "publication_descriptor_path": bundle.get("publication_descriptor_path"),
+            }
+        )
+
+    return {
+        "bundle_dirs": bundle_dirs,
+        "bundles": bundles,
     }
 
 
@@ -8795,6 +8973,28 @@ def build_cli_parser() -> Any:
     bootstrap_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label override")
     bootstrap_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
 
+    bootstrap_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-publication-registry-workspace", help="Copy a release-catalog-index publication, derive descriptor and metadata publication lanes, and emit a full signed SATROOT publication registry workspace")
+    bootstrap_publication_registry_workspace_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory to include in the descriptor and metadata lanes")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to use as a default discovery root and release-catalog-index source")
+    bootstrap_publication_registry_workspace_parser.add_argument("--release-catalog-index-dir", help="Optional release catalog index publication directory; defaults to <publication-network-dir>/release_catalog_index when --publication-network-dir is provided")
+    bootstrap_publication_registry_workspace_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
+    bootstrap_publication_registry_workspace_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each discovery root")
+    bootstrap_publication_registry_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
+    bootstrap_publication_registry_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
+    bootstrap_publication_registry_workspace_parser.add_argument("--descriptor-index-published-at", help="Optional descriptor-index published_at metadata")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-registry-channel", help="Optional publication-registry channel metadata")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-registry-label", help="Optional human-readable publication-registry label")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-registry-published-at", help="Optional publication-registry published_at metadata")
+    bootstrap_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated descriptor, metadata, and registry publications")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-registry-key-id", required=True, help="Signature key identifier to generate and use for the publication registry manifest")
+    bootstrap_publication_registry_workspace_parser.add_argument("--output-dir", required=True, help="Directory where a copied publication_network/ or release_catalog_index/ plus publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, publication_registry/, and summary.json will be written")
+
     publish_publication_stack_parser = subparsers.add_parser("publish-publication-stack", help="Copy existing demo catalog workspaces into one SATROOT publication stack and publish a signed release catalog")
     publish_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT demo catalog workspace directory")
     publish_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested demo catalog workspaces; may be repeated")
@@ -10184,6 +10384,51 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_catalog_index_preset_path=release_catalog_index_preset_path,
         )
         print(f"wrote SATROOT publication network to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-publication-registry-workspace":
+        publication_network_dir = None if not args.publication_network_dir else Path(args.publication_network_dir).resolve()
+        discover_under = list(args.discover_under or [])
+        if publication_network_dir is not None:
+            discover_under.append(str(publication_network_dir))
+        release_catalog_index_dir = args.release_catalog_index_dir
+        if release_catalog_index_dir is None and publication_network_dir is not None:
+            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+        if release_catalog_index_dir is None:
+            raise SatRootError("bootstrap-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
+
+        descriptor_index_metadata = {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        }
+        publication_metadata_catalog_metadata = {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+        }
+        publication_registry_metadata = {
+            "channel": args.publication_registry_channel,
+            "label": args.publication_registry_label,
+            "published_at": args.publication_registry_published_at,
+        }
+        write_publication_registry_workspace(
+            artifact_paths=args.path,
+            discover_under=discover_under,
+            recursive=not args.non_recursive,
+            release_catalog_index_dir=release_catalog_index_dir,
+            publication_network_dir=publication_network_dir,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            publication_registry_key_id=args.publication_registry_key_id,
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+            publication_registry_metadata=publication_registry_metadata,
+        )
+        print(f"wrote SATROOT publication registry workspace to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "publish-publication-stack":

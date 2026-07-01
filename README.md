@@ -139,6 +139,7 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
 - `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
+- one-shot `bootstrap-publication-registry-workspace` orchestration for copying a release-catalog-index publication, generating descriptor and metadata publication lanes, and emitting a top-level signed registry workspace,
 - publication-registry inspection via `publication-registry-summary` and structural linting via `publication-registry-lint`,
 - `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, registry, and workspace layers,
 - preset export commands for deriving reusable demo-catalog, publication-stack, and publication-network presets back from generated workspaces,
@@ -247,7 +248,7 @@ python -m pytest
 Expected result:
 
 ```text
-277 passed
+278 passed
 ```
 
 ## Signing utilities
@@ -727,6 +728,12 @@ To bind the release-catalog-index, descriptor-index, and metadata-catalog lanes 
 
 ```bash
 satroot1 bootstrap-publication-registry-publication --release-catalog-index-dir publication_network/release_catalog_index --publication-descriptor-index-dir publication_descriptor_index_publication --publication-metadata-catalog-dir publication_metadata_catalog_publication --output-dir publication_registry_publication --channel network --label "SATROOT Publication Registry" --scheme hmac-sha256 --key-id registry-key
+```
+
+To generate that whole registry workspace from an existing publication network in one shot:
+
+```bash
+satroot1 bootstrap-publication-registry-workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --descriptor-index-label "Workspace Descriptor Index" --publication-metadata-catalog-label "Workspace Metadata Catalog" --publication-registry-label "Workspace Publication Registry"
 ```
 
 For a checked-in repeatable registry composition, the same command can also load a preset:
