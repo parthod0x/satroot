@@ -6245,6 +6245,102 @@ def build_satroot_artifact_descriptor(path: str | Path) -> Dict[str, Any]:
     raise SatRootError(f"unsupported SATROOT artifact kind: {kind}")
 
 
+def discover_satroot_artifact_paths(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    resolved_search_roots = [Path(value).resolve() for value in search_roots]
+    if not resolved_search_roots:
+        raise SatRootError("at least one SATROOT artifact discovery root is required")
+
+    artifact_paths: list[str] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add_artifact(kind: str, path: str | Path) -> None:
+        resolved_path = str(Path(path).resolve())
+        key = (kind, resolved_path)
+        if key not in seen:
+            artifact_paths.append(resolved_path)
+            seen.add(key)
+
+    for artifact_path in _discover_optional_paths(discover_signed_ledger_bundle_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("bundle", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_signed_release_publication_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("release", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_signed_release_catalog_publication_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("release-catalog", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_signed_release_catalog_index_publication_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("release-catalog-index", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_demo_catalog_workspace_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("demo-catalog", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_publication_stack_workspace_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("publication-stack", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_publication_network_workspace_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("publication-network", artifact_path)
+
+    return sorted(artifact_paths)
+
+
+def build_satroot_publication_descriptor_index(
+    artifact_paths: Sequence[str | Path],
+    *,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_paths: list[str] = []
+    seen_paths: set[str] = set()
+
+    for path in artifact_paths:
+        resolved_path = str(Path(path).resolve())
+        if resolved_path not in seen_paths:
+            resolved_paths.append(resolved_path)
+            seen_paths.add(resolved_path)
+
+    if discover_under:
+        for path in discover_satroot_artifact_paths(discover_under, recursive=recursive):
+            if path not in seen_paths:
+                resolved_paths.append(path)
+                seen_paths.add(path)
+
+    if not resolved_paths:
+        raise SatRootError("build-publication-descriptor-index requires at least one artifact path or --discover-under root")
+
+    descriptors = [build_satroot_artifact_descriptor(path) for path in resolved_paths]
+    descriptors.sort(key=lambda entry: (str(entry.get("artifact_kind")), str(entry.get("artifact_path"))))
+
+    kind_order = [
+        "bundle",
+        "release",
+        "release-catalog",
+        "release-catalog-index",
+        "demo-catalog",
+        "publication-stack",
+        "publication-network",
+    ]
+    artifact_kind_counts = {
+        kind: sum(1 for entry in descriptors if entry.get("artifact_kind") == kind)
+        for kind in kind_order
+    }
+
+    index = {
+        "type": "SATROOT-PUBLICATION-DESCRIPTOR-INDEX",
+        "version": "0.1",
+        "artifact_count": len(descriptors),
+        "artifact_kind_counts": artifact_kind_counts,
+        "artifacts": descriptors,
+    }
+    cleaned_metadata = {
+        key: value
+        for key, value in (index_metadata or {}).items()
+        if isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip()
+    }
+    if cleaned_metadata:
+        index["index"] = cleaned_metadata
+    return index
+
+
 def render_satroot_artifact_report(path: str | Path) -> str:
     kind, artifact_path = _detect_satroot_artifact_kind(path)
     lines: list[str] = []
@@ -6877,6 +6973,15 @@ def build_cli_parser() -> Any:
     export_publication_descriptor_parser = subparsers.add_parser("export-publication-descriptor", help="Export a normalized JSON descriptor for a SATROOT bundle, release, catalog, index, or workspace")
     export_publication_descriptor_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
     export_publication_descriptor_parser.add_argument("--output", help="Optional output path")
+
+    build_publication_descriptor_index_parser = subparsers.add_parser("build-publication-descriptor-index", help="Build a machine-readable SATROOT publication descriptor index from explicit artifact paths and/or discovery roots")
+    build_publication_descriptor_index_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
+    build_publication_descriptor_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
+    build_publication_descriptor_index_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    build_publication_descriptor_index_parser.add_argument("--channel", help="Optional descriptor-index channel metadata")
+    build_publication_descriptor_index_parser.add_argument("--label", help="Optional human-readable descriptor-index label metadata")
+    build_publication_descriptor_index_parser.add_argument("--published-at", help="Optional descriptor-index published_at metadata")
+    build_publication_descriptor_index_parser.add_argument("--output", help="Optional output path")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -8140,6 +8245,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "export-publication-descriptor":
         descriptor = build_satroot_artifact_descriptor(args.path)
         _write_output(descriptor, args.output)
+        return 0
+
+    if args.command == "build-publication-descriptor-index":
+        index_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        index = build_satroot_publication_descriptor_index(
+            args.path,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+            index_metadata=index_metadata,
+        )
+        _write_output(index, args.output)
         return 0
 
     if args.command == "bootstrap-genesis-bundle":

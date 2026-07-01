@@ -133,6 +133,7 @@ The v0.1 kernel defines:
 - preset export commands for deriving reusable demo-catalog, publication-stack, and publication-network presets back from generated workspaces,
 - `render-publication-report` for turning detected SATROOT artifacts or workspaces into human-readable markdown reports,
 - `export-publication-descriptor` for emitting normalized JSON descriptors from detected SATROOT artifacts or workspaces,
+- `build-publication-descriptor-index` for aggregating many detected SATROOT descriptors into one machine-readable registry,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
@@ -222,7 +223,7 @@ python -m pytest
 Expected result:
 
 ```text
-241 passed
+243 passed
 ```
 
 ## Signing utilities
@@ -648,6 +649,12 @@ For a normalized machine-readable export of the same detected artifact metadata,
 
 ```bash
 satroot1 export-publication-descriptor publication_network --output publication_network_descriptor.json
+```
+
+To aggregate many detected artifacts into one descriptor registry, use `build-publication-descriptor-index`:
+
+```bash
+satroot1 build-publication-descriptor-index --discover-under publication_network --channel network --label "SATROOT Descriptor Index" --output publication_descriptor_index.json
 ```
 
 Inspect a release catalog publication without signature verification:

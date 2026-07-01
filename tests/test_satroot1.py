@@ -3094,6 +3094,63 @@ def test_cli_export_publication_descriptor_for_release(tmp_path):
     assert descriptor["bundle_symbols"] == ["RELSTB1"]
 
 
+def test_cli_build_publication_descriptor_index_recursive(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_path = tmp_path / "descriptor_index.json"
+
+    exit_code = main(
+        [
+            "build-publication-descriptor-index",
+            "--discover-under",
+            str(network_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Descriptor Index",
+            "--published-at",
+            "2026-07-07T01:00:00Z",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["type"] == "SATROOT-PUBLICATION-DESCRIPTOR-INDEX"
+    assert index["artifact_count"] == 12
+    assert index["artifact_kind_counts"]["bundle"] == 2
+    assert index["artifact_kind_counts"]["release"] == 2
+    assert index["artifact_kind_counts"]["release-catalog"] == 2
+    assert index["artifact_kind_counts"]["release-catalog-index"] == 1
+    assert index["artifact_kind_counts"]["demo-catalog"] == 2
+    assert index["artifact_kind_counts"]["publication-stack"] == 2
+    assert index["artifact_kind_counts"]["publication-network"] == 1
+    assert index["index"]["label"] == "SATROOT Descriptor Index"
+
+
+def test_cli_build_publication_descriptor_index_non_recursive(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_path = tmp_path / "descriptor_index_non_recursive.json"
+
+    exit_code = main(
+        [
+            "build-publication-descriptor-index",
+            "--discover-under",
+            str(network_dir),
+            "--non-recursive",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-network"] == 1
+    assert index["artifact_kind_counts"]["publication-stack"] == 0
+    assert index["artifacts"][0]["artifact_kind"] == "publication-network"
+
+
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     manifest = build_signed_ledger_bundle_manifest(
