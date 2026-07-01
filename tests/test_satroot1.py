@@ -3064,6 +3064,36 @@ def test_cli_render_publication_report_for_release(tmp_path, capsys):
     assert "- `RELSTB1`" in captured.out
 
 
+def test_cli_export_publication_descriptor_for_network(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_path = tmp_path / "network_descriptor.json"
+
+    exit_code = main(["export-publication-descriptor", str(network_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    descriptor = json.loads(output_path.read_text(encoding="utf-8"))
+    assert descriptor["descriptor_type"] == "SATROOT-ARTIFACT-DESCRIPTOR"
+    assert descriptor["artifact_kind"] == "publication-network"
+    assert descriptor["stack_count"] == 2
+    assert descriptor["workspace_names"] == ["stack_a", "stack_b"]
+    assert descriptor["release_catalog_index"]["label"] == "Publication Network Override"
+
+
+def test_cli_export_publication_descriptor_for_release(tmp_path):
+    release_dir = make_demo_release_catalog_dir(tmp_path).parent / "stable_workspace" / "release"
+    output_path = tmp_path / "release_descriptor.json"
+
+    exit_code = main(["export-publication-descriptor", str(release_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    descriptor = json.loads(output_path.read_text(encoding="utf-8"))
+    assert descriptor["descriptor_type"] == "SATROOT-ARTIFACT-DESCRIPTOR"
+    assert descriptor["artifact_kind"] == "release"
+    assert descriptor["bundle_count"] == 1
+    assert descriptor["release"]["label"] == "Stable Release Workspace"
+    assert descriptor["bundle_symbols"] == ["RELSTB1"]
+
+
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     manifest = build_signed_ledger_bundle_manifest(

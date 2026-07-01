@@ -6126,6 +6126,125 @@ def _append_metadata_lines(lines: list[str], metadata: Mapping[str, Any], fields
             lines.append(f"- {label}: `{value}`")
 
 
+def build_satroot_artifact_descriptor(path: str | Path) -> Dict[str, Any]:
+    kind, artifact_path = _detect_satroot_artifact_kind(path)
+    descriptor: Dict[str, Any] = {
+        "descriptor_type": "SATROOT-ARTIFACT-DESCRIPTOR",
+        "descriptor_version": "0.1",
+        "artifact_kind": kind,
+        "artifact_path": str(artifact_path),
+    }
+
+    if kind == "bundle":
+        summary = summarize_signed_ledger_bundle(artifact_path)
+        snapshot = summary.get("final_state_snapshot")
+        assert isinstance(snapshot, dict)
+        descriptor.update(
+            {
+                "scheme": summary.get("scheme"),
+                "symbol": summary.get("symbol"),
+                "profile": snapshot.get("profile"),
+                "record_count": summary.get("record_count"),
+                "root_id": summary.get("root_id"),
+                "verification_material_scope": summary.get("verification_material_scope"),
+                "final_event_id": summary.get("final_event_id"),
+                "final_state_hash": summary.get("final_state_hash"),
+            }
+        )
+        return descriptor
+
+    if kind == "release":
+        summary = summarize_signed_release_publication(artifact_path)
+        descriptor.update(
+            {
+                "signature_scheme": summary.get("signature_scheme"),
+                "signature_key_id": summary.get("signature_key_id"),
+                "bundle_count": summary.get("bundle_count"),
+                "release": copy.deepcopy(summary.get("release")),
+                "bundle_symbols": copy.deepcopy(summary.get("bundle_symbols")),
+                "bundle_index_path": summary.get("bundle_index_path"),
+                "bundle_index_hash": summary.get("bundle_index_hash"),
+            }
+        )
+        return descriptor
+
+    if kind == "release-catalog":
+        summary = summarize_signed_release_catalog_publication(artifact_path)
+        descriptor.update(
+            {
+                "signature_scheme": summary.get("signature_scheme"),
+                "signature_key_id": summary.get("signature_key_id"),
+                "release_count": summary.get("release_count"),
+                "catalog": copy.deepcopy(summary.get("catalog")),
+                "release_labels": copy.deepcopy(summary.get("release_labels")),
+                "release_paths": copy.deepcopy(summary.get("release_paths")),
+            }
+        )
+        return descriptor
+
+    if kind == "release-catalog-index":
+        summary = summarize_signed_release_catalog_index_publication(artifact_path)
+        descriptor.update(
+            {
+                "signature_scheme": summary.get("signature_scheme"),
+                "signature_key_id": summary.get("signature_key_id"),
+                "release_catalog_count": summary.get("release_catalog_count"),
+                "index": copy.deepcopy(summary.get("index")),
+                "catalog_labels": copy.deepcopy(summary.get("catalog_labels")),
+                "release_catalog_paths": copy.deepcopy(summary.get("release_catalog_paths")),
+            }
+        )
+        return descriptor
+
+    if kind == "demo-catalog":
+        summary = summarize_demo_catalog_workspace(artifact_path)
+        descriptor.update(
+            {
+                "bundle_scheme": summary.get("bundle_scheme"),
+                "release_scheme": summary.get("release_scheme"),
+                "bundle_count": summary.get("bundle_count"),
+                "release": copy.deepcopy(summary.get("release")),
+                "bundle_names": copy.deepcopy(summary.get("bundle_names")),
+                "bundle_profiles": copy.deepcopy(summary.get("bundle_profiles")),
+                "bundle_symbols": copy.deepcopy(summary.get("bundle_symbols")),
+            }
+        )
+        return descriptor
+
+    if kind == "publication-stack":
+        summary = summarize_publication_stack_workspace(artifact_path)
+        descriptor.update(
+            {
+                "bundle_scheme": summary.get("bundle_scheme"),
+                "release_scheme": summary.get("release_scheme"),
+                "release_catalog_scheme": summary.get("release_catalog_scheme"),
+                "workspace_count": summary.get("workspace_count"),
+                "workspace_names": copy.deepcopy(summary.get("workspace_names")),
+                "workspace_preset_paths": copy.deepcopy(summary.get("workspace_preset_paths")),
+                "release_catalog": copy.deepcopy((summary.get("release_catalog_summary") or {}).get("catalog")),
+            }
+        )
+        return descriptor
+
+    if kind == "publication-network":
+        summary = summarize_publication_network_workspace(artifact_path)
+        descriptor.update(
+            {
+                "bundle_scheme": summary.get("bundle_scheme"),
+                "release_scheme": summary.get("release_scheme"),
+                "release_catalog_scheme": summary.get("release_catalog_scheme"),
+                "release_catalog_index_scheme": summary.get("release_catalog_index_scheme"),
+                "stack_count": summary.get("stack_count"),
+                "workspace_names": copy.deepcopy(summary.get("workspace_names")),
+                "workspace_preset_paths": copy.deepcopy(summary.get("workspace_preset_paths")),
+                "release_catalog_index": copy.deepcopy((summary.get("release_catalog_index_summary") or {}).get("index")),
+            }
+        )
+        return descriptor
+
+    raise SatRootError(f"unsupported SATROOT artifact kind: {kind}")
+
+
 def render_satroot_artifact_report(path: str | Path) -> str:
     kind, artifact_path = _detect_satroot_artifact_kind(path)
     lines: list[str] = []
@@ -6754,6 +6873,10 @@ def build_cli_parser() -> Any:
     render_publication_report_parser = subparsers.add_parser("render-publication-report", help="Render a human-readable markdown report for a SATROOT bundle, release, catalog, index, or workspace")
     render_publication_report_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
     render_publication_report_parser.add_argument("--output", help="Optional output path")
+
+    export_publication_descriptor_parser = subparsers.add_parser("export-publication-descriptor", help="Export a normalized JSON descriptor for a SATROOT bundle, release, catalog, index, or workspace")
+    export_publication_descriptor_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
+    export_publication_descriptor_parser.add_argument("--output", help="Optional output path")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -8012,6 +8135,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "render-publication-report":
         report = render_satroot_artifact_report(args.path)
         _write_text_output(report, args.output)
+        return 0
+
+    if args.command == "export-publication-descriptor":
+        descriptor = build_satroot_artifact_descriptor(args.path)
+        _write_output(descriptor, args.output)
         return 0
 
     if args.command == "bootstrap-genesis-bundle":
