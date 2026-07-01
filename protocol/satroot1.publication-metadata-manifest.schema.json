@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/satroot1.publication-metadata-manifest.schema.json",
+  "title": "SATROOT Publication Metadata Manifest",
+  "type": "object",
+  "required": [
+    "protocol",
+    "version",
+    "manifest_type",
+    "artifact_kind",
+    "artifact_path",
+    "publication_report_path",
+    "publication_report_hash",
+    "publication_descriptor_path",
+    "publication_descriptor_hash",
+    "signature_scheme",
+    "signature_key_id",
+    "signature"
+  ],
+  "properties": {
+    "protocol": {"const": "SATROOT-1"},
+    "version": {"const": "0.1"},
+    "manifest_type": {"const": "publication-metadata-manifest"},
+    "artifact_kind": {
+      "enum": [
+        "bundle",
+        "release",
+        "release-catalog",
+        "release-catalog-index",
+        "demo-catalog",
+        "publication-stack",
+        "publication-network"
+      ]
+    },
+    "artifact_path": {"type": "string", "minLength": 1},
+    "publication_report_path": {"type": "string", "minLength": 1},
+    "publication_report_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+    "publication_descriptor_path": {"type": "string", "minLength": 1},
+    "publication_descriptor_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+    "signature_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+    "signature_key_id": {"type": "string", "minLength": 1},
+    "signature": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"signature_scheme": {"const": "hmac-sha256"}},
+        "required": ["signature_scheme"]
+      },
+      "then": {
+        "properties": {
+          "signature": {"type": "string", "pattern": "^hmac-sha256:[a-fA-F0-9]{64}$"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"signature_scheme": {"const": "ed25519"}},
+        "required": ["signature_scheme"]
+      },
+      "then": {
+        "properties": {
+          "signature": {"type": "string", "pattern": "^ed25519:[a-fA-F0-9]{128}$"}
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

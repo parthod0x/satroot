@@ -227,7 +227,7 @@ python -m pytest
 Expected result:
 
 ```text
-246 passed
+249 passed
 ```
 
 ## Signing utilities
@@ -665,6 +665,18 @@ To bootstrap signing material plus a ready-to-verify signed publication descript
 
 ```bash
 satroot1 bootstrap-publication-descriptor-index-publication --discover-under publication_network --output-dir publication_descriptor_index_publication --channel network --label "SATROOT Descriptor Publication" --scheme hmac-sha256 --key-id descriptor-key
+```
+
+To bootstrap a signed publication report plus descriptor bundle for one artifact:
+
+```bash
+satroot1 bootstrap-publication-metadata-bundle publication_network --output-dir publication_metadata_bundle --scheme hmac-sha256 --key-id metadata-key
+```
+
+To verify that bundle later:
+
+```bash
+satroot1 verify-publication-metadata-manifest publication_metadata_bundle/publication_metadata_manifest.json --secrets-json publication_metadata_bundle/publication_metadata_secrets.json
 ```
 
 Inspect a release catalog publication without signature verification:

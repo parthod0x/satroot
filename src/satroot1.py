@@ -46,6 +46,7 @@ PUBLICATION_STACK_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "p
 PUBLICATION_NETWORK_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-network-summary.schema.json"
 PUBLICATION_DESCRIPTOR_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-descriptor-index.schema.json"
 PUBLICATION_DESCRIPTOR_INDEX_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-descriptor-index-manifest.schema.json"
+PUBLICATION_METADATA_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-metadata-manifest.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -346,6 +347,12 @@ def load_publication_descriptor_index_schema() -> Dict[str, Any]:
 @functools.lru_cache(maxsize=1)
 def load_publication_descriptor_index_manifest_schema() -> Dict[str, Any]:
     with PUBLICATION_DESCRIPTOR_INDEX_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_publication_metadata_manifest_schema() -> Dict[str, Any]:
+    with PUBLICATION_METADATA_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -6259,6 +6266,27 @@ def build_satroot_artifact_descriptor(path: str | Path) -> Dict[str, Any]:
     raise SatRootError(f"unsupported SATROOT artifact kind: {kind}")
 
 
+def validate_publication_descriptor_consistency(descriptor: Mapping[str, Any]) -> None:
+    if descriptor.get("descriptor_type") != "SATROOT-ARTIFACT-DESCRIPTOR":
+        raise SatRootError("publication descriptor must declare descriptor_type=SATROOT-ARTIFACT-DESCRIPTOR")
+    if descriptor.get("descriptor_version") != "0.1":
+        raise SatRootError("publication descriptor must declare descriptor_version=0.1")
+    artifact_kind = descriptor.get("artifact_kind")
+    if artifact_kind not in {
+        "bundle",
+        "release",
+        "release-catalog",
+        "release-catalog-index",
+        "demo-catalog",
+        "publication-stack",
+        "publication-network",
+    }:
+        raise SatRootError("publication descriptor artifact_kind must be a supported descriptor kind")
+    artifact_path = descriptor.get("artifact_path")
+    if not isinstance(artifact_path, str) or not artifact_path.strip():
+        raise SatRootError("publication descriptor artifact_path must be a non-empty string")
+
+
 def discover_satroot_artifact_paths(
     search_roots: Sequence[str | Path],
     *,
@@ -6384,11 +6412,9 @@ def validate_publication_descriptor_index_consistency(index: Mapping[str, Any]) 
     for entry in artifacts:
         if not isinstance(entry, Mapping):
             raise SatRootError("publication descriptor index artifacts must contain objects")
-        if entry.get("descriptor_type") != "SATROOT-ARTIFACT-DESCRIPTOR":
-            raise SatRootError("publication descriptor index artifacts must contain SATROOT artifact descriptors")
+        validate_publication_descriptor_consistency(entry)
         artifact_kind = entry.get("artifact_kind")
-        if not isinstance(artifact_kind, str) or artifact_kind not in actual_counts:
-            raise SatRootError("publication descriptor index artifact_kind must be a supported descriptor kind")
+        assert isinstance(artifact_kind, str)
         actual_counts[artifact_kind] += 1
 
     for kind, count in actual_counts.items():
@@ -6528,6 +6554,148 @@ def bootstrap_publication_descriptor_index_publication(
         "publication_descriptor_index_manifest": descriptor_index_manifest,
         "publication_descriptor_index_manifest_path": str(descriptor_index_manifest_path),
         "publication_descriptor_index_material": material,
+    }
+
+
+def publication_metadata_manifest_signing_payload(manifest: Mapping[str, Any]) -> str:
+    cleaned = {k: v for k, v in manifest.items() if k != "signature"}
+    return canonical_json(cleaned)
+
+
+def build_signed_publication_metadata_manifest(
+    publication_report_path: str | Path,
+    publication_descriptor_json: str | Path,
+    *,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    base_dir: str | Path = ".",
+) -> Dict[str, Any]:
+    if signature_scheme not in {"hmac-sha256", "ed25519"}:
+        raise SatRootError(f"unsupported publication metadata signature scheme: {signature_scheme}")
+    report_path = Path(publication_report_path).resolve()
+    descriptor_path = Path(publication_descriptor_json).resolve()
+    if not report_path.is_file():
+        raise SatRootError("publication report file must exist")
+    descriptor = _load_json_object_file(str(descriptor_path), label="publication descriptor")
+    validate_publication_descriptor_consistency(descriptor)
+
+    relative_report_path = _relative_output_path(report_path, base_dir=base_dir)
+    relative_descriptor_path = _relative_output_path(descriptor_path, base_dir=base_dir)
+    manifest = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "manifest_type": "publication-metadata-manifest",
+        "artifact_kind": descriptor.get("artifact_kind"),
+        "artifact_path": descriptor.get("artifact_path"),
+        "publication_report_path": relative_report_path,
+        "publication_report_hash": "sha256:" + sha256_hex_bytes(report_path.read_bytes()),
+        "publication_descriptor_path": relative_descriptor_path,
+        "publication_descriptor_hash": "sha256:" + sha256_hex_bytes(descriptor_path.read_bytes()),
+        "signature_scheme": signature_scheme,
+        "signature_key_id": key_id,
+    }
+    manifest["signature"] = signer(publication_metadata_manifest_signing_payload(manifest), key_id)
+    return manifest
+
+
+def verify_signed_publication_metadata_manifest(
+    publication_metadata_manifest_json: str | Path,
+    *,
+    verifier: SignatureVerifier,
+) -> Dict[str, Any]:
+    manifest_path = Path(publication_metadata_manifest_json).resolve()
+    manifest = _load_json_object_file(str(manifest_path), label="publication-metadata-manifest")
+    validate_instance_against_schema(manifest, load_publication_metadata_manifest_schema())
+
+    report_ref = manifest.get("publication_report_path")
+    if not isinstance(report_ref, str) or not report_ref.strip():
+        raise SatRootError("publication metadata manifest publication_report_path must be a non-empty string")
+    descriptor_ref = manifest.get("publication_descriptor_path")
+    if not isinstance(descriptor_ref, str) or not descriptor_ref.strip():
+        raise SatRootError("publication metadata manifest publication_descriptor_path must be a non-empty string")
+
+    report_path = (manifest_path.parent / report_ref).resolve()
+    descriptor_path = (manifest_path.parent / descriptor_ref).resolve()
+    if not report_path.is_file():
+        raise SatRootError(f"publication report file not found: {report_ref}")
+    if not descriptor_path.is_file():
+        raise SatRootError(f"publication descriptor file not found: {descriptor_ref}")
+
+    descriptor = _load_json_object_file(str(descriptor_path), label="publication descriptor")
+    validate_publication_descriptor_consistency(descriptor)
+
+    actual_report_hash = "sha256:" + sha256_hex_bytes(report_path.read_bytes())
+    actual_descriptor_hash = "sha256:" + sha256_hex_bytes(descriptor_path.read_bytes())
+    if manifest.get("publication_report_hash") != actual_report_hash:
+        raise SatRootError("publication metadata manifest publication_report_hash mismatch")
+    if manifest.get("publication_descriptor_hash") != actual_descriptor_hash:
+        raise SatRootError("publication metadata manifest publication_descriptor_hash mismatch")
+    if manifest.get("artifact_kind") != descriptor.get("artifact_kind"):
+        raise SatRootError("publication metadata manifest artifact_kind mismatch")
+    if manifest.get("artifact_path") != descriptor.get("artifact_path"):
+        raise SatRootError("publication metadata manifest artifact_path mismatch")
+    if not verifier(manifest, publication_metadata_manifest_signing_payload(manifest)):
+        raise SatRootError("publication metadata manifest signature verification failed")
+
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "artifact_kind": manifest.get("artifact_kind"),
+        "artifact_path": manifest.get("artifact_path"),
+        "publication_report_path": report_ref,
+        "publication_report_hash": actual_report_hash,
+        "publication_descriptor_path": descriptor_ref,
+        "publication_descriptor_hash": actual_descriptor_hash,
+    }
+
+
+def bootstrap_publication_metadata_bundle(
+    artifact_path: str | Path,
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    if signature_scheme == "hmac-sha256":
+        material = bootstrap_release_hmac_material([key_id])
+        signer = make_hmac_sha256_signer(material["shared_secrets"])
+        _write_json_file(output_path / "publication_metadata_secrets.json", material["shared_secrets"])
+    elif signature_scheme == "ed25519":
+        material = bootstrap_release_ed25519_material([key_id])
+        signer = make_ed25519_signer(material["private_keys"])
+        _write_json_file(output_path / "publication_metadata_private_keys.json", material["private_keys"])
+        _write_json_file(output_path / "publication_metadata_public_keys.json", material["public_keys"])
+    else:
+        raise SatRootError(f"unsupported publication metadata signature scheme: {signature_scheme}")
+
+    report = render_satroot_artifact_report(artifact_path)
+    descriptor = build_satroot_artifact_descriptor(artifact_path)
+    report_path = output_path / "publication_report.md"
+    descriptor_path = output_path / "publication_descriptor.json"
+    _write_text_output(report, str(report_path))
+    _write_json_file(descriptor_path, descriptor)
+
+    manifest = build_signed_publication_metadata_manifest(
+        report_path,
+        descriptor_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        base_dir=output_path,
+    )
+    manifest_path = output_path / "publication_metadata_manifest.json"
+    _write_json_file(manifest_path, manifest)
+
+    return {
+        "publication_report_path": str(report_path),
+        "publication_descriptor_path": str(descriptor_path),
+        "publication_metadata_manifest": manifest,
+        "publication_metadata_manifest_path": str(manifest_path),
+        "publication_metadata_material": material,
     }
 
 
@@ -6833,6 +7001,10 @@ def build_cli_parser() -> Any:
     validate_publication_descriptor_index_manifest_parser = subparsers.add_parser("validate-publication-descriptor-index-manifest", help="Validate a SATROOT publication descriptor index manifest against the publication-descriptor-index-manifest schema")
     validate_publication_descriptor_index_manifest_parser.add_argument("publication_descriptor_index_manifest_json", help="Path to publication_descriptor_index_manifest.json")
     validate_publication_descriptor_index_manifest_parser.add_argument("--schema-json", help="Optional path to a publication-descriptor-index-manifest JSON Schema file")
+
+    validate_publication_metadata_manifest_parser = subparsers.add_parser("validate-publication-metadata-manifest", help="Validate a SATROOT publication metadata manifest against the publication-metadata-manifest schema")
+    validate_publication_metadata_manifest_parser.add_argument("publication_metadata_manifest_json", help="Path to publication_metadata_manifest.json")
+    validate_publication_metadata_manifest_parser.add_argument("--schema-json", help="Optional path to a publication-metadata-manifest JSON Schema file")
 
     init_genesis_parser = subparsers.add_parser("init-genesis", help="Scaffold a SATROOT-1 genesis record with optional profile-aware defaults")
     init_genesis_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
@@ -7191,6 +7363,17 @@ def build_cli_parser() -> Any:
     build_publication_descriptor_index_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-descriptor-index-manifest signing")
     build_publication_descriptor_index_manifest_parser.add_argument("--output", help="Optional output path")
 
+    build_publication_metadata_manifest_parser = subparsers.add_parser("build-publication-metadata-manifest", help="Build a signed SATROOT publication metadata manifest from a report and descriptor pair")
+    build_publication_metadata_manifest_parser.add_argument("publication_report_path", help="Path to publication_report.md")
+    build_publication_metadata_manifest_parser.add_argument("publication_descriptor_json", help="Path to publication_descriptor.json")
+    build_publication_metadata_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    build_publication_metadata_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication metadata manifest")
+    build_publication_metadata_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    build_publication_metadata_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-metadata-manifest signing")
+    build_publication_metadata_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    build_publication_metadata_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-manifest signing")
+    build_publication_metadata_manifest_parser.add_argument("--output", help="Optional output path")
+
     bootstrap_publication_descriptor_index_publication_parser = subparsers.add_parser("bootstrap-publication-descriptor-index-publication", help="Generate signing material and write a ready-to-verify SATROOT publication descriptor index directory")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
@@ -7201,6 +7384,12 @@ def build_cli_parser() -> Any:
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the descriptor index")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+
+    bootstrap_publication_metadata_bundle_parser = subparsers.add_parser("bootstrap-publication-metadata-bundle", help="Generate signing material, a publication report, a publication descriptor, and a ready-to-verify publication metadata manifest")
+    bootstrap_publication_metadata_bundle_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
+    bootstrap_publication_metadata_bundle_parser.add_argument("--output-dir", required=True, help="Directory where publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json will be written")
+    bootstrap_publication_metadata_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_publication_metadata_bundle_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata manifest")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -7549,6 +7738,12 @@ def build_cli_parser() -> Any:
     verify_publication_descriptor_index_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification")
     verify_publication_descriptor_index_manifest_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
     verify_publication_descriptor_index_manifest_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for verification")
+
+    verify_publication_metadata_manifest_parser = subparsers.add_parser("verify-publication-metadata-manifest", help="Verify a signed SATROOT publication metadata manifest against its report and descriptor files")
+    verify_publication_metadata_manifest_parser.add_argument("publication_metadata_manifest_json", help="Path to publication_metadata_manifest.json")
+    verify_publication_metadata_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification")
+    verify_publication_metadata_manifest_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
+    verify_publication_metadata_manifest_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for verification")
 
     generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
@@ -8501,6 +8696,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(manifest, output_path)
         return 0
 
+    if args.command == "build-publication-metadata-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        manifest = build_signed_publication_metadata_manifest(
+            args.publication_report_path,
+            args.publication_descriptor_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
     if args.command == "bootstrap-publication-descriptor-index-publication":
         index_metadata = {
             "channel": args.channel,
@@ -8517,6 +8727,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             index_metadata=index_metadata,
         )
         print(f"wrote bootstrapped SATROOT publication descriptor index to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-publication-metadata-bundle":
+        output = bootstrap_publication_metadata_bundle(
+            args.path,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+        )
+        print(f"wrote bootstrapped SATROOT publication metadata bundle to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-genesis-bundle":
@@ -8667,6 +8887,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_publication_descriptor_index_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(manifest, schema)
         print(f"valid SATROOT publication descriptor index manifest: {count} record(s)")
+        return 0
+
+    if args.command == "validate-publication-metadata-manifest":
+        manifest = _load_json_file(args.publication_metadata_manifest_json)
+        schema = load_publication_metadata_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(manifest, schema)
+        print(f"valid SATROOT publication metadata manifest: {count} record(s)")
         return 0
 
     if args.command == "init-signer-key-map":
@@ -9084,6 +9311,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         manifest = _load_json_object_file(args.publication_descriptor_index_manifest_json, label="publication-descriptor-index-manifest")
         verifier = _release_manifest_verifier_from_args(args, manifest)
         summary = verify_signed_publication_descriptor_index_manifest(args.publication_descriptor_index_manifest_json, verifier=verifier)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "verify-publication-metadata-manifest":
+        manifest = _load_json_object_file(args.publication_metadata_manifest_json, label="publication-metadata-manifest")
+        verifier = _release_manifest_verifier_from_args(args, manifest)
+        summary = verify_signed_publication_metadata_manifest(args.publication_metadata_manifest_json, verifier=verifier)
         print(canonical_json(summary))
         return 0
 
