@@ -49,6 +49,8 @@ PUBLICATION_DESCRIPTOR_INDEX_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().par
 PUBLICATION_METADATA_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-metadata-manifest.schema.json"
 PUBLICATION_METADATA_CATALOG_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-metadata-catalog.schema.json"
 PUBLICATION_METADATA_CATALOG_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-metadata-catalog-manifest.schema.json"
+PUBLICATION_REGISTRY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-registry.schema.json"
+PUBLICATION_REGISTRY_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-registry-manifest.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -367,6 +369,18 @@ def load_publication_metadata_catalog_schema() -> Dict[str, Any]:
 @functools.lru_cache(maxsize=1)
 def load_publication_metadata_catalog_manifest_schema() -> Dict[str, Any]:
     with PUBLICATION_METADATA_CATALOG_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_publication_registry_schema() -> Dict[str, Any]:
+    with PUBLICATION_REGISTRY_SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@functools.lru_cache(maxsize=1)
+def load_publication_registry_manifest_schema() -> Dict[str, Any]:
+    with PUBLICATION_REGISTRY_MANIFEST_SCHEMA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -6518,6 +6532,34 @@ def verify_signed_publication_descriptor_index_manifest(
     }
 
 
+def _load_publication_descriptor_index_publication(
+    publication_descriptor_index_dir: str | Path,
+) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
+    index_path = Path(publication_descriptor_index_dir).resolve()
+    if not index_path.is_dir():
+        raise SatRootError("publication descriptor index directory must be an existing directory")
+
+    manifest_path = index_path / "publication_descriptor_index_manifest.json"
+    if not manifest_path.is_file():
+        raise SatRootError("publication_descriptor_index_manifest.json is required for publication descriptor index operations")
+    manifest = _load_json_object_file(str(manifest_path), label="publication-descriptor-index-manifest")
+    validate_instance_against_schema(manifest, load_publication_descriptor_index_manifest_schema())
+
+    descriptor_index_ref = manifest.get("publication_descriptor_index_path")
+    if not isinstance(descriptor_index_ref, str) or not descriptor_index_ref.strip():
+        raise SatRootError("publication descriptor index manifest publication_descriptor_index_path must be a non-empty string")
+    descriptor_index_path = (manifest_path.parent / descriptor_index_ref).resolve()
+    if not descriptor_index_path.is_file():
+        raise SatRootError(f"publication descriptor index file not found: {descriptor_index_ref}")
+
+    index = _load_json_file(str(descriptor_index_path))
+    validate_instance_against_schema(index, load_publication_descriptor_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("publication descriptor index must contain an object")
+    validate_publication_descriptor_index_consistency(index)
+    return manifest_path, descriptor_index_path, manifest, index
+
+
 def bootstrap_publication_descriptor_index_publication(
     artifact_paths: Sequence[str | Path],
     *,
@@ -7135,6 +7177,367 @@ def bootstrap_publication_metadata_catalog_publication(
     }
 
 
+def _load_publication_metadata_catalog_publication(
+    publication_metadata_catalog_dir: str | Path,
+) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
+    catalog_dir = Path(publication_metadata_catalog_dir).resolve()
+    if not catalog_dir.is_dir():
+        raise SatRootError("publication metadata catalog directory must be an existing directory")
+
+    manifest_path = catalog_dir / "publication_metadata_catalog_manifest.json"
+    if not manifest_path.is_file():
+        raise SatRootError("publication_metadata_catalog_manifest.json is required for publication metadata catalog operations")
+    manifest = _load_json_object_file(str(manifest_path), label="publication-metadata-catalog-manifest")
+    validate_instance_against_schema(manifest, load_publication_metadata_catalog_manifest_schema())
+
+    catalog_ref = manifest.get("publication_metadata_catalog_path")
+    if not isinstance(catalog_ref, str) or not catalog_ref.strip():
+        raise SatRootError("publication metadata catalog manifest publication_metadata_catalog_path must be a non-empty string")
+    catalog_path = (manifest_path.parent / catalog_ref).resolve()
+    if not catalog_path.is_file():
+        raise SatRootError(f"publication metadata catalog file not found: {catalog_ref}")
+
+    catalog = _load_json_file(str(catalog_path))
+    validate_instance_against_schema(catalog, load_publication_metadata_catalog_schema())
+    if not isinstance(catalog, dict):
+        raise SatRootError("publication metadata catalog must contain an object")
+    validate_publication_metadata_catalog_consistency(catalog)
+    return manifest_path, catalog_path, manifest, catalog
+
+
+def build_publication_registry(
+    *,
+    release_catalog_index_dir: Optional[str | Path] = None,
+    publication_descriptor_index_dir: Optional[str | Path] = None,
+    publication_metadata_catalog_dir: Optional[str | Path] = None,
+    base_dir: str | Path = ".",
+    registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    registry: Dict[str, Any] = {
+        "type": "SATROOT-PUBLICATION-REGISTRY",
+        "version": "0.1",
+    }
+    component_count = 0
+
+    if release_catalog_index_dir is not None:
+        publication_dir = Path(release_catalog_index_dir).resolve()
+        manifest_path, index_path, manifest, index = _load_release_catalog_index_publication(publication_dir)
+        registry["release_catalog_index_publication"] = {
+            "publication_directory_path": _relative_output_path(publication_dir, base_dir=base_dir),
+            "release_catalog_index_manifest_path": _relative_output_path(manifest_path, base_dir=base_dir),
+            "release_catalog_index_manifest_hash": "sha256:" + sha256_hex_bytes(manifest_path.read_bytes()),
+            "release_catalog_index_json_path": _relative_output_path(index_path, base_dir=base_dir),
+            "release_catalog_index_hash": "sha256:" + sha256_hex_bytes(index_path.read_bytes()),
+            "signature_scheme": manifest.get("signature_scheme"),
+            "signature_key_id": manifest.get("signature_key_id"),
+            "release_catalog_count": index.get("release_catalog_count"),
+            "index": copy.deepcopy(index.get("index")),
+        }
+        component_count += 1
+
+    if publication_descriptor_index_dir is not None:
+        publication_dir = Path(publication_descriptor_index_dir).resolve()
+        manifest_path, index_path, manifest, index = _load_publication_descriptor_index_publication(publication_dir)
+        registry["publication_descriptor_index_publication"] = {
+            "publication_directory_path": _relative_output_path(publication_dir, base_dir=base_dir),
+            "publication_descriptor_index_manifest_path": _relative_output_path(manifest_path, base_dir=base_dir),
+            "publication_descriptor_index_manifest_hash": "sha256:" + sha256_hex_bytes(manifest_path.read_bytes()),
+            "publication_descriptor_index_json_path": _relative_output_path(index_path, base_dir=base_dir),
+            "publication_descriptor_index_hash": "sha256:" + sha256_hex_bytes(index_path.read_bytes()),
+            "signature_scheme": manifest.get("signature_scheme"),
+            "signature_key_id": manifest.get("signature_key_id"),
+            "artifact_count": index.get("artifact_count"),
+            "index": copy.deepcopy(index.get("index")),
+        }
+        component_count += 1
+
+    if publication_metadata_catalog_dir is not None:
+        publication_dir = Path(publication_metadata_catalog_dir).resolve()
+        manifest_path, catalog_path, manifest, catalog = _load_publication_metadata_catalog_publication(publication_dir)
+        registry["publication_metadata_catalog_publication"] = {
+            "publication_directory_path": _relative_output_path(publication_dir, base_dir=base_dir),
+            "publication_metadata_catalog_manifest_path": _relative_output_path(manifest_path, base_dir=base_dir),
+            "publication_metadata_catalog_manifest_hash": "sha256:" + sha256_hex_bytes(manifest_path.read_bytes()),
+            "publication_metadata_catalog_json_path": _relative_output_path(catalog_path, base_dir=base_dir),
+            "publication_metadata_catalog_hash": "sha256:" + sha256_hex_bytes(catalog_path.read_bytes()),
+            "signature_scheme": manifest.get("signature_scheme"),
+            "signature_key_id": manifest.get("signature_key_id"),
+            "bundle_count": catalog.get("bundle_count"),
+            "index": copy.deepcopy(catalog.get("index")),
+        }
+        component_count += 1
+
+    if component_count == 0:
+        raise SatRootError("build-publication-registry requires at least one publication component directory")
+
+    registry["component_count"] = component_count
+    cleaned_metadata = {
+        key: value
+        for key, value in (registry_metadata or {}).items()
+        if isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip()
+    }
+    if cleaned_metadata:
+        registry["index"] = cleaned_metadata
+    return registry
+
+
+def validate_publication_registry_consistency(registry: Mapping[str, Any]) -> None:
+    component_count = registry.get("component_count")
+    if not isinstance(component_count, int) or component_count < 1:
+        raise SatRootError("publication registry component_count must be a positive integer")
+
+    component_names = [
+        "release_catalog_index_publication",
+        "publication_descriptor_index_publication",
+        "publication_metadata_catalog_publication",
+    ]
+    required_fields = {
+        "release_catalog_index_publication": [
+            "publication_directory_path",
+            "release_catalog_index_manifest_path",
+            "release_catalog_index_manifest_hash",
+            "release_catalog_index_json_path",
+            "release_catalog_index_hash",
+            "signature_scheme",
+            "signature_key_id",
+            "release_catalog_count",
+        ],
+        "publication_descriptor_index_publication": [
+            "publication_directory_path",
+            "publication_descriptor_index_manifest_path",
+            "publication_descriptor_index_manifest_hash",
+            "publication_descriptor_index_json_path",
+            "publication_descriptor_index_hash",
+            "signature_scheme",
+            "signature_key_id",
+            "artifact_count",
+        ],
+        "publication_metadata_catalog_publication": [
+            "publication_directory_path",
+            "publication_metadata_catalog_manifest_path",
+            "publication_metadata_catalog_manifest_hash",
+            "publication_metadata_catalog_json_path",
+            "publication_metadata_catalog_hash",
+            "signature_scheme",
+            "signature_key_id",
+            "bundle_count",
+        ],
+    }
+
+    present_count = 0
+    for component_name in component_names:
+        component = registry.get(component_name)
+        if component is None:
+            continue
+        present_count += 1
+        if not isinstance(component, Mapping):
+            raise SatRootError(f"publication registry {component_name} must be an object")
+        for field_name in required_fields[component_name]:
+            field_value = component.get(field_name)
+            if field_name.endswith("_count"):
+                if not isinstance(field_value, int) or field_value < 1:
+                    raise SatRootError(f"publication registry {component_name}.{field_name} must be a positive integer")
+            else:
+                if not isinstance(field_value, str) or not field_value.strip():
+                    raise SatRootError(f"publication registry {component_name}.{field_name} must be a non-empty string")
+    if present_count != component_count:
+        raise SatRootError("publication registry component_count mismatch")
+
+
+def publication_registry_manifest_signing_payload(manifest: Mapping[str, Any]) -> str:
+    cleaned = {k: v for k, v in manifest.items() if k != "signature"}
+    return canonical_json(cleaned)
+
+
+def build_signed_publication_registry_manifest(
+    publication_registry_json: str | Path,
+    *,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    base_dir: str | Path = ".",
+) -> Dict[str, Any]:
+    if signature_scheme not in {"hmac-sha256", "ed25519"}:
+        raise SatRootError(f"unsupported publication registry signature scheme: {signature_scheme}")
+    registry_path = Path(publication_registry_json).resolve()
+    registry = _load_json_file(str(registry_path))
+    validate_instance_against_schema(registry, load_publication_registry_schema())
+    if not isinstance(registry, dict):
+        raise SatRootError("publication registry must contain an object")
+    validate_publication_registry_consistency(registry)
+
+    relative_registry_path = _relative_output_path(registry_path, base_dir=base_dir)
+    manifest = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "manifest_type": "publication-registry-manifest",
+        "publication_registry_path": relative_registry_path,
+        "publication_registry_hash": "sha256:" + sha256_hex_bytes(registry_path.read_bytes()),
+        "component_count": registry.get("component_count"),
+        "signature_scheme": signature_scheme,
+        "signature_key_id": key_id,
+    }
+    registry_index = registry.get("index")
+    if isinstance(registry_index, dict) and registry_index:
+        manifest["index"] = copy.deepcopy(registry_index)
+    manifest["signature"] = signer(publication_registry_manifest_signing_payload(manifest), key_id)
+    return manifest
+
+
+def verify_signed_publication_registry_manifest(
+    publication_registry_manifest_json: str | Path,
+    *,
+    verifier: SignatureVerifier,
+) -> Dict[str, Any]:
+    manifest_path = Path(publication_registry_manifest_json).resolve()
+    manifest = _load_json_object_file(str(manifest_path), label="publication-registry-manifest")
+    validate_instance_against_schema(manifest, load_publication_registry_manifest_schema())
+
+    registry_ref = manifest.get("publication_registry_path")
+    if not isinstance(registry_ref, str) or not registry_ref.strip():
+        raise SatRootError("publication registry manifest publication_registry_path must be a non-empty string")
+    registry_path = (manifest_path.parent / registry_ref).resolve()
+    if not registry_path.is_file():
+        raise SatRootError(f"publication registry file not found: {registry_ref}")
+
+    registry = _load_json_file(str(registry_path))
+    validate_instance_against_schema(registry, load_publication_registry_schema())
+    if not isinstance(registry, dict):
+        raise SatRootError("publication registry must contain an object")
+    validate_publication_registry_consistency(registry)
+
+    actual_registry_hash = "sha256:" + sha256_hex_bytes(registry_path.read_bytes())
+    if manifest.get("publication_registry_hash") != actual_registry_hash:
+        raise SatRootError("publication registry manifest publication_registry_hash mismatch")
+    if manifest.get("component_count") != registry.get("component_count"):
+        raise SatRootError("publication registry manifest component_count mismatch")
+    if manifest.get("index") != registry.get("index"):
+        raise SatRootError("publication registry manifest index metadata mismatch")
+
+    release_catalog_component = registry.get("release_catalog_index_publication")
+    if isinstance(release_catalog_component, Mapping):
+        publication_dir = (registry_path.parent / str(release_catalog_component.get("publication_directory_path"))).resolve()
+        manifest_entry_path = (registry_path.parent / str(release_catalog_component.get("release_catalog_index_manifest_path"))).resolve()
+        index_entry_path = (registry_path.parent / str(release_catalog_component.get("release_catalog_index_json_path"))).resolve()
+        loaded_manifest_path, loaded_index_path, loaded_manifest, loaded_index = _load_release_catalog_index_publication(publication_dir)
+        if manifest_entry_path != loaded_manifest_path or index_entry_path != loaded_index_path:
+            raise SatRootError("publication registry release catalog index paths do not match nested publication")
+        if release_catalog_component.get("release_catalog_index_manifest_hash") != "sha256:" + sha256_hex_bytes(loaded_manifest_path.read_bytes()):
+            raise SatRootError("publication registry release_catalog_index_manifest_hash mismatch")
+        if release_catalog_component.get("release_catalog_index_hash") != "sha256:" + sha256_hex_bytes(loaded_index_path.read_bytes()):
+            raise SatRootError("publication registry release_catalog_index_hash mismatch")
+        if release_catalog_component.get("signature_scheme") != loaded_manifest.get("signature_scheme"):
+            raise SatRootError("publication registry release catalog index signature_scheme mismatch")
+        if release_catalog_component.get("signature_key_id") != loaded_manifest.get("signature_key_id"):
+            raise SatRootError("publication registry release catalog index signature_key_id mismatch")
+        if release_catalog_component.get("release_catalog_count") != loaded_index.get("release_catalog_count"):
+            raise SatRootError("publication registry release catalog index release_catalog_count mismatch")
+
+    descriptor_component = registry.get("publication_descriptor_index_publication")
+    if isinstance(descriptor_component, Mapping):
+        publication_dir = (registry_path.parent / str(descriptor_component.get("publication_directory_path"))).resolve()
+        manifest_entry_path = (registry_path.parent / str(descriptor_component.get("publication_descriptor_index_manifest_path"))).resolve()
+        index_entry_path = (registry_path.parent / str(descriptor_component.get("publication_descriptor_index_json_path"))).resolve()
+        loaded_manifest_path, loaded_index_path, loaded_manifest, loaded_index = _load_publication_descriptor_index_publication(publication_dir)
+        if manifest_entry_path != loaded_manifest_path or index_entry_path != loaded_index_path:
+            raise SatRootError("publication registry publication descriptor index paths do not match nested publication")
+        if descriptor_component.get("publication_descriptor_index_manifest_hash") != "sha256:" + sha256_hex_bytes(loaded_manifest_path.read_bytes()):
+            raise SatRootError("publication registry publication_descriptor_index_manifest_hash mismatch")
+        if descriptor_component.get("publication_descriptor_index_hash") != "sha256:" + sha256_hex_bytes(loaded_index_path.read_bytes()):
+            raise SatRootError("publication registry publication_descriptor_index_hash mismatch")
+        if descriptor_component.get("signature_scheme") != loaded_manifest.get("signature_scheme"):
+            raise SatRootError("publication registry publication descriptor index signature_scheme mismatch")
+        if descriptor_component.get("signature_key_id") != loaded_manifest.get("signature_key_id"):
+            raise SatRootError("publication registry publication descriptor index signature_key_id mismatch")
+        if descriptor_component.get("artifact_count") != loaded_index.get("artifact_count"):
+            raise SatRootError("publication registry publication descriptor index artifact_count mismatch")
+
+    metadata_component = registry.get("publication_metadata_catalog_publication")
+    if isinstance(metadata_component, Mapping):
+        publication_dir = (registry_path.parent / str(metadata_component.get("publication_directory_path"))).resolve()
+        manifest_entry_path = (registry_path.parent / str(metadata_component.get("publication_metadata_catalog_manifest_path"))).resolve()
+        catalog_entry_path = (registry_path.parent / str(metadata_component.get("publication_metadata_catalog_json_path"))).resolve()
+        loaded_manifest_path, loaded_catalog_path, loaded_manifest, loaded_catalog = _load_publication_metadata_catalog_publication(publication_dir)
+        if manifest_entry_path != loaded_manifest_path or catalog_entry_path != loaded_catalog_path:
+            raise SatRootError("publication registry publication metadata catalog paths do not match nested publication")
+        if metadata_component.get("publication_metadata_catalog_manifest_hash") != "sha256:" + sha256_hex_bytes(loaded_manifest_path.read_bytes()):
+            raise SatRootError("publication registry publication_metadata_catalog_manifest_hash mismatch")
+        if metadata_component.get("publication_metadata_catalog_hash") != "sha256:" + sha256_hex_bytes(loaded_catalog_path.read_bytes()):
+            raise SatRootError("publication registry publication_metadata_catalog_hash mismatch")
+        if metadata_component.get("signature_scheme") != loaded_manifest.get("signature_scheme"):
+            raise SatRootError("publication registry publication metadata catalog signature_scheme mismatch")
+        if metadata_component.get("signature_key_id") != loaded_manifest.get("signature_key_id"):
+            raise SatRootError("publication registry publication metadata catalog signature_key_id mismatch")
+        if metadata_component.get("bundle_count") != loaded_catalog.get("bundle_count"):
+            raise SatRootError("publication registry publication metadata catalog bundle_count mismatch")
+
+    if not verifier(manifest, publication_registry_manifest_signing_payload(manifest)):
+        raise SatRootError("publication registry manifest signature verification failed")
+
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "publication_registry_path": registry_ref,
+        "publication_registry_hash": actual_registry_hash,
+        "component_count": registry.get("component_count"),
+        "index": copy.deepcopy(registry.get("index")),
+    }
+
+
+def bootstrap_publication_registry_publication(
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    release_catalog_index_dir: Optional[str | Path] = None,
+    publication_descriptor_index_dir: Optional[str | Path] = None,
+    publication_metadata_catalog_dir: Optional[str | Path] = None,
+    registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    if signature_scheme == "hmac-sha256":
+        material = bootstrap_release_hmac_material([key_id])
+        signer = make_hmac_sha256_signer(material["shared_secrets"])
+        _write_json_file(output_path / "publication_registry_secrets.json", material["shared_secrets"])
+    elif signature_scheme == "ed25519":
+        material = bootstrap_release_ed25519_material([key_id])
+        signer = make_ed25519_signer(material["private_keys"])
+        _write_json_file(output_path / "publication_registry_private_keys.json", material["private_keys"])
+        _write_json_file(output_path / "publication_registry_public_keys.json", material["public_keys"])
+    else:
+        raise SatRootError(f"unsupported publication registry signature scheme: {signature_scheme}")
+
+    registry = build_publication_registry(
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_descriptor_index_dir=publication_descriptor_index_dir,
+        publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        base_dir=output_path,
+        registry_metadata=registry_metadata,
+    )
+    registry_path = output_path / "publication_registry.json"
+    _write_json_file(registry_path, registry)
+
+    registry_manifest = build_signed_publication_registry_manifest(
+        registry_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        base_dir=output_path,
+    )
+    registry_manifest_path = output_path / "publication_registry_manifest.json"
+    _write_json_file(registry_manifest_path, registry_manifest)
+
+    return {
+        "publication_registry": registry,
+        "publication_registry_path": str(registry_path),
+        "publication_registry_manifest": registry_manifest,
+        "publication_registry_manifest_path": str(registry_manifest_path),
+        "publication_registry_material": material,
+    }
+
+
 def render_satroot_artifact_report(path: str | Path) -> str:
     kind, artifact_path = _detect_satroot_artifact_kind(path)
     lines: list[str] = []
@@ -7449,6 +7852,14 @@ def build_cli_parser() -> Any:
     validate_publication_metadata_catalog_manifest_parser = subparsers.add_parser("validate-publication-metadata-catalog-manifest", help="Validate a SATROOT publication metadata catalog manifest against the publication-metadata-catalog-manifest schema")
     validate_publication_metadata_catalog_manifest_parser.add_argument("publication_metadata_catalog_manifest_json", help="Path to publication_metadata_catalog_manifest.json")
     validate_publication_metadata_catalog_manifest_parser.add_argument("--schema-json", help="Optional path to a publication-metadata-catalog-manifest JSON Schema file")
+
+    validate_publication_registry_parser = subparsers.add_parser("validate-publication-registry", help="Validate a SATROOT publication registry against the publication-registry schema")
+    validate_publication_registry_parser.add_argument("publication_registry_json", help="Path to publication_registry.json")
+    validate_publication_registry_parser.add_argument("--schema-json", help="Optional path to a publication-registry JSON Schema file")
+
+    validate_publication_registry_manifest_parser = subparsers.add_parser("validate-publication-registry-manifest", help="Validate a SATROOT publication registry manifest against the publication-registry-manifest schema")
+    validate_publication_registry_manifest_parser.add_argument("publication_registry_manifest_json", help="Path to publication_registry_manifest.json")
+    validate_publication_registry_manifest_parser.add_argument("--schema-json", help="Optional path to a publication-registry-manifest JSON Schema file")
 
     init_genesis_parser = subparsers.add_parser("init-genesis", help="Scaffold a SATROOT-1 genesis record with optional profile-aware defaults")
     init_genesis_parser.add_argument("--symbol", required=True, help="Asset symbol for the genesis record")
@@ -7837,6 +8248,25 @@ def build_cli_parser() -> Any:
     build_publication_metadata_catalog_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-catalog-manifest signing")
     build_publication_metadata_catalog_manifest_parser.add_argument("--output", help="Optional output path")
 
+    build_publication_registry_parser = subparsers.add_parser("build-publication-registry", help="Build a top-level SATROOT publication registry from existing published component directories")
+    build_publication_registry_parser.add_argument("--release-catalog-index-dir", help="Path to a release catalog index publication directory")
+    build_publication_registry_parser.add_argument("--publication-descriptor-index-dir", help="Path to a publication descriptor index publication directory")
+    build_publication_registry_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a publication metadata catalog publication directory")
+    build_publication_registry_parser.add_argument("--channel", help="Optional publication-registry channel metadata")
+    build_publication_registry_parser.add_argument("--label", help="Optional human-readable publication registry label")
+    build_publication_registry_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication registry")
+    build_publication_registry_parser.add_argument("--output", help="Optional output path")
+
+    build_publication_registry_manifest_parser = subparsers.add_parser("build-publication-registry-manifest", help="Build a signed SATROOT publication registry manifest from a publication registry")
+    build_publication_registry_manifest_parser.add_argument("publication_registry_json", help="Path to publication_registry.json")
+    build_publication_registry_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    build_publication_registry_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication registry manifest")
+    build_publication_registry_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    build_publication_registry_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-registry-manifest signing")
+    build_publication_registry_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    build_publication_registry_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-registry-manifest signing")
+    build_publication_registry_manifest_parser.add_argument("--output", help="Optional output path")
+
     bootstrap_publication_descriptor_index_publication_parser = subparsers.add_parser("bootstrap-publication-descriptor-index-publication", help="Generate signing material and write a ready-to-verify SATROOT publication descriptor index directory")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
@@ -7864,6 +8294,17 @@ def build_cli_parser() -> Any:
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication metadata catalog")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+
+    bootstrap_publication_registry_publication_parser = subparsers.add_parser("bootstrap-publication-registry-publication", help="Generate signing material and write a ready-to-verify SATROOT publication registry directory")
+    bootstrap_publication_registry_publication_parser.add_argument("--release-catalog-index-dir", help="Path to a release catalog index publication directory")
+    bootstrap_publication_registry_publication_parser.add_argument("--publication-descriptor-index-dir", help="Path to a publication descriptor index publication directory")
+    bootstrap_publication_registry_publication_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a publication metadata catalog publication directory")
+    bootstrap_publication_registry_publication_parser.add_argument("--output-dir", required=True, help="Directory where publication_registry.json and publication_registry_manifest.json will be written")
+    bootstrap_publication_registry_publication_parser.add_argument("--channel", help="Optional publication-registry channel metadata")
+    bootstrap_publication_registry_publication_parser.add_argument("--label", help="Optional human-readable publication registry label")
+    bootstrap_publication_registry_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication registry")
+    bootstrap_publication_registry_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_publication_registry_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication registry manifest")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -8224,6 +8665,12 @@ def build_cli_parser() -> Any:
     verify_publication_metadata_catalog_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification")
     verify_publication_metadata_catalog_manifest_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
     verify_publication_metadata_catalog_manifest_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for verification")
+
+    verify_publication_registry_manifest_parser = subparsers.add_parser("verify-publication-registry-manifest", help="Verify a signed SATROOT publication registry manifest against its publication registry")
+    verify_publication_registry_manifest_parser.add_argument("publication_registry_manifest_json", help="Path to publication_registry_manifest.json")
+    verify_publication_registry_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 verification")
+    verify_publication_registry_manifest_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex for verification")
+    verify_publication_registry_manifest_parser.add_argument("--private-keys-json", help="Optional path to JSON mapping key_id -> Ed25519 private key hex for verification")
 
     generate_keys_parser = subparsers.add_parser("generate-ed25519-private-keys", help="Generate Ed25519 private key hex mappings")
     generate_keys_parser.add_argument("--key-id", action="append", dest="key_ids", help="Key identifier to generate")
@@ -9223,6 +9670,38 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(manifest, output_path)
         return 0
 
+    if args.command == "build-publication-registry":
+        registry_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        registry = build_publication_registry(
+            release_catalog_index_dir=args.release_catalog_index_dir,
+            publication_descriptor_index_dir=args.publication_descriptor_index_dir,
+            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir,
+            base_dir=base_dir,
+            registry_metadata=registry_metadata,
+        )
+        _write_output(registry, output_path)
+        return 0
+
+    if args.command == "build-publication-registry-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        manifest = build_signed_publication_registry_manifest(
+            args.publication_registry_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
     if args.command == "bootstrap-publication-descriptor-index-publication":
         index_metadata = {
             "channel": args.channel,
@@ -9267,6 +9746,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             catalog_metadata=catalog_metadata,
         )
         print(f"wrote bootstrapped SATROOT publication metadata catalog to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-publication-registry-publication":
+        registry_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        output = bootstrap_publication_registry_publication(
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            release_catalog_index_dir=args.release_catalog_index_dir,
+            publication_descriptor_index_dir=args.publication_descriptor_index_dir,
+            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir,
+            registry_metadata=registry_metadata,
+        )
+        print(f"wrote bootstrapped SATROOT publication registry to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-genesis-bundle":
@@ -9441,6 +9938,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         schema = load_publication_metadata_catalog_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
         count = validate_instance_against_schema(manifest, schema)
         print(f"valid SATROOT publication metadata catalog manifest: {count} record(s)")
+        return 0
+
+    if args.command == "validate-publication-registry":
+        registry = _load_json_file(args.publication_registry_json)
+        schema = load_publication_registry_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(registry, schema)
+        if not isinstance(registry, dict):
+            raise SatRootError("publication registry must contain an object")
+        validate_publication_registry_consistency(registry)
+        print(f"valid SATROOT publication registry: {count} record(s)")
+        return 0
+
+    if args.command == "validate-publication-registry-manifest":
+        manifest = _load_json_file(args.publication_registry_manifest_json)
+        schema = load_publication_registry_manifest_schema() if not args.schema_json else _load_json_object_file(args.schema_json, label="schema-json")
+        count = validate_instance_against_schema(manifest, schema)
+        print(f"valid SATROOT publication registry manifest: {count} record(s)")
         return 0
 
     if args.command == "init-signer-key-map":
@@ -9872,6 +10386,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         manifest = _load_json_object_file(args.publication_metadata_catalog_manifest_json, label="publication-metadata-catalog-manifest")
         verifier = _release_manifest_verifier_from_args(args, manifest)
         summary = verify_signed_publication_metadata_catalog_manifest(args.publication_metadata_catalog_manifest_json, verifier=verifier)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "verify-publication-registry-manifest":
+        manifest = _load_json_object_file(args.publication_registry_manifest_json, label="publication-registry-manifest")
+        verifier = _release_manifest_verifier_from_args(args, manifest)
+        summary = verify_signed_publication_registry_manifest(args.publication_registry_manifest_json, verifier=verifier)
         print(canonical_json(summary))
         return 0
 

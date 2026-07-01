@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/satroot1.publication-registry.schema.json",
+  "title": "SATROOT Publication Registry",
+  "type": "object",
+  "required": [
+    "type",
+    "version",
+    "component_count"
+  ],
+  "properties": {
+    "type": {"const": "SATROOT-PUBLICATION-REGISTRY"},
+    "version": {"const": "0.1"},
+    "component_count": {"type": "integer", "minimum": 1},
+    "index": {
+      "type": "object",
+      "properties": {
+        "channel": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1},
+        "published_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "release_catalog_index_publication": {
+      "type": "object",
+      "required": [
+        "publication_directory_path",
+        "release_catalog_index_manifest_path",
+        "release_catalog_index_manifest_hash",
+        "release_catalog_index_json_path",
+        "release_catalog_index_hash",
+        "signature_scheme",
+        "signature_key_id",
+        "release_catalog_count"
+      ],
+      "properties": {
+        "publication_directory_path": {"type": "string", "minLength": 1},
+        "release_catalog_index_manifest_path": {"type": "string", "minLength": 1},
+        "release_catalog_index_manifest_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "release_catalog_index_json_path": {"type": "string", "minLength": 1},
+        "release_catalog_index_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "signature_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+        "signature_key_id": {"type": "string", "minLength": 1},
+        "release_catalog_count": {"type": "integer", "minimum": 1},
+        "index": {
+          "type": "object",
+          "properties": {
+            "channel": {"type": "string", "minLength": 1},
+            "label": {"type": "string", "minLength": 1},
+            "published_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "publication_descriptor_index_publication": {
+      "type": "object",
+      "required": [
+        "publication_directory_path",
+        "publication_descriptor_index_manifest_path",
+        "publication_descriptor_index_manifest_hash",
+        "publication_descriptor_index_json_path",
+        "publication_descriptor_index_hash",
+        "signature_scheme",
+        "signature_key_id",
+        "artifact_count"
+      ],
+      "properties": {
+        "publication_directory_path": {"type": "string", "minLength": 1},
+        "publication_descriptor_index_manifest_path": {"type": "string", "minLength": 1},
+        "publication_descriptor_index_manifest_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "publication_descriptor_index_json_path": {"type": "string", "minLength": 1},
+        "publication_descriptor_index_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "signature_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+        "signature_key_id": {"type": "string", "minLength": 1},
+        "artifact_count": {"type": "integer", "minimum": 1},
+        "index": {
+          "type": "object",
+          "properties": {
+            "channel": {"type": "string", "minLength": 1},
+            "label": {"type": "string", "minLength": 1},
+            "published_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "publication_metadata_catalog_publication": {
+      "type": "object",
+      "required": [
+        "publication_directory_path",
+        "publication_metadata_catalog_manifest_path",
+        "publication_metadata_catalog_manifest_hash",
+        "publication_metadata_catalog_json_path",
+        "publication_metadata_catalog_hash",
+        "signature_scheme",
+        "signature_key_id",
+        "bundle_count"
+      ],
+      "properties": {
+        "publication_directory_path": {"type": "string", "minLength": 1},
+        "publication_metadata_catalog_manifest_path": {"type": "string", "minLength": 1},
+        "publication_metadata_catalog_manifest_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "publication_metadata_catalog_json_path": {"type": "string", "minLength": 1},
+        "publication_metadata_catalog_hash": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "signature_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+        "signature_key_id": {"type": "string", "minLength": 1},
+        "bundle_count": {"type": "integer", "minimum": 1},
+        "index": {
+          "type": "object",
+          "properties": {
+            "channel": {"type": "string", "minLength": 1},
+            "label": {"type": "string", "minLength": 1},
+            "published_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "anyOf": [
+    {"required": ["release_catalog_index_publication"]},
+    {"required": ["publication_descriptor_index_publication"]},
+    {"required": ["publication_metadata_catalog_publication"]}
+  ],
+  "additionalProperties": false
+}

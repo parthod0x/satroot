@@ -8,8 +8,10 @@ from satroot1 import (
     annotate_ledger_events,
     build_signed_ledger_bundle_index,
     build_publication_metadata_catalog,
+    build_publication_registry,
     build_signed_publication_metadata_catalog_manifest,
     build_signed_publication_metadata_manifest,
+    build_signed_publication_registry_manifest,
     build_signed_release_catalog,
     build_signed_release_catalog_index,
     build_signed_release_catalog_index_manifest,
@@ -55,6 +57,8 @@ from satroot1 import (
     load_publication_network_preset,
     load_publication_metadata_catalog_manifest_schema,
     load_publication_metadata_catalog_schema,
+    load_publication_registry_manifest_schema,
+    load_publication_registry_schema,
     load_publication_descriptor_index_manifest_schema,
     load_publication_descriptor_index_schema,
     load_publication_metadata_manifest_schema,
@@ -95,6 +99,7 @@ from satroot1 import (
     validate_demo_catalog_summary_consistency,
     validate_publication_network_summary_consistency,
     validate_publication_metadata_catalog_consistency,
+    validate_publication_registry_consistency,
     validate_publication_descriptor_index_consistency,
     validate_publication_stack_summary_consistency,
     validate_release_catalog_index_consistency,
@@ -105,6 +110,7 @@ from satroot1 import (
     verify_signed_publication_metadata_catalog_manifest,
     verify_signed_publication_descriptor_index_manifest,
     verify_signed_publication_metadata_manifest,
+    verify_signed_publication_registry_manifest,
     verify_signed_ledger_bundle,
 )
 
@@ -447,6 +453,83 @@ def make_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path, Path]:
         ]
     ) == 0
     return release_bundle_dir, network_bundle_dir
+
+
+def make_publication_registry_component_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
+    network_root = tmp_path / "network_root"
+    network_root.mkdir(parents=True, exist_ok=True)
+    network_dir = make_demo_publication_network_dir(network_root)
+    release_catalog_index_dir = network_dir / "release_catalog_index"
+
+    descriptor_index_dir = tmp_path / "publication_descriptor_index_publication"
+    assert main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(descriptor_index_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Registry Descriptor Index",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+
+    release_root = tmp_path / "registry_release_root"
+    release_root.mkdir(parents=True, exist_ok=True)
+    release_dir, _ = make_demo_release_dirs(release_root)
+    metadata_release_bundle_dir = tmp_path / "registry_metadata_inputs" / "release"
+    metadata_network_bundle_dir = tmp_path / "registry_metadata_inputs" / "network"
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            release_dir,
+            "--output-dir",
+            str(metadata_release_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(network_dir),
+            "--output-dir",
+            str(metadata_network_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+
+    metadata_catalog_dir = tmp_path / "publication_metadata_catalog_publication"
+    assert main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            str(metadata_release_bundle_dir),
+            str(metadata_network_bundle_dir),
+            "--output-dir",
+            str(metadata_catalog_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Registry Metadata Catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+
+    return release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir
 
 
 def build_rotation_ledger():
@@ -3544,6 +3627,147 @@ def test_cli_validate_and_verify_publication_metadata_catalog_manifest(tmp_path,
     assert '"signature_scheme":"hmac-sha256"' in captured.out
     assert '"signature_key_id":"catalog-key"' in captured.out
     assert '"publication_metadata_catalog_path":"publication_metadata_catalog.json"' in captured.out
+
+
+def test_validate_publication_registry_schema_accepts_generated_registry(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    registry = build_publication_registry(
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_descriptor_index_dir=descriptor_index_dir,
+        publication_metadata_catalog_dir=metadata_catalog_dir,
+        base_dir=tmp_path,
+    )
+
+    count = validate_instance_against_schema(registry, load_publication_registry_schema())
+    assert count == 1
+    validate_publication_registry_consistency(registry)
+
+
+def test_build_and_verify_signed_publication_registry_manifest_hmac(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    registry = build_publication_registry(
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_descriptor_index_dir=descriptor_index_dir,
+        publication_metadata_catalog_dir=metadata_catalog_dir,
+        base_dir=tmp_path,
+        registry_metadata={"label": "SATROOT Publication Registry"},
+    )
+    registry_path = tmp_path / "publication_registry.json"
+    write_json(registry_path, registry)
+
+    manifest = build_signed_publication_registry_manifest(
+        registry_path,
+        signature_scheme="hmac-sha256",
+        key_id="registry-key",
+        signer=make_hmac_sha256_signer({"registry-key": "registry-secret"}),
+        base_dir=tmp_path,
+    )
+    count = validate_instance_against_schema(manifest, load_publication_registry_manifest_schema())
+    assert count == 1
+
+    manifest_path = tmp_path / "publication_registry_manifest.json"
+    write_json(manifest_path, manifest)
+    summary = verify_signed_publication_registry_manifest(
+        manifest_path,
+        verifier=make_hmac_sha256_verifier({"registry-key": "registry-secret"}),
+    )
+    assert summary["signature_scheme"] == "hmac-sha256"
+    assert summary["signature_key_id"] == "registry-key"
+    assert summary["publication_registry_path"] == "publication_registry.json"
+    assert summary["component_count"] == 3
+
+
+def test_cli_bootstrap_publication_registry_publication(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "publication_registry_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-registry-publication",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Publication Registry",
+            "--published-at",
+            "2026-07-08T05:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_registry_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "SATROOT Publication Registry"
+    assert manifest["signature_key_id"] == "registry-key"
+
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"] == registry["index"]
+
+
+def test_cli_validate_and_verify_publication_registry_manifest(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "publication_registry_publication"
+
+    assert main(
+        [
+            "bootstrap-publication-registry-publication",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    registry_path = output_dir / "publication_registry.json"
+    manifest_path = output_dir / "publication_registry_manifest.json"
+    secrets_path = output_dir / "publication_registry_secrets.json"
+
+    exit_code = main(["validate-publication-registry", str(registry_path)])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "valid SATROOT publication registry: 1 record(s)" in captured.out
+
+    exit_code = main(["validate-publication-registry-manifest", str(manifest_path)])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "valid SATROOT publication registry manifest: 1 record(s)" in captured.out
+
+    exit_code = main(["verify-publication-registry-manifest", str(manifest_path), "--secrets-json", str(secrets_path)])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"registry-key"' in captured.out
+    assert '"publication_registry_path":"publication_registry.json"' in captured.out
 
 
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
