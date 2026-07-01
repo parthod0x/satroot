@@ -47,6 +47,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `examples/release_catalog_presets/` - reusable SATROOT release-catalog publication presets.
 - `examples/release_catalog_index_presets/` - reusable SATROOT release-catalog-index publication presets.
+- `examples/publication_descriptor_index_presets/` - reusable SATROOT publication-descriptor-index presets.
 - `examples/publication_metadata_catalog_presets/` - reusable SATROOT publication-metadata-catalog presets.
 - `examples/registry_presets/` - reusable SATROOT publication-registry presets.
 - `examples/network_presets/` - reusable SATROOT publication-network presets.
@@ -146,6 +147,7 @@ The v0.1 kernel defines:
 - `build-publication-descriptor-index` for aggregating many detected SATROOT descriptors into one machine-readable registry,
 - signed publication-descriptor-index-manifest generation for authenticating descriptor registries,
 - one-shot `bootstrap-publication-descriptor-index-publication` orchestration for descriptor indexes plus signing material,
+- preset export commands for deriving reusable publication-descriptor-index presets back from generated descriptor index publications,
 - signed publication-metadata-manifest generation for authenticating one artifact's rendered report plus normalized descriptor,
 - `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
 - signed publication-metadata-catalog-manifest generation for authenticating publication metadata catalogs,
@@ -244,7 +246,7 @@ python -m pytest
 Expected result:
 
 ```text
-271 passed
+274 passed
 ```
 
 ## Signing utilities
@@ -684,6 +686,12 @@ To bootstrap signing material plus a ready-to-verify signed publication descript
 satroot1 bootstrap-publication-descriptor-index-publication --discover-under publication_network --output-dir publication_descriptor_index_publication --channel network --label "SATROOT Descriptor Publication" --scheme hmac-sha256 --key-id descriptor-key
 ```
 
+For repeatable descriptor-index packaging, that same command can also load a preset:
+
+```bash
+satroot1 bootstrap-publication-descriptor-index-publication --preset-json examples/publication_descriptor_index_presets/ai_compute_publication_descriptor_index.json --output-dir publication_descriptor_index_publication --label "SATROOT Descriptor Publication Override" --scheme hmac-sha256 --key-id descriptor-key
+```
+
 To bootstrap a signed publication report plus descriptor bundle for one artifact:
 
 ```bash
@@ -742,6 +750,12 @@ To derive a reusable preset back from a generated metadata catalog publication:
 
 ```bash
 satroot1 export-publication-metadata-catalog-preset publication_metadata_catalog_publication --output exported_publication_metadata_catalog.json
+```
+
+To derive a reusable preset back from a generated descriptor index publication:
+
+```bash
+satroot1 export-publication-descriptor-index-preset publication_descriptor_index_publication --output exported_publication_descriptor_index.json
 ```
 
 Inspect a release catalog publication without signature verification:

@@ -54,6 +54,7 @@ from satroot1 import (
     load_demo_catalog_preset,
     load_protocol_schema,
     load_profile_registry,
+    load_publication_descriptor_index_preset,
     load_publication_network_preset,
     load_publication_metadata_catalog_preset,
     load_publication_metadata_catalog_manifest_schema,
@@ -475,6 +476,29 @@ def make_publication_metadata_catalog_dir(tmp_path: Path) -> Path:
             "hmac-sha256",
             "--key-id",
             "catalog-key",
+        ]
+    ) == 0
+    return output_dir
+
+
+def make_publication_descriptor_index_dir(tmp_path: Path) -> Path:
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "publication_descriptor_index_publication"
+    assert main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Descriptor Publication",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
         ]
     ) == 0
     return output_dir
@@ -996,6 +1020,14 @@ def test_load_release_catalog_index_preset_example():
     assert preset["discover_under"] == [str((ROOT / "generated_release_catalogs").resolve())]
     assert preset["recursive"] is True
     assert preset["index_metadata"]["label"] == "SATROOT AI Compute Catalog Network"
+
+
+def test_load_publication_descriptor_index_preset_example():
+    preset = load_publication_descriptor_index_preset(
+        ROOT / "examples" / "publication_descriptor_index_presets" / "ai_compute_publication_descriptor_index.json"
+    )
+    assert preset["discover_under"] == [str((ROOT / "examples" / "generated_publication_network").resolve())]
+    assert preset["index_metadata"]["label"] == "SATROOT AI Compute Publication Descriptor Index"
 
 
 def test_load_publication_stack_preset_example():
@@ -3280,6 +3312,22 @@ def test_cli_export_publication_metadata_catalog_preset(tmp_path):
     assert preset["catalog"]["label"] == "SATROOT Metadata Catalog Publication"
 
 
+def test_cli_export_publication_descriptor_index_preset(tmp_path):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+    preset_path = tmp_path / "exported_publication_descriptor_index.json"
+
+    exit_code = main(["export-publication-descriptor-index-preset", str(descriptor_index_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_descriptor_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET"
+    assert len(loaded["artifact_paths"]) == 12
+    loaded_names = {Path(value).name for value in loaded["artifact_paths"]}
+    assert {"publication_network", "stack_a", "stack_b", "release_catalog_index", "stable_catalog", "machine_catalog"} <= loaded_names
+    assert preset["index"]["label"] == "SATROOT Descriptor Publication"
+
+
 def test_cli_render_publication_report_for_network(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
 
@@ -3527,6 +3575,51 @@ def test_cli_bootstrap_publication_descriptor_index_publication(tmp_path, capsys
     )
     assert verified["artifact_count"] == 12
     assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_publication_descriptor_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    preset_path = tmp_path / "publication_descriptor_index_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET",
+            "version": "0.1",
+            "discover_under": [str(Path(network_dir).relative_to(tmp_path))],
+            "index": {
+                "channel": "network",
+                "label": "SATROOT Preset Descriptor Index",
+                "published_at": "2026-07-08T02:30:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_descriptor_index_publication_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Descriptor Index Override",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 12
+    assert index["index"]["channel"] == "network"
+    assert index["index"]["label"] == "SATROOT Descriptor Index Override"
+    assert index["index"]["published_at"] == "2026-07-08T02:30:00Z"
 
 
 def test_build_and_verify_signed_publication_metadata_manifest_hmac(tmp_path):

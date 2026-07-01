@@ -923,6 +923,54 @@ def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
     }
 
 
+def load_publication_descriptor_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="publication descriptor index preset")
+    if preset.get("type") != "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET":
+        raise SatRootError("unsupported publication descriptor index preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported publication descriptor index preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "artifact_paths",
+        "discover_under",
+        "recursive",
+        "index",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported publication descriptor index preset keys: {sorted(unexpected)}")
+
+    artifact_paths = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("artifact_paths"),
+            label="publication descriptor index preset artifact_paths",
+        )
+    ]
+    discover_under = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("discover_under"),
+            label="publication descriptor index preset discover_under",
+        )
+    ]
+    recursive = preset.get("recursive", True)
+    if not isinstance(recursive, bool):
+        raise SatRootError("publication descriptor index preset recursive must be a boolean")
+    if not artifact_paths and not discover_under:
+        raise SatRootError("publication descriptor index preset must contain at least one artifact_path or discover_under path")
+
+    return {
+        "artifact_paths": artifact_paths,
+        "discover_under": discover_under,
+        "recursive": recursive,
+        "index_metadata": validate_release_metadata_mapping(preset.get("index")),
+    }
+
+
 def load_publication_metadata_catalog_preset(path: str | Path) -> Dict[str, Any]:
     preset_path = Path(path).resolve()
     preset = _load_json_object_file(str(preset_path), label="publication metadata catalog preset")
@@ -6465,6 +6513,37 @@ def export_publication_network_preset_from_workspace(
     return preset
 
 
+def export_publication_descriptor_index_preset_from_workspace(
+    publication_descriptor_index_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _manifest_path, _descriptor_index_path, _manifest, index = _load_publication_descriptor_index_publication(
+        publication_descriptor_index_dir
+    )
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    preset: Dict[str, Any] = {
+        "type": "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET",
+        "version": "0.1",
+    }
+
+    artifact_paths: list[str] = []
+    for entry in index.get("artifacts", []):
+        if not isinstance(entry, Mapping):
+            continue
+        artifact_path = entry.get("artifact_path")
+        if not isinstance(artifact_path, str) or not artifact_path.strip():
+            continue
+        artifact_paths.append(_relative_output_path(Path(artifact_path).resolve(), base_dir=base_dir))
+    if artifact_paths:
+        preset["artifact_paths"] = artifact_paths
+
+    index_metadata = _filtered_string_mapping(index.get("index"))
+    if index_metadata:
+        preset["index"] = index_metadata
+    return preset
+
+
 def export_publication_metadata_catalog_preset_from_workspace(
     publication_metadata_catalog_dir: str | Path,
     *,
@@ -8667,6 +8746,10 @@ def build_cli_parser() -> Any:
     export_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported alongside generated stack presets")
     export_publication_network_preset_parser.add_argument("--output", help="Optional output path")
 
+    export_publication_descriptor_index_preset_parser = subparsers.add_parser("export-publication-descriptor-index-preset", help="Export a SATROOT publication descriptor index back into a reusable publication descriptor index preset")
+    export_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory")
+    export_publication_descriptor_index_preset_parser.add_argument("--output", help="Optional output path")
+
     export_publication_metadata_catalog_preset_parser = subparsers.add_parser("export-publication-metadata-catalog-preset", help="Export a SATROOT publication metadata catalog back into a reusable publication metadata catalog preset")
     export_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory")
     export_publication_metadata_catalog_preset_parser.add_argument("--output", help="Optional output path")
@@ -8684,6 +8767,7 @@ def build_cli_parser() -> Any:
     export_publication_descriptor_parser.add_argument("--output", help="Optional output path")
 
     build_publication_descriptor_index_parser = subparsers.add_parser("build-publication-descriptor-index", help="Build a machine-readable SATROOT publication descriptor index from explicit artifact paths and/or discovery roots")
+    build_publication_descriptor_index_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with artifact paths, discovery roots, and index metadata defaults")
     build_publication_descriptor_index_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
     build_publication_descriptor_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
     build_publication_descriptor_index_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
@@ -8754,6 +8838,7 @@ def build_cli_parser() -> Any:
     build_publication_registry_manifest_parser.add_argument("--output", help="Optional output path")
 
     bootstrap_publication_descriptor_index_publication_parser = subparsers.add_parser("bootstrap-publication-descriptor-index-publication", help="Generate signing material and write a ready-to-verify SATROOT publication descriptor index directory")
+    bootstrap_publication_descriptor_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with artifact paths, discovery roots, and index metadata defaults")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
@@ -10078,6 +10163,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(preset, args.output)
         return 0
 
+    if args.command == "export-publication-descriptor-index-preset":
+        preset = export_publication_descriptor_index_preset_from_workspace(
+            args.publication_descriptor_index_dir,
+            output_path=args.output,
+        )
+        _write_output(preset, args.output)
+        return 0
+
     if args.command == "export-publication-metadata-catalog-preset":
         preset = export_publication_metadata_catalog_preset_from_workspace(
             args.publication_metadata_catalog_dir,
@@ -10105,15 +10198,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-publication-descriptor-index":
+        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
         index_metadata = {
+            **dict((preset or {}).get("index_metadata", {})),
+        }
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
         index = build_satroot_publication_descriptor_index(
-            args.path,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            [*(preset or {}).get("artifact_paths", []), *args.path],
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
             index_metadata=index_metadata,
         )
         _write_output(index, args.output)
@@ -10225,18 +10324,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-publication-descriptor-index-publication":
+        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
         index_metadata = {
+            **dict((preset or {}).get("index_metadata", {})),
+        }
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
         output = bootstrap_publication_descriptor_index_publication(
-            args.path,
+            [*(preset or {}).get("artifact_paths", []), *args.path],
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
             index_metadata=index_metadata,
         )
         print(f"wrote bootstrapped SATROOT publication descriptor index to {Path(args.output_dir).resolve()}")
