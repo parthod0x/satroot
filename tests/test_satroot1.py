@@ -12,9 +12,11 @@ from satroot1 import (
     build_signed_release_catalog_index_manifest,
     build_signed_release_catalog_manifest,
     build_signed_release_manifest,
+    build_signed_publication_descriptor_index_manifest,
     append_signed_event_to_ledger,
     bootstrap_machine_credit_demo_ledger,
     bootstrap_machine_credit_demo_release,
+    bootstrap_publication_descriptor_index_publication,
     bootstrap_release_catalog_index_publication,
     bootstrap_release_catalog_publication,
     bootstrap_release_ed25519_material,
@@ -48,6 +50,8 @@ from satroot1 import (
     load_protocol_schema,
     load_profile_registry,
     load_publication_network_preset,
+    load_publication_descriptor_index_manifest_schema,
+    load_publication_descriptor_index_schema,
     load_publication_network_summary_schema,
     load_publication_stack_preset,
     load_publication_stack_summary_schema,
@@ -84,12 +88,14 @@ from satroot1 import (
     validate_bundle_index_consistency,
     validate_demo_catalog_summary_consistency,
     validate_publication_network_summary_consistency,
+    validate_publication_descriptor_index_consistency,
     validate_publication_stack_summary_consistency,
     validate_release_catalog_index_consistency,
     validate_release_catalog_consistency,
     verify_signed_release_catalog_index_manifest,
     verify_signed_release_catalog_manifest,
     verify_signed_release_manifest,
+    verify_signed_publication_descriptor_index_manifest,
     verify_signed_ledger_bundle,
 )
 
@@ -3149,6 +3155,97 @@ def test_cli_build_publication_descriptor_index_non_recursive(tmp_path):
     assert index["artifact_kind_counts"]["publication-network"] == 1
     assert index["artifact_kind_counts"]["publication-stack"] == 0
     assert index["artifacts"][0]["artifact_kind"] == "publication-network"
+
+
+def test_validate_publication_descriptor_index_schema_accepts_generated_index(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    index = json.loads((tmp_path / "descriptor_index.json").read_text(encoding="utf-8")) if (tmp_path / "descriptor_index.json").exists() else None
+    if index is None:
+        output_path = tmp_path / "descriptor_index.json"
+        assert main(["build-publication-descriptor-index", "--discover-under", str(network_dir), "--output", str(output_path)]) == 0
+        index = json.loads(output_path.read_text(encoding="utf-8"))
+
+    count = validate_instance_against_schema(index, load_publication_descriptor_index_schema())
+    assert count == 1
+    validate_publication_descriptor_index_consistency(index)
+
+
+def test_build_and_verify_signed_publication_descriptor_index_manifest_hmac(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    index = json.loads((tmp_path / "descriptor_index.json").read_text(encoding="utf-8")) if (tmp_path / "descriptor_index.json").exists() else None
+    if index is None:
+        output_path = tmp_path / "descriptor_index.json"
+        assert main(["build-publication-descriptor-index", "--discover-under", str(network_dir), "--output", str(output_path)]) == 0
+        index = json.loads(output_path.read_text(encoding="utf-8"))
+        index_path = output_path
+    else:
+        index_path = tmp_path / "descriptor_index.json"
+        write_json(index_path, index)
+
+    manifest = build_signed_publication_descriptor_index_manifest(
+        index_path,
+        signature_scheme="hmac-sha256",
+        key_id="descriptor-key",
+        signer=make_hmac_sha256_signer({"descriptor-key": "descriptor-secret"}),
+        base_dir=tmp_path,
+    )
+    count = validate_instance_against_schema(manifest, load_publication_descriptor_index_manifest_schema())
+    assert count == 1
+
+    manifest_path = tmp_path / "publication_descriptor_index_manifest.json"
+    write_json(manifest_path, manifest)
+    summary = verify_signed_publication_descriptor_index_manifest(
+        manifest_path,
+        verifier=make_hmac_sha256_verifier({"descriptor-key": "descriptor-secret"}),
+    )
+    assert summary["signature_scheme"] == "hmac-sha256"
+    assert summary["signature_key_id"] == "descriptor-key"
+    assert summary["publication_descriptor_index_path"] == "descriptor_index.json"
+    assert summary["artifact_count"] == index["artifact_count"]
+
+
+def test_cli_bootstrap_publication_descriptor_index_publication(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "publication_descriptor_index_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Descriptor Publication",
+            "--published-at",
+            "2026-07-07T02:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_descriptor_index_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_descriptor_index_secrets.json").read_text(encoding="utf-8"))
+
+    assert index["artifact_count"] == 12
+    assert index["index"]["label"] == "SATROOT Descriptor Publication"
+    assert manifest["signature_key_id"] == "descriptor-key"
+
+    verified = verify_signed_publication_descriptor_index_manifest(
+        output_dir / "publication_descriptor_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["artifact_count"] == 12
+    assert verified["index"] == index["index"]
 
 
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):

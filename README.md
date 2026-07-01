@@ -34,6 +34,8 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `protocol/satroot1.demo-catalog-summary.schema.json` - JSON schema for demo catalog workspace summaries.
 - `protocol/satroot1.publication-stack-summary.schema.json` - JSON schema for publication-stack workspace summaries.
 - `protocol/satroot1.publication-network-summary.schema.json` - JSON schema for publication-network workspace summaries.
+- `protocol/satroot1.publication-descriptor-index.schema.json` - JSON schema for publication descriptor indexes.
+- `protocol/satroot1.publication-descriptor-index-manifest.schema.json` - JSON schema for signed publication descriptor index manifests.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
@@ -134,9 +136,11 @@ The v0.1 kernel defines:
 - `render-publication-report` for turning detected SATROOT artifacts or workspaces into human-readable markdown reports,
 - `export-publication-descriptor` for emitting normalized JSON descriptors from detected SATROOT artifacts or workspaces,
 - `build-publication-descriptor-index` for aggregating many detected SATROOT descriptors into one machine-readable registry,
+- signed publication-descriptor-index-manifest generation for authenticating descriptor registries,
+- one-shot `bootstrap-publication-descriptor-index-publication` orchestration for descriptor indexes plus signing material,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
 - signed bundle verification against manifest and verifier material,
-- bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
+- bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, publication-descriptor-index, publication-descriptor-index-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -223,7 +227,7 @@ python -m pytest
 Expected result:
 
 ```text
-243 passed
+246 passed
 ```
 
 ## Signing utilities
@@ -655,6 +659,12 @@ To aggregate many detected artifacts into one descriptor registry, use `build-pu
 
 ```bash
 satroot1 build-publication-descriptor-index --discover-under publication_network --channel network --label "SATROOT Descriptor Index" --output publication_descriptor_index.json
+```
+
+To bootstrap signing material plus a ready-to-verify signed publication descriptor index:
+
+```bash
+satroot1 bootstrap-publication-descriptor-index-publication --discover-under publication_network --output-dir publication_descriptor_index_publication --channel network --label "SATROOT Descriptor Publication" --scheme hmac-sha256 --key-id descriptor-key
 ```
 
 Inspect a release catalog publication without signature verification:
