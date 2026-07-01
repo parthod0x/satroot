@@ -5688,6 +5688,51 @@ def test_cli_release_catalog_index_lint_reports_findings(tmp_path, capsys):
     assert '"missing_release_catalog_manifests":[' in captured.out
 
 
+def test_cli_publication_descriptor_index_summary_reads_manifest_and_index(tmp_path, capsys):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+
+    exit_code = main(["publication-descriptor-index-summary", str(descriptor_index_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"descriptor-key"' in captured.out
+    assert '"artifact_count":12' in captured.out
+    assert '"artifact_kinds":["bundle","demo-catalog","publication-network","publication-stack","release","release-catalog","release-catalog-index"]' in captured.out
+
+
+def test_cli_publication_descriptor_index_lint_accepts_clean_index(tmp_path, capsys):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+
+    exit_code = main(["publication-descriptor-index-lint", str(descriptor_index_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"publication_descriptor_index_hash_matches":true' in captured.out
+    assert '"missing_artifact_paths":[]' in captured.out
+    assert '"artifact_descriptor_mismatches":[]' in captured.out
+
+
+def test_cli_publication_descriptor_index_lint_reports_findings(tmp_path, capsys):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+
+    index_path = descriptor_index_dir / "publication_descriptor_index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["index"]["label"] = "Tampered Descriptor Index Label"
+    index["artifacts"][0]["artifact_path"] = str(tmp_path / "missing_artifact")
+    write_json(index_path, index)
+
+    exit_code = main(["publication-descriptor-index-lint", str(descriptor_index_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"publication_descriptor_index_hash_matches":false' in captured.out
+    assert '"index_metadata_matches":false' in captured.out
+    assert '"missing_artifact_paths":[' in captured.out
+
+
 def test_cli_demo_catalog_summary_reads_summary_and_release(tmp_path, capsys):
     output_dir = make_demo_catalog_workspace_dir(tmp_path)
 

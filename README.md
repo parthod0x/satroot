@@ -147,6 +147,7 @@ The v0.1 kernel defines:
 - `build-publication-descriptor-index` for aggregating many detected SATROOT descriptors into one machine-readable registry,
 - signed publication-descriptor-index-manifest generation for authenticating descriptor registries,
 - one-shot `bootstrap-publication-descriptor-index-publication` orchestration for descriptor indexes plus signing material,
+- publication-descriptor-index inspection via `publication-descriptor-index-summary` and structural linting via `publication-descriptor-index-lint`,
 - preset export commands for deriving reusable publication-descriptor-index presets back from generated descriptor index publications,
 - signed publication-metadata-manifest generation for authenticating one artifact's rendered report plus normalized descriptor,
 - `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
@@ -246,7 +247,7 @@ python -m pytest
 Expected result:
 
 ```text
-274 passed
+277 passed
 ```
 
 ## Signing utilities
@@ -756,6 +757,18 @@ To derive a reusable preset back from a generated descriptor index publication:
 
 ```bash
 satroot1 export-publication-descriptor-index-preset publication_descriptor_index_publication --output exported_publication_descriptor_index.json
+```
+
+Inspect a publication descriptor index without signature verification:
+
+```bash
+satroot1 publication-descriptor-index-summary publication_descriptor_index_publication
+```
+
+Lint a publication descriptor index and its referenced SATROOT artifacts:
+
+```bash
+satroot1 publication-descriptor-index-lint publication_descriptor_index_publication
 ```
 
 Inspect a release catalog publication without signature verification:

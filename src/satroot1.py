@@ -3759,6 +3759,30 @@ def summarize_signed_release_catalog_index_publication(release_catalog_index_dir
     }
 
 
+def summarize_publication_descriptor_index_publication(publication_descriptor_index_dir: str | Path) -> Dict[str, Any]:
+    _, descriptor_index_path, manifest, index = _load_publication_descriptor_index_publication(publication_descriptor_index_dir)
+    artifacts = index.get("artifacts")
+    assert isinstance(artifacts, list)
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "publication_descriptor_index_path": manifest.get("publication_descriptor_index_path"),
+        "publication_descriptor_index_hash": manifest.get("publication_descriptor_index_hash"),
+        "publication_descriptor_index_resolved_path": str(descriptor_index_path),
+        "artifact_count": index.get("artifact_count"),
+        "index": copy.deepcopy(index.get("index")),
+        "artifact_paths": sorted(str(entry.get("artifact_path")) for entry in artifacts),
+        "artifact_kinds": sorted(
+            {
+                str(entry.get("artifact_kind"))
+                for entry in artifacts
+                if isinstance(entry.get("artifact_kind"), str)
+            }
+        ),
+        "artifacts": copy.deepcopy(artifacts),
+    }
+
+
 def summarize_publication_registry_publication(publication_registry_dir: str | Path) -> Dict[str, Any]:
     _, registry_path, manifest, registry = _load_publication_registry_publication(publication_registry_dir)
     summary: Dict[str, Any] = {
@@ -3779,6 +3803,70 @@ def summarize_publication_registry_publication(publication_registry_dir: str | P
         if isinstance(component, Mapping):
             summary[component_name] = copy.deepcopy(component)
     return summary
+
+
+def lint_publication_descriptor_index_publication(publication_descriptor_index_dir: str | Path) -> Dict[str, Any]:
+    _manifest_path, descriptor_index_path, manifest, index = _load_publication_descriptor_index_publication(publication_descriptor_index_dir)
+    artifacts = index.get("artifacts")
+    assert isinstance(artifacts, list)
+
+    actual_index_hash = "sha256:" + sha256_hex_bytes(descriptor_index_path.read_bytes())
+    publication_descriptor_index_hash_matches = manifest.get("publication_descriptor_index_hash") == actual_index_hash
+    artifact_count_matches = manifest.get("artifact_count") == index.get("artifact_count")
+    index_metadata_matches = manifest.get("index") == index.get("index")
+
+    artifact_path_counts: Dict[str, int] = {}
+    for entry in artifacts:
+        artifact_path_ref = entry.get("artifact_path")
+        if isinstance(artifact_path_ref, str):
+            artifact_path_counts[artifact_path_ref] = artifact_path_counts.get(artifact_path_ref, 0) + 1
+    duplicate_artifact_paths = sorted(value for value, count in artifact_path_counts.items() if count > 1)
+
+    missing_artifact_paths: list[str] = []
+    artifact_descriptor_mismatches: list[Dict[str, Any]] = []
+    for entry in artifacts:
+        artifact_path_ref = entry.get("artifact_path")
+        if not isinstance(artifact_path_ref, str) or not artifact_path_ref.strip():
+            continue
+        resolved_artifact_path = Path(artifact_path_ref).resolve()
+        if not resolved_artifact_path.exists():
+            missing_artifact_paths.append(artifact_path_ref)
+            continue
+        current_descriptor = build_satroot_artifact_descriptor(resolved_artifact_path)
+        if dict(entry) != current_descriptor:
+            artifact_descriptor_mismatches.append(
+                {
+                    "artifact_path": artifact_path_ref,
+                    "fields": sorted(
+                        key
+                        for key in set(entry.keys()) | set(current_descriptor.keys())
+                        if entry.get(key) != current_descriptor.get(key)
+                    ),
+                }
+            )
+
+    return {
+        "ok": not any(
+            [
+                not publication_descriptor_index_hash_matches,
+                not artifact_count_matches,
+                not index_metadata_matches,
+                duplicate_artifact_paths,
+                missing_artifact_paths,
+                artifact_descriptor_mismatches,
+            ]
+        ),
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "publication_descriptor_index_path": manifest.get("publication_descriptor_index_path"),
+        "publication_descriptor_index_hash_matches": publication_descriptor_index_hash_matches,
+        "artifact_count_matches": artifact_count_matches,
+        "index_metadata_matches": index_metadata_matches,
+        "artifact_count": index.get("artifact_count"),
+        "duplicate_artifact_paths": duplicate_artifact_paths,
+        "missing_artifact_paths": sorted(missing_artifact_paths),
+        "artifact_descriptor_mismatches": artifact_descriptor_mismatches,
+    }
 
 
 def lint_signed_release_catalog_index_publication(release_catalog_index_dir: str | Path) -> Dict[str, Any]:
@@ -4020,6 +4108,9 @@ def lint_publication_registry_publication(publication_registry_dir: str | Path) 
             if descriptor_component.get("publication_descriptor_index_hash") != actual_payload_hash:
                 component_hash_mismatches.append("publication_descriptor_index_hash")
         if publication_dir.is_dir() and manifest_file.is_file() and payload_file.is_file():
+            lint_report = lint_publication_descriptor_index_publication(publication_dir)
+            if not lint_report.get("ok"):
+                component_lint_failures.append("publication_descriptor_index_publication")
             loaded_manifest_path, loaded_payload_path, loaded_manifest, loaded_index = _load_publication_descriptor_index_publication(publication_dir)
             if manifest_file != loaded_manifest_path or payload_file != loaded_payload_path:
                 component_publication_metadata_mismatches.append("publication_descriptor_index_publication.paths")
@@ -9041,6 +9132,12 @@ def build_cli_parser() -> Any:
     release_catalog_index_lint_parser = subparsers.add_parser("release-catalog-index-lint", help="Check release_catalog_index_manifest.json, release_catalog_index.json, and referenced release catalog publications without signature verification")
     release_catalog_index_lint_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
 
+    publication_descriptor_index_summary_parser = subparsers.add_parser("publication-descriptor-index-summary", help="Read publication_descriptor_index_manifest.json plus publication_descriptor_index.json and print a descriptor-index summary without signature verification")
+    publication_descriptor_index_summary_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory")
+
+    publication_descriptor_index_lint_parser = subparsers.add_parser("publication-descriptor-index-lint", help="Check publication_descriptor_index_manifest.json, publication_descriptor_index.json, and referenced SATROOT artifacts without signature verification")
+    publication_descriptor_index_lint_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory")
+
     demo_catalog_summary_parser = subparsers.add_parser("demo-catalog-summary", help="Read summary.json plus release/ and print a demo-catalog workspace summary without signature verification")
     demo_catalog_summary_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory")
 
@@ -10695,6 +10792,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "release-catalog-index-lint":
         report = lint_signed_release_catalog_index_publication(args.release_catalog_index_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-descriptor-index-summary":
+        summary = summarize_publication_descriptor_index_publication(args.publication_descriptor_index_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-descriptor-index-lint":
+        report = lint_publication_descriptor_index_publication(args.publication_descriptor_index_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 
