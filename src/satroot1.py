@@ -4766,6 +4766,14 @@ def _write_output(data: Any, output_path: Optional[str]) -> None:
         sys.stdout.write(rendered)
 
 
+def _write_text_output(text: str, output_path: Optional[str]) -> None:
+    if output_path:
+        with open(output_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+    else:
+        sys.stdout.write(text)
+
+
 def _write_json_file(path: Path, data: Any) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as f:
         f.write(_dump_json(data))
@@ -6068,6 +6076,267 @@ def export_publication_network_preset_from_workspace(
     return preset
 
 
+def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
+    resolved_path = Path(path).resolve()
+    if resolved_path.is_file():
+        parent = resolved_path.parent
+        name = resolved_path.name
+        if name == "summary.json":
+            if (parent / "release_catalog_index").is_dir():
+                return "publication-network", parent
+            if (parent / "release_catalog").is_dir():
+                return "publication-stack", parent
+            if (parent / "bundles").is_dir() and (parent / "release").is_dir():
+                return "demo-catalog", parent
+        if name == "bundle_manifest.json":
+            return "bundle", parent
+        if name == "release_manifest.json":
+            return "release", parent
+        if name == "release_catalog_manifest.json":
+            return "release-catalog", parent
+        if name == "release_catalog_index_manifest.json":
+            return "release-catalog-index", parent
+        raise SatRootError(f"unsupported SATROOT artifact file: {resolved_path}")
+
+    if not resolved_path.is_dir():
+        raise SatRootError("report path must be an existing file or directory")
+
+    if (resolved_path / "summary.json").is_file():
+        if (resolved_path / "release_catalog_index").is_dir():
+            return "publication-network", resolved_path
+        if (resolved_path / "release_catalog").is_dir():
+            return "publication-stack", resolved_path
+        if (resolved_path / "bundles").is_dir() and (resolved_path / "release").is_dir():
+            return "demo-catalog", resolved_path
+    if (resolved_path / "release_catalog_index_manifest.json").is_file():
+        return "release-catalog-index", resolved_path
+    if (resolved_path / "release_catalog_manifest.json").is_file():
+        return "release-catalog", resolved_path
+    if (resolved_path / "release_manifest.json").is_file():
+        return "release", resolved_path
+    if (resolved_path / "bundle_manifest.json").is_file():
+        return "bundle", resolved_path
+    raise SatRootError(f"unable to detect SATROOT artifact kind at: {resolved_path}")
+
+
+def _append_metadata_lines(lines: list[str], metadata: Mapping[str, Any], fields: Sequence[tuple[str, str]]) -> None:
+    for field_name, label in fields:
+        value = metadata.get(field_name)
+        if isinstance(value, str) and value.strip():
+            lines.append(f"- {label}: `{value}`")
+
+
+def render_satroot_artifact_report(path: str | Path) -> str:
+    kind, artifact_path = _detect_satroot_artifact_kind(path)
+    lines: list[str] = []
+
+    if kind == "bundle":
+        summary = summarize_signed_ledger_bundle(artifact_path)
+        snapshot = summary.get("final_state_snapshot")
+        assert isinstance(snapshot, dict)
+        lines.extend(
+            [
+                "# SATROOT Bundle Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Scheme: `{summary.get('scheme')}`",
+                f"- Symbol: `{summary.get('symbol')}`",
+                f"- Profile: `{snapshot.get('profile')}`",
+                f"- Record count: `{summary.get('record_count')}`",
+                f"- Root ID: `{summary.get('root_id')}`",
+                f"- Verification material scope: `{summary.get('verification_material_scope')}`",
+                "",
+            ]
+        )
+        return "\n".join(lines)
+
+    if kind == "release":
+        summary = summarize_signed_release_publication(artifact_path)
+        release_metadata = summary.get("release")
+        lines.extend(
+            [
+                "# SATROOT Release Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Signature scheme: `{summary.get('signature_scheme')}`",
+                f"- Signature key ID: `{summary.get('signature_key_id')}`",
+                f"- Bundle count: `{summary.get('bundle_count')}`",
+            ]
+        )
+        if isinstance(release_metadata, Mapping):
+            _append_metadata_lines(lines, release_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        bundle_symbols = summary.get("bundle_symbols")
+        if isinstance(bundle_symbols, list):
+            lines.extend(["", "## Bundles", ""])
+            lines.extend(f"- `{symbol}`" for symbol in bundle_symbols if isinstance(symbol, str))
+        lines.append("")
+        return "\n".join(lines)
+
+    if kind == "release-catalog":
+        summary = summarize_signed_release_catalog_publication(artifact_path)
+        catalog_metadata = summary.get("catalog")
+        lines.extend(
+            [
+                "# SATROOT Release Catalog Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Signature scheme: `{summary.get('signature_scheme')}`",
+                f"- Signature key ID: `{summary.get('signature_key_id')}`",
+                f"- Release count: `{summary.get('release_count')}`",
+            ]
+        )
+        if isinstance(catalog_metadata, Mapping):
+            _append_metadata_lines(lines, catalog_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        releases = summary.get("releases")
+        if isinstance(releases, list):
+            lines.extend(["", "## Releases", ""])
+            for entry in releases:
+                if not isinstance(entry, Mapping):
+                    continue
+                release_metadata = entry.get("release")
+                label = None
+                channel = None
+                if isinstance(release_metadata, Mapping):
+                    label = release_metadata.get("label")
+                    channel = release_metadata.get("channel")
+                release_path = entry.get("release_path")
+                parts = [f"path `{release_path}`"] if isinstance(release_path, str) else []
+                if isinstance(label, str) and label.strip():
+                    parts.append(f"label `{label}`")
+                if isinstance(channel, str) and channel.strip():
+                    parts.append(f"channel `{channel}`")
+                lines.append(f"- {', '.join(parts) if parts else 'release'}")
+        lines.append("")
+        return "\n".join(lines)
+
+    if kind == "release-catalog-index":
+        summary = summarize_signed_release_catalog_index_publication(artifact_path)
+        index_metadata = summary.get("index")
+        lines.extend(
+            [
+                "# SATROOT Release Catalog Index Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Signature scheme: `{summary.get('signature_scheme')}`",
+                f"- Signature key ID: `{summary.get('signature_key_id')}`",
+                f"- Release catalog count: `{summary.get('release_catalog_count')}`",
+            ]
+        )
+        if isinstance(index_metadata, Mapping):
+            _append_metadata_lines(lines, index_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        release_catalogs = summary.get("release_catalogs")
+        if isinstance(release_catalogs, list):
+            lines.extend(["", "## Release Catalogs", ""])
+            for entry in release_catalogs:
+                if not isinstance(entry, Mapping):
+                    continue
+                catalog_metadata = entry.get("catalog")
+                label = None
+                channel = None
+                if isinstance(catalog_metadata, Mapping):
+                    label = catalog_metadata.get("label")
+                    channel = catalog_metadata.get("channel")
+                release_catalog_path = entry.get("release_catalog_path")
+                parts = [f"path `{release_catalog_path}`"] if isinstance(release_catalog_path, str) else []
+                if isinstance(label, str) and label.strip():
+                    parts.append(f"label `{label}`")
+                if isinstance(channel, str) and channel.strip():
+                    parts.append(f"channel `{channel}`")
+                lines.append(f"- {', '.join(parts) if parts else 'release catalog'}")
+        lines.append("")
+        return "\n".join(lines)
+
+    if kind == "demo-catalog":
+        summary = summarize_demo_catalog_workspace(artifact_path)
+        release_metadata = summary.get("release")
+        lines.extend(
+            [
+                "# SATROOT Demo Catalog Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Bundle scheme: `{summary.get('bundle_scheme')}`",
+                f"- Release scheme: `{summary.get('release_scheme')}`",
+                f"- Bundle count: `{summary.get('bundle_count')}`",
+            ]
+        )
+        if isinstance(release_metadata, Mapping):
+            _append_metadata_lines(lines, release_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        bundles = summary.get("bundles")
+        if isinstance(bundles, list):
+            lines.extend(["", "## Bundles", ""])
+            for entry in bundles:
+                if not isinstance(entry, Mapping):
+                    continue
+                lines.append(
+                    f"- `{entry.get('bundle_name')}`: profile `{entry.get('profile')}`, symbol `{entry.get('symbol')}`, name `{entry.get('name')}`"
+                )
+        lines.append("")
+        return "\n".join(lines)
+
+    if kind == "publication-stack":
+        summary = summarize_publication_stack_workspace(artifact_path)
+        release_catalog_summary = summary.get("release_catalog_summary")
+        lines.extend(
+            [
+                "# SATROOT Publication Stack Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Bundle scheme: `{summary.get('bundle_scheme')}`",
+                f"- Release scheme: `{summary.get('release_scheme')}`",
+                f"- Release catalog scheme: `{summary.get('release_catalog_scheme')}`",
+                f"- Workspace count: `{summary.get('workspace_count')}`",
+            ]
+        )
+        if isinstance(release_catalog_summary, Mapping):
+            catalog_metadata = release_catalog_summary.get("catalog")
+            if isinstance(catalog_metadata, Mapping):
+                _append_metadata_lines(lines, catalog_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        workspaces = summary.get("workspaces")
+        if isinstance(workspaces, list):
+            lines.extend(["", "## Catalog Workspaces", ""])
+            for entry in workspaces:
+                if not isinstance(entry, Mapping):
+                    continue
+                lines.append(
+                    f"- `{entry.get('workspace_name')}`: bundles `{entry.get('bundle_count')}`, release manifest `{entry.get('release_manifest_path')}`"
+                )
+        lines.append("")
+        return "\n".join(lines)
+
+    if kind == "publication-network":
+        summary = summarize_publication_network_workspace(artifact_path)
+        release_catalog_index_summary = summary.get("release_catalog_index_summary")
+        lines.extend(
+            [
+                "# SATROOT Publication Network Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Bundle scheme: `{summary.get('bundle_scheme')}`",
+                f"- Release scheme: `{summary.get('release_scheme')}`",
+                f"- Release catalog scheme: `{summary.get('release_catalog_scheme')}`",
+                f"- Release catalog index scheme: `{summary.get('release_catalog_index_scheme')}`",
+                f"- Stack count: `{summary.get('stack_count')}`",
+            ]
+        )
+        if isinstance(release_catalog_index_summary, Mapping):
+            index_metadata = release_catalog_index_summary.get("index")
+            if isinstance(index_metadata, Mapping):
+                _append_metadata_lines(lines, index_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        workspaces = summary.get("workspaces")
+        if isinstance(workspaces, list):
+            lines.extend(["", "## Stack Workspaces", ""])
+            for entry in workspaces:
+                if not isinstance(entry, Mapping):
+                    continue
+                lines.append(
+                    f"- `{entry.get('workspace_name')}`: catalog workspaces `{entry.get('catalog_workspace_count')}`, release catalog manifest `{entry.get('release_catalog_manifest_path')}`"
+                )
+        lines.append("")
+        return "\n".join(lines)
+
+    raise SatRootError(f"unsupported SATROOT artifact kind: {kind}")
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -6481,6 +6750,10 @@ def build_cli_parser() -> Any:
     export_publication_network_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested publication stack presets will also be exported")
     export_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported alongside generated stack presets")
     export_publication_network_preset_parser.add_argument("--output", help="Optional output path")
+
+    render_publication_report_parser = subparsers.add_parser("render-publication-report", help="Render a human-readable markdown report for a SATROOT bundle, release, catalog, index, or workspace")
+    render_publication_report_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
+    render_publication_report_parser.add_argument("--output", help="Optional output path")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -7734,6 +8007,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             catalog_preset_dir=args.catalog_preset_dir,
         )
         _write_output(preset, args.output)
+        return 0
+
+    if args.command == "render-publication-report":
+        report = render_satroot_artifact_report(args.path)
+        _write_text_output(report, args.output)
         return 0
 
     if args.command == "bootstrap-genesis-bundle":

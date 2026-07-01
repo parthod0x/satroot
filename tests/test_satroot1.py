@@ -3037,6 +3037,33 @@ def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp
     assert (catalog_preset_dir / "stack_b" / "machine_catalog.json").is_file()
 
 
+def test_cli_render_publication_report_for_network(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    exit_code = main(["render-publication-report", str(network_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "# SATROOT Publication Network Report" in captured.out
+    assert "- Stack count: `2`" in captured.out
+    assert "- Label: `Publication Network Override`" in captured.out
+    assert "## Stack Workspaces" in captured.out
+    assert "- `stack_a`:" in captured.out
+
+
+def test_cli_render_publication_report_for_release(tmp_path, capsys):
+    release_dir = make_demo_release_catalog_dir(tmp_path).parent / "stable_workspace" / "release"
+
+    exit_code = main(["render-publication-report", str(release_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "# SATROOT Release Report" in captured.out
+    assert "- Bundle count: `1`" in captured.out
+    assert "## Bundles" in captured.out
+    assert "- `RELSTB1`" in captured.out
+
+
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     manifest = build_signed_ledger_bundle_manifest(

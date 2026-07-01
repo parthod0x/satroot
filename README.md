@@ -131,6 +131,7 @@ The v0.1 kernel defines:
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
 - `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, and workspace layers,
 - preset export commands for deriving reusable demo-catalog, publication-stack, and publication-network presets back from generated workspaces,
+- `render-publication-report` for turning detected SATROOT artifacts or workspaces into human-readable markdown reports,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
@@ -220,7 +221,7 @@ python -m pytest
 Expected result:
 
 ```text
-237 passed
+239 passed
 ```
 
 ## Signing utilities
@@ -628,6 +629,18 @@ To derive a publication network preset and recursively emit nested stack and cat
 
 ```bash
 satroot1 export-publication-network-preset publication_network --stack-preset-dir exported_stack_presets --catalog-preset-dir exported_catalog_presets --output exported_network.json
+```
+
+To render a human-readable markdown report for a generated SATROOT artifact or workspace:
+
+```bash
+satroot1 render-publication-report publication_network
+```
+
+The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, demo-catalog, publication-stack, and publication-network inputs, and it can also write to a file:
+
+```bash
+satroot1 render-publication-report stable_release --output stable_release_report.md
 ```
 
 Inspect a release catalog publication without signature verification:
