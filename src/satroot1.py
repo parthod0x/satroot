@@ -923,6 +923,56 @@ def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
     }
 
 
+def load_publication_metadata_catalog_preset(path: str | Path) -> Dict[str, Any]:
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="publication metadata catalog preset")
+    if preset.get("type") != "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET":
+        raise SatRootError("unsupported publication metadata catalog preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported publication metadata catalog preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "publication_metadata_bundle_dirs",
+        "discover_under",
+        "recursive",
+        "catalog",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported publication metadata catalog preset keys: {sorted(unexpected)}")
+
+    publication_metadata_bundle_dirs = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("publication_metadata_bundle_dirs"),
+            label="publication metadata catalog preset publication_metadata_bundle_dirs",
+        )
+    ]
+    discover_under = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("discover_under"),
+            label="publication metadata catalog preset discover_under",
+        )
+    ]
+    recursive = preset.get("recursive", True)
+    if not isinstance(recursive, bool):
+        raise SatRootError("publication metadata catalog preset recursive must be a boolean")
+    if not publication_metadata_bundle_dirs and not discover_under:
+        raise SatRootError(
+            "publication metadata catalog preset must contain at least one publication_metadata_bundle_dir or discover_under path"
+        )
+
+    return {
+        "publication_metadata_bundle_dirs": publication_metadata_bundle_dirs,
+        "discover_under": discover_under,
+        "recursive": recursive,
+        "catalog_metadata": validate_release_metadata_mapping(preset.get("catalog")),
+    }
+
+
 def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
     preset_path = Path(path).resolve()
     preset = _load_json_object_file(str(preset_path), label="publication registry preset")
@@ -6415,6 +6465,36 @@ def export_publication_network_preset_from_workspace(
     return preset
 
 
+def export_publication_metadata_catalog_preset_from_workspace(
+    publication_metadata_catalog_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _manifest_path, catalog_path, _manifest, catalog = _load_publication_metadata_catalog_publication(publication_metadata_catalog_dir)
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    preset: Dict[str, Any] = {
+        "type": "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET",
+        "version": "0.1",
+    }
+
+    bundle_dirs: list[str] = []
+    for entry in catalog.get("bundles", []):
+        if not isinstance(entry, Mapping):
+            continue
+        bundle_ref = entry.get("publication_metadata_bundle_path")
+        if not isinstance(bundle_ref, str) or not bundle_ref.strip():
+            continue
+        resolved_bundle_dir = (catalog_path.parent / bundle_ref).resolve()
+        bundle_dirs.append(_relative_output_path(resolved_bundle_dir, base_dir=base_dir))
+    if bundle_dirs:
+        preset["publication_metadata_bundle_dirs"] = bundle_dirs
+
+    catalog_metadata = _filtered_string_mapping(catalog.get("index"))
+    if catalog_metadata:
+        preset["catalog"] = catalog_metadata
+    return preset
+
+
 def export_publication_registry_preset_from_workspace(
     publication_registry_dir: str | Path,
     *,
@@ -8587,6 +8667,10 @@ def build_cli_parser() -> Any:
     export_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported alongside generated stack presets")
     export_publication_network_preset_parser.add_argument("--output", help="Optional output path")
 
+    export_publication_metadata_catalog_preset_parser = subparsers.add_parser("export-publication-metadata-catalog-preset", help="Export a SATROOT publication metadata catalog back into a reusable publication metadata catalog preset")
+    export_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory")
+    export_publication_metadata_catalog_preset_parser.add_argument("--output", help="Optional output path")
+
     export_publication_registry_preset_parser = subparsers.add_parser("export-publication-registry-preset", help="Export a SATROOT publication registry back into a reusable publication registry preset")
     export_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory")
     export_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
@@ -8630,6 +8714,7 @@ def build_cli_parser() -> Any:
     build_publication_metadata_manifest_parser.add_argument("--output", help="Optional output path")
 
     build_publication_metadata_catalog_parser = subparsers.add_parser("build-publication-metadata-catalog", help="Build a SATROOT publication metadata catalog from one or more publication metadata bundle directories")
+    build_publication_metadata_catalog_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with bundle paths, discovery roots, and catalog metadata defaults")
     build_publication_metadata_catalog_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a publication metadata bundle directory")
     build_publication_metadata_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication_metadata_manifest.json files; may be repeated")
     build_publication_metadata_catalog_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
@@ -8686,6 +8771,7 @@ def build_cli_parser() -> Any:
     bootstrap_publication_metadata_bundle_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata manifest")
 
     bootstrap_publication_metadata_catalog_publication_parser = subparsers.add_parser("bootstrap-publication-metadata-catalog-publication", help="Generate signing material and write a ready-to-verify SATROOT publication metadata catalog directory")
+    bootstrap_publication_metadata_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with bundle paths, discovery roots, and catalog metadata defaults")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a publication metadata bundle directory")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication_metadata_manifest.json files; may be repeated")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
@@ -9992,6 +10078,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(preset, args.output)
         return 0
 
+    if args.command == "export-publication-metadata-catalog-preset":
+        preset = export_publication_metadata_catalog_preset_from_workspace(
+            args.publication_metadata_catalog_dir,
+            output_path=args.output,
+        )
+        _write_output(preset, args.output)
+        return 0
+
     if args.command == "export-publication-registry-preset":
         preset = export_publication_registry_preset_from_workspace(
             args.publication_registry_dir,
@@ -10055,17 +10149,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-publication-metadata-catalog":
+        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
         catalog_metadata = {
+            **dict((preset or {}).get("catalog_metadata", {})),
+        }
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         catalog = build_publication_metadata_catalog(
-            args.publication_metadata_bundle_dir,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *args.publication_metadata_bundle_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
             base_dir=base_dir,
             catalog_metadata=catalog_metadata,
         )
@@ -10153,18 +10253,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-publication-metadata-catalog-publication":
+        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
         catalog_metadata = {
+            **dict((preset or {}).get("catalog_metadata", {})),
+        }
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
         output = bootstrap_publication_metadata_catalog_publication(
-            args.publication_metadata_bundle_dir,
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *args.publication_metadata_bundle_dir],
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
             catalog_metadata=catalog_metadata,
         )
         print(f"wrote bootstrapped SATROOT publication metadata catalog to {Path(args.output_dir).resolve()}")

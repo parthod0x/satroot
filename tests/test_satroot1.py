@@ -55,6 +55,7 @@ from satroot1 import (
     load_protocol_schema,
     load_profile_registry,
     load_publication_network_preset,
+    load_publication_metadata_catalog_preset,
     load_publication_metadata_catalog_manifest_schema,
     load_publication_metadata_catalog_schema,
     load_publication_registry_manifest_schema,
@@ -454,6 +455,29 @@ def make_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path, Path]:
         ]
     ) == 0
     return release_bundle_dir, network_bundle_dir
+
+
+def make_publication_metadata_catalog_dir(tmp_path: Path) -> Path:
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    output_dir = tmp_path / "publication_metadata_catalog_publication"
+    assert main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            "--discover-under",
+            str(tmp_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Metadata Catalog Publication",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+    return output_dir
 
 
 def make_publication_registry_component_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -992,6 +1016,14 @@ def test_load_publication_registry_preset_example():
     assert preset["publication_descriptor_index_dir"] == str((ROOT / "examples" / "generated_publication_descriptor_index_publication").resolve())
     assert preset["publication_metadata_catalog_dir"] == str((ROOT / "examples" / "generated_publication_metadata_catalog_publication").resolve())
     assert preset["registry_metadata"]["label"] == "SATROOT AI Compute Publication Registry"
+
+
+def test_load_publication_metadata_catalog_preset_example():
+    preset = load_publication_metadata_catalog_preset(
+        ROOT / "examples" / "publication_metadata_catalog_presets" / "ai_compute_publication_metadata_catalog.json"
+    )
+    assert preset["discover_under"] == [str((ROOT / "examples" / "generated_publication_metadata_root").resolve())]
+    assert preset["catalog_metadata"]["label"] == "SATROOT AI Compute Publication Metadata Catalog"
 
 
 def test_validate_publication_stack_summary_schema_accepts_generated_summary(tmp_path):
@@ -3231,6 +3263,23 @@ def test_cli_export_publication_registry_preset(tmp_path):
     assert preset["registry"]["label"] == "SATROOT Publication Registry"
 
 
+def test_cli_export_publication_metadata_catalog_preset(tmp_path):
+    catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+    preset_path = tmp_path / "exported_publication_metadata_catalog.json"
+
+    exit_code = main(["export-publication-metadata-catalog-preset", str(catalog_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_metadata_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET"
+    assert sorted(Path(value).name for value in loaded["publication_metadata_bundle_dirs"]) == [
+        "publication_metadata_network",
+        "publication_metadata_release",
+    ]
+    assert preset["catalog"]["label"] == "SATROOT Metadata Catalog Publication"
+
+
 def test_cli_render_publication_report_for_network(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
 
@@ -3693,6 +3742,51 @@ def test_cli_bootstrap_publication_metadata_catalog_publication(tmp_path, capsys
     )
     assert verified["bundle_count"] == 2
     assert verified["index"] == catalog["index"]
+
+
+def test_cli_bootstrap_publication_metadata_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    preset_path = tmp_path / "publication_metadata_catalog_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET",
+            "version": "0.1",
+            "discover_under": ["."],
+            "catalog": {
+                "channel": "network",
+                "label": "SATROOT Preset Metadata Catalog",
+                "published_at": "2026-07-08T05:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_metadata_catalog_publication_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Metadata Catalog Override",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["index"]["channel"] == "network"
+    assert catalog["index"]["label"] == "SATROOT Metadata Catalog Override"
+    assert catalog["index"]["published_at"] == "2026-07-08T05:00:00Z"
 
 
 def test_cli_validate_and_verify_publication_metadata_catalog_manifest(tmp_path, capsys):

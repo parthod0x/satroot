@@ -47,6 +47,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `examples/release_catalog_presets/` - reusable SATROOT release-catalog publication presets.
 - `examples/release_catalog_index_presets/` - reusable SATROOT release-catalog-index publication presets.
+- `examples/publication_metadata_catalog_presets/` - reusable SATROOT publication-metadata-catalog presets.
 - `examples/registry_presets/` - reusable SATROOT publication-registry presets.
 - `examples/network_presets/` - reusable SATROOT publication-network presets.
 - `examples/stack_presets/` - reusable SATROOT end-to-end publication-stack presets.
@@ -149,6 +150,7 @@ The v0.1 kernel defines:
 - `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
 - signed publication-metadata-catalog-manifest generation for authenticating publication metadata catalogs,
 - one-shot `bootstrap-publication-metadata-catalog-publication` orchestration for metadata catalogs plus signing material,
+- preset export commands for deriving reusable publication-metadata-catalog presets back from generated metadata catalog publications,
 - `build-publication-registry` for binding descriptor, metadata, and release-catalog-index publications into one top-level signed namespace artifact,
 - signed publication-registry-manifest generation for authenticating top-level publication registries,
 - one-shot `bootstrap-publication-registry-publication` orchestration for registry publications plus signing material,
@@ -242,7 +244,7 @@ python -m pytest
 Expected result:
 
 ```text
-268 passed
+271 passed
 ```
 
 ## Signing utilities
@@ -700,6 +702,12 @@ To aggregate multiple publication metadata bundles into one signed catalog:
 satroot1 bootstrap-publication-metadata-catalog-publication --discover-under publication_metadata_root --output-dir publication_metadata_catalog_publication --channel network --label "SATROOT Metadata Catalog" --scheme hmac-sha256 --key-id catalog-key
 ```
 
+For repeatable metadata-catalog packaging, that same command can also load a preset:
+
+```bash
+satroot1 bootstrap-publication-metadata-catalog-publication --preset-json examples/publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json --output-dir publication_metadata_catalog_publication --label "SATROOT Metadata Catalog Override" --scheme hmac-sha256 --key-id catalog-key
+```
+
 To verify that catalog later:
 
 ```bash
@@ -728,6 +736,12 @@ To derive a reusable preset back from a generated registry publication:
 
 ```bash
 satroot1 export-publication-registry-preset publication_registry_publication --output exported_registry.json
+```
+
+To derive a reusable preset back from a generated metadata catalog publication:
+
+```bash
+satroot1 export-publication-metadata-catalog-preset publication_metadata_catalog_publication --output exported_publication_metadata_catalog.json
 ```
 
 Inspect a release catalog publication without signature verification:
