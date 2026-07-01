@@ -7,6 +7,8 @@ import pytest
 from satroot1 import (
     annotate_ledger_events,
     build_signed_ledger_bundle_index,
+    build_publication_metadata_catalog,
+    build_signed_publication_metadata_catalog_manifest,
     build_signed_publication_metadata_manifest,
     build_signed_release_catalog,
     build_signed_release_catalog_index,
@@ -51,6 +53,8 @@ from satroot1 import (
     load_protocol_schema,
     load_profile_registry,
     load_publication_network_preset,
+    load_publication_metadata_catalog_manifest_schema,
+    load_publication_metadata_catalog_schema,
     load_publication_descriptor_index_manifest_schema,
     load_publication_descriptor_index_schema,
     load_publication_metadata_manifest_schema,
@@ -90,6 +94,7 @@ from satroot1 import (
     validate_bundle_index_consistency,
     validate_demo_catalog_summary_consistency,
     validate_publication_network_summary_consistency,
+    validate_publication_metadata_catalog_consistency,
     validate_publication_descriptor_index_consistency,
     validate_publication_stack_summary_consistency,
     validate_release_catalog_index_consistency,
@@ -97,6 +102,7 @@ from satroot1 import (
     verify_signed_release_catalog_index_manifest,
     verify_signed_release_catalog_manifest,
     verify_signed_release_manifest,
+    verify_signed_publication_metadata_catalog_manifest,
     verify_signed_publication_descriptor_index_manifest,
     verify_signed_publication_metadata_manifest,
     verify_signed_ledger_bundle,
@@ -408,6 +414,39 @@ def make_demo_publication_network_dir(tmp_path: Path) -> Path:
     )
     assert exit_code == 0
     return output_dir
+
+
+def make_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path, Path]:
+    release_dir, _ = make_demo_release_dirs(tmp_path)
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    release_bundle_dir = tmp_path / "publication_metadata_release"
+    network_bundle_dir = tmp_path / "publication_metadata_network"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            release_dir,
+            "--output-dir",
+            str(release_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(network_dir),
+            "--output-dir",
+            str(network_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    return release_bundle_dir, network_bundle_dir
 
 
 def build_rotation_ledger():
@@ -3352,6 +3391,159 @@ def test_cli_validate_and_verify_publication_metadata_manifest(tmp_path, capsys)
     assert '"signature_scheme":"hmac-sha256"' in captured.out
     assert '"signature_key_id":"metadata-key"' in captured.out
     assert '"publication_report_path":"publication_report.md"' in captured.out
+
+
+def test_cli_build_publication_metadata_catalog_recursive(tmp_path):
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "publication_metadata_catalog.json"
+
+    assert main(
+        [
+            "build-publication-metadata-catalog",
+            "--discover-under",
+            str(tmp_path),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Metadata Catalog",
+            "--published-at",
+            "2026-07-08T03:00:00Z",
+            "--output",
+            str(catalog_path),
+        ]
+    ) == 0
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["release"] == 1
+    assert catalog["artifact_kind_counts"]["publication-network"] == 1
+    assert catalog["index"]["label"] == "SATROOT Metadata Catalog"
+
+
+def test_validate_publication_metadata_catalog_schema_accepts_generated_catalog(tmp_path):
+    release_bundle_dir, network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    catalog = build_publication_metadata_catalog([release_bundle_dir, network_bundle_dir], base_dir=tmp_path)
+
+    count = validate_instance_against_schema(catalog, load_publication_metadata_catalog_schema())
+    assert count == 1
+    validate_publication_metadata_catalog_consistency(catalog)
+
+
+def test_build_and_verify_signed_publication_metadata_catalog_manifest_hmac(tmp_path):
+    release_bundle_dir, network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    catalog = build_publication_metadata_catalog(
+        [release_bundle_dir, network_bundle_dir],
+        base_dir=tmp_path,
+        catalog_metadata={"label": "SATROOT Metadata Catalog"},
+    )
+    catalog_path = tmp_path / "publication_metadata_catalog.json"
+    write_json(catalog_path, catalog)
+
+    manifest = build_signed_publication_metadata_catalog_manifest(
+        catalog_path,
+        signature_scheme="hmac-sha256",
+        key_id="catalog-key",
+        signer=make_hmac_sha256_signer({"catalog-key": "catalog-secret"}),
+        base_dir=tmp_path,
+    )
+    count = validate_instance_against_schema(manifest, load_publication_metadata_catalog_manifest_schema())
+    assert count == 1
+
+    manifest_path = tmp_path / "publication_metadata_catalog_manifest.json"
+    write_json(manifest_path, manifest)
+    summary = verify_signed_publication_metadata_catalog_manifest(
+        manifest_path,
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert summary["signature_scheme"] == "hmac-sha256"
+    assert summary["signature_key_id"] == "catalog-key"
+    assert summary["publication_metadata_catalog_path"] == "publication_metadata_catalog.json"
+    assert summary["bundle_count"] == 2
+
+
+def test_cli_bootstrap_publication_metadata_catalog_publication(tmp_path, capsys):
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    output_dir = tmp_path / "publication_metadata_catalog_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            "--discover-under",
+            str(tmp_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Metadata Catalog Publication",
+            "--published-at",
+            "2026-07-08T04:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_metadata_catalog_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_metadata_catalog_secrets.json").read_text(encoding="utf-8"))
+
+    assert catalog["bundle_count"] == 2
+    assert catalog["index"]["label"] == "SATROOT Metadata Catalog Publication"
+    assert manifest["signature_key_id"] == "catalog-key"
+
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["bundle_count"] == 2
+    assert verified["index"] == catalog["index"]
+
+
+def test_cli_validate_and_verify_publication_metadata_catalog_manifest(tmp_path, capsys):
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    output_dir = tmp_path / "publication_metadata_catalog_publication"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            "--discover-under",
+            str(tmp_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    catalog_path = output_dir / "publication_metadata_catalog.json"
+    manifest_path = output_dir / "publication_metadata_catalog_manifest.json"
+    secrets_path = output_dir / "publication_metadata_catalog_secrets.json"
+
+    exit_code = main(["validate-publication-metadata-catalog", str(catalog_path)])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "valid SATROOT publication metadata catalog: 1 record(s)" in captured.out
+
+    exit_code = main(["validate-publication-metadata-catalog-manifest", str(manifest_path)])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "valid SATROOT publication metadata catalog manifest: 1 record(s)" in captured.out
+
+    exit_code = main(["verify-publication-metadata-catalog-manifest", str(manifest_path), "--secrets-json", str(secrets_path)])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"catalog-key"' in captured.out
+    assert '"publication_metadata_catalog_path":"publication_metadata_catalog.json"' in captured.out
 
 
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):

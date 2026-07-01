@@ -36,6 +36,9 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `protocol/satroot1.publication-network-summary.schema.json` - JSON schema for publication-network workspace summaries.
 - `protocol/satroot1.publication-descriptor-index.schema.json` - JSON schema for publication descriptor indexes.
 - `protocol/satroot1.publication-descriptor-index-manifest.schema.json` - JSON schema for signed publication descriptor index manifests.
+- `protocol/satroot1.publication-metadata-manifest.schema.json` - JSON schema for signed publication metadata bundles.
+- `protocol/satroot1.publication-metadata-catalog.schema.json` - JSON schema for multi-bundle publication metadata catalogs.
+- `protocol/satroot1.publication-metadata-catalog-manifest.schema.json` - JSON schema for signed publication metadata catalog manifests.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
@@ -138,9 +141,13 @@ The v0.1 kernel defines:
 - `build-publication-descriptor-index` for aggregating many detected SATROOT descriptors into one machine-readable registry,
 - signed publication-descriptor-index-manifest generation for authenticating descriptor registries,
 - one-shot `bootstrap-publication-descriptor-index-publication` orchestration for descriptor indexes plus signing material,
+- signed publication-metadata-manifest generation for authenticating one artifact's rendered report plus normalized descriptor,
+- `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
+- signed publication-metadata-catalog-manifest generation for authenticating publication metadata catalogs,
+- one-shot `bootstrap-publication-metadata-catalog-publication` orchestration for metadata catalogs plus signing material,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
 - signed bundle verification against manifest and verifier material,
-- bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, publication-descriptor-index, publication-descriptor-index-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
+- bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, publication-descriptor-index, publication-descriptor-index-manifest, publication-metadata-manifest, publication-metadata-catalog, publication-metadata-catalog-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
 - replay snapshots that preserve profile/genesis metadata for higher-layer namespace use cases.
 
 ## Current demo
@@ -227,7 +234,7 @@ python -m pytest
 Expected result:
 
 ```text
-249 passed
+254 passed
 ```
 
 ## Signing utilities
@@ -677,6 +684,18 @@ To verify that bundle later:
 
 ```bash
 satroot1 verify-publication-metadata-manifest publication_metadata_bundle/publication_metadata_manifest.json --secrets-json publication_metadata_bundle/publication_metadata_secrets.json
+```
+
+To aggregate multiple publication metadata bundles into one signed catalog:
+
+```bash
+satroot1 bootstrap-publication-metadata-catalog-publication --discover-under publication_metadata_root --output-dir publication_metadata_catalog_publication --channel network --label "SATROOT Metadata Catalog" --scheme hmac-sha256 --key-id catalog-key
+```
+
+To verify that catalog later:
+
+```bash
+satroot1 verify-publication-metadata-catalog-manifest publication_metadata_catalog_publication/publication_metadata_catalog_manifest.json --secrets-json publication_metadata_catalog_publication/publication_metadata_catalog_secrets.json
 ```
 
 Inspect a release catalog publication without signature verification:
