@@ -140,6 +140,7 @@ The v0.1 kernel defines:
 - `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
 - one-shot `bootstrap-publication-registry-workspace` orchestration for copying a release-catalog-index publication, generating descriptor and metadata publication lanes, and emitting a top-level signed registry workspace,
+- publication-registry-workspace inspection via `publication-registry-workspace-summary` and structural linting via `publication-registry-workspace-lint`,
 - publication-registry inspection via `publication-registry-summary` and structural linting via `publication-registry-lint`,
 - `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, registry, and workspace layers,
 - preset export commands for deriving reusable demo-catalog, publication-stack, and publication-network presets back from generated workspaces,
@@ -248,7 +249,7 @@ python -m pytest
 Expected result:
 
 ```text
-278 passed
+281 passed
 ```
 
 ## Signing utilities
@@ -836,6 +837,18 @@ Lint a publication network workspace, its nested release-catalog index, and all 
 
 ```bash
 satroot1 publication-network-lint publication_network
+```
+
+Inspect a publication registry workspace without signature verification:
+
+```bash
+satroot1 publication-registry-workspace-summary publication_registry_workspace
+```
+
+Lint a publication registry workspace, its copied/generated publication components, and all referenced publication metadata bundles:
+
+```bash
+satroot1 publication-registry-workspace-lint publication_registry_workspace
 ```
 
 Inspect a publication registry without signature verification:

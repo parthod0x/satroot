@@ -5981,6 +5981,51 @@ def test_cli_publication_network_lint_reports_findings(tmp_path, capsys):
     assert '"missing_workspace_summaries":["stack_a"]' in captured.out
 
 
+def test_cli_publication_registry_workspace_summary_reads_summary_and_components(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    exit_code = main(["publication-registry-workspace-summary", str(workspace_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"artifact_count":12' in captured.out
+    assert '"publication_network_summary":' in captured.out
+    assert '"release_catalog_index_summary":' in captured.out
+    assert '"publication_registry_summary":' in captured.out
+
+
+def test_cli_publication_registry_workspace_lint_accepts_clean_workspace(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    exit_code = main(["publication-registry-workspace-lint", str(workspace_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"publication_registry_lint":' in captured.out
+    assert '"metadata_bundle_lint_failures":[]' in captured.out
+
+
+def test_cli_publication_registry_workspace_lint_reports_findings(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    summary_path = workspace_dir / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["publication_registry_manifest_path"] = "tampered"
+    write_json(summary_path, summary)
+
+    bundle_name = summary["publication_metadata_bundles"][0]["bundle_name"]
+    (workspace_dir / "publication_metadata_bundles" / bundle_name / "publication_metadata_manifest.json").unlink()
+
+    exit_code = main(["publication-registry-workspace-lint", str(workspace_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"publication_registry_manifest_path_matches":false' in captured.out
+    assert f'"missing_bundle_manifests":["{bundle_name}"]' in captured.out
+
+
 def test_cli_publication_registry_summary_reads_manifest_and_registry(tmp_path, capsys):
     registry_dir = make_publication_registry_dir(tmp_path)
 

@@ -4226,6 +4226,42 @@ def validate_publication_network_summary_consistency(summary: Mapping[str, Any])
         raise SatRootError("publication network summary stack_count mismatch")
 
 
+def validate_publication_registry_workspace_summary_consistency(summary: Mapping[str, Any]) -> None:
+    artifact_paths = summary.get("artifact_paths")
+    metadata_bundles = summary.get("publication_metadata_bundles")
+    artifact_count = summary.get("artifact_count")
+    metadata_bundle_count = summary.get("publication_metadata_bundle_count")
+    if not isinstance(artifact_paths, list):
+        raise SatRootError("publication registry workspace summary artifact_paths must be an array")
+    if not isinstance(metadata_bundles, list):
+        raise SatRootError("publication registry workspace summary publication_metadata_bundles must be an array")
+    if not isinstance(artifact_count, int) or artifact_count != len(artifact_paths):
+        raise SatRootError("publication registry workspace summary artifact_count mismatch")
+    if not isinstance(metadata_bundle_count, int) or metadata_bundle_count != len(metadata_bundles):
+        raise SatRootError("publication registry workspace summary publication_metadata_bundle_count mismatch")
+
+
+def _resolve_publication_registry_workspace_component_dirs(workspace_path: Path) -> Dict[str, Path]:
+    publication_network_dir = (workspace_path / "publication_network").resolve()
+    root_release_catalog_index_dir = (workspace_path / "release_catalog_index").resolve()
+    nested_release_catalog_index_dir = (publication_network_dir / "release_catalog_index").resolve()
+    if root_release_catalog_index_dir.is_dir():
+        release_catalog_index_dir = root_release_catalog_index_dir
+    elif nested_release_catalog_index_dir.is_dir():
+        release_catalog_index_dir = nested_release_catalog_index_dir
+    else:
+        release_catalog_index_dir = root_release_catalog_index_dir
+
+    return {
+        "publication_network_dir": publication_network_dir,
+        "release_catalog_index_dir": release_catalog_index_dir,
+        "publication_descriptor_index_dir": (workspace_path / "publication_descriptor_index").resolve(),
+        "publication_metadata_bundles_dir": (workspace_path / "publication_metadata_bundles").resolve(),
+        "publication_metadata_catalog_dir": (workspace_path / "publication_metadata_catalog").resolve(),
+        "publication_registry_dir": (workspace_path / "publication_registry").resolve(),
+    }
+
+
 def summarize_demo_catalog_workspace(demo_catalog_dir: str | Path) -> Dict[str, Any]:
     catalog_path, summary = _load_workspace_summary(demo_catalog_dir, label="demo catalog workspace")
     validate_demo_catalog_summary_consistency(summary)
@@ -4707,6 +4743,303 @@ def lint_publication_network_workspace(publication_network_dir: str | Path) -> D
         "workspace_summary_metadata_mismatches": workspace_summary_metadata_mismatches,
         "workspace_lint_failures": sorted(workspace_lint_failures),
         "release_catalog_index_lint": release_catalog_index_lint,
+    }
+
+
+def summarize_publication_registry_workspace(publication_registry_workspace_dir: str | Path) -> Dict[str, Any]:
+    workspace_path, summary = _load_workspace_summary(publication_registry_workspace_dir, label="publication registry workspace")
+    validate_publication_registry_workspace_summary_consistency(summary)
+    metadata_bundles = summary.get("publication_metadata_bundles")
+    assert isinstance(metadata_bundles, list)
+
+    component_dirs = _resolve_publication_registry_workspace_component_dirs(workspace_path)
+    publication_network_dir = component_dirs["publication_network_dir"]
+    release_catalog_index_dir = component_dirs["release_catalog_index_dir"]
+    publication_descriptor_index_dir = component_dirs["publication_descriptor_index_dir"]
+    publication_metadata_catalog_dir = component_dirs["publication_metadata_catalog_dir"]
+    publication_registry_dir = component_dirs["publication_registry_dir"]
+
+    release_catalog_index_summary = summarize_signed_release_catalog_index_publication(release_catalog_index_dir)
+    publication_descriptor_index_summary = summarize_publication_descriptor_index_publication(publication_descriptor_index_dir)
+    _catalog_manifest_path, _catalog_path, _catalog_manifest, publication_metadata_catalog = _load_publication_metadata_catalog_publication(
+        publication_metadata_catalog_dir
+    )
+    publication_registry_summary = summarize_publication_registry_publication(publication_registry_dir)
+
+    summary_payload: Dict[str, Any] = {
+        "signature_scheme": summary.get("signature_scheme"),
+        "source_publication_network_dir": summary.get("source_publication_network_dir"),
+        "publication_network_dir": summary.get("publication_network_dir"),
+        "artifact_count": summary.get("artifact_count"),
+        "artifact_paths": copy.deepcopy(summary.get("artifact_paths")),
+        "release_catalog_index_source_dir": summary.get("release_catalog_index_source_dir"),
+        "release_catalog_index_dir": summary.get("release_catalog_index_dir"),
+        "publication_descriptor_index_dir": summary.get("publication_descriptor_index_dir"),
+        "publication_metadata_bundles_dir": summary.get("publication_metadata_bundles_dir"),
+        "publication_metadata_bundle_count": summary.get("publication_metadata_bundle_count"),
+        "publication_metadata_catalog_dir": summary.get("publication_metadata_catalog_dir"),
+        "publication_registry_dir": summary.get("publication_registry_dir"),
+        "publication_descriptor_index_manifest_path": summary.get("publication_descriptor_index_manifest_path"),
+        "publication_metadata_catalog_manifest_path": summary.get("publication_metadata_catalog_manifest_path"),
+        "publication_registry_manifest_path": summary.get("publication_registry_manifest_path"),
+        "publication_metadata_bundle_names": sorted(
+            str(entry.get("bundle_name"))
+            for entry in metadata_bundles
+            if isinstance(entry, dict) and isinstance(entry.get("bundle_name"), str)
+        ),
+        "publication_metadata_artifact_kinds": sorted(
+            {
+                str(entry.get("artifact_kind"))
+                for entry in metadata_bundles
+                if isinstance(entry, dict) and isinstance(entry.get("artifact_kind"), str)
+            }
+        ),
+        "release_catalog_index_summary": release_catalog_index_summary,
+        "publication_descriptor_index_summary": publication_descriptor_index_summary,
+        "publication_metadata_catalog": copy.deepcopy(publication_metadata_catalog),
+        "publication_registry_summary": publication_registry_summary,
+        "publication_metadata_bundles": copy.deepcopy(metadata_bundles),
+    }
+    if publication_network_dir.is_dir():
+        summary_payload["publication_network_summary"] = summarize_publication_network_workspace(publication_network_dir)
+    return summary_payload
+
+
+def lint_publication_registry_workspace(publication_registry_workspace_dir: str | Path) -> Dict[str, Any]:
+    workspace_path, summary = _load_workspace_summary(publication_registry_workspace_dir, label="publication registry workspace")
+    validate_publication_registry_workspace_summary_consistency(summary)
+    metadata_bundles = summary.get("publication_metadata_bundles")
+    artifact_paths = summary.get("artifact_paths")
+    assert isinstance(metadata_bundles, list)
+    assert isinstance(artifact_paths, list)
+
+    component_dirs = _resolve_publication_registry_workspace_component_dirs(workspace_path)
+    publication_network_dir = component_dirs["publication_network_dir"]
+    actual_release_catalog_index_dir = component_dirs["release_catalog_index_dir"]
+    actual_publication_descriptor_index_dir = component_dirs["publication_descriptor_index_dir"]
+    actual_publication_metadata_bundles_dir = component_dirs["publication_metadata_bundles_dir"]
+    actual_publication_metadata_catalog_dir = component_dirs["publication_metadata_catalog_dir"]
+    actual_publication_registry_dir = component_dirs["publication_registry_dir"]
+
+    artifact_count_matches = isinstance(summary.get("artifact_count"), int) and summary.get("artifact_count") == len(artifact_paths)
+    publication_metadata_bundle_count_matches = (
+        isinstance(summary.get("publication_metadata_bundle_count"), int)
+        and summary.get("publication_metadata_bundle_count") == len(metadata_bundles)
+    )
+    publication_network_dir_matches = summary.get("publication_network_dir") == (
+        str(publication_network_dir) if publication_network_dir.is_dir() else None
+    )
+    release_catalog_index_dir_matches = summary.get("release_catalog_index_dir") == str(actual_release_catalog_index_dir)
+    publication_descriptor_index_dir_matches = summary.get("publication_descriptor_index_dir") == str(actual_publication_descriptor_index_dir)
+    publication_metadata_bundles_dir_matches = summary.get("publication_metadata_bundles_dir") == str(actual_publication_metadata_bundles_dir)
+    publication_metadata_catalog_dir_matches = summary.get("publication_metadata_catalog_dir") == str(actual_publication_metadata_catalog_dir)
+    publication_registry_dir_matches = summary.get("publication_registry_dir") == str(actual_publication_registry_dir)
+    publication_descriptor_index_manifest_path_matches = summary.get("publication_descriptor_index_manifest_path") == str(
+        (actual_publication_descriptor_index_dir / "publication_descriptor_index_manifest.json").resolve()
+    )
+    publication_metadata_catalog_manifest_path_matches = summary.get("publication_metadata_catalog_manifest_path") == str(
+        (actual_publication_metadata_catalog_dir / "publication_metadata_catalog_manifest.json").resolve()
+    )
+    publication_registry_manifest_path_matches = summary.get("publication_registry_manifest_path") == str(
+        (actual_publication_registry_dir / "publication_registry_manifest.json").resolve()
+    )
+
+    release_catalog_index_summary = summarize_signed_release_catalog_index_publication(actual_release_catalog_index_dir)
+    release_catalog_index_lint = lint_signed_release_catalog_index_publication(actual_release_catalog_index_dir)
+    _descriptor_manifest_path, _descriptor_index_path, _descriptor_manifest, publication_descriptor_index = _load_publication_descriptor_index_publication(
+        actual_publication_descriptor_index_dir
+    )
+    publication_descriptor_index_summary = summarize_publication_descriptor_index_publication(actual_publication_descriptor_index_dir)
+    publication_descriptor_index_lint = lint_publication_descriptor_index_publication(actual_publication_descriptor_index_dir)
+    _catalog_manifest_path, _catalog_path, _catalog_manifest, publication_metadata_catalog = _load_publication_metadata_catalog_publication(
+        actual_publication_metadata_catalog_dir
+    )
+    _registry_manifest_path, _registry_path, _registry_manifest, publication_registry = _load_publication_registry_publication(
+        actual_publication_registry_dir
+    )
+    publication_registry_lint = lint_publication_registry_publication(actual_publication_registry_dir)
+    publication_network_lint = (
+        lint_publication_network_workspace(publication_network_dir)
+        if publication_network_dir.is_dir()
+        else None
+    )
+
+    artifact_paths_match_descriptor_index = sorted(str(value) for value in artifact_paths) == sorted(
+        str(value) for value in publication_descriptor_index_summary.get("artifact_paths", [])
+    )
+    publication_descriptor_index_metadata_matches = summary.get("publication_descriptor_index") == publication_descriptor_index
+    publication_metadata_catalog_matches = summary.get("publication_metadata_catalog") == publication_metadata_catalog
+    publication_registry_matches = summary.get("publication_registry") == publication_registry
+
+    bundle_name_counts: Dict[str, int] = {}
+    bundle_dir_counts: Dict[str, int] = {}
+    bundle_manifest_path_counts: Dict[str, int] = {}
+    bundle_report_path_counts: Dict[str, int] = {}
+    bundle_descriptor_path_counts: Dict[str, int] = {}
+    for entry in metadata_bundles:
+        if not isinstance(entry, dict):
+            continue
+        bundle_name = entry.get("bundle_name")
+        bundle_dir = entry.get("bundle_dir")
+        manifest_path = entry.get("publication_metadata_manifest_path")
+        report_path = entry.get("publication_report_path")
+        descriptor_path = entry.get("publication_descriptor_path")
+        if isinstance(bundle_name, str):
+            bundle_name_counts[bundle_name] = bundle_name_counts.get(bundle_name, 0) + 1
+        if isinstance(bundle_dir, str):
+            bundle_dir_counts[bundle_dir] = bundle_dir_counts.get(bundle_dir, 0) + 1
+        if isinstance(manifest_path, str):
+            bundle_manifest_path_counts[manifest_path] = bundle_manifest_path_counts.get(manifest_path, 0) + 1
+        if isinstance(report_path, str):
+            bundle_report_path_counts[report_path] = bundle_report_path_counts.get(report_path, 0) + 1
+        if isinstance(descriptor_path, str):
+            bundle_descriptor_path_counts[descriptor_path] = bundle_descriptor_path_counts.get(descriptor_path, 0) + 1
+
+    duplicate_bundle_names = sorted(value for value, count in bundle_name_counts.items() if count > 1)
+    duplicate_bundle_dirs = sorted(value for value, count in bundle_dir_counts.items() if count > 1)
+    duplicate_bundle_manifest_paths = sorted(value for value, count in bundle_manifest_path_counts.items() if count > 1)
+    duplicate_bundle_report_paths = sorted(value for value, count in bundle_report_path_counts.items() if count > 1)
+    duplicate_bundle_descriptor_paths = sorted(value for value, count in bundle_descriptor_path_counts.items() if count > 1)
+
+    bundle_dir_path_mismatches: list[str] = []
+    missing_bundle_dirs: list[str] = []
+    missing_bundle_manifests: list[str] = []
+    missing_bundle_reports: list[str] = []
+    missing_bundle_descriptors: list[str] = []
+    bundle_summary_metadata_mismatches: list[Dict[str, Any]] = []
+    metadata_bundle_lint_failures: list[str] = []
+
+    for entry in metadata_bundles:
+        if not isinstance(entry, dict):
+            continue
+        bundle_name = entry.get("bundle_name")
+        bundle_dir_ref = entry.get("bundle_dir")
+        if not isinstance(bundle_name, str) or not bundle_name.strip():
+            continue
+        if not isinstance(bundle_dir_ref, str) or not bundle_dir_ref.strip():
+            continue
+
+        resolved_bundle_dir = Path(bundle_dir_ref).resolve()
+        expected_bundle_dir = (actual_publication_metadata_bundles_dir / bundle_name).resolve()
+        if resolved_bundle_dir != expected_bundle_dir:
+            bundle_dir_path_mismatches.append(bundle_name)
+        if not resolved_bundle_dir.is_dir():
+            missing_bundle_dirs.append(bundle_name)
+            continue
+
+        manifest_path = resolved_bundle_dir / "publication_metadata_manifest.json"
+        report_path = resolved_bundle_dir / "publication_report.md"
+        descriptor_path = resolved_bundle_dir / "publication_descriptor.json"
+        if not manifest_path.is_file():
+            missing_bundle_manifests.append(bundle_name)
+            continue
+        if not report_path.is_file():
+            missing_bundle_reports.append(bundle_name)
+            continue
+        if not descriptor_path.is_file():
+            missing_bundle_descriptors.append(bundle_name)
+            continue
+
+        mismatched_fields: list[str] = []
+        if entry.get("publication_metadata_manifest_path") != str(manifest_path.resolve()):
+            mismatched_fields.append("publication_metadata_manifest_path")
+        if entry.get("publication_report_path") != str(report_path.resolve()):
+            mismatched_fields.append("publication_report_path")
+        if entry.get("publication_descriptor_path") != str(descriptor_path.resolve()):
+            mismatched_fields.append("publication_descriptor_path")
+
+        try:
+            _loaded_manifest_path, _loaded_report_path, _loaded_descriptor_path, manifest, descriptor = _load_publication_metadata_bundle_publication(
+                resolved_bundle_dir
+            )
+        except SatRootError:
+            metadata_bundle_lint_failures.append(bundle_name)
+            continue
+
+        if entry.get("artifact_kind") != manifest.get("artifact_kind"):
+            mismatched_fields.append("artifact_kind")
+        if entry.get("artifact_path") != manifest.get("artifact_path"):
+            mismatched_fields.append("artifact_path")
+        if entry.get("artifact_kind") != descriptor.get("artifact_kind"):
+            mismatched_fields.append("descriptor.artifact_kind")
+        if entry.get("artifact_path") != descriptor.get("artifact_path"):
+            mismatched_fields.append("descriptor.artifact_path")
+
+        if mismatched_fields:
+            bundle_summary_metadata_mismatches.append(
+                {
+                    "bundle_name": bundle_name,
+                    "fields": sorted(set(mismatched_fields)),
+                }
+            )
+
+    return {
+        "ok": not any(
+            [
+                not artifact_count_matches,
+                not publication_metadata_bundle_count_matches,
+                not publication_network_dir_matches,
+                not release_catalog_index_dir_matches,
+                not publication_descriptor_index_dir_matches,
+                not publication_metadata_bundles_dir_matches,
+                not publication_metadata_catalog_dir_matches,
+                not publication_registry_dir_matches,
+                not publication_descriptor_index_manifest_path_matches,
+                not publication_metadata_catalog_manifest_path_matches,
+                not publication_registry_manifest_path_matches,
+                not artifact_paths_match_descriptor_index,
+                not publication_descriptor_index_metadata_matches,
+                not publication_metadata_catalog_matches,
+                not publication_registry_matches,
+                not release_catalog_index_lint["ok"],
+                not publication_descriptor_index_lint["ok"],
+                not publication_registry_lint["ok"],
+                publication_network_lint is not None and not publication_network_lint["ok"],
+                duplicate_bundle_names,
+                duplicate_bundle_dirs,
+                duplicate_bundle_manifest_paths,
+                duplicate_bundle_report_paths,
+                duplicate_bundle_descriptor_paths,
+                bundle_dir_path_mismatches,
+                missing_bundle_dirs,
+                missing_bundle_manifests,
+                missing_bundle_reports,
+                missing_bundle_descriptors,
+                bundle_summary_metadata_mismatches,
+                metadata_bundle_lint_failures,
+            ]
+        ),
+        "artifact_count_matches": artifact_count_matches,
+        "publication_metadata_bundle_count_matches": publication_metadata_bundle_count_matches,
+        "publication_network_dir_matches": publication_network_dir_matches,
+        "release_catalog_index_dir_matches": release_catalog_index_dir_matches,
+        "publication_descriptor_index_dir_matches": publication_descriptor_index_dir_matches,
+        "publication_metadata_bundles_dir_matches": publication_metadata_bundles_dir_matches,
+        "publication_metadata_catalog_dir_matches": publication_metadata_catalog_dir_matches,
+        "publication_registry_dir_matches": publication_registry_dir_matches,
+        "publication_descriptor_index_manifest_path_matches": publication_descriptor_index_manifest_path_matches,
+        "publication_metadata_catalog_manifest_path_matches": publication_metadata_catalog_manifest_path_matches,
+        "publication_registry_manifest_path_matches": publication_registry_manifest_path_matches,
+        "artifact_paths_match_descriptor_index": artifact_paths_match_descriptor_index,
+        "publication_descriptor_index_metadata_matches": publication_descriptor_index_metadata_matches,
+        "publication_metadata_catalog_matches": publication_metadata_catalog_matches,
+        "publication_registry_matches": publication_registry_matches,
+        "duplicate_bundle_names": duplicate_bundle_names,
+        "duplicate_bundle_dirs": duplicate_bundle_dirs,
+        "duplicate_bundle_manifest_paths": duplicate_bundle_manifest_paths,
+        "duplicate_bundle_report_paths": duplicate_bundle_report_paths,
+        "duplicate_bundle_descriptor_paths": duplicate_bundle_descriptor_paths,
+        "bundle_dir_path_mismatches": sorted(bundle_dir_path_mismatches),
+        "missing_bundle_dirs": sorted(missing_bundle_dirs),
+        "missing_bundle_manifests": sorted(missing_bundle_manifests),
+        "missing_bundle_reports": sorted(missing_bundle_reports),
+        "missing_bundle_descriptors": sorted(missing_bundle_descriptors),
+        "bundle_summary_metadata_mismatches": bundle_summary_metadata_mismatches,
+        "metadata_bundle_lint_failures": sorted(metadata_bundle_lint_failures),
+        "release_catalog_index_lint": release_catalog_index_lint,
+        "publication_descriptor_index_lint": publication_descriptor_index_lint,
+        "publication_network_lint": publication_network_lint,
+        "publication_registry_lint": publication_registry_lint,
     }
 
 
@@ -6286,6 +6619,7 @@ def write_publication_registry_workspace(
             root_output_dir / "publication_network",
             label="publication network workspace",
         )
+        relocate_publication_network_workspace_summary(copied_publication_network_dir)
         if resolved_release_catalog_index_dir == (resolved_publication_network_dir / "release_catalog_index").resolve():
             copied_release_catalog_index_dir = copied_publication_network_dir / "release_catalog_index"
         else:
@@ -9356,6 +9690,12 @@ def build_cli_parser() -> Any:
     publication_network_lint_parser = subparsers.add_parser("publication-network-lint", help="Check summary.json, release_catalog_index/, and referenced publication stack summaries without signature verification")
     publication_network_lint_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network directory")
 
+    publication_registry_workspace_summary_parser = subparsers.add_parser("publication-registry-workspace-summary", help="Read summary.json plus copied/generated publication components and print a publication-registry workspace summary without signature verification")
+    publication_registry_workspace_summary_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
+
+    publication_registry_workspace_lint_parser = subparsers.add_parser("publication-registry-workspace-lint", help="Check summary.json, copied/generated publication components, and referenced publication metadata bundles without signature verification")
+    publication_registry_workspace_lint_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
+
     publication_registry_summary_parser = subparsers.add_parser("publication-registry-summary", help="Read publication_registry_manifest.json plus publication_registry.json and print a publication-registry summary without signature verification")
     publication_registry_summary_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory")
 
@@ -11077,6 +11417,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publication-network-lint":
         report = lint_publication_network_workspace(args.publication_network_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-registry-workspace-summary":
+        summary = summarize_publication_registry_workspace(args.publication_registry_workspace_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-registry-workspace-lint":
+        report = lint_publication_registry_workspace(args.publication_registry_workspace_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 
