@@ -2956,6 +2956,87 @@ def test_cli_inventory_artifacts_non_recursive_reports_top_level_only(tmp_path, 
     assert '"bundle_count":0' in captured.out
 
 
+def test_cli_export_demo_catalog_preset_from_workspace(tmp_path):
+    output_dir = make_demo_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_catalog.json"
+
+    exit_code = main(["export-demo-catalog-preset", str(output_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_demo_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-DEMO-CATALOG-PRESET"
+    assert preset["profiles"] == ["SATROOT-STABLE-1", "SATROOT-MACHINE-1"]
+    assert preset["release"]["label"] == "CLI Demo Catalog"
+    assert loaded["profiles"] == ["SATROOT-STABLE-1", "SATROOT-MACHINE-1"]
+    assert loaded["release_metadata"]["published_at"] == "2026-07-05T02:00:00Z"
+
+
+def test_cli_export_publication_stack_preset_with_generated_catalog_presets(tmp_path):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+    preset_path = tmp_path / "exported_stack.json"
+    catalog_preset_dir = tmp_path / "exported_catalog_presets"
+
+    exit_code = main(
+        [
+            "export-publication-stack-preset",
+            str(stack_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_stack_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-STACK-PRESET"
+    assert preset["release_catalog"]["label"] == "Publication Stack Override"
+    assert sorted(Path(value).name for value in loaded["catalog_preset_paths"]) == ["machine_catalog.json", "stable_catalog.json"]
+
+    stable_catalog = json.loads((catalog_preset_dir / "stable_catalog.json").read_text(encoding="utf-8"))
+    machine_catalog = json.loads((catalog_preset_dir / "machine_catalog.json").read_text(encoding="utf-8"))
+    assert stable_catalog["profiles"] == ["SATROOT-STABLE-1"]
+    assert machine_catalog["profiles"] == ["SATROOT-MACHINE-1"]
+    assert stable_catalog["symbol_overrides"]["SATROOT-STABLE-1"] == "PSTSTB1"
+    assert machine_catalog["symbol_overrides"]["SATROOT-MACHINE-1"] == "PSTMCH1"
+
+
+def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    preset_path = tmp_path / "exported_network.json"
+    stack_preset_dir = tmp_path / "exported_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_catalog_presets"
+
+    exit_code = main(
+        [
+            "export-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_network_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-NETWORK-PRESET"
+    assert preset["release_catalog_index"]["label"] == "Publication Network Override"
+    assert sorted(Path(value).name for value in loaded["stack_preset_paths"]) == ["stack_a.json", "stack_b.json"]
+
+    stack_a = json.loads((stack_preset_dir / "stack_a.json").read_text(encoding="utf-8"))
+    stack_b = json.loads((stack_preset_dir / "stack_b.json").read_text(encoding="utf-8"))
+    assert stack_a["release_catalog"]["label"] == "Publication Network Stack Alpha"
+    assert stack_b["release_catalog"]["label"] == "Publication Network Stack Beta"
+    assert (catalog_preset_dir / "stack_a" / "stable_catalog.json").is_file()
+    assert (catalog_preset_dir / "stack_b" / "machine_catalog.json").is_file()
+
+
 def test_lint_signed_ledger_bundle_reports_structural_findings(tmp_path):
     bundle = bootstrap_signed_ledger_bundle(load_events(), scheme="hmac-sha256")
     manifest = build_signed_ledger_bundle_manifest(

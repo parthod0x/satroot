@@ -5882,6 +5882,192 @@ def inventory_workspace_artifacts(
     }
 
 
+def _filtered_string_mapping(value: Any) -> Dict[str, str]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {
+        str(key): str(entry)
+        for key, entry in value.items()
+        if isinstance(key, str) and key.strip() and isinstance(entry, str) and entry.strip()
+    }
+
+
+def export_demo_catalog_preset_from_workspace(demo_catalog_dir: str | Path) -> Dict[str, Any]:
+    _, summary = _load_workspace_summary(demo_catalog_dir, label="demo catalog workspace")
+    validate_demo_catalog_summary_consistency(summary)
+    bundles = summary.get("bundles")
+    assert isinstance(bundles, list)
+    spec_map = {spec["profile"]: spec for spec in DEMO_CATALOG_BUNDLE_SPECS}
+
+    profiles: list[str] = []
+    symbol_overrides: Dict[str, str] = {}
+    name_overrides: Dict[str, str] = {}
+    profile_field_overrides: Dict[str, Dict[str, str]] = {}
+    profile_structure_overrides: Dict[str, Dict[str, Any]] = {}
+
+    for entry in bundles:
+        if not isinstance(entry, Mapping):
+            continue
+        profile = entry.get("profile")
+        if not isinstance(profile, str) or profile not in spec_map:
+            continue
+        profiles.append(profile)
+
+        symbol = entry.get("symbol")
+        if isinstance(symbol, str) and symbol != spec_map[profile]["symbol"]:
+            symbol_overrides[profile] = symbol
+
+        name = entry.get("name")
+        if isinstance(name, str) and name != spec_map[profile]["name"]:
+            name_overrides[profile] = name
+
+        profile_fields = _filtered_string_mapping(entry.get("profile_fields"))
+        if profile_fields:
+            profile_field_overrides[profile] = profile_fields
+
+        structure_overrides = entry.get("structure_overrides")
+        if isinstance(structure_overrides, Mapping) and structure_overrides:
+            profile_structure_overrides[profile] = copy.deepcopy(dict(structure_overrides))
+
+    preset: Dict[str, Any] = {
+        "type": "SATROOT-DEMO-CATALOG-PRESET",
+        "version": "0.1",
+        "profiles": profiles,
+    }
+    if symbol_overrides:
+        preset["symbol_overrides"] = symbol_overrides
+    if name_overrides:
+        preset["name_overrides"] = name_overrides
+    if profile_field_overrides:
+        preset["profile_field_overrides"] = profile_field_overrides
+    if profile_structure_overrides:
+        preset["profile_structure_overrides"] = profile_structure_overrides
+
+    release_metadata = _filtered_string_mapping(summary.get("release"))
+    if release_metadata:
+        preset["release"] = release_metadata
+    return preset
+
+
+def export_publication_stack_preset_from_workspace(
+    publication_stack_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+    catalog_preset_dir: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
+    validate_publication_stack_summary_consistency(summary)
+    workspaces = summary.get("workspaces")
+    assert isinstance(workspaces, list)
+
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    export_catalog_dir = None if catalog_preset_dir is None else Path(catalog_preset_dir).resolve()
+    catalog_preset_paths: list[str] = []
+
+    for entry in workspaces:
+        if not isinstance(entry, Mapping):
+            continue
+        workspace_name = entry.get("workspace_name")
+        workspace_dir = entry.get("workspace_dir")
+        preset_path = entry.get("preset_path")
+        if not isinstance(workspace_name, str) or not workspace_name.strip():
+            continue
+
+        if export_catalog_dir is not None:
+            if not isinstance(workspace_dir, str) or not workspace_dir.strip():
+                raise SatRootError("publication stack preset export requires workspace_dir for each nested workspace")
+            catalog_output_path = export_catalog_dir / f"{workspace_name}.json"
+            catalog_output_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json_file(
+                catalog_output_path,
+                export_demo_catalog_preset_from_workspace(workspace_dir),
+            )
+            catalog_preset_paths.append(_relative_output_path(catalog_output_path, base_dir=base_dir))
+            continue
+
+        if not isinstance(preset_path, str) or not preset_path.strip():
+            raise SatRootError("publication stack preset export requires --catalog-preset-dir when nested workspaces do not preserve preset_path")
+        catalog_preset_paths.append(_relative_output_path(preset_path, base_dir=base_dir))
+
+    release_catalog = summary.get("release_catalog")
+    release_catalog_metadata = {}
+    if isinstance(release_catalog, Mapping):
+        release_catalog_metadata = _filtered_string_mapping(release_catalog.get("catalog"))
+
+    preset = {
+        "type": "SATROOT-PUBLICATION-STACK-PRESET",
+        "version": "0.1",
+        "catalog_presets": catalog_preset_paths,
+    }
+    if release_catalog_metadata:
+        preset["release_catalog"] = release_catalog_metadata
+    return preset
+
+
+def export_publication_network_preset_from_workspace(
+    publication_network_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+    stack_preset_dir: Optional[str | Path] = None,
+    catalog_preset_dir: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _, summary = _load_workspace_summary(publication_network_dir, label="publication network")
+    validate_publication_network_summary_consistency(summary)
+    workspaces = summary.get("workspaces")
+    assert isinstance(workspaces, list)
+
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    export_stack_dir = None if stack_preset_dir is None else Path(stack_preset_dir).resolve()
+    export_catalog_dir = None if catalog_preset_dir is None else Path(catalog_preset_dir).resolve()
+    stack_preset_paths: list[str] = []
+
+    for entry in workspaces:
+        if not isinstance(entry, Mapping):
+            continue
+        workspace_name = entry.get("workspace_name")
+        workspace_dir = entry.get("workspace_dir")
+        preset_path = entry.get("preset_path")
+        if not isinstance(workspace_name, str) or not workspace_name.strip():
+            continue
+
+        if export_stack_dir is not None:
+            if not isinstance(workspace_dir, str) or not workspace_dir.strip():
+                raise SatRootError("publication network preset export requires workspace_dir for each nested stack")
+            stack_output_path = export_stack_dir / f"{workspace_name}.json"
+            stack_output_path.parent.mkdir(parents=True, exist_ok=True)
+            nested_catalog_dir = None
+            if export_catalog_dir is not None:
+                nested_catalog_dir = export_catalog_dir / workspace_name
+            _write_json_file(
+                stack_output_path,
+                export_publication_stack_preset_from_workspace(
+                    workspace_dir,
+                    output_path=stack_output_path,
+                    catalog_preset_dir=nested_catalog_dir,
+                ),
+            )
+            stack_preset_paths.append(_relative_output_path(stack_output_path, base_dir=base_dir))
+            continue
+
+        if not isinstance(preset_path, str) or not preset_path.strip():
+            raise SatRootError("publication network preset export requires --stack-preset-dir when nested workspaces do not preserve preset_path")
+        stack_preset_paths.append(_relative_output_path(preset_path, base_dir=base_dir))
+
+    release_catalog_index = summary.get("release_catalog_index")
+    release_catalog_index_metadata = {}
+    if isinstance(release_catalog_index, Mapping):
+        release_catalog_index_metadata = _filtered_string_mapping(release_catalog_index.get("index"))
+
+    preset = {
+        "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
+        "version": "0.1",
+        "stack_presets": stack_preset_paths,
+    }
+    if release_catalog_index_metadata:
+        preset["release_catalog_index"] = release_catalog_index_metadata
+    return preset
+
+
 def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, Any]] = None) -> int:
     if schema is None:
         schema = load_protocol_schema()
@@ -6280,6 +6466,21 @@ def build_cli_parser() -> Any:
     inventory_artifacts_parser.add_argument("search_root", nargs="*", help="Directory root to scan for SATROOT artifacts")
     inventory_artifacts_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Additional directory root to scan for SATROOT artifacts; may be repeated")
     inventory_artifacts_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while scanning")
+
+    export_demo_catalog_preset_parser = subparsers.add_parser("export-demo-catalog-preset", help="Export a SATROOT demo catalog workspace back into a reusable demo catalog preset")
+    export_demo_catalog_preset_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory")
+    export_demo_catalog_preset_parser.add_argument("--output", help="Optional output path")
+
+    export_publication_stack_preset_parser = subparsers.add_parser("export-publication-stack-preset", help="Export a SATROOT publication stack workspace back into a reusable publication stack preset")
+    export_publication_stack_preset_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack workspace directory")
+    export_publication_stack_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported")
+    export_publication_stack_preset_parser.add_argument("--output", help="Optional output path")
+
+    export_publication_network_preset_parser = subparsers.add_parser("export-publication-network-preset", help="Export a SATROOT publication network workspace back into a reusable publication network preset")
+    export_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network workspace directory")
+    export_publication_network_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested publication stack presets will also be exported")
+    export_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported alongside generated stack presets")
+    export_publication_network_preset_parser.add_argument("--output", help="Optional output path")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
     init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
@@ -7509,6 +7710,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             raise SatRootError("inventory-artifacts requires at least one search_root or --discover-under path")
         inventory = inventory_workspace_artifacts(search_roots, recursive=not args.non_recursive)
         print(canonical_json(inventory))
+        return 0
+
+    if args.command == "export-demo-catalog-preset":
+        preset = export_demo_catalog_preset_from_workspace(args.demo_catalog_dir)
+        _write_output(preset, args.output)
+        return 0
+
+    if args.command == "export-publication-stack-preset":
+        preset = export_publication_stack_preset_from_workspace(
+            args.publication_stack_dir,
+            output_path=args.output,
+            catalog_preset_dir=args.catalog_preset_dir,
+        )
+        _write_output(preset, args.output)
+        return 0
+
+    if args.command == "export-publication-network-preset":
+        preset = export_publication_network_preset_from_workspace(
+            args.publication_network_dir,
+            output_path=args.output,
+            stack_preset_dir=args.stack_preset_dir,
+            catalog_preset_dir=args.catalog_preset_dir,
+        )
+        _write_output(preset, args.output)
         return 0
 
     if args.command == "bootstrap-genesis-bundle":

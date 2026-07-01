@@ -130,6 +130,7 @@ The v0.1 kernel defines:
 - `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
 - `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, and workspace layers,
+- preset export commands for deriving reusable demo-catalog, publication-stack, and publication-network presets back from generated workspaces,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
@@ -219,7 +220,7 @@ python -m pytest
 Expected result:
 
 ```text
-234 passed
+237 passed
 ```
 
 ## Signing utilities
@@ -609,6 +610,24 @@ If you only want to report artifacts rooted directly at the given path and skip 
 
 ```bash
 satroot1 inventory-artifacts publication_network --non-recursive
+```
+
+To derive a reusable preset back from a generated demo catalog workspace:
+
+```bash
+satroot1 export-demo-catalog-preset catalog_workspace --output exported_catalog.json
+```
+
+To derive a publication stack preset and also emit nested demo catalog preset files alongside it:
+
+```bash
+satroot1 export-publication-stack-preset publication_stack --catalog-preset-dir exported_catalog_presets --output exported_stack.json
+```
+
+To derive a publication network preset and recursively emit nested stack and catalog preset files:
+
+```bash
+satroot1 export-publication-network-preset publication_network --stack-preset-dir exported_stack_presets --catalog-preset-dir exported_catalog_presets --output exported_network.json
 ```
 
 Inspect a release catalog publication without signature verification:
