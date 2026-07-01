@@ -1,0 +1,12 @@
+{
+  "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
+  "version": "0.1",
+  "release_catalog_index_dir": "../generated_publication_network/release_catalog_index",
+  "publication_descriptor_index_dir": "../generated_publication_descriptor_index_publication",
+  "publication_metadata_catalog_dir": "../generated_publication_metadata_catalog_publication",
+  "registry": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Publication Registry",
+    "published_at": "2026-07-08T06:00:00Z"
+  }
+}

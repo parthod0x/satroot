@@ -58,6 +58,7 @@ from satroot1 import (
     load_publication_metadata_catalog_manifest_schema,
     load_publication_metadata_catalog_schema,
     load_publication_registry_manifest_schema,
+    load_publication_registry_preset,
     load_publication_registry_schema,
     load_publication_descriptor_index_manifest_schema,
     load_publication_descriptor_index_schema,
@@ -983,6 +984,14 @@ def test_load_publication_network_preset_example():
     preset = load_publication_network_preset(ROOT / "examples" / "network_presets" / "ai_compute_publication_network.json")
     assert preset["stack_preset_paths"] == [str((ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack.json").resolve())]
     assert preset["release_catalog_index_metadata"]["label"] == "SATROOT AI Compute Publication Network"
+
+
+def test_load_publication_registry_preset_example():
+    preset = load_publication_registry_preset(ROOT / "examples" / "registry_presets" / "ai_compute_publication_registry.json")
+    assert preset["release_catalog_index_dir"] == str((ROOT / "examples" / "generated_publication_network" / "release_catalog_index").resolve())
+    assert preset["publication_descriptor_index_dir"] == str((ROOT / "examples" / "generated_publication_descriptor_index_publication").resolve())
+    assert preset["publication_metadata_catalog_dir"] == str((ROOT / "examples" / "generated_publication_metadata_catalog_publication").resolve())
+    assert preset["registry_metadata"]["label"] == "SATROOT AI Compute Publication Registry"
 
 
 def test_validate_publication_stack_summary_schema_accepts_generated_summary(tmp_path):
@@ -3206,6 +3215,22 @@ def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp
     assert (catalog_preset_dir / "stack_b" / "machine_catalog.json").is_file()
 
 
+def test_cli_export_publication_registry_preset(tmp_path):
+    registry_dir = make_publication_registry_dir(tmp_path)
+    preset_path = tmp_path / "exported_registry.json"
+
+    exit_code = main(["export-publication-registry-preset", str(registry_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-PRESET"
+    assert Path(loaded["release_catalog_index_dir"]).name == "release_catalog_index"
+    assert Path(loaded["publication_descriptor_index_dir"]).name == "publication_descriptor_index_publication"
+    assert Path(loaded["publication_metadata_catalog_dir"]).name == "publication_metadata_catalog_publication"
+    assert preset["registry"]["label"] == "SATROOT Publication Registry"
+
+
 def test_cli_render_publication_report_for_network(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
 
@@ -3805,6 +3830,52 @@ def test_cli_bootstrap_publication_registry_publication(tmp_path, capsys):
     )
     assert verified["component_count"] == 3
     assert verified["index"] == registry["index"]
+
+
+def test_cli_bootstrap_publication_registry_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "publication_registry_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
+            "version": "0.1",
+            "release_catalog_index_dir": str(Path(release_catalog_index_dir).relative_to(tmp_path)),
+            "publication_descriptor_index_dir": str(Path(descriptor_index_dir).relative_to(tmp_path)),
+            "publication_metadata_catalog_dir": str(Path(metadata_catalog_dir).relative_to(tmp_path)),
+            "registry": {
+                "channel": "mesh",
+                "label": "Preset Publication Registry",
+                "published_at": "2026-07-08T06:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_registry_preset_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-registry-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+            "--label",
+            "CLI Publication Registry Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["index"]["channel"] == "mesh"
+    assert registry["index"]["label"] == "CLI Publication Registry Override"
+    assert registry["index"]["published_at"] == "2026-07-08T06:00:00Z"
 
 
 def test_cli_validate_and_verify_publication_registry_manifest(tmp_path, capsys):

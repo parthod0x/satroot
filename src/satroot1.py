@@ -923,6 +923,48 @@ def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
     }
 
 
+def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="publication registry preset")
+    if preset.get("type") != "SATROOT-PUBLICATION-REGISTRY-PRESET":
+        raise SatRootError("unsupported publication registry preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported publication registry preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "release_catalog_index_dir",
+        "publication_descriptor_index_dir",
+        "publication_metadata_catalog_dir",
+        "registry",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported publication registry preset keys: {sorted(unexpected)}")
+
+    def resolve_optional_path(key: str) -> Optional[str]:
+        value = preset.get(key)
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise SatRootError(f"publication registry preset {key} must be a non-empty string when provided")
+        return str((preset_path.parent / value).resolve())
+
+    release_catalog_index_dir = resolve_optional_path("release_catalog_index_dir")
+    publication_descriptor_index_dir = resolve_optional_path("publication_descriptor_index_dir")
+    publication_metadata_catalog_dir = resolve_optional_path("publication_metadata_catalog_dir")
+    if not any((release_catalog_index_dir, publication_descriptor_index_dir, publication_metadata_catalog_dir)):
+        raise SatRootError("publication registry preset must contain at least one publication component directory")
+
+    return {
+        "release_catalog_index_dir": release_catalog_index_dir,
+        "publication_descriptor_index_dir": publication_descriptor_index_dir,
+        "publication_metadata_catalog_dir": publication_metadata_catalog_dir,
+        "registry_metadata": validate_release_metadata_mapping(preset.get("registry")),
+    }
+
+
 def _unique_workspace_names(paths: Sequence[str | Path]) -> list[str]:
     used: Dict[str, int] = {}
     names: list[str] = []
@@ -6373,6 +6415,47 @@ def export_publication_network_preset_from_workspace(
     return preset
 
 
+def export_publication_registry_preset_from_workspace(
+    publication_registry_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _, registry_path, _manifest, registry = _load_publication_registry_publication(publication_registry_dir)
+    validate_publication_registry_consistency(registry)
+
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    preset: Dict[str, Any] = {
+        "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
+        "version": "0.1",
+    }
+
+    release_catalog_index_component = registry.get("release_catalog_index_publication")
+    if isinstance(release_catalog_index_component, Mapping):
+        publication_directory_path = release_catalog_index_component.get("publication_directory_path")
+        if isinstance(publication_directory_path, str) and publication_directory_path.strip():
+            resolved_path = (registry_path.parent / publication_directory_path).resolve()
+            preset["release_catalog_index_dir"] = _relative_output_path(resolved_path, base_dir=base_dir)
+
+    publication_descriptor_index_component = registry.get("publication_descriptor_index_publication")
+    if isinstance(publication_descriptor_index_component, Mapping):
+        publication_directory_path = publication_descriptor_index_component.get("publication_directory_path")
+        if isinstance(publication_directory_path, str) and publication_directory_path.strip():
+            resolved_path = (registry_path.parent / publication_directory_path).resolve()
+            preset["publication_descriptor_index_dir"] = _relative_output_path(resolved_path, base_dir=base_dir)
+
+    publication_metadata_catalog_component = registry.get("publication_metadata_catalog_publication")
+    if isinstance(publication_metadata_catalog_component, Mapping):
+        publication_directory_path = publication_metadata_catalog_component.get("publication_directory_path")
+        if isinstance(publication_directory_path, str) and publication_directory_path.strip():
+            resolved_path = (registry_path.parent / publication_directory_path).resolve()
+            preset["publication_metadata_catalog_dir"] = _relative_output_path(resolved_path, base_dir=base_dir)
+
+    registry_metadata = _filtered_string_mapping(registry.get("index"))
+    if registry_metadata:
+        preset["registry"] = registry_metadata
+    return preset
+
+
 def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
     resolved_path = Path(path).resolve()
     if resolved_path.is_file():
@@ -8504,6 +8587,10 @@ def build_cli_parser() -> Any:
     export_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported alongside generated stack presets")
     export_publication_network_preset_parser.add_argument("--output", help="Optional output path")
 
+    export_publication_registry_preset_parser = subparsers.add_parser("export-publication-registry-preset", help="Export a SATROOT publication registry back into a reusable publication registry preset")
+    export_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory")
+    export_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
+
     render_publication_report_parser = subparsers.add_parser("render-publication-report", help="Render a human-readable markdown report for a SATROOT bundle, release, catalog, index, or workspace")
     render_publication_report_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
     render_publication_report_parser.add_argument("--output", help="Optional output path")
@@ -8562,6 +8649,7 @@ def build_cli_parser() -> Any:
     build_publication_metadata_catalog_manifest_parser.add_argument("--output", help="Optional output path")
 
     build_publication_registry_parser = subparsers.add_parser("build-publication-registry", help="Build a top-level SATROOT publication registry from existing published component directories")
+    build_publication_registry_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with component paths and registry metadata defaults")
     build_publication_registry_parser.add_argument("--release-catalog-index-dir", help="Path to a release catalog index publication directory")
     build_publication_registry_parser.add_argument("--publication-descriptor-index-dir", help="Path to a publication descriptor index publication directory")
     build_publication_registry_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a publication metadata catalog publication directory")
@@ -8609,6 +8697,7 @@ def build_cli_parser() -> Any:
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
 
     bootstrap_publication_registry_publication_parser = subparsers.add_parser("bootstrap-publication-registry-publication", help="Generate signing material and write a ready-to-verify SATROOT publication registry directory")
+    bootstrap_publication_registry_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with component paths and registry metadata defaults")
     bootstrap_publication_registry_publication_parser.add_argument("--release-catalog-index-dir", help="Path to a release catalog index publication directory")
     bootstrap_publication_registry_publication_parser.add_argument("--publication-descriptor-index-dir", help="Path to a publication descriptor index publication directory")
     bootstrap_publication_registry_publication_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a publication metadata catalog publication directory")
@@ -9903,6 +9992,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(preset, args.output)
         return 0
 
+    if args.command == "export-publication-registry-preset":
+        preset = export_publication_registry_preset_from_workspace(
+            args.publication_registry_dir,
+            output_path=args.output,
+        )
+        _write_output(preset, args.output)
+        return 0
+
     if args.command == "render-publication-report":
         report = render_satroot_artifact_report(args.path)
         _write_text_output(report, args.output)
@@ -9990,17 +10087,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-publication-registry":
+        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
         registry_metadata = {
+            **dict((preset or {}).get("registry_metadata", {})),
+        }
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                registry_metadata[key] = value
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         registry = build_publication_registry(
-            release_catalog_index_dir=args.release_catalog_index_dir,
-            publication_descriptor_index_dir=args.publication_descriptor_index_dir,
-            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir,
+            release_catalog_index_dir=args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir"),
+            publication_descriptor_index_dir=args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir"),
+            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir"),
             base_dir=base_dir,
             registry_metadata=registry_metadata,
         )
@@ -10068,18 +10171,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-publication-registry-publication":
+        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
         registry_metadata = {
+            **dict((preset or {}).get("registry_metadata", {})),
+        }
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                registry_metadata[key] = value
         output = bootstrap_publication_registry_publication(
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
-            release_catalog_index_dir=args.release_catalog_index_dir,
-            publication_descriptor_index_dir=args.publication_descriptor_index_dir,
-            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir,
+            release_catalog_index_dir=args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir"),
+            publication_descriptor_index_dir=args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir"),
+            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir"),
             registry_metadata=registry_metadata,
         )
         print(f"wrote bootstrapped SATROOT publication registry to {Path(args.output_dir).resolve()}")

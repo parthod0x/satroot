@@ -47,6 +47,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `examples/release_catalog_presets/` - reusable SATROOT release-catalog publication presets.
 - `examples/release_catalog_index_presets/` - reusable SATROOT release-catalog-index publication presets.
+- `examples/registry_presets/` - reusable SATROOT publication-registry presets.
 - `examples/network_presets/` - reusable SATROOT publication-network presets.
 - `examples/stack_presets/` - reusable SATROOT end-to-end publication-stack presets.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
@@ -151,6 +152,7 @@ The v0.1 kernel defines:
 - `build-publication-registry` for binding descriptor, metadata, and release-catalog-index publications into one top-level signed namespace artifact,
 - signed publication-registry-manifest generation for authenticating top-level publication registries,
 - one-shot `bootstrap-publication-registry-publication` orchestration for registry publications plus signing material,
+- preset export commands for deriving reusable publication-registry presets back from generated registry publications,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
 - signed bundle verification against manifest and verifier material,
 - bundle-manifest, bundle-index, release-manifest, release-catalog, release-catalog-manifest, release-catalog-index, release-catalog-index-manifest, publication-descriptor-index, publication-descriptor-index-manifest, publication-metadata-manifest, publication-metadata-catalog, publication-metadata-catalog-manifest, publication-registry, publication-registry-manifest, demo-catalog-summary, publication-stack-summary, and publication-network-summary schema validation for exported signed artifacts,
@@ -240,7 +242,7 @@ python -m pytest
 Expected result:
 
 ```text
-265 passed
+268 passed
 ```
 
 ## Signing utilities
@@ -710,10 +712,22 @@ To bind the release-catalog-index, descriptor-index, and metadata-catalog lanes 
 satroot1 bootstrap-publication-registry-publication --release-catalog-index-dir publication_network/release_catalog_index --publication-descriptor-index-dir publication_descriptor_index_publication --publication-metadata-catalog-dir publication_metadata_catalog_publication --output-dir publication_registry_publication --channel network --label "SATROOT Publication Registry" --scheme hmac-sha256 --key-id registry-key
 ```
 
+For a checked-in repeatable registry composition, the same command can also load a preset:
+
+```bash
+satroot1 bootstrap-publication-registry-publication --preset-json examples/registry_presets/ai_compute_publication_registry.json --output-dir publication_registry_publication --label "SATROOT Publication Registry Override" --scheme hmac-sha256 --key-id registry-key
+```
+
 To verify that registry later:
 
 ```bash
 satroot1 verify-publication-registry-manifest publication_registry_publication/publication_registry_manifest.json --secrets-json publication_registry_publication/publication_registry_secrets.json
+```
+
+To derive a reusable preset back from a generated registry publication:
+
+```bash
+satroot1 export-publication-registry-preset publication_registry_publication --output exported_registry.json
 ```
 
 Inspect a release catalog publication without signature verification:
