@@ -49,6 +49,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/release_catalog_index_presets/` - reusable SATROOT release-catalog-index publication presets.
 - `examples/publication_descriptor_index_presets/` - reusable SATROOT publication-descriptor-index presets.
 - `examples/publication_metadata_catalog_presets/` - reusable SATROOT publication-metadata-catalog presets.
+- `examples/publication_catalog_workspace_presets/` - reusable SATROOT publication-catalog-workspace presets.
 - `examples/registry_presets/` - reusable SATROOT publication-registry presets.
 - `examples/registry_workspace_presets/` - reusable SATROOT publication-registry-workspace presets.
 - `examples/network_presets/` - reusable SATROOT publication-network presets.
@@ -146,7 +147,7 @@ The v0.1 kernel defines:
 - publication-registry-workspace inspection via `publication-registry-workspace-summary` and structural linting via `publication-registry-workspace-lint`,
 - publication-registry inspection via `publication-registry-summary` and structural linting via `publication-registry-lint`,
 - `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, registry, and workspace layers,
-- preset export commands for deriving reusable demo-catalog, publication-stack, publication-network, and publication-registry-workspace presets back from generated workspaces,
+- preset export commands for deriving reusable demo-catalog, publication-stack, publication-network, publication-catalog-workspace, and publication-registry-workspace presets back from generated workspaces,
 - `render-publication-report` for turning detected SATROOT artifacts or workspaces into human-readable markdown reports,
 - `export-publication-descriptor` for emitting normalized JSON descriptors from detected SATROOT artifacts or workspaces,
 - `build-publication-descriptor-index` for aggregating many detected SATROOT descriptors into one machine-readable registry,
@@ -252,7 +253,7 @@ python -m pytest
 Expected result:
 
 ```text
-298 passed
+301 passed
 ```
 
 ## Signing utilities
@@ -746,6 +747,12 @@ To generate just the reusable descriptor-index plus metadata-catalog workspace w
 satroot1 bootstrap-publication-catalog-workspace --discover-under publication_network --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --output-dir publication_catalog_workspace --descriptor-index-label "Workspace Descriptor Index" --publication-metadata-catalog-label "Workspace Metadata Catalog"
 ```
 
+For a checked-in repeatable publication-catalog-workspace composition, the same command can also load a preset:
+
+```bash
+satroot1 bootstrap-publication-catalog-workspace --preset-json examples/publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --output-dir publication_catalog_workspace --descriptor-index-label "SATROOT Workspace Descriptor Index Override"
+```
+
 For a checked-in repeatable registry-workspace composition, the same command can also load a preset:
 
 ```bash
@@ -774,6 +781,12 @@ To derive a reusable preset back from a generated registry workspace:
 
 ```bash
 satroot1 export-publication-registry-workspace-preset publication_registry_workspace --output exported_registry_workspace.json
+```
+
+To derive a reusable preset back from a generated publication catalog workspace:
+
+```bash
+satroot1 export-publication-catalog-workspace-preset publication_catalog_workspace --output exported_catalog_workspace.json
 ```
 
 To derive a reusable preset back from a generated metadata catalog publication:

@@ -1,0 +1,17 @@
+{
+  "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+  "version": "0.1",
+  "discover_under": [
+    "../generated_publication_network"
+  ],
+  "publication_descriptor_index": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Workspace Descriptor Index",
+    "published_at": "2026-07-08T07:00:00Z"
+  },
+  "publication_metadata_catalog": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Workspace Metadata Catalog",
+    "published_at": "2026-07-08T07:05:00Z"
+  }
+}

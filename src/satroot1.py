@@ -1021,6 +1021,56 @@ def load_publication_metadata_catalog_preset(path: str | Path) -> Dict[str, Any]
     }
 
 
+def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any]:
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="publication catalog workspace preset")
+    if preset.get("type") != "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET":
+        raise SatRootError("unsupported publication catalog workspace preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported publication catalog workspace preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "artifact_paths",
+        "discover_under",
+        "recursive",
+        "publication_descriptor_index",
+        "publication_metadata_catalog",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported publication catalog workspace preset keys: {sorted(unexpected)}")
+
+    artifact_paths = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("artifact_paths"),
+            label="publication catalog workspace preset artifact_paths",
+        )
+    ]
+    discover_under = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("discover_under"),
+            label="publication catalog workspace preset discover_under",
+        )
+    ]
+    recursive = preset.get("recursive", True)
+    if not isinstance(recursive, bool):
+        raise SatRootError("publication catalog workspace preset recursive must be a boolean")
+    if not artifact_paths and not discover_under:
+        raise SatRootError("publication catalog workspace preset must contain artifact_paths or discover_under")
+
+    return {
+        "artifact_paths": artifact_paths,
+        "discover_under": discover_under,
+        "recursive": recursive,
+        "descriptor_index_metadata": validate_release_metadata_mapping(preset.get("publication_descriptor_index")),
+        "publication_metadata_catalog_metadata": validate_release_metadata_mapping(preset.get("publication_metadata_catalog")),
+    }
+
+
 def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
     preset_path = Path(path).resolve()
     preset = _load_json_object_file(str(preset_path), label="publication registry preset")
@@ -7544,6 +7594,43 @@ def export_publication_network_preset_from_workspace(
     return preset
 
 
+def export_publication_catalog_workspace_preset_from_workspace(
+    publication_catalog_workspace_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _, summary = _load_workspace_summary(publication_catalog_workspace_dir, label="publication catalog workspace")
+    validate_publication_catalog_workspace_summary_consistency(summary)
+
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    preset: Dict[str, Any] = {
+        "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+        "version": "0.1",
+    }
+
+    artifact_paths = [
+        _relative_output_path(Path(value).resolve(), base_dir=base_dir)
+        for value in summary.get("artifact_paths", [])
+        if isinstance(value, str) and value.strip()
+    ]
+    if artifact_paths:
+        preset["artifact_paths"] = artifact_paths
+
+    descriptor_index = summary.get("publication_descriptor_index")
+    if isinstance(descriptor_index, Mapping):
+        descriptor_index_metadata = _filtered_string_mapping(descriptor_index.get("index"))
+        if descriptor_index_metadata:
+            preset["publication_descriptor_index"] = descriptor_index_metadata
+
+    publication_metadata_catalog = summary.get("publication_metadata_catalog")
+    if isinstance(publication_metadata_catalog, Mapping):
+        publication_metadata_catalog_metadata = _filtered_string_mapping(publication_metadata_catalog.get("index"))
+        if publication_metadata_catalog_metadata:
+            preset["publication_metadata_catalog"] = publication_metadata_catalog_metadata
+
+    return preset
+
+
 def export_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
@@ -9977,6 +10064,7 @@ def build_cli_parser() -> Any:
     bootstrap_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
 
     bootstrap_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-publication-catalog-workspace", help="Generate descriptor and metadata publication lanes for one or more SATROOT artifacts in a reusable catalog workspace")
+    bootstrap_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication catalog workspace preset JSON file with artifact paths, discovery roots, and metadata defaults")
     bootstrap_publication_catalog_workspace_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory to include in the descriptor and metadata lanes")
     bootstrap_publication_catalog_workspace_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
     bootstrap_publication_catalog_workspace_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each discovery root")
@@ -10056,6 +10144,10 @@ def build_cli_parser() -> Any:
     export_publication_network_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested publication stack presets will also be exported")
     export_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported alongside generated stack presets")
     export_publication_network_preset_parser.add_argument("--output", help="Optional output path")
+
+    export_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-publication-catalog-workspace-preset", help="Export a SATROOT publication catalog workspace back into a reusable publication catalog workspace preset")
+    export_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory")
+    export_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_registry_workspace_preset_parser = subparsers.add_parser("export-publication-registry-workspace-preset", help="Export a SATROOT publication registry workspace back into a reusable publication registry workspace preset")
     export_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
@@ -11423,7 +11515,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-publication-catalog-workspace":
-        descriptor_index_metadata = {}
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        preset = load_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
+        descriptor_index_metadata = dict((preset or {}).get("descriptor_index_metadata", {}))
         for key, value in {
             "channel": args.descriptor_index_channel,
             "label": args.descriptor_index_label,
@@ -11431,7 +11525,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         }.items():
             if value is not None:
                 descriptor_index_metadata[key] = value
-        publication_metadata_catalog_metadata = {}
+        publication_metadata_catalog_metadata = dict((preset or {}).get("publication_metadata_catalog_metadata", {}))
         for key, value in {
             "channel": args.publication_metadata_catalog_channel,
             "label": args.publication_metadata_catalog_label,
@@ -11440,9 +11534,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 publication_metadata_catalog_metadata[key] = value
         write_publication_catalog_workspace(
-            artifact_paths=args.path or [],
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            artifact_paths=[*((preset or {}).get("artifact_paths", [])), *((args.path or []))],
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
@@ -11582,6 +11676,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_path=args.output,
             stack_preset_dir=args.stack_preset_dir,
             catalog_preset_dir=args.catalog_preset_dir,
+        )
+        _write_output(preset, args.output)
+        return 0
+
+    if args.command == "export-publication-catalog-workspace-preset":
+        preset = export_publication_catalog_workspace_preset_from_workspace(
+            args.publication_catalog_workspace_dir,
+            output_path=args.output,
         )
         _write_output(preset, args.output)
         return 0

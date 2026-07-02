@@ -52,6 +52,7 @@ from satroot1 import (
     load_bundle_manifest_schema,
     load_demo_catalog_summary_schema,
     load_demo_catalog_preset,
+    load_publication_catalog_workspace_preset,
     load_protocol_schema,
     load_profile_registry,
     load_publication_descriptor_index_preset,
@@ -1131,6 +1132,17 @@ def test_load_publication_registry_workspace_preset_example():
     assert preset["descriptor_index_metadata"]["label"] == "SATROOT AI Compute Workspace Descriptor Index"
     assert preset["publication_metadata_catalog_metadata"]["label"] == "SATROOT AI Compute Workspace Metadata Catalog"
     assert preset["publication_registry_metadata"]["label"] == "SATROOT AI Compute Workspace Publication Registry"
+
+
+def test_load_publication_catalog_workspace_preset_example():
+    preset = load_publication_catalog_workspace_preset(
+        ROOT / "examples" / "publication_catalog_workspace_presets" / "ai_compute_publication_catalog_workspace.json"
+    )
+    assert preset["artifact_paths"] == []
+    assert preset["discover_under"] == [str((ROOT / "examples" / "generated_publication_network").resolve())]
+    assert preset["recursive"] is True
+    assert preset["descriptor_index_metadata"]["label"] == "SATROOT AI Compute Workspace Descriptor Index"
+    assert preset["publication_metadata_catalog_metadata"]["label"] == "SATROOT AI Compute Workspace Metadata Catalog"
 
 
 def test_load_publication_metadata_catalog_preset_example():
@@ -3355,6 +3367,61 @@ def test_cli_bootstrap_publication_catalog_workspace(tmp_path, capsys):
     capsys.readouterr()
 
 
+def test_cli_bootstrap_publication_catalog_workspace_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    preset_path = tmp_path / "publication_catalog_workspace_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "discover_under": [str(Path(network_dir).relative_to(tmp_path))],
+            "publication_descriptor_index": {
+                "channel": "network",
+                "label": "Preset Workspace Descriptor Index",
+                "published_at": "2026-07-08T07:00:00Z",
+            },
+            "publication_metadata_catalog": {
+                "channel": "network",
+                "label": "Preset Workspace Metadata Catalog",
+                "published_at": "2026-07-08T07:05:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_catalog_workspace_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--descriptor-index-label",
+            "Override Workspace Descriptor Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 12
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Override Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Preset Workspace Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_registry_workspace_with_preset_json_and_cli_overrides(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     preset_path = tmp_path / "publication_registry_workspace_preset.json"
@@ -3568,6 +3635,21 @@ def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp
     assert stack_b["release_catalog"]["label"] == "Publication Network Stack Beta"
     assert (catalog_preset_dir / "stack_a" / "stable_catalog.json").is_file()
     assert (catalog_preset_dir / "stack_b" / "machine_catalog.json").is_file()
+
+
+def test_cli_export_publication_catalog_workspace_preset(tmp_path):
+    workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_catalog_workspace.json"
+
+    exit_code = main(["export-publication-catalog-workspace-preset", str(workspace_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_catalog_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET"
+    assert len(loaded["artifact_paths"]) == 12
+    assert preset["publication_descriptor_index"]["label"] == "Workspace Descriptor Index"
+    assert preset["publication_metadata_catalog"]["label"] == "Workspace Metadata Catalog"
 
 
 def test_cli_export_publication_registry_workspace_preset(tmp_path):
