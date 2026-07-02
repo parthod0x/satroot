@@ -3522,6 +3522,19 @@ def discover_publication_network_workspace_dirs(
     )
 
 
+def discover_publication_registry_workspace_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    return _discover_workspace_dirs(
+        search_roots,
+        recursive=recursive,
+        label="publication registry workspace",
+        summary_validator=validate_publication_registry_workspace_summary_consistency,
+    )
+
+
 def resolve_demo_catalog_workspace_inputs(
     workspace_dirs: Sequence[str | Path],
     *,
@@ -6797,6 +6810,11 @@ def inventory_workspace_artifacts(
     demo_catalog_workspace_dirs = _discover_optional_paths(discover_demo_catalog_workspace_dirs, resolved_search_roots, recursive=recursive)
     publication_stack_dirs = _discover_optional_paths(discover_publication_stack_workspace_dirs, resolved_search_roots, recursive=recursive)
     publication_network_dirs = _discover_optional_paths(discover_publication_network_workspace_dirs, resolved_search_roots, recursive=recursive)
+    publication_registry_workspace_dirs = _discover_optional_paths(
+        discover_publication_registry_workspace_dirs,
+        resolved_search_roots,
+        recursive=recursive,
+    )
 
     bundle_entries: list[Dict[str, Any]] = []
     for bundle_dir in bundle_dirs:
@@ -6924,6 +6942,20 @@ def inventory_workspace_artifacts(
             }
         )
 
+    publication_registry_workspace_entries: list[Dict[str, Any]] = []
+    for workspace_dir in publication_registry_workspace_dirs:
+        workspace_summary = summarize_publication_registry_workspace(workspace_dir)
+        publication_registry_workspace_entries.append(
+            {
+                "workspace_dir": str(Path(workspace_dir).resolve()),
+                "signature_scheme": workspace_summary.get("signature_scheme"),
+                "artifact_count": workspace_summary.get("artifact_count"),
+                "publication_metadata_bundle_count": workspace_summary.get("publication_metadata_bundle_count"),
+                "publication_metadata_artifact_kinds": copy.deepcopy(workspace_summary.get("publication_metadata_artifact_kinds")),
+                "publication_registry": copy.deepcopy(workspace_summary.get("publication_registry_summary", {}).get("index")),
+            }
+        )
+
     return {
         "search_roots": resolved_search_roots,
         "recursive": recursive,
@@ -6935,6 +6967,7 @@ def inventory_workspace_artifacts(
         "demo_catalog_workspace_count": len(demo_catalog_workspace_entries),
         "publication_stack_count": len(publication_stack_entries),
         "publication_network_count": len(publication_network_entries),
+        "publication_registry_workspace_count": len(publication_registry_workspace_entries),
         "bundles": bundle_entries,
         "releases": release_entries,
         "release_catalogs": release_catalog_entries,
@@ -6943,6 +6976,7 @@ def inventory_workspace_artifacts(
         "demo_catalog_workspaces": demo_catalog_workspace_entries,
         "publication_stacks": publication_stack_entries,
         "publication_networks": publication_network_entries,
+        "publication_registry_workspaces": publication_registry_workspace_entries,
     }
 
 
@@ -7296,6 +7330,8 @@ def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
         if name == "publication_registry_manifest.json":
             return "publication-registry", parent
         if name == "summary.json":
+            if (parent / "publication_registry").is_dir() and (parent / "publication_descriptor_index").is_dir() and (parent / "publication_metadata_catalog").is_dir():
+                return "publication-registry-workspace", parent
             if (parent / "release_catalog_index").is_dir():
                 return "publication-network", parent
             if (parent / "release_catalog").is_dir():
@@ -7316,6 +7352,8 @@ def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
         raise SatRootError("report path must be an existing file or directory")
 
     if (resolved_path / "summary.json").is_file():
+        if (resolved_path / "publication_registry").is_dir() and (resolved_path / "publication_descriptor_index").is_dir() and (resolved_path / "publication_metadata_catalog").is_dir():
+            return "publication-registry-workspace", resolved_path
         if (resolved_path / "release_catalog_index").is_dir():
             return "publication-network", resolved_path
         if (resolved_path / "release_catalog").is_dir():
@@ -7458,6 +7496,20 @@ def build_satroot_artifact_descriptor(path: str | Path) -> Dict[str, Any]:
         )
         return descriptor
 
+    if kind == "publication-registry-workspace":
+        summary = summarize_publication_registry_workspace(artifact_path)
+        descriptor.update(
+            {
+                "signature_scheme": summary.get("signature_scheme"),
+                "artifact_count": summary.get("artifact_count"),
+                "publication_metadata_bundle_count": summary.get("publication_metadata_bundle_count"),
+                "publication_metadata_artifact_kinds": copy.deepcopy(summary.get("publication_metadata_artifact_kinds")),
+                "publication_registry": copy.deepcopy((summary.get("publication_registry_summary") or {}).get("index")),
+                "publication_descriptor_index": copy.deepcopy((summary.get("publication_descriptor_index_summary") or {}).get("index")),
+            }
+        )
+        return descriptor
+
     if kind == "publication-registry":
         summary = summarize_publication_registry_publication(artifact_path)
         descriptor.update(
@@ -7496,6 +7548,7 @@ def validate_publication_descriptor_consistency(descriptor: Mapping[str, Any]) -
         "demo-catalog",
         "publication-stack",
         "publication-network",
+        "publication-registry-workspace",
         "publication-registry",
     }:
         raise SatRootError("publication descriptor artifact_kind must be a supported descriptor kind")
@@ -7539,6 +7592,8 @@ def discover_satroot_artifact_paths(
         add_artifact("publication-stack", artifact_path)
     for artifact_path in _discover_optional_paths(discover_publication_network_workspace_dirs, resolved_search_roots, recursive=recursive):
         add_artifact("publication-network", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_publication_registry_workspace_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("publication-registry-workspace", artifact_path)
 
     return sorted(artifact_paths)
 
@@ -7593,6 +7648,7 @@ def build_satroot_publication_descriptor_index(
         "demo-catalog",
         "publication-stack",
         "publication-network",
+        "publication-registry-workspace",
         "publication-registry",
     ]
     artifact_kind_counts = {
@@ -7636,6 +7692,7 @@ def validate_publication_descriptor_index_consistency(index: Mapping[str, Any]) 
         "demo-catalog",
         "publication-stack",
         "publication-network",
+        "publication-registry-workspace",
         "publication-registry",
     ]
     for kind in required_kinds:
@@ -8158,6 +8215,7 @@ def build_publication_metadata_catalog(
         "demo-catalog",
         "publication-stack",
         "publication-network",
+        "publication-registry-workspace",
         "publication-registry",
     ]
     artifact_kind_counts = {
@@ -8201,6 +8259,7 @@ def validate_publication_metadata_catalog_consistency(catalog: Mapping[str, Any]
         "demo-catalog",
         "publication-stack",
         "publication-network",
+        "publication-registry-workspace",
         "publication-registry",
     ]
     for kind in required_kinds:
@@ -8995,6 +9054,47 @@ def render_satroot_artifact_report(path: str | Path) -> str:
                 lines.append(
                     f"- `{entry.get('workspace_name')}`: catalog workspaces `{entry.get('catalog_workspace_count')}`, release catalog manifest `{entry.get('release_catalog_manifest_path')}`"
                 )
+        lines.append("")
+        return "\n".join(lines)
+
+    if kind == "publication-registry-workspace":
+        summary = summarize_publication_registry_workspace(artifact_path)
+        publication_registry_summary = summary.get("publication_registry_summary")
+        lines.extend(
+            [
+                "# SATROOT Publication Registry Workspace Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Signature scheme: `{summary.get('signature_scheme')}`",
+                f"- Artifact count: `{summary.get('artifact_count')}`",
+                f"- Publication metadata bundle count: `{summary.get('publication_metadata_bundle_count')}`",
+            ]
+        )
+        if isinstance(publication_registry_summary, Mapping):
+            index_metadata = publication_registry_summary.get("index")
+            if isinstance(index_metadata, Mapping):
+                _append_metadata_lines(lines, index_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        artifact_kinds = summary.get("publication_metadata_artifact_kinds")
+        if isinstance(artifact_kinds, list):
+            lines.extend(["", "## Artifact Kinds", ""])
+            lines.extend(f"- `{kind}`" for kind in artifact_kinds if isinstance(kind, str))
+        lines.extend(["", "## Component Lanes", ""])
+        for label, component_summary, count_field in (
+            ("Publication Network", summary.get("publication_network_summary"), "stack_count"),
+            ("Release Catalog Index", summary.get("release_catalog_index_summary"), "release_catalog_count"),
+            ("Publication Descriptor Index", summary.get("publication_descriptor_index_summary"), "artifact_count"),
+            ("Publication Registry", publication_registry_summary, "component_count"),
+        ):
+            if not isinstance(component_summary, Mapping):
+                continue
+            index_metadata = component_summary.get("index")
+            label_parts = [label]
+            if isinstance(index_metadata, Mapping) and isinstance(index_metadata.get("label"), str) and index_metadata.get("label"):
+                label_parts.append(f"label `{index_metadata.get('label')}`")
+            component_count = component_summary.get(count_field)
+            if isinstance(component_count, int):
+                label_parts.append(f"count `{component_count}`")
+            lines.append(f"- {', '.join(label_parts)}")
         lines.append("")
         return "\n".join(lines)
 

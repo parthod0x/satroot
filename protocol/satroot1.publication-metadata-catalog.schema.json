@@ -24,6 +24,7 @@
         "demo-catalog",
         "publication-stack",
         "publication-network",
+        "publication-registry-workspace",
         "publication-registry"
       ],
       "properties": {
@@ -34,6 +35,7 @@
         "demo-catalog": {"type": "integer", "minimum": 0},
         "publication-stack": {"type": "integer", "minimum": 0},
         "publication-network": {"type": "integer", "minimum": 0},
+        "publication-registry-workspace": {"type": "integer", "minimum": 0},
         "publication-registry": {"type": "integer", "minimum": 0}
       },
       "additionalProperties": false
@@ -87,6 +89,7 @@
               "demo-catalog",
               "publication-stack",
               "publication-network",
+              "publication-registry-workspace",
               "publication-registry"
             ]
           },

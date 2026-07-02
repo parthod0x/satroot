@@ -250,7 +250,7 @@ python -m pytest
 Expected result:
 
 ```text
-284 passed
+289 passed
 ```
 
 ## Signing utilities
@@ -666,7 +666,7 @@ To render a human-readable markdown report for a generated SATROOT artifact or w
 satroot1 render-publication-report publication_network
 ```
 
-The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, demo-catalog, publication-stack, publication-network, and publication-registry inputs, and it can also write to a file:
+The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, demo-catalog, publication-stack, publication-network, publication-registry-workspace, and publication-registry inputs, and it can also write to a file:
 
 ```bash
 satroot1 render-publication-report stable_release --output stable_release_report.md

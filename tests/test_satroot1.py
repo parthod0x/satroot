@@ -3381,6 +3381,18 @@ def test_cli_inventory_artifacts_reports_publication_registry(tmp_path, capsys):
     assert '"publication_network_count":0' in captured.out
 
 
+def test_cli_inventory_artifacts_reports_publication_registry_workspace(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    exit_code = main(["inventory-artifacts", str(workspace_dir), "--non-recursive"])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"publication_registry_workspace_count":1' in captured.out
+    assert '"publication_registry_count":0' in captured.out
+    assert '"publication_network_count":0' in captured.out
+
+
 def test_cli_export_demo_catalog_preset_from_workspace(tmp_path):
     output_dir = make_demo_catalog_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_catalog.json"
@@ -3569,6 +3581,19 @@ def test_cli_render_publication_report_for_registry(tmp_path, capsys):
     assert "Release Catalog Index" in captured.out
 
 
+def test_cli_render_publication_report_for_registry_workspace(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    exit_code = main(["render-publication-report", str(workspace_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "# SATROOT Publication Registry Workspace Report" in captured.out
+    assert "- Artifact count: `12`" in captured.out
+    assert "## Artifact Kinds" in captured.out
+    assert "Publication Registry" in captured.out
+
+
 def test_cli_export_publication_descriptor_for_network(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_path = tmp_path / "network_descriptor.json"
@@ -3600,6 +3625,21 @@ def test_cli_export_publication_descriptor_for_registry(tmp_path):
         "publication_metadata_catalog_publication",
         "release_catalog_index_publication",
     ]
+
+
+def test_cli_export_publication_descriptor_for_registry_workspace(tmp_path):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+    output_path = tmp_path / "registry_workspace_descriptor.json"
+
+    exit_code = main(["export-publication-descriptor", str(workspace_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    descriptor = json.loads(output_path.read_text(encoding="utf-8"))
+    assert descriptor["descriptor_type"] == "SATROOT-ARTIFACT-DESCRIPTOR"
+    assert descriptor["artifact_kind"] == "publication-registry-workspace"
+    assert descriptor["artifact_count"] == 12
+    assert descriptor["publication_metadata_bundle_count"] == 12
+    assert descriptor["publication_registry"]["label"] == "Workspace Publication Registry"
 
 
 def test_cli_export_publication_descriptor_for_release(tmp_path):
@@ -3685,6 +3725,19 @@ def test_cli_build_publication_descriptor_index_for_registry_path(tmp_path):
     assert index["artifact_count"] == 1
     assert index["artifact_kind_counts"]["publication-registry"] == 1
     assert index["artifacts"][0]["artifact_kind"] == "publication-registry"
+
+
+def test_cli_build_publication_descriptor_index_for_registry_workspace_path(tmp_path):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+    output_path = tmp_path / "registry_workspace_descriptor_index.json"
+
+    exit_code = main(["build-publication-descriptor-index", str(workspace_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-registry-workspace"] == 1
+    assert index["artifacts"][0]["artifact_kind"] == "publication-registry-workspace"
 
 
 def test_validate_publication_descriptor_index_schema_accepts_generated_index(tmp_path):
@@ -3890,6 +3943,38 @@ def test_cli_bootstrap_publication_metadata_bundle(tmp_path, capsys):
     )
     assert verified["artifact_kind"] == "publication-network"
     assert verified["publication_report_path"] == "publication_report.md"
+
+
+def test_cli_bootstrap_publication_metadata_bundle_for_registry_workspace(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+    output_dir = tmp_path / "publication_metadata_registry_workspace_bundle"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(workspace_dir),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    )
+    assert exit_code == 0
+
+    descriptor = json.loads((output_dir / "publication_descriptor.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_metadata_secrets.json").read_text(encoding="utf-8"))
+    assert descriptor["artifact_kind"] == "publication-registry-workspace"
+
+    verified = verify_signed_publication_metadata_manifest(
+        output_dir / "publication_metadata_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["artifact_kind"] == "publication-registry-workspace"
+
+    catalog = build_publication_metadata_catalog([output_dir], base_dir=tmp_path)
+    assert catalog["artifact_kind_counts"]["publication-registry-workspace"] == 1
 
 
 def test_cli_validate_and_verify_publication_metadata_manifest(tmp_path, capsys):
