@@ -3296,6 +3296,39 @@ def test_cli_publish_publication_registry_workspace_from_existing_catalog_worksp
     capsys.readouterr()
 
 
+def test_cli_publish_publication_catalog_workspace_from_existing_publications(tmp_path, capsys):
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "published_catalog_workspace"
+
+    exit_code = main(
+        [
+            "publish-publication-catalog-workspace",
+            str(catalog_workspace_dir / "publication_descriptor_index"),
+            str(catalog_workspace_dir / "publication_metadata_catalog"),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication catalog workspace from existing publications to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_descriptor_index_dir"] == str((catalog_workspace_dir / "publication_descriptor_index").resolve())
+    assert summary["source_publication_metadata_catalog_dir"] == str((catalog_workspace_dir / "publication_metadata_catalog").resolve())
+    assert summary["artifact_count"] == 12
+    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
+    assert all(
+        (output_dir / "publication_metadata_bundles" / str(entry["bundle_name"])).is_dir()
+        for entry in summary["publication_metadata_bundles"]
+    )
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_publish_publication_registry_workspace_from_release_catalog_index(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)

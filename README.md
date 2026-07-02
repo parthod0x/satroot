@@ -142,6 +142,7 @@ The v0.1 kernel defines:
 - `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
 - one-shot `bootstrap-publication-catalog-workspace` orchestration for generating reusable descriptor-index and metadata-catalog lanes from arbitrary SATROOT artifacts,
+- `publish-publication-catalog-workspace` for consolidating an existing publication descriptor index plus publication metadata catalog into one reusable publication-catalog workspace,
 - publication-catalog-workspace inspection via `publication-catalog-workspace-summary` and structural linting via `publication-catalog-workspace-lint`,
 - one-shot `bootstrap-publication-registry-workspace` orchestration for copying a release-catalog-index publication, generating descriptor and metadata publication lanes, and emitting a top-level signed registry workspace,
 - `publish-publication-registry-workspace` for consolidating an existing publication-catalog workspace plus release-catalog-index source into one signed publication-registry workspace,
@@ -254,7 +255,7 @@ python -m pytest
 Expected result:
 
 ```text
-306 passed
+307 passed
 ```
 
 ## Signing utilities
@@ -632,6 +633,12 @@ If you already have generated publication stack workspaces and want a top-level 
 
 ```bash
 satroot1 publish-publication-network generated_stacks/stack_alpha generated_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Published Existing Network"
+```
+
+If you already have a publication descriptor index and matching publication metadata catalog publication, you can wrap them back into a reusable catalog workspace with `publish-publication-catalog-workspace`:
+
+```bash
+satroot1 publish-publication-catalog-workspace publication_descriptor_index publication_metadata_catalog --output-dir publication_catalog_workspace_from_existing
 ```
 
 If you already have a publication catalog workspace and just want to bind it to a release-catalog-index source without regenerating the descriptor or metadata lanes, use `publish-publication-registry-workspace`:
