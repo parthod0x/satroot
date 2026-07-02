@@ -50,6 +50,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/publication_descriptor_index_presets/` - reusable SATROOT publication-descriptor-index presets.
 - `examples/publication_metadata_catalog_presets/` - reusable SATROOT publication-metadata-catalog presets.
 - `examples/registry_presets/` - reusable SATROOT publication-registry presets.
+- `examples/registry_workspace_presets/` - reusable SATROOT publication-registry-workspace presets.
 - `examples/network_presets/` - reusable SATROOT publication-network presets.
 - `examples/stack_presets/` - reusable SATROOT end-to-end publication-stack presets.
 - `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
@@ -143,7 +144,7 @@ The v0.1 kernel defines:
 - publication-registry-workspace inspection via `publication-registry-workspace-summary` and structural linting via `publication-registry-workspace-lint`,
 - publication-registry inspection via `publication-registry-summary` and structural linting via `publication-registry-lint`,
 - `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, registry, and workspace layers,
-- preset export commands for deriving reusable demo-catalog, publication-stack, and publication-network presets back from generated workspaces,
+- preset export commands for deriving reusable demo-catalog, publication-stack, publication-network, and publication-registry-workspace presets back from generated workspaces,
 - `render-publication-report` for turning detected SATROOT artifacts or workspaces into human-readable markdown reports,
 - `export-publication-descriptor` for emitting normalized JSON descriptors from detected SATROOT artifacts or workspaces,
 - `build-publication-descriptor-index` for aggregating many detected SATROOT descriptors into one machine-readable registry,
@@ -249,7 +250,7 @@ python -m pytest
 Expected result:
 
 ```text
-281 passed
+284 passed
 ```
 
 ## Signing utilities
@@ -737,7 +738,13 @@ To generate that whole registry workspace from an existing publication network i
 satroot1 bootstrap-publication-registry-workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --descriptor-index-label "Workspace Descriptor Index" --publication-metadata-catalog-label "Workspace Metadata Catalog" --publication-registry-label "Workspace Publication Registry"
 ```
 
-For a checked-in repeatable registry composition, the same command can also load a preset:
+For a checked-in repeatable registry-workspace composition, the same command can also load a preset:
+
+```bash
+satroot1 bootstrap-publication-registry-workspace --preset-json examples/registry_workspace_presets/ai_compute_publication_registry_workspace.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --publication-registry-label "SATROOT Workspace Registry Override"
+```
+
+For a checked-in repeatable top-level registry publication, use the publication preset:
 
 ```bash
 satroot1 bootstrap-publication-registry-publication --preset-json examples/registry_presets/ai_compute_publication_registry.json --output-dir publication_registry_publication --label "SATROOT Publication Registry Override" --scheme hmac-sha256 --key-id registry-key
@@ -753,6 +760,12 @@ To derive a reusable preset back from a generated registry publication:
 
 ```bash
 satroot1 export-publication-registry-preset publication_registry_publication --output exported_registry.json
+```
+
+To derive a reusable preset back from a generated registry workspace:
+
+```bash
+satroot1 export-publication-registry-workspace-preset publication_registry_workspace --output exported_registry_workspace.json
 ```
 
 To derive a reusable preset back from a generated metadata catalog publication:
