@@ -7884,6 +7884,66 @@ def test_cli_bootstrap_machine_demo_release_hmac(tmp_path, capsys):
     assert summary["release"] == bundle_index["release"]
 
 
+def test_cli_bootstrap_machine_demo_catalog_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "machine_catalog_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-catalog",
+            "--symbol",
+            "APICAT1",
+            "--name",
+            "Machine Catalog CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--profile-field",
+            "intended_use=cluster-credit",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Machine Catalog",
+            "--published-at",
+            "2026-07-03T04:00:00Z",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    bundle_manifest = json.loads((output_dir / "bundles" / "machine" / "bundle_manifest.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((output_dir / "release" / "release_manifest.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((output_dir / "release" / "release_secrets.json").read_text(encoding="utf-8"))
+
+    assert summary["bundle_count"] == 1
+    assert summary["bundles"][0]["profile"] == "SATROOT-MACHINE-1"
+    assert summary["bundles"][0]["profile_fields"]["service_scope"] == "batch-inference"
+    assert summary["bundles"][0]["profile_fields"]["intended_use"] == "cluster-credit"
+    assert summary["release"]["label"] == "SATROOT Machine Catalog"
+    assert bundle_manifest["symbol"] == "APICAT1"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["billing_unit"] == "job"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["intended_use"] == "cluster-credit"
+
+    verified = verify_signed_release_manifest(
+        output_dir / "release" / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert verified["bundle_count"] == 1
+    assert verified["release"]["label"] == "SATROOT Machine Catalog"
+    assert release_manifest["signature_key_id"] == "release-key"
+    assert main(["demo-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_machine_demo_release_ed25519(tmp_path, capsys):
     output_dir = tmp_path / "machine_release_ed25519"
 

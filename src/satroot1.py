@@ -4572,6 +4572,9 @@ def lint_demo_catalog_workspace(demo_catalog_dir: str | Path) -> Dict[str, Any]:
         bundle_summary = summarize_signed_ledger_bundle(resolved_bundle_dir)
         snapshot = bundle_summary.get("final_state_snapshot")
         assert isinstance(snapshot, dict)
+        genesis_metadata = snapshot.get("genesis_metadata")
+        if not isinstance(genesis_metadata, Mapping):
+            genesis_metadata = {}
 
         mismatched_fields: list[str] = []
         if entry.get("symbol") != bundle_summary.get("symbol"):
@@ -4584,14 +4587,24 @@ def lint_demo_catalog_workspace(demo_catalog_dir: str | Path) -> Dict[str, Any]:
         profile_fields = entry.get("profile_fields")
         if isinstance(profile_fields, dict):
             for field_name, field_value in profile_fields.items():
-                if snapshot.get(field_name) != field_value:
+                if field_name in snapshot:
+                    actual_value = snapshot.get(field_name)
+                else:
+                    actual_value = genesis_metadata.get(field_name)
+                if actual_value != field_value:
                     mismatched_fields.append("profile_fields")
                     break
 
         structure_overrides = entry.get("structure_overrides")
         if isinstance(structure_overrides, dict):
             for field_name, field_value in structure_overrides.items():
-                if snapshot.get(field_name) != field_value:
+                if field_name in snapshot:
+                    actual_value = snapshot.get(field_name)
+                elif field_name in genesis_metadata:
+                    actual_value = genesis_metadata.get(field_name)
+                else:
+                    continue
+                if actual_value != field_value:
                     mismatched_fields.append("structure_overrides")
                     break
 
@@ -6349,6 +6362,83 @@ def bootstrap_machine_credit_demo_release(
         "release_publication": published,
         "release_material": published["release_material"],
     }
+
+
+def bootstrap_machine_credit_demo_catalog_workspace(
+    *,
+    symbol: str,
+    name: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    service_scope: str = "api-compute",
+    billing_unit: str = "request",
+    consumption_model: str = "burn-on-use",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    tenant_account: str = "tenant_a",
+    worker_account: str = "worker_node",
+    max_supply: Optional[str] = None,
+    initial_balance: str = "100000000",
+    tenant_amount: str = "5000000",
+    worker_amount: str = "1200000",
+    worker_burn_amount: str = "200000",
+    intended_use: str = "machine-api-credit",
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_profile_fields = {
+        "service_scope": service_scope,
+        "billing_unit": billing_unit,
+        "consumption_model": consumption_model,
+        "intended_use": intended_use,
+    }
+    if profile_fields:
+        resolved_profile_fields.update(profile_fields)
+
+    resolved_structure_overrides = {
+        key: value
+        for key, value in {
+            "root_id": root_id,
+            "issuer": issuer,
+            "tenant_account": tenant_account,
+            "worker_account": worker_account,
+            "max_supply": max_supply,
+            "initial_balance": initial_balance,
+            "tenant_amount": tenant_amount,
+            "worker_amount": worker_amount,
+            "worker_burn_amount": worker_burn_amount,
+            "rules_hash": rules_hash,
+            "nonce": nonce,
+        }.items()
+        if value is not None
+    }
+
+    return write_demo_catalog_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        output_dir=output_dir,
+        profiles=["SATROOT-MACHINE-1"],
+        symbol_overrides={"SATROOT-MACHINE-1": symbol},
+        name_overrides={"SATROOT-MACHINE-1": name},
+        profile_field_overrides={"SATROOT-MACHINE-1": resolved_profile_fields},
+        profile_structure_overrides={"SATROOT-MACHINE-1": resolved_structure_overrides},
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata=release_metadata,
+    )
 
 
 def bootstrap_demo_catalog_release(
@@ -10333,6 +10423,38 @@ def build_cli_parser() -> Any:
     bootstrap_machine_demo_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bootstrap_machine_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
+    bootstrap_machine_demo_catalog_parser = subparsers.add_parser("bootstrap-machine-demo-catalog", help="Generate a SATROOT-MACHINE-1 machine-credit demo catalog workspace with one signed bundle plus signed release directory")
+    bootstrap_machine_demo_catalog_parser.add_argument("--symbol", required=True, help="Asset symbol for the machine-credit catalog bundle")
+    bootstrap_machine_demo_catalog_parser.add_argument("--name", required=True, help="Human-readable asset name for the machine-credit catalog bundle")
+    bootstrap_machine_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine-credit demo bundle")
+    bootstrap_machine_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
+    bootstrap_machine_demo_catalog_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the catalog release manifest")
+    bootstrap_machine_demo_catalog_parser.add_argument("--output-dir", required=True, help="Directory where bundles/, release/, and summary.json will be written")
+    bootstrap_machine_demo_catalog_parser.add_argument("--service-scope", default="api-compute", help="Compact machine service scope metadata")
+    bootstrap_machine_demo_catalog_parser.add_argument("--billing-unit", default="request", help="Compact machine billing unit metadata")
+    bootstrap_machine_demo_catalog_parser.add_argument("--consumption-model", default="burn-on-use", help="Compact machine consumption model metadata")
+    bootstrap_machine_demo_catalog_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_machine_demo_catalog_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and tenant allocation events")
+    bootstrap_machine_demo_catalog_parser.add_argument("--tenant-account", default="tenant_a", help="Tenant account receiving the primary machine-credit allocation")
+    bootstrap_machine_demo_catalog_parser.add_argument("--worker-account", default="worker_node", help="Machine worker account receiving consumable execution credits")
+    bootstrap_machine_demo_catalog_parser.add_argument("--max-supply", help="Optional explicit max_supply override; defaults to the initial issued balance")
+    bootstrap_machine_demo_catalog_parser.add_argument("--initial-balance", default="100000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_machine_demo_catalog_parser.add_argument("--tenant-amount", default="5000000", help="Amount transferred from the issuer to the tenant account")
+    bootstrap_machine_demo_catalog_parser.add_argument("--worker-amount", default="1200000", help="Amount transferred from the tenant account to the worker account")
+    bootstrap_machine_demo_catalog_parser.add_argument("--worker-burn-amount", default="200000", help="Optional worker-side burn amount; use 0 to skip the burn event")
+    bootstrap_machine_demo_catalog_parser.add_argument("--intended-use", default="machine-api-credit", help="Compact machine intended_use metadata")
+    bootstrap_machine_demo_catalog_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Additional machine profile field override in key=value form; may be repeated")
+    bootstrap_machine_demo_catalog_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_machine_demo_catalog_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_machine_demo_catalog_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_machine_demo_catalog_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_machine_demo_catalog_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_machine_demo_catalog_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_machine_demo_catalog_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_machine_demo_catalog_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    bootstrap_machine_demo_catalog_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    bootstrap_machine_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+
     bootstrap_demo_catalog_parser = subparsers.add_parser("bootstrap-demo-catalog", help="Generate stable, machine, and singleton demo bundles plus a signed catalog release workspace")
     bootstrap_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated demo bundles")
     bootstrap_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
@@ -11703,6 +11825,45 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_metadata=release_metadata,
         )
         print(f"wrote SATROOT-MACHINE-1 demo release to {Path(released['release_dir'])}")
+        return 0
+
+    if args.command == "bootstrap-machine-demo-catalog":
+        release_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        workspace = bootstrap_machine_credit_demo_catalog_workspace(
+            symbol=args.symbol,
+            name=args.name,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            service_scope=args.service_scope,
+            billing_unit=args.billing_unit,
+            consumption_model=args.consumption_model,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            tenant_account=args.tenant_account,
+            worker_account=args.worker_account,
+            max_supply=args.max_supply,
+            initial_balance=args.initial_balance,
+            tenant_amount=args.tenant_amount,
+            worker_amount=args.worker_amount,
+            worker_burn_amount=args.worker_burn_amount,
+            intended_use=args.intended_use,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata=release_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 demo catalog workspace to {Path(workspace['summary_path']).parent}")
         return 0
 
     if args.command == "bootstrap-demo-catalog":
