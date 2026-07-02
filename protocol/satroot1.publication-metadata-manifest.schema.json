@@ -30,6 +30,7 @@
         "demo-catalog",
         "publication-stack",
         "publication-network",
+        "publication-catalog-workspace",
         "publication-registry-workspace",
         "publication-registry"
       ]

@@ -140,6 +140,8 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
 - `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
+- one-shot `bootstrap-publication-catalog-workspace` orchestration for generating reusable descriptor-index and metadata-catalog lanes from arbitrary SATROOT artifacts,
+- publication-catalog-workspace inspection via `publication-catalog-workspace-summary` and structural linting via `publication-catalog-workspace-lint`,
 - one-shot `bootstrap-publication-registry-workspace` orchestration for copying a release-catalog-index publication, generating descriptor and metadata publication lanes, and emitting a top-level signed registry workspace,
 - publication-registry-workspace inspection via `publication-registry-workspace-summary` and structural linting via `publication-registry-workspace-lint`,
 - publication-registry inspection via `publication-registry-summary` and structural linting via `publication-registry-lint`,
@@ -250,7 +252,7 @@ python -m pytest
 Expected result:
 
 ```text
-289 passed
+298 passed
 ```
 
 ## Signing utilities
@@ -666,7 +668,7 @@ To render a human-readable markdown report for a generated SATROOT artifact or w
 satroot1 render-publication-report publication_network
 ```
 
-The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, demo-catalog, publication-stack, publication-network, publication-registry-workspace, and publication-registry inputs, and it can also write to a file:
+The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, demo-catalog, publication-stack, publication-network, publication-catalog-workspace, publication-registry-workspace, and publication-registry inputs, and it can also write to a file:
 
 ```bash
 satroot1 render-publication-report stable_release --output stable_release_report.md
@@ -736,6 +738,12 @@ To generate that whole registry workspace from an existing publication network i
 
 ```bash
 satroot1 bootstrap-publication-registry-workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --descriptor-index-label "Workspace Descriptor Index" --publication-metadata-catalog-label "Workspace Metadata Catalog" --publication-registry-label "Workspace Publication Registry"
+```
+
+To generate just the reusable descriptor-index plus metadata-catalog workspace without the top-level registry lane:
+
+```bash
+satroot1 bootstrap-publication-catalog-workspace --discover-under publication_network --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --output-dir publication_catalog_workspace --descriptor-index-label "Workspace Descriptor Index" --publication-metadata-catalog-label "Workspace Metadata Catalog"
 ```
 
 For a checked-in repeatable registry-workspace composition, the same command can also load a preset:
@@ -850,6 +858,18 @@ Lint a publication network workspace, its nested release-catalog index, and all 
 
 ```bash
 satroot1 publication-network-lint publication_network
+```
+
+Inspect a publication catalog workspace without signature verification:
+
+```bash
+satroot1 publication-catalog-workspace-summary publication_catalog_workspace
+```
+
+Lint a publication catalog workspace, its generated publication components, and all referenced publication metadata bundles:
+
+```bash
+satroot1 publication-catalog-workspace-lint publication_catalog_workspace
 ```
 
 Inspect a publication registry workspace without signature verification:

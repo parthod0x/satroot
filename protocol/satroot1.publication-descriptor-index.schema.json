@@ -24,6 +24,7 @@
         "demo-catalog",
         "publication-stack",
         "publication-network",
+        "publication-catalog-workspace",
         "publication-registry-workspace",
         "publication-registry"
       ],
@@ -35,6 +36,7 @@
         "demo-catalog": {"type": "integer", "minimum": 0},
         "publication-stack": {"type": "integer", "minimum": 0},
         "publication-network": {"type": "integer", "minimum": 0},
+        "publication-catalog-workspace": {"type": "integer", "minimum": 0},
         "publication-registry-workspace": {"type": "integer", "minimum": 0},
         "publication-registry": {"type": "integer", "minimum": 0}
       },
@@ -75,6 +77,7 @@
               "demo-catalog",
               "publication-stack",
               "publication-network",
+              "publication-catalog-workspace",
               "publication-registry-workspace",
               "publication-registry"
             ]
