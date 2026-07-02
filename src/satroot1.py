@@ -1127,6 +1127,7 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
         "artifact_paths",
         "discover_under",
         "recursive",
+        "publication_catalog_workspace_dir",
         "publication_network_dir",
         "release_catalog_index_dir",
         "publication_descriptor_index",
@@ -1163,11 +1164,12 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
             raise SatRootError(f"publication registry workspace preset {key} must be a non-empty string when provided")
         return str((preset_path.parent / value).resolve())
 
+    publication_catalog_workspace_dir = resolve_optional_path("publication_catalog_workspace_dir")
     publication_network_dir = resolve_optional_path("publication_network_dir")
     release_catalog_index_dir = resolve_optional_path("release_catalog_index_dir")
-    if not artifact_paths and not discover_under and publication_network_dir is None:
+    if not artifact_paths and not discover_under and publication_catalog_workspace_dir is None and publication_network_dir is None:
         raise SatRootError(
-            "publication registry workspace preset must contain artifact_paths, discover_under, or publication_network_dir"
+            "publication registry workspace preset must contain artifact_paths, discover_under, publication_catalog_workspace_dir, or publication_network_dir"
         )
     if release_catalog_index_dir is None and publication_network_dir is None:
         raise SatRootError(
@@ -1178,6 +1180,7 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
         "artifact_paths": artifact_paths,
         "discover_under": discover_under,
         "recursive": recursive,
+        "publication_catalog_workspace_dir": publication_catalog_workspace_dir,
         "publication_network_dir": publication_network_dir,
         "release_catalog_index_dir": release_catalog_index_dir,
         "descriptor_index_metadata": validate_release_metadata_mapping(preset.get("publication_descriptor_index")),
@@ -5212,6 +5215,7 @@ def summarize_publication_registry_workspace(publication_registry_workspace_dir:
 
     summary_payload: Dict[str, Any] = {
         "signature_scheme": summary.get("signature_scheme"),
+        "source_publication_catalog_workspace_dir": summary.get("source_publication_catalog_workspace_dir"),
         "source_publication_network_dir": summary.get("source_publication_network_dir"),
         "publication_network_dir": summary.get("publication_network_dir"),
         "artifact_count": summary.get("artifact_count"),
@@ -7103,6 +7107,68 @@ def write_publication_catalog_workspace(
     }
 
 
+def relocate_publication_catalog_workspace_summary(publication_catalog_workspace_dir: str | Path) -> Dict[str, Any]:
+    workspace_path, summary = _load_workspace_summary(publication_catalog_workspace_dir, label="publication catalog workspace")
+    validate_publication_catalog_workspace_summary_consistency(summary)
+    metadata_bundles = summary.get("publication_metadata_bundles")
+    assert isinstance(metadata_bundles, list)
+
+    component_dirs = _resolve_publication_catalog_workspace_component_dirs(workspace_path)
+    publication_descriptor_index_dir = component_dirs["publication_descriptor_index_dir"]
+    publication_metadata_bundles_dir = component_dirs["publication_metadata_bundles_dir"]
+    publication_metadata_catalog_dir = component_dirs["publication_metadata_catalog_dir"]
+
+    summary["publication_descriptor_index_dir"] = str(publication_descriptor_index_dir)
+    summary["publication_metadata_bundles_dir"] = str(publication_metadata_bundles_dir)
+    summary["publication_metadata_catalog_dir"] = str(publication_metadata_catalog_dir)
+    summary["publication_descriptor_index_manifest_path"] = str(
+        (publication_descriptor_index_dir / "publication_descriptor_index_manifest.json").resolve()
+    )
+    summary["publication_metadata_catalog_manifest_path"] = str(
+        (publication_metadata_catalog_dir / "publication_metadata_catalog_manifest.json").resolve()
+    )
+
+    _descriptor_manifest_path, _descriptor_index_path, _descriptor_manifest, publication_descriptor_index = _load_publication_descriptor_index_publication(
+        publication_descriptor_index_dir
+    )
+    _catalog_manifest_path, _catalog_path, _catalog_manifest, publication_metadata_catalog = _load_publication_metadata_catalog_publication(
+        publication_metadata_catalog_dir
+    )
+    summary["publication_descriptor_index"] = copy.deepcopy(publication_descriptor_index)
+    summary["publication_metadata_catalog"] = copy.deepcopy(publication_metadata_catalog)
+
+    relocated_bundles: list[Dict[str, Any]] = []
+    for entry in metadata_bundles:
+        if not isinstance(entry, Mapping):
+            continue
+        bundle_name = entry.get("bundle_name")
+        if not isinstance(bundle_name, str) or not bundle_name.strip():
+            continue
+        bundle_dir = (publication_metadata_bundles_dir / bundle_name).resolve()
+        manifest_path, report_path, descriptor_path, manifest, descriptor = _load_publication_metadata_bundle_publication(bundle_dir)
+        relocated_bundles.append(
+            {
+                "bundle_name": bundle_name,
+                "bundle_dir": str(bundle_dir),
+                "publication_metadata_manifest_path": str(manifest_path.resolve()),
+                "publication_report_path": str(report_path.resolve()),
+                "publication_descriptor_path": str(descriptor_path.resolve()),
+                "artifact_kind": manifest.get("artifact_kind"),
+                "artifact_path": manifest.get("artifact_path"),
+            }
+        )
+        if isinstance(descriptor.get("artifact_kind"), str):
+            relocated_bundles[-1]["artifact_kind"] = descriptor.get("artifact_kind")
+        if isinstance(descriptor.get("artifact_path"), str):
+            relocated_bundles[-1]["artifact_path"] = descriptor.get("artifact_path")
+
+    summary["publication_metadata_bundles"] = relocated_bundles
+    summary["publication_metadata_bundle_count"] = len(relocated_bundles)
+    summary["artifact_count"] = len(summary.get("artifact_paths", [])) if isinstance(summary.get("artifact_paths"), list) else summary.get("artifact_count")
+    _write_json_file(workspace_path / "summary.json", summary)
+    return summary
+
+
 def write_publication_registry_workspace(
     *,
     artifact_paths: Sequence[str | Path],
@@ -7115,6 +7181,7 @@ def write_publication_registry_workspace(
     publication_registry_key_id: str,
     discover_under: Optional[Sequence[str | Path]] = None,
     recursive: bool = True,
+    publication_catalog_workspace_dir: Optional[str | Path] = None,
     publication_network_dir: Optional[str | Path] = None,
     descriptor_index_metadata: Optional[Mapping[str, str]] = None,
     publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
@@ -7147,20 +7214,69 @@ def write_publication_registry_workspace(
             root_output_dir / "release_catalog_index",
             label="release catalog index publication",
         )
-    catalog_workspace = write_publication_catalog_workspace(
-        artifact_paths=artifact_paths,
-        discover_under=discover_under,
-        recursive=recursive,
-        output_dir=root_output_dir,
-        signature_scheme=signature_scheme,
-        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
-        publication_metadata_key_id=publication_metadata_key_id,
-        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
-        descriptor_index_metadata=descriptor_index_metadata,
-        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
-    )
+
+    source_publication_catalog_workspace_dir: Optional[Path] = None
+    if publication_catalog_workspace_dir is not None:
+        source_publication_catalog_workspace_dir = Path(publication_catalog_workspace_dir).resolve()
+        _copy_workspace_directory(
+            source_publication_catalog_workspace_dir / "publication_descriptor_index",
+            root_output_dir / "publication_descriptor_index",
+            label="publication descriptor index publication",
+        )
+        _copy_workspace_directory(
+            source_publication_catalog_workspace_dir / "publication_metadata_bundles",
+            root_output_dir / "publication_metadata_bundles",
+            label="publication metadata bundle collection",
+        )
+        _copy_workspace_directory(
+            source_publication_catalog_workspace_dir / "publication_metadata_catalog",
+            root_output_dir / "publication_metadata_catalog",
+            label="publication metadata catalog publication",
+        )
+        _source_catalog_workspace_path, source_catalog_summary = _load_workspace_summary(
+            source_publication_catalog_workspace_dir,
+            label="publication catalog workspace",
+        )
+        _write_json_file(root_output_dir / "summary.json", copy.deepcopy(source_catalog_summary))
+        copied_summary = relocate_publication_catalog_workspace_summary(root_output_dir)
+        catalog_workspace = {
+            "summary": copied_summary,
+            "summary_path": str((root_output_dir / "summary.json").resolve()),
+            "publication_descriptor_index_dir": str((root_output_dir / "publication_descriptor_index").resolve()),
+            "publication_metadata_bundles_dir": str((root_output_dir / "publication_metadata_bundles").resolve()),
+            "publication_metadata_catalog_dir": str((root_output_dir / "publication_metadata_catalog").resolve()),
+            "publication_descriptor_index_publication": {
+                "publication_descriptor_index": copy.deepcopy(copied_summary.get("publication_descriptor_index")),
+                "publication_descriptor_index_manifest_path": copied_summary.get("publication_descriptor_index_manifest_path"),
+            },
+            "publication_metadata_bundle_collection": {
+                "bundle_dirs": [
+                    entry.get("bundle_dir")
+                    for entry in copied_summary.get("publication_metadata_bundles", [])
+                    if isinstance(entry, Mapping) and isinstance(entry.get("bundle_dir"), str)
+                ],
+                "bundles": copy.deepcopy(copied_summary.get("publication_metadata_bundles")),
+            },
+            "publication_metadata_catalog_publication": {
+                "publication_metadata_catalog": copy.deepcopy(copied_summary.get("publication_metadata_catalog")),
+                "publication_metadata_catalog_manifest_path": copied_summary.get("publication_metadata_catalog_manifest_path"),
+            },
+        }
+    else:
+        catalog_workspace = write_publication_catalog_workspace(
+            artifact_paths=artifact_paths,
+            discover_under=discover_under,
+            recursive=recursive,
+            output_dir=root_output_dir,
+            signature_scheme=signature_scheme,
+            publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+            publication_metadata_key_id=publication_metadata_key_id,
+            publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+        )
+
     summary = copy.deepcopy(catalog_workspace["summary"])
-    resolved_artifact_paths = list(summary.get("artifact_paths", []))
     descriptor_index_dir = Path(str(catalog_workspace["publication_descriptor_index_dir"])).resolve()
     metadata_bundles_dir = Path(str(catalog_workspace["publication_metadata_bundles_dir"])).resolve()
     metadata_catalog_dir = Path(str(catalog_workspace["publication_metadata_catalog_dir"])).resolve()
@@ -7175,6 +7291,9 @@ def write_publication_registry_workspace(
         registry_metadata=publication_registry_metadata,
     )
 
+    summary["source_publication_catalog_workspace_dir"] = (
+        None if source_publication_catalog_workspace_dir is None else str(source_publication_catalog_workspace_dir.resolve())
+    )
     summary["source_publication_network_dir"] = None if publication_network_dir is None else str(Path(publication_network_dir).resolve())
     summary["publication_network_dir"] = None if copied_publication_network_dir is None else str(copied_publication_network_dir.resolve())
     summary["release_catalog_index_source_dir"] = str(resolved_release_catalog_index_dir)
@@ -7654,6 +7773,13 @@ def export_publication_registry_workspace_preset_from_workspace(
         preset["artifact_paths"] = artifact_paths
 
     source_publication_network_dir = summary.get("source_publication_network_dir")
+    source_publication_catalog_workspace_dir = summary.get("source_publication_catalog_workspace_dir")
+    if isinstance(source_publication_catalog_workspace_dir, str) and source_publication_catalog_workspace_dir.strip():
+        preset["publication_catalog_workspace_dir"] = _relative_output_path(
+            Path(source_publication_catalog_workspace_dir).resolve(),
+            base_dir=base_dir,
+        )
+
     if isinstance(source_publication_network_dir, str) and source_publication_network_dir.strip():
         preset["publication_network_dir"] = _relative_output_path(Path(source_publication_network_dir).resolve(), base_dir=base_dir)
 
@@ -9599,6 +9725,9 @@ def render_satroot_artifact_report(path: str | Path) -> str:
                 f"- Publication metadata bundle count: `{summary.get('publication_metadata_bundle_count')}`",
             ]
         )
+        source_catalog_workspace_dir = summary.get("source_publication_catalog_workspace_dir")
+        if isinstance(source_catalog_workspace_dir, str) and source_catalog_workspace_dir.strip():
+            lines.append(f"- Source publication catalog workspace: `{source_catalog_workspace_dir}`")
         if isinstance(publication_registry_summary, Mapping):
             index_metadata = publication_registry_summary.get("index")
             if isinstance(index_metadata, Mapping):
@@ -10083,6 +10212,7 @@ def build_cli_parser() -> Any:
     bootstrap_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-publication-registry-workspace", help="Copy a release-catalog-index publication, derive descriptor and metadata publication lanes, and emit a full signed SATROOT publication registry workspace")
     bootstrap_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file with artifact paths, discovery roots, source publication references, and metadata defaults")
     bootstrap_publication_registry_workspace_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory to include in the descriptor and metadata lanes")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-dir", help="Optional publication catalog workspace directory to copy instead of regenerating descriptor and metadata publication lanes")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to use as a default discovery root and release-catalog-index source")
     bootstrap_publication_registry_workspace_parser.add_argument("--release-catalog-index-dir", help="Optional release catalog index publication directory; defaults to <publication-network-dir>/release_catalog_index when --publication-network-dir is provided")
     bootstrap_publication_registry_workspace_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
@@ -11551,6 +11681,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-publication-registry-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        publication_catalog_workspace_dir = (
+            Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
+            if (preset or {}).get("publication_catalog_workspace_dir")
+            else None
+        )
+        if args.publication_catalog_workspace_dir:
+            publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
         publication_network_dir = Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None
         if args.publication_network_dir:
             publication_network_dir = Path(args.publication_network_dir).resolve()
@@ -11592,6 +11729,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             discover_under=discover_under,
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             release_catalog_index_dir=release_catalog_index_dir,
+            publication_catalog_workspace_dir=publication_catalog_workspace_dir,
             publication_network_dir=publication_network_dir,
             output_dir=args.output_dir,
             signature_scheme=args.scheme,

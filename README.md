@@ -253,7 +253,7 @@ python -m pytest
 Expected result:
 
 ```text
-301 passed
+304 passed
 ```
 
 ## Signing utilities
@@ -739,6 +739,12 @@ To generate that whole registry workspace from an existing publication network i
 
 ```bash
 satroot1 bootstrap-publication-registry-workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --descriptor-index-label "Workspace Descriptor Index" --publication-metadata-catalog-label "Workspace Metadata Catalog" --publication-registry-label "Workspace Publication Registry"
+```
+
+If you already have a reusable publication catalog workspace, the registry workspace bootstrap can copy that lane instead of regenerating descriptor and metadata publications:
+
+```bash
+satroot1 bootstrap-publication-registry-workspace --publication-network-dir publication_network --publication-catalog-workspace-dir publication_catalog_workspace --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --publication-registry-label "Workspace Publication Registry"
 ```
 
 To generate just the reusable descriptor-index plus metadata-catalog workspace without the top-level registry lane:

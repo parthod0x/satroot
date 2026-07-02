@@ -3488,6 +3488,101 @@ def test_cli_bootstrap_publication_registry_workspace_with_preset_json_and_cli_o
     capsys.readouterr()
 
 
+def test_cli_bootstrap_publication_registry_workspace_from_publication_catalog_workspace(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "publication_registry_workspace_from_catalog"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--publication-catalog-workspace-dir",
+            str(catalog_workspace_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--publication-registry-label",
+            "Workspace Publication Registry",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Workspace Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_publication_registry_workspace_with_preset_catalog_workspace_reference(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "publication_registry_workspace_catalog_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+            "version": "0.1",
+            "publication_network_dir": str(Path(network_dir).relative_to(tmp_path)),
+            "publication_catalog_workspace_dir": str(Path(catalog_workspace_dir).relative_to(tmp_path)),
+            "publication_registry": {
+                "channel": "network",
+                "label": "Preset Workspace Publication Registry",
+                "published_at": "2026-07-08T07:10:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "publication_registry_workspace_catalog_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["publication_registry"]["index"]["label"] == "Preset Workspace Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_inventory_artifacts_reports_recursive_publication_network(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
 
@@ -3667,6 +3762,47 @@ def test_cli_export_publication_registry_workspace_preset(tmp_path):
     assert len(loaded["artifact_paths"]) == 12
     assert preset["publication_descriptor_index"]["label"] == "Workspace Descriptor Index"
     assert preset["publication_metadata_catalog"]["label"] == "Workspace Metadata Catalog"
+    assert preset["publication_registry"]["label"] == "Workspace Publication Registry"
+
+
+def test_cli_export_publication_registry_workspace_preset_preserves_catalog_workspace_reference(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    workspace_dir = tmp_path / "publication_registry_workspace_from_catalog"
+
+    assert main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--publication-catalog-workspace-dir",
+            str(catalog_workspace_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(workspace_dir),
+            "--publication-registry-label",
+            "Workspace Publication Registry",
+        ]
+    ) == 0
+
+    preset_path = tmp_path / "exported_registry_workspace_from_catalog.json"
+    exit_code = main(["export-publication-registry-workspace-preset", str(workspace_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET"
+    assert Path(loaded["publication_catalog_workspace_dir"]).name == "publication_catalog_workspace"
+    assert Path(loaded["publication_network_dir"]).name == "publication_network"
     assert preset["publication_registry"]["label"] == "Workspace Publication Registry"
 
 
