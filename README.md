@@ -144,6 +144,7 @@ The v0.1 kernel defines:
 - one-shot `bootstrap-publication-catalog-workspace` orchestration for generating reusable descriptor-index and metadata-catalog lanes from arbitrary SATROOT artifacts,
 - publication-catalog-workspace inspection via `publication-catalog-workspace-summary` and structural linting via `publication-catalog-workspace-lint`,
 - one-shot `bootstrap-publication-registry-workspace` orchestration for copying a release-catalog-index publication, generating descriptor and metadata publication lanes, and emitting a top-level signed registry workspace,
+- `publish-publication-registry-workspace` for consolidating an existing publication-catalog workspace plus release-catalog-index source into one signed publication-registry workspace,
 - publication-registry-workspace inspection via `publication-registry-workspace-summary` and structural linting via `publication-registry-workspace-lint`,
 - publication-registry inspection via `publication-registry-summary` and structural linting via `publication-registry-lint`,
 - `inventory-artifacts` for scanning a directory tree and summarizing discovered SATROOT artifacts across bundle, release, catalog, index, registry, and workspace layers,
@@ -253,7 +254,7 @@ python -m pytest
 Expected result:
 
 ```text
-304 passed
+306 passed
 ```
 
 ## Signing utilities
@@ -631,6 +632,12 @@ If you already have generated publication stack workspaces and want a top-level 
 
 ```bash
 satroot1 publish-publication-network generated_stacks/stack_alpha generated_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Published Existing Network"
+```
+
+If you already have a publication catalog workspace and just want to bind it to a release-catalog-index source without regenerating the descriptor or metadata lanes, use `publish-publication-registry-workspace`:
+
+```bash
+satroot1 publish-publication-registry-workspace publication_catalog_workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir publication_registry_workspace_from_existing --label "Published Existing Registry Workspace"
 ```
 
 To scan a generated tree and see which SATROOT bundles, releases, catalogs, indexes, registries, and workspaces are present, use `inventory-artifacts`:

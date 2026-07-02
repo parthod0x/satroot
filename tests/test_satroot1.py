@@ -3249,6 +3249,89 @@ def test_cli_publish_publication_network_from_existing_stack_workspaces(tmp_path
     capsys.readouterr()
 
 
+def test_cli_publish_publication_registry_workspace_from_existing_catalog_workspace(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "published_registry_workspace"
+
+    exit_code = main(
+        [
+            "publish-publication-registry-workspace",
+            str(catalog_workspace_dir),
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Published Existing Registry Workspace",
+            "--published-at",
+            "2026-07-06T05:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication registry workspace from existing publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["publication_registry"]["index"]["label"] == "Published Existing Registry Workspace"
+    assert summary["publication_network_dir"] == str((output_dir / "publication_network").resolve())
+    assert (output_dir / "publication_registry" / "publication_registry_manifest.json").is_file()
+
+    secrets = json.loads((output_dir / "publication_registry" / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry" / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["index"]["label"] == "Published Existing Registry Workspace"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_publication_registry_workspace_from_release_catalog_index(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "published_registry_workspace_release_index"
+
+    exit_code = main(
+        [
+            "publish-publication-registry-workspace",
+            str(catalog_workspace_dir),
+            "--release-catalog-index-dir",
+            str(network_dir / "release_catalog_index"),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Published Registry Workspace From Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication registry workspace from existing publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_publication_network_dir"] is None
+    assert summary["publication_network_dir"] == str((output_dir / "publication_network").resolve())
+    assert Path(summary["release_catalog_index_dir"]) == (output_dir / "publication_network" / "release_catalog_index").resolve()
+    assert summary["publication_registry"]["index"]["label"] == "Published Registry Workspace From Index"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_registry_workspace_from_publication_network(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_registry_workspace"

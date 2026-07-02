@@ -7033,6 +7033,33 @@ def publish_publication_network_workspace(
     }
 
 
+def publish_publication_registry_workspace(
+    *,
+    publication_catalog_workspace_dir: str | Path,
+    release_catalog_index_dir: str | Path,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    publication_network_dir: Optional[str | Path] = None,
+    publication_registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    return write_publication_registry_workspace(
+        artifact_paths=[],
+        discover_under=None,
+        recursive=True,
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+        publication_network_dir=publication_network_dir,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        publication_descriptor_index_key_id=None,
+        publication_metadata_key_id=None,
+        publication_metadata_catalog_key_id=None,
+        publication_registry_key_id=key_id,
+        publication_registry_metadata=publication_registry_metadata,
+    )
+
+
 def write_publication_catalog_workspace(
     *,
     artifact_paths: Sequence[str | Path],
@@ -7175,9 +7202,9 @@ def write_publication_registry_workspace(
     release_catalog_index_dir: str | Path,
     output_dir: str | Path,
     signature_scheme: str,
-    publication_descriptor_index_key_id: str,
-    publication_metadata_key_id: str,
-    publication_metadata_catalog_key_id: str,
+    publication_descriptor_index_key_id: Optional[str],
+    publication_metadata_key_id: Optional[str],
+    publication_metadata_catalog_key_id: Optional[str],
     publication_registry_key_id: str,
     discover_under: Optional[Sequence[str | Path]] = None,
     recursive: bool = True,
@@ -7209,11 +7236,32 @@ def write_publication_registry_workspace(
                 label="release catalog index publication",
             )
     else:
-        copied_release_catalog_index_dir = _copy_workspace_directory(
-            resolved_release_catalog_index_dir,
-            root_output_dir / "release_catalog_index",
-            label="release catalog index publication",
-        )
+        inferred_publication_network_dir = resolved_release_catalog_index_dir.parent
+        can_copy_inferred_network = False
+        if resolved_release_catalog_index_dir == (inferred_publication_network_dir / "release_catalog_index").resolve():
+            try:
+                _, inferred_network_summary = _load_workspace_summary(
+                    inferred_publication_network_dir,
+                    label="publication network",
+                )
+                validate_publication_network_summary_consistency(inferred_network_summary)
+                can_copy_inferred_network = True
+            except SatRootError:
+                can_copy_inferred_network = False
+        if can_copy_inferred_network:
+            copied_publication_network_dir = _copy_workspace_directory(
+                inferred_publication_network_dir,
+                root_output_dir / "publication_network",
+                label="publication network workspace",
+            )
+            relocate_publication_network_workspace_summary(copied_publication_network_dir)
+            copied_release_catalog_index_dir = copied_publication_network_dir / "release_catalog_index"
+        else:
+            copied_release_catalog_index_dir = _copy_workspace_directory(
+                resolved_release_catalog_index_dir,
+                root_output_dir / "release_catalog_index",
+                label="release catalog index publication",
+            )
 
     source_publication_catalog_workspace_dir: Optional[Path] = None
     if publication_catalog_workspace_dir is not None:
@@ -7263,6 +7311,12 @@ def write_publication_registry_workspace(
             },
         }
     else:
+        if not isinstance(publication_descriptor_index_key_id, str) or not publication_descriptor_index_key_id.strip():
+            raise SatRootError("publication registry workspace generation requires publication_descriptor_index_key_id")
+        if not isinstance(publication_metadata_key_id, str) or not publication_metadata_key_id.strip():
+            raise SatRootError("publication registry workspace generation requires publication_metadata_key_id")
+        if not isinstance(publication_metadata_catalog_key_id, str) or not publication_metadata_catalog_key_id.strip():
+            raise SatRootError("publication registry workspace generation requires publication_metadata_catalog_key_id")
         catalog_workspace = write_publication_catalog_workspace(
             artifact_paths=artifact_paths,
             discover_under=discover_under,
@@ -10255,6 +10309,17 @@ def build_cli_parser() -> Any:
     publish_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label metadata")
     publish_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
+    publish_publication_registry_workspace_parser = subparsers.add_parser("publish-publication-registry-workspace", help="Copy an existing publication catalog workspace plus release-catalog-index source into one SATROOT publication registry workspace and sign only the top-level registry")
+    publish_publication_registry_workspace_parser.add_argument("publication_catalog_workspace_dir", help="Path to an existing SATROOT publication catalog workspace directory")
+    publish_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
+    publish_publication_registry_workspace_parser.add_argument("--release-catalog-index-dir", help="Optional release catalog index publication directory; defaults to <publication-network-dir>/release_catalog_index when --publication-network-dir is provided")
+    publish_publication_registry_workspace_parser.add_argument("--output-dir", required=True, help="Directory where copied publication catalog components, copied publication_network/ or release_catalog_index/, publication_registry/, and summary.json will be written")
+    publish_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated publication-registry manifest")
+    publish_publication_registry_workspace_parser.add_argument("--publication-registry-key-id", required=True, help="Signature key identifier to generate and use for the publication registry manifest")
+    publish_publication_registry_workspace_parser.add_argument("--channel", help="Optional publication registry channel metadata")
+    publish_publication_registry_workspace_parser.add_argument("--label", help="Optional human-readable publication registry label metadata")
+    publish_publication_registry_workspace_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
+
     inventory_artifacts_parser = subparsers.add_parser("inventory-artifacts", help="Scan one or more directories and summarize discovered SATROOT artifacts and workspaces")
     inventory_artifacts_parser.add_argument("search_root", nargs="*", help="Directory root to scan for SATROOT artifacts")
     inventory_artifacts_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Additional directory root to scan for SATROOT artifacts; may be repeated")
@@ -11784,6 +11849,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_catalog_index_metadata=index_metadata,
         )
         print(f"wrote SATROOT publication network from existing workspaces to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-publication-registry-workspace":
+        publication_network_dir = Path(args.publication_network_dir).resolve() if args.publication_network_dir else None
+        release_catalog_index_dir = args.release_catalog_index_dir
+        if release_catalog_index_dir is None and publication_network_dir is not None:
+            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+        if release_catalog_index_dir is None:
+            raise SatRootError("publish-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
+
+        publication_registry_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        publish_publication_registry_workspace(
+            publication_catalog_workspace_dir=args.publication_catalog_workspace_dir,
+            release_catalog_index_dir=release_catalog_index_dir,
+            publication_network_dir=publication_network_dir,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.publication_registry_key_id,
+            publication_registry_metadata=publication_registry_metadata,
+        )
+        print(f"wrote SATROOT publication registry workspace from existing publication catalog workspace to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "inventory-artifacts":
