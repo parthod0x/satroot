@@ -91,6 +91,7 @@ The v0.1 kernel defines:
 - a one-shot SATROOT-MACHINE-1 signed demo-bundle bootstrap for release-ready machine-profile artifacts,
 - a one-shot SATROOT-MACHINE-1 demo-release bootstrap for bundle plus release publication generation,
 - a one-shot SATROOT-MACHINE-1 demo-catalog bootstrap for workspace-ready machine-profile release lanes,
+- a one-shot SATROOT-MACHINE-1 publication-catalog-workspace bootstrap for machine-profile descriptor and metadata publication lanes,
 - profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
 - a one-shot singleton receipt/identity/license demo bootstrap for runnable object-profile lifecycle artifacts,
 - a one-shot singleton receipt/identity/license signed demo-bundle bootstrap for verifiable object-profile artifacts,
@@ -220,7 +221,8 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-demo` for generating new machine-credit demo ledgers on demand,
 - `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters,
 - `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step,
-- `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows.
+- `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows,
+- `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step.
 
 This repo also now includes the first receipt-object profile draft:
 
@@ -257,7 +259,7 @@ python -m pytest
 Expected result:
 
 ```text
-308 passed
+309 passed
 ```
 
 ## Signing utilities
@@ -398,6 +400,12 @@ Generate a reusable SATROOT-MACHINE-1 machine-credit demo catalog workspace:
 
 ```bash
 satroot1 bootstrap-machine-demo-catalog --symbol APICAT1 --name "Machine Catalog CLI" --scheme hmac-sha256 --release-key-id release-key --service-scope batch-inference --billing-unit job --profile-field intended_use=cluster-credit --channel stable --label "SATROOT Machine Catalog" --published-at 2026-07-03T04:00:00Z --output-dir machine_catalog_workspace
+```
+
+Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly from machine-profile inputs:
+
+```bash
+satroot1 bootstrap-machine-publication-catalog-workspace --symbol APIPUBCAT1 --name "Machine Publication Catalog CLI" --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --service-scope batch-inference --billing-unit job --profile-field intended_use=cluster-credit --channel stable --label "SATROOT Machine Catalog" --descriptor-index-label "Machine Descriptor Index" --publication-metadata-catalog-label "Machine Metadata Catalog" --output-dir machine_publication_catalog_workspace
 ```
 
 Generate a full multi-profile demo catalog workspace with `bundles/`, `release/`, and a root `summary.json` in one step:

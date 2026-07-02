@@ -3483,6 +3483,69 @@ def test_cli_bootstrap_publication_catalog_workspace(tmp_path, capsys):
     capsys.readouterr()
 
 
+def test_cli_bootstrap_machine_publication_catalog_workspace_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "machine_publication_catalog_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-catalog-workspace",
+            "--symbol",
+            "APIPUBCAT1",
+            "--name",
+            "Machine Publication Catalog CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--profile-field",
+            "intended_use=cluster-credit",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Machine Catalog",
+            "--descriptor-index-label",
+            "Machine Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Metadata Catalog",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_machine_catalog_workspace_dir"] == str((output_dir / "machine_catalog_workspace").resolve())
+    assert summary["artifact_count"] == 3
+    assert summary["publication_metadata_bundle_count"] == 3
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Machine Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Machine Metadata Catalog"
+    assert {entry["artifact_kind"] for entry in summary["publication_metadata_bundles"]} == {"bundle", "release", "demo-catalog"}
+    assert (output_dir / "machine_catalog_workspace" / "summary.json").is_file()
+
+    secrets = json.loads((output_dir / "publication_metadata_catalog" / "publication_metadata_catalog_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog" / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["bundle_count"] == 3
+    assert verified["index"]["label"] == "Machine Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_catalog_workspace_with_preset_json_and_cli_overrides(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     preset_path = tmp_path / "publication_catalog_workspace_preset.json"
