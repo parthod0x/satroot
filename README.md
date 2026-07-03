@@ -223,6 +223,8 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters or a machine-only preset,
 - `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step, with optional machine-only preset defaults,
 - `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows, now with optional generic demo-catalog preset support,
+- `satroot1 bootstrap-machine-publication-stack` for generating one or more machine-only demo catalog workspaces and publishing them as a release-catalog stack,
+- `satroot1 bootstrap-machine-publication-network` for generating one or more machine-only publication stacks and publishing them as a release-catalog index,
 - `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step, now with optional nested demo-catalog and publication-catalog-workspace presets,
 - `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets.
 
@@ -261,7 +263,7 @@ python -m pytest
 Expected result:
 
 ```text
-316 passed
+322 passed
 ```
 
 ## Signing utilities
@@ -671,6 +673,12 @@ If you want the whole stack described in one checked-in file, `bootstrap-publica
 satroot1 bootstrap-publication-stack --stack-preset-json examples/stack_presets/ai_compute_publication_stack.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir publication_stack --label "SATROOT Stack Override"
 ```
 
+For a machine-only lane on the same preset format, `bootstrap-machine-publication-stack` validates that every nested catalog preset resolves to `SATROOT-MACHINE-1` only:
+
+```bash
+satroot1 bootstrap-machine-publication-stack --stack-preset-json examples/stack_presets/machine_compute_publication_stack.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir machine_publication_stack --label "Machine Stack Override"
+```
+
 To generate multiple stack workspaces and a top-level signed release-catalog index in one pass, use `bootstrap-publication-network` with one or more stack presets:
 
 ```bash
@@ -681,6 +689,12 @@ If you want the whole network described in one checked-in file, `bootstrap-publi
 
 ```bash
 satroot1 bootstrap-publication-network --network-preset-json examples/network_presets/ai_compute_publication_network.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --output-dir publication_network --label "SATROOT Network Override"
+```
+
+There is also a machine-only convenience wrapper that validates every nested stack preset stays on the machine lane:
+
+```bash
+satroot1 bootstrap-machine-publication-network --network-preset-json examples/network_presets/machine_compute_publication_network.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --output-dir machine_publication_network --label "Machine Network Override"
 ```
 
 If you already have generated demo catalog workspaces and just want to consolidate them into one signed publication stack, use `publish-publication-stack`:

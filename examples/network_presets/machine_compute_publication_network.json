@@ -1,0 +1,12 @@
+{
+  "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
+  "version": "0.1",
+  "stack_presets": [
+    "../stack_presets/machine_compute_publication_stack.json"
+  ],
+  "release_catalog_index": {
+    "channel": "stable",
+    "label": "SATROOT Machine Compute Publication Network",
+    "published_at": "2026-07-03T10:00:00Z"
+  }
+}
