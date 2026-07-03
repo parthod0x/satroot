@@ -8082,6 +8082,66 @@ def test_cli_bootstrap_machine_demo(tmp_path, capsys):
     assert state.balances["worker_node"] == 1_150_000
 
 
+def test_cli_bootstrap_machine_demo_with_preset_json(tmp_path, capsys):
+    preset_path = tmp_path / "machine_demo_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APIDEMPRE1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Preset Machine Demo"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "render-cluster",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "preset-demo-credit",
+                }
+            },
+            "profile_structure_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "tenant_account": "tenant_demo",
+                    "worker_account": "worker_demo",
+                    "worker_burn_amount": "0",
+                }
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_demo_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo ledger to" in captured.out
+
+    events = json.loads((output_dir / "events.json").read_text(encoding="utf-8"))
+    annotated = json.loads((output_dir / "annotated_events.json").read_text(encoding="utf-8"))
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    state = replay(events)
+    assert len(events) == 3
+    assert len(annotated) == 3
+    assert summary["service_scope"] == "render-cluster"
+    assert summary["billing_unit"] == "minute"
+    assert summary["consumption_model"] == "burn-on-use"
+    assert state.symbol == "APIDEMPRE1"
+    assert state.genesis_metadata["service_scope"] == "render-cluster"
+    assert state.genesis_metadata["billing_unit"] == "minute"
+    assert state.genesis_metadata["intended_use"] == "preset-demo-credit"
+    assert state.balances["tenant_demo"] == 3_800_000
+    assert state.balances["worker_demo"] == 1_200_000
+
+
 def test_cli_bootstrap_machine_demo_bundle_hmac(tmp_path, capsys):
     output_dir = tmp_path / "machine_bundle"
 

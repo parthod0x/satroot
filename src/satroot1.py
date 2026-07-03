@@ -10629,8 +10629,9 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_events.json")
 
     bootstrap_machine_demo_parser = subparsers.add_parser("bootstrap-machine-demo", help="Generate a SATROOT-MACHINE-1 machine-credit demo ledger plus annotated artifacts")
-    bootstrap_machine_demo_parser.add_argument("--symbol", required=True, help="Asset symbol for the machine-credit demo")
-    bootstrap_machine_demo_parser.add_argument("--name", required=True, help="Human-readable asset name for the machine-credit demo")
+    bootstrap_machine_demo_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_demo_parser.add_argument("--symbol", help="Asset symbol for the machine-credit demo; required when --preset-json does not provide it")
+    bootstrap_machine_demo_parser.add_argument("--name", help="Human-readable asset name for the machine-credit demo; required when --preset-json does not provide it")
     bootstrap_machine_demo_parser.add_argument("--output-dir", required=True, help="Directory where events.json, annotated_events.json, and summary.json will be written")
     bootstrap_machine_demo_parser.add_argument("--service-scope", default="api-compute", help="Compact machine service scope metadata")
     bootstrap_machine_demo_parser.add_argument("--billing-unit", default="request", help="Compact machine billing unit metadata")
@@ -11832,7 +11833,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-machine-demo":
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        demo = bootstrap_machine_credit_demo_ledger(
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        machine_preset = load_machine_demo_catalog_preset(preset_path) if preset_path is not None else None
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
+            command_name="bootstrap-machine-demo",
+            preset_option_name="--preset-json",
+            machine_preset=machine_preset,
             symbol=args.symbol,
             name=args.name,
             service_scope=args.service_scope,
@@ -11848,8 +11854,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             worker_amount=args.worker_amount,
             worker_burn_amount=args.worker_burn_amount,
             intended_use=args.intended_use,
+            profile_fields=None,
             rules_hash=args.rules_hash,
             nonce=args.nonce,
+        )
+        demo = bootstrap_machine_credit_demo_ledger(
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
             include_annotation=not args.no_annotated_output,
         )
         _write_json_file(output_dir / "events.json", demo["events"])
@@ -11858,9 +11885,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         summary = {
             "profile": "SATROOT-MACHINE-1",
             "profile_mode": "prepaid-credit",
-            "service_scope": args.service_scope,
-            "billing_unit": args.billing_unit,
-            "consumption_model": args.consumption_model,
+            "service_scope": machine_inputs["service_scope"],
+            "billing_unit": machine_inputs["billing_unit"],
+            "consumption_model": machine_inputs["consumption_model"],
             "event_count": len(demo["events"]),
             "final_state_hash": demo["final_state_hash"],
             "final_state_snapshot": demo["final_state_snapshot"],

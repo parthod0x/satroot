@@ -219,7 +219,7 @@ This repo also now includes the first machine-credit profile draft:
 - `SATROOT-MACHINE-1` for prepaid machine-native service credits,
 - `examples/genesis_apicredit1.json` for an `APICREDIT1` genesis record,
 - `examples/events_apicredit1.json` for a runnable machine-credit ledger flow,
-- `satroot1 bootstrap-machine-demo` for generating new machine-credit demo ledgers on demand,
+- `satroot1 bootstrap-machine-demo` for generating new machine-credit demo ledgers on demand, with optional machine-only preset defaults,
 - `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters or a machine-only preset,
 - `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step, with optional machine-only preset defaults,
 - `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows, now with optional generic demo-catalog preset support,
@@ -261,7 +261,7 @@ python -m pytest
 Expected result:
 
 ```text
-315 passed
+316 passed
 ```
 
 ## Signing utilities
@@ -348,6 +348,12 @@ Generate a runnable SATROOT-MACHINE-1 machine-credit demo ledger:
 
 ```bash
 satroot1 bootstrap-machine-demo --symbol APIDEMO2 --name "Machine CLI Demo" --service-scope inference-api --billing-unit token --output-dir machine_demo
+```
+
+That machine demo bootstrap can also resolve its symbol, name, and profile defaults from a machine-only preset:
+
+```bash
+satroot1 bootstrap-machine-demo --preset-json examples/catalog_presets/machine_compute_catalog.json --output-dir machine_demo_preset
 ```
 
 Generate a runnable receipt, identity, or license singleton demo ledger:
