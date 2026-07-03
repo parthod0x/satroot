@@ -222,9 +222,9 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-demo` for generating new machine-credit demo ledgers on demand,
 - `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters,
 - `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step,
-- `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows,
-- `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step,
-- `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace.
+- `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows, now with optional generic demo-catalog preset support,
+- `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step, now with optional nested demo-catalog and publication-catalog-workspace presets,
+- `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets.
 
 This repo also now includes the first receipt-object profile draft:
 
@@ -261,7 +261,7 @@ python -m pytest
 Expected result:
 
 ```text
-310 passed
+313 passed
 ```
 
 ## Signing utilities
@@ -404,16 +404,34 @@ Generate a reusable SATROOT-MACHINE-1 machine-credit demo catalog workspace:
 satroot1 bootstrap-machine-demo-catalog --symbol APICAT1 --name "Machine Catalog CLI" --scheme hmac-sha256 --release-key-id release-key --service-scope batch-inference --billing-unit job --profile-field intended_use=cluster-credit --channel stable --label "SATROOT Machine Catalog" --published-at 2026-07-03T04:00:00Z --output-dir machine_catalog_workspace
 ```
 
+That machine catalog bootstrap can also resolve its symbol, name, machine fields, and release metadata from a machine-only SATROOT demo-catalog preset:
+
+```bash
+satroot1 bootstrap-machine-demo-catalog --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir machine_catalog_workspace_preset --label "SATROOT Machine Catalog Override"
+```
+
 Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly from machine-profile inputs:
 
 ```bash
 satroot1 bootstrap-machine-publication-catalog-workspace --symbol APIPUBCAT1 --name "Machine Publication Catalog CLI" --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --service-scope batch-inference --billing-unit job --profile-field intended_use=cluster-credit --channel stable --label "SATROOT Machine Catalog" --descriptor-index-label "Machine Descriptor Index" --publication-metadata-catalog-label "Machine Metadata Catalog" --output-dir machine_publication_catalog_workspace
 ```
 
+The same wrapper can also layer a machine-only demo-catalog preset with a generic publication-catalog-workspace preset:
+
+```bash
+satroot1 bootstrap-machine-publication-catalog-workspace --catalog-preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --output-dir machine_publication_catalog_workspace_preset --publication-metadata-catalog-label "SATROOT Machine Metadata Catalog Override"
+```
+
 Generate a reusable SATROOT-MACHINE-1 publication registry workspace directly from machine-profile inputs plus a publication network source:
 
 ```bash
 satroot1 bootstrap-machine-publication-registry-workspace --publication-network-dir publication_network --symbol APIPUBREG1 --name "Machine Publication Registry CLI" --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --service-scope batch-inference --billing-unit job --profile-field intended_use=cluster-credit --channel stable --label "SATROOT Machine Catalog" --descriptor-index-label "Machine Descriptor Index" --publication-metadata-catalog-label "Machine Metadata Catalog" --publication-registry-label "Machine Publication Registry" --output-dir machine_publication_registry_workspace
+```
+
+That registry wrapper can also compose the machine catalog preset, a publication-catalog-workspace preset, and a publication-registry-workspace preset:
+
+```bash
+satroot1 bootstrap-machine-publication-registry-workspace --catalog-preset-json examples/catalog_presets/machine_compute_catalog.json --publication-catalog-workspace-preset-json examples/publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json --preset-json examples/registry_workspace_presets/ai_compute_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir machine_publication_registry_workspace_preset --publication-registry-label "SATROOT Machine Registry Override"
 ```
 
 Generate a full multi-profile demo catalog workspace with `bundles/`, `release/`, and a root `summary.json` in one step:

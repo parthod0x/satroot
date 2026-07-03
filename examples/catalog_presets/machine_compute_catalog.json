@@ -1,0 +1,35 @@
+{
+  "type": "SATROOT-DEMO-CATALOG-PRESET",
+  "version": "0.1",
+  "profiles": [
+    "SATROOT-MACHINE-1"
+  ],
+  "symbol_overrides": {
+    "SATROOT-MACHINE-1": "AICOREM1"
+  },
+  "name_overrides": {
+    "SATROOT-MACHINE-1": "SATROOT Machine Compute Credits"
+  },
+  "profile_field_overrides": {
+    "SATROOT-MACHINE-1": {
+      "service_scope": "batch-inference",
+      "billing_unit": "job",
+      "consumption_model": "burn-on-use",
+      "intended_use": "ai-compute-credit"
+    }
+  },
+  "profile_structure_overrides": {
+    "SATROOT-MACHINE-1": {
+      "tenant_account": "tenant_ops",
+      "worker_account": "gpu_pool",
+      "tenant_amount": "7000000",
+      "worker_amount": "1800000",
+      "worker_burn_amount": "0"
+    }
+  },
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT Machine Compute Catalog",
+    "published_at": "2026-06-30T00:00:00Z"
+  }
+}

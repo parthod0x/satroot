@@ -3506,6 +3506,124 @@ def test_cli_bootstrap_machine_publication_registry_workspace_hmac(tmp_path, cap
     capsys.readouterr()
 
 
+def test_cli_bootstrap_machine_publication_registry_workspace_with_presets(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_preset_path = tmp_path / "machine_catalog_preset.json"
+    publication_catalog_workspace_preset_path = tmp_path / "machine_publication_catalog_workspace_preset.json"
+    registry_preset_path = tmp_path / "machine_publication_registry_workspace_preset.json"
+    output_dir = tmp_path / "machine_publication_registry_workspace_preset"
+
+    write_json(
+        catalog_preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APIPUBREGPRE1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Preset Machine Publication Registry"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "batch-inference",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "preset-registry-credit",
+                }
+            },
+            "release": {
+                "channel": "preset",
+                "label": "Preset Machine Registry Catalog",
+                "published_at": "2026-07-03T07:00:00Z",
+            },
+        },
+    )
+    write_json(
+        publication_catalog_workspace_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "discover_under": [str(network_dir)],
+            "recursive": True,
+            "publication_descriptor_index": {
+                "channel": "preset",
+                "label": "Preset Registry Descriptor Index",
+            },
+            "publication_metadata_catalog": {
+                "channel": "preset",
+                "label": "Preset Registry Metadata Catalog",
+            },
+        },
+    )
+    write_json(
+        registry_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+            "version": "0.1",
+            "artifact_paths": [],
+            "discover_under": [],
+            "recursive": True,
+            "publication_network_dir": str(network_dir),
+            "publication_descriptor_index": {
+                "label": "Preset Registry Descriptor Index Override",
+            },
+            "publication_metadata_catalog": {
+                "label": "Preset Registry Metadata Catalog Override",
+            },
+            "publication_registry": {
+                "channel": "preset",
+                "label": "Preset Machine Publication Registry",
+            },
+        },
+    )
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-registry-workspace",
+            "--catalog-preset-json",
+            str(catalog_preset_path),
+            "--publication-catalog-workspace-preset-json",
+            str(publication_catalog_workspace_preset_path),
+            "--preset-json",
+            str(registry_preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--publication-registry-label",
+            "Preset Machine Publication Registry Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    nested_summary = json.loads(
+        (output_dir / "machine_publication_catalog_workspace" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["artifact_count"] == 15
+    assert summary["publication_metadata_bundle_count"] == 15
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Preset Registry Descriptor Index Override"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Preset Registry Metadata Catalog Override"
+    assert summary["publication_registry"]["index"]["channel"] == "preset"
+    assert summary["publication_registry"]["index"]["label"] == "Preset Machine Publication Registry Override"
+    assert nested_summary["publication_metadata_catalog"]["index"]["label"] == "Preset Registry Metadata Catalog Override"
+    assert nested_summary["source_machine_catalog_workspace_dir"] == str(
+        (output_dir / "machine_publication_catalog_workspace" / "machine_catalog_workspace").resolve()
+    )
+
+
 def test_cli_bootstrap_publication_catalog_workspace(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_catalog_workspace"
@@ -3620,6 +3738,93 @@ def test_cli_bootstrap_machine_publication_catalog_workspace_hmac(tmp_path, caps
     assert verified["index"]["label"] == "Machine Metadata Catalog"
     assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
+
+
+def test_cli_bootstrap_machine_publication_catalog_workspace_with_presets(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_preset_path = tmp_path / "machine_catalog_preset.json"
+    workspace_preset_path = tmp_path / "machine_publication_catalog_workspace_preset.json"
+    output_dir = tmp_path / "machine_publication_catalog_workspace_preset"
+
+    write_json(
+        catalog_preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APIPUBPRE1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Preset Machine Publication Catalog"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "batch-inference",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "preset-publication-credit",
+                }
+            },
+            "release": {
+                "channel": "preset",
+                "label": "Preset Machine Catalog",
+                "published_at": "2026-07-03T06:00:00Z",
+            },
+        },
+    )
+    write_json(
+        workspace_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "discover_under": [str(network_dir)],
+            "recursive": True,
+            "publication_descriptor_index": {
+                "channel": "preset",
+                "label": "Preset Descriptor Index",
+            },
+            "publication_metadata_catalog": {
+                "channel": "preset",
+                "label": "Preset Metadata Catalog",
+            },
+        },
+    )
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-catalog-workspace",
+            "--catalog-preset-json",
+            str(catalog_preset_path),
+            "--preset-json",
+            str(workspace_preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-metadata-catalog-label",
+            "Preset Metadata Catalog Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    machine_summary = json.loads((output_dir / "machine_catalog_workspace" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 15
+    assert summary["publication_metadata_bundle_count"] == 15
+    assert summary["publication_descriptor_index"]["index"]["channel"] == "preset"
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Preset Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["channel"] == "preset"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Preset Metadata Catalog Override"
+    assert machine_summary["release"]["label"] == "Preset Machine Catalog"
+    assert machine_summary["bundles"][0]["symbol"] == "APIPUBPRE1"
 
 
 def test_cli_bootstrap_publication_catalog_workspace_with_preset_json_and_cli_overrides(tmp_path, capsys):
@@ -8081,6 +8286,81 @@ def test_cli_bootstrap_machine_demo_catalog_hmac(tmp_path, capsys):
     assert release_manifest["signature_key_id"] == "release-key"
     assert main(["demo-catalog-lint", str(output_dir)]) == 0
     capsys.readouterr()
+
+
+def test_cli_bootstrap_machine_demo_catalog_with_preset_json(tmp_path, capsys):
+    preset_path = tmp_path / "machine_catalog_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APIPRESET1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Preset Machine Catalog"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "batch-inference",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "preset-credit",
+                }
+            },
+            "profile_structure_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "tenant_account": "tenant_preset",
+                    "worker_account": "worker_preset",
+                    "worker_amount": "700000",
+                }
+            },
+            "release": {
+                "channel": "preset",
+                "label": "Preset Machine Catalog",
+                "published_at": "2026-07-03T05:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_catalog_workspace_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-catalog",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--profile-field",
+            "intended_use=cli-credit",
+            "--label",
+            "Preset Machine Catalog Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    machine_genesis = json.loads((output_dir / "bundles" / "machine" / "genesis.json").read_text(encoding="utf-8"))
+    machine_summary = summary["bundles"][0]
+
+    assert summary["bundle_count"] == 1
+    assert summary["release"]["channel"] == "preset"
+    assert summary["release"]["label"] == "Preset Machine Catalog Override"
+    assert summary["release"]["published_at"] == "2026-07-03T05:00:00Z"
+    assert machine_summary["symbol"] == "APIPRESET1"
+    assert machine_summary["name"] == "Preset Machine Catalog"
+    assert machine_summary["structure_overrides"]["tenant_account"] == "tenant_preset"
+    assert machine_summary["structure_overrides"]["worker_account"] == "worker_preset"
+    assert machine_summary["structure_overrides"]["worker_amount"] == "700000"
+    assert machine_genesis["service_scope"] == "batch-inference"
+    assert machine_genesis["billing_unit"] == "job"
+    assert machine_genesis["consumption_model"] == "burn-on-use"
+    assert machine_genesis["intended_use"] == "cli-credit"
 
 
 def test_cli_bootstrap_machine_demo_release_ed25519(tmp_path, capsys):

@@ -217,6 +217,22 @@ DEMO_CATALOG_STRUCTURE_OVERRIDE_SPECS: Dict[str, Dict[str, str]] = {
         "retire": "bool",
     },
 }
+MACHINE_DEMO_CATALOG_PROFILE = "SATROOT-MACHINE-1"
+MACHINE_DEMO_CATALOG_FIELD_DEFAULTS: Dict[str, str] = {
+    "service_scope": "api-compute",
+    "billing_unit": "request",
+    "consumption_model": "burn-on-use",
+    "intended_use": "machine-api-credit",
+}
+MACHINE_DEMO_CATALOG_STRUCTURE_DEFAULTS: Dict[str, str] = {
+    "issuer": "issuer",
+    "tenant_account": "tenant_a",
+    "worker_account": "worker_node",
+    "initial_balance": "100000000",
+    "tenant_amount": "5000000",
+    "worker_amount": "1200000",
+    "worker_burn_amount": "200000",
+}
 
 
 def _resolve_singleton_demo_accounts(
@@ -772,6 +788,34 @@ def load_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
             allowed_profiles=DEMO_CATALOG_PROFILES,
         ),
         "release_metadata": validate_release_metadata_mapping(preset.get("release")),
+    }
+
+
+def load_machine_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_demo_catalog_preset(path)
+    allowed_profiles = {MACHINE_DEMO_CATALOG_PROFILE}
+    unexpected_profiles = (
+        set((preset.get("symbol_overrides") or {}).keys())
+        | set((preset.get("name_overrides") or {}).keys())
+        | set((preset.get("profile_field_overrides") or {}).keys())
+        | set((preset.get("profile_structure_overrides") or {}).keys())
+    ) - allowed_profiles
+    if unexpected_profiles:
+        raise SatRootError(
+            "machine demo catalog preset only supports SATROOT-MACHINE-1 overrides; "
+            f"found {sorted(unexpected_profiles)}"
+        )
+
+    profiles = preset.get("profiles")
+    if profiles is not None and profiles != [MACHINE_DEMO_CATALOG_PROFILE]:
+        raise SatRootError("machine demo catalog preset must select only SATROOT-MACHINE-1")
+
+    return {
+        "symbol": (preset.get("symbol_overrides") or {}).get(MACHINE_DEMO_CATALOG_PROFILE),
+        "name": (preset.get("name_overrides") or {}).get(MACHINE_DEMO_CATALOG_PROFILE),
+        "profile_fields": dict((preset.get("profile_field_overrides") or {}).get(MACHINE_DEMO_CATALOG_PROFILE, {})),
+        "profile_structure": dict((preset.get("profile_structure_overrides") or {}).get(MACHINE_DEMO_CATALOG_PROFILE, {})),
+        "release_metadata": dict(preset.get("release_metadata") or {}),
     }
 
 
@@ -6476,6 +6520,9 @@ def bootstrap_machine_credit_publication_catalog_workspace(
     release_metadata: Optional[Mapping[str, str]] = None,
     descriptor_index_metadata: Optional[Mapping[str, str]] = None,
     publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+    artifact_paths: Optional[Sequence[str | Path]] = None,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
 ) -> Dict[str, Any]:
     root_output_dir = Path(output_dir).resolve()
     root_output_dir.mkdir(parents=True, exist_ok=True)
@@ -6512,9 +6559,9 @@ def bootstrap_machine_credit_publication_catalog_workspace(
         release_metadata=release_metadata,
     )
     publication_catalog_workspace = write_publication_catalog_workspace(
-        artifact_paths=[],
-        discover_under=[machine_catalog_workspace_dir],
-        recursive=True,
+        artifact_paths=[*(artifact_paths or [])],
+        discover_under=[machine_catalog_workspace_dir, *((discover_under or []))],
+        recursive=recursive,
         output_dir=root_output_dir,
         signature_scheme=bundle_scheme,
         publication_descriptor_index_key_id=publication_descriptor_index_key_id,
@@ -6576,6 +6623,9 @@ def bootstrap_machine_credit_publication_registry_workspace(
     descriptor_index_metadata: Optional[Mapping[str, str]] = None,
     publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
     publication_registry_metadata: Optional[Mapping[str, str]] = None,
+    artifact_paths: Optional[Sequence[str | Path]] = None,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
 ) -> Dict[str, Any]:
     root_output_dir = Path(output_dir).resolve()
     root_output_dir.mkdir(parents=True, exist_ok=True)
@@ -6615,6 +6665,9 @@ def bootstrap_machine_credit_publication_registry_workspace(
         release_metadata=release_metadata,
         descriptor_index_metadata=descriptor_index_metadata,
         publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+        artifact_paths=artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
     )
     registry_workspace = write_publication_registry_workspace(
         artifact_paths=[],
@@ -6808,6 +6861,143 @@ def _merge_nested_override_maps(
         merged.setdefault(key, {})
         merged[key].update(value)
     return merged
+
+
+def _merge_release_metadata_defaults(
+    base: Optional[Mapping[str, str]],
+    override: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, str]:
+    merged = dict(base or {})
+    for key, value in (override or {}).items():
+        if value is not None:
+            merged[key] = value
+    return merged
+
+
+def _resolve_machine_cli_value(
+    cli_value: Optional[str],
+    *,
+    cli_default: Optional[str],
+    preset_value: Optional[str],
+) -> Optional[str]:
+    if cli_value is None:
+        return preset_value if preset_value is not None else cli_default
+    if preset_value is not None and cli_default is not None and cli_value == cli_default:
+        return preset_value
+    return cli_value
+
+
+def resolve_machine_demo_catalog_bootstrap_inputs(
+    *,
+    command_name: str,
+    preset_option_name: str,
+    machine_preset: Optional[Mapping[str, Any]],
+    symbol: Optional[str],
+    name: Optional[str],
+    service_scope: str,
+    billing_unit: str,
+    consumption_model: str,
+    root_id: Optional[str],
+    issuer: str,
+    tenant_account: str,
+    worker_account: str,
+    max_supply: Optional[str],
+    initial_balance: str,
+    tenant_amount: str,
+    worker_amount: str,
+    worker_burn_amount: str,
+    intended_use: str,
+    profile_fields: Optional[Sequence[str]],
+    rules_hash: Optional[str],
+    nonce: Optional[str],
+) -> Dict[str, Any]:
+    preset_profile_fields = dict((machine_preset or {}).get("profile_fields") or {})
+    preset_profile_structure = dict((machine_preset or {}).get("profile_structure") or {})
+    resolved_symbol = symbol or (machine_preset or {}).get("symbol")
+    if not resolved_symbol:
+        raise SatRootError(
+            f"{command_name} requires --symbol or a SATROOT-MACHINE-1 symbol override in {preset_option_name}"
+        )
+    resolved_name = name or (machine_preset or {}).get("name")
+    if not resolved_name:
+        raise SatRootError(
+            f"{command_name} requires --name or a SATROOT-MACHINE-1 name override in {preset_option_name}"
+        )
+
+    resolved_profile_fields = {
+        key: value
+        for key, value in preset_profile_fields.items()
+        if key not in MACHINE_DEMO_CATALOG_FIELD_DEFAULTS
+    }
+    resolved_profile_fields.update(parse_profile_field_overrides(profile_fields))
+    return {
+        "symbol": resolved_symbol,
+        "name": resolved_name,
+        "service_scope": _resolve_machine_cli_value(
+            service_scope,
+            cli_default=MACHINE_DEMO_CATALOG_FIELD_DEFAULTS["service_scope"],
+            preset_value=preset_profile_fields.get("service_scope"),
+        ),
+        "billing_unit": _resolve_machine_cli_value(
+            billing_unit,
+            cli_default=MACHINE_DEMO_CATALOG_FIELD_DEFAULTS["billing_unit"],
+            preset_value=preset_profile_fields.get("billing_unit"),
+        ),
+        "consumption_model": _resolve_machine_cli_value(
+            consumption_model,
+            cli_default=MACHINE_DEMO_CATALOG_FIELD_DEFAULTS["consumption_model"],
+            preset_value=preset_profile_fields.get("consumption_model"),
+        ),
+        "root_id": root_id,
+        "issuer": _resolve_machine_cli_value(
+            issuer,
+            cli_default=MACHINE_DEMO_CATALOG_STRUCTURE_DEFAULTS["issuer"],
+            preset_value=None,
+        ),
+        "tenant_account": _resolve_machine_cli_value(
+            tenant_account,
+            cli_default=MACHINE_DEMO_CATALOG_STRUCTURE_DEFAULTS["tenant_account"],
+            preset_value=preset_profile_structure.get("tenant_account"),
+        ),
+        "worker_account": _resolve_machine_cli_value(
+            worker_account,
+            cli_default=MACHINE_DEMO_CATALOG_STRUCTURE_DEFAULTS["worker_account"],
+            preset_value=preset_profile_structure.get("worker_account"),
+        ),
+        "max_supply": _resolve_machine_cli_value(
+            max_supply,
+            cli_default=None,
+            preset_value=preset_profile_structure.get("max_supply"),
+        ),
+        "initial_balance": _resolve_machine_cli_value(
+            initial_balance,
+            cli_default=MACHINE_DEMO_CATALOG_STRUCTURE_DEFAULTS["initial_balance"],
+            preset_value=preset_profile_structure.get("initial_balance"),
+        ),
+        "tenant_amount": _resolve_machine_cli_value(
+            tenant_amount,
+            cli_default=MACHINE_DEMO_CATALOG_STRUCTURE_DEFAULTS["tenant_amount"],
+            preset_value=preset_profile_structure.get("tenant_amount"),
+        ),
+        "worker_amount": _resolve_machine_cli_value(
+            worker_amount,
+            cli_default=MACHINE_DEMO_CATALOG_STRUCTURE_DEFAULTS["worker_amount"],
+            preset_value=preset_profile_structure.get("worker_amount"),
+        ),
+        "worker_burn_amount": _resolve_machine_cli_value(
+            worker_burn_amount,
+            cli_default=MACHINE_DEMO_CATALOG_STRUCTURE_DEFAULTS["worker_burn_amount"],
+            preset_value=preset_profile_structure.get("worker_burn_amount"),
+        ),
+        "intended_use": _resolve_machine_cli_value(
+            intended_use,
+            cli_default=MACHINE_DEMO_CATALOG_FIELD_DEFAULTS["intended_use"],
+            preset_value=preset_profile_fields.get("intended_use"),
+        ),
+        "profile_fields": resolved_profile_fields,
+        "rules_hash": rules_hash,
+        "nonce": nonce,
+    }
 
 
 def write_demo_catalog_workspace(
@@ -10632,8 +10822,9 @@ def build_cli_parser() -> Any:
     bootstrap_machine_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
     bootstrap_machine_demo_catalog_parser = subparsers.add_parser("bootstrap-machine-demo-catalog", help="Generate a SATROOT-MACHINE-1 machine-credit demo catalog workspace with one signed bundle plus signed release directory")
-    bootstrap_machine_demo_catalog_parser.add_argument("--symbol", required=True, help="Asset symbol for the machine-credit catalog bundle")
-    bootstrap_machine_demo_catalog_parser.add_argument("--name", required=True, help="Human-readable asset name for the machine-credit catalog bundle")
+    bootstrap_machine_demo_catalog_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_demo_catalog_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --preset-json does not provide it")
+    bootstrap_machine_demo_catalog_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --preset-json does not provide it")
     bootstrap_machine_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine-credit demo bundle")
     bootstrap_machine_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
     bootstrap_machine_demo_catalog_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the catalog release manifest")
@@ -10664,8 +10855,10 @@ def build_cli_parser() -> Any:
     bootstrap_machine_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
     bootstrap_machine_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-machine-publication-catalog-workspace", help="Generate a SATROOT-MACHINE-1 machine demo catalog workspace and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
-    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--symbol", required=True, help="Asset symbol for the machine-credit catalog bundle")
-    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--name", required=True, help="Human-readable asset name for the machine-credit catalog bundle")
+    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested machine catalog; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for descriptor and metadata defaults")
+    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
+    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine demo bundle and generated publication manifests")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for the nested release-manifest signing; defaults to --scheme")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the nested machine catalog release manifest")
@@ -10705,8 +10898,11 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
 
     bootstrap_machine_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-machine-publication-registry-workspace", help="Generate a SATROOT-MACHINE-1 machine publication catalog workspace and bind it to a release-catalog-index source in one signed publication registry workspace")
-    bootstrap_machine_publication_registry_workspace_parser.add_argument("--symbol", required=True, help="Asset symbol for the machine-credit catalog bundle")
-    bootstrap_machine_publication_registry_workspace_parser.add_argument("--name", required=True, help="Human-readable asset name for the machine-credit catalog bundle")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested machine catalog; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for the nested publication catalog workspace defaults")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file for registry defaults")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine demo bundle and generated publication manifests")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for the nested release-manifest signing; defaults to --scheme")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the nested machine catalog release manifest")
@@ -12124,18 +12320,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-machine-demo-catalog":
-        release_metadata = {
-            "channel": args.channel,
-            "label": args.label,
-            "published_at": args.published_at,
-        }
-        workspace = bootstrap_machine_credit_demo_catalog_workspace(
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        machine_preset = load_machine_demo_catalog_preset(preset_path) if preset_path is not None else None
+        machine_inputs = resolve_machine_demo_catalog_bootstrap_inputs(
+            command_name="bootstrap-machine-demo-catalog",
+            preset_option_name="--preset-json",
+            machine_preset=machine_preset,
             symbol=args.symbol,
             name=args.name,
-            bundle_scheme=args.scheme,
-            release_scheme=args.release_scheme,
-            release_key_id=args.release_key_id,
-            output_dir=args.output_dir,
             service_scope=args.service_scope,
             billing_unit=args.billing_unit,
             consumption_model=args.consumption_model,
@@ -12149,9 +12341,38 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             worker_amount=args.worker_amount,
             worker_burn_amount=args.worker_burn_amount,
             intended_use=args.intended_use,
-            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            profile_fields=args.profile_fields,
             rules_hash=args.rules_hash,
             nonce=args.nonce,
+        )
+        release_metadata = _merge_release_metadata_defaults((machine_preset or {}).get("release_metadata"), {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        })
+        workspace = bootstrap_machine_credit_demo_catalog_workspace(
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -12163,31 +12384,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-machine-publication-catalog-workspace":
-        release_metadata = {
-            "channel": args.channel,
-            "label": args.label,
-            "published_at": args.published_at,
-        }
-        descriptor_index_metadata = {
-            "channel": args.descriptor_index_channel,
-            "label": args.descriptor_index_label,
-            "published_at": args.descriptor_index_published_at,
-        }
-        publication_metadata_catalog_metadata = {
-            "channel": args.publication_metadata_catalog_channel,
-            "label": args.publication_metadata_catalog_label,
-            "published_at": args.publication_metadata_catalog_published_at,
-        }
-        workspace = bootstrap_machine_credit_publication_catalog_workspace(
+        catalog_preset_path = None if not args.catalog_preset_json else Path(args.catalog_preset_json).resolve()
+        machine_preset = load_machine_demo_catalog_preset(catalog_preset_path) if catalog_preset_path is not None else None
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        preset = load_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
+        machine_inputs = resolve_machine_demo_catalog_bootstrap_inputs(
+            command_name="bootstrap-machine-publication-catalog-workspace",
+            preset_option_name="--catalog-preset-json",
+            machine_preset=machine_preset,
             symbol=args.symbol,
             name=args.name,
-            bundle_scheme=args.scheme,
-            release_scheme=args.release_scheme,
-            release_key_id=args.release_key_id,
-            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
-            publication_metadata_key_id=args.publication_metadata_key_id,
-            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
-            output_dir=args.output_dir,
             service_scope=args.service_scope,
             billing_unit=args.billing_unit,
             consumption_model=args.consumption_model,
@@ -12201,9 +12407,54 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             worker_amount=args.worker_amount,
             worker_burn_amount=args.worker_burn_amount,
             intended_use=args.intended_use,
-            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            profile_fields=args.profile_fields,
             rules_hash=args.rules_hash,
             nonce=args.nonce,
+        )
+        release_metadata = _merge_release_metadata_defaults((machine_preset or {}).get("release_metadata"), {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        })
+        descriptor_index_metadata = _merge_release_metadata_defaults((preset or {}).get("descriptor_index_metadata"), {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        })
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(
+            (preset or {}).get("publication_metadata_catalog_metadata"),
+            {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+            },
+        )
+        workspace = bootstrap_machine_credit_publication_catalog_workspace(
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            output_dir=args.output_dir,
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -12212,41 +12463,94 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_metadata=release_metadata,
             descriptor_index_metadata=descriptor_index_metadata,
             publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+            artifact_paths=(preset or {}).get("artifact_paths"),
+            discover_under=(preset or {}).get("discover_under"),
+            recursive=(preset or {}).get("recursive", True),
         )
         print(f"wrote SATROOT-MACHINE-1 publication catalog workspace to {Path(workspace['summary_path']).parent}")
         return 0
 
     if args.command == "bootstrap-machine-publication-registry-workspace":
-        publication_network_dir = Path(args.publication_network_dir).resolve() if args.publication_network_dir else None
-        release_catalog_index_dir = args.release_catalog_index_dir
+        catalog_preset_path = None if not args.catalog_preset_json else Path(args.catalog_preset_json).resolve()
+        machine_preset = load_machine_demo_catalog_preset(catalog_preset_path) if catalog_preset_path is not None else None
+        publication_catalog_workspace_preset_path = (
+            None if not args.publication_catalog_workspace_preset_json else Path(args.publication_catalog_workspace_preset_json).resolve()
+        )
+        publication_catalog_workspace_preset = (
+            load_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
+            if publication_catalog_workspace_preset_path is not None
+            else None
+        )
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        machine_inputs = resolve_machine_demo_catalog_bootstrap_inputs(
+            command_name="bootstrap-machine-publication-registry-workspace",
+            preset_option_name="--catalog-preset-json",
+            machine_preset=machine_preset,
+            symbol=args.symbol,
+            name=args.name,
+            service_scope=args.service_scope,
+            billing_unit=args.billing_unit,
+            consumption_model=args.consumption_model,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            tenant_account=args.tenant_account,
+            worker_account=args.worker_account,
+            max_supply=args.max_supply,
+            initial_balance=args.initial_balance,
+            tenant_amount=args.tenant_amount,
+            worker_amount=args.worker_amount,
+            worker_burn_amount=args.worker_burn_amount,
+            intended_use=args.intended_use,
+            profile_fields=args.profile_fields,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+        )
+        publication_network_dir = (
+            Path(args.publication_network_dir).resolve()
+            if args.publication_network_dir
+            else (Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None)
+        )
+        release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
             release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
         if release_catalog_index_dir is None:
             raise SatRootError("bootstrap-machine-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
 
-        release_metadata = {
+        release_metadata = _merge_release_metadata_defaults((machine_preset or {}).get("release_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
-        descriptor_index_metadata = {
+        })
+        descriptor_index_metadata = _merge_release_metadata_defaults(
+            (publication_catalog_workspace_preset or {}).get("descriptor_index_metadata"),
+            (preset or {}).get("descriptor_index_metadata"),
+        )
+        descriptor_index_metadata = _merge_release_metadata_defaults(descriptor_index_metadata, {
             "channel": args.descriptor_index_channel,
             "label": args.descriptor_index_label,
             "published_at": args.descriptor_index_published_at,
-        }
-        publication_metadata_catalog_metadata = {
+        })
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(
+            (publication_catalog_workspace_preset or {}).get("publication_metadata_catalog_metadata"),
+            (preset or {}).get("publication_metadata_catalog_metadata"),
+        )
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(
+            publication_metadata_catalog_metadata,
+            {
             "channel": args.publication_metadata_catalog_channel,
             "label": args.publication_metadata_catalog_label,
             "published_at": args.publication_metadata_catalog_published_at,
-        }
-        publication_registry_metadata = {
+            },
+        )
+        publication_registry_metadata = _merge_release_metadata_defaults((preset or {}).get("publication_registry_metadata"), {
             "channel": args.publication_registry_channel,
             "label": args.publication_registry_label,
             "published_at": args.publication_registry_published_at,
-        }
+        })
         workspace = bootstrap_machine_credit_publication_registry_workspace(
-            symbol=args.symbol,
-            name=args.name,
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
             bundle_scheme=args.scheme,
             release_scheme=args.release_scheme,
             release_catalog_index_dir=release_catalog_index_dir,
@@ -12256,22 +12560,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
             publication_registry_key_id=args.publication_registry_key_id,
             output_dir=args.output_dir,
-            service_scope=args.service_scope,
-            billing_unit=args.billing_unit,
-            consumption_model=args.consumption_model,
-            root_id=args.root_id,
-            issuer=args.issuer,
-            tenant_account=args.tenant_account,
-            worker_account=args.worker_account,
-            max_supply=args.max_supply,
-            initial_balance=args.initial_balance,
-            tenant_amount=args.tenant_amount,
-            worker_amount=args.worker_amount,
-            worker_burn_amount=args.worker_burn_amount,
-            intended_use=args.intended_use,
-            profile_fields=parse_profile_field_overrides(args.profile_fields),
-            rules_hash=args.rules_hash,
-            nonce=args.nonce,
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -12282,6 +12586,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             descriptor_index_metadata=descriptor_index_metadata,
             publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
             publication_registry_metadata=publication_registry_metadata,
+            artifact_paths=[
+                *((publication_catalog_workspace_preset or {}).get("artifact_paths", [])),
+                *((preset or {}).get("artifact_paths", [])),
+            ],
+            discover_under=[
+                *((publication_catalog_workspace_preset or {}).get("discover_under", [])),
+                *((preset or {}).get("discover_under", [])),
+            ],
+            recursive=(preset or {}).get(
+                "recursive",
+                (publication_catalog_workspace_preset or {}).get("recursive", True),
+            ),
         )
         print(f"wrote SATROOT-MACHINE-1 publication registry workspace to {Path(workspace['summary_path']).parent}")
         return 0
