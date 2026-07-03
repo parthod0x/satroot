@@ -6345,6 +6345,7 @@ def bootstrap_machine_credit_demo_release(
     worker_amount: str = "1200000",
     worker_burn_amount: str = "200000",
     intended_use: str = "machine-api-credit",
+    profile_fields: Optional[Mapping[str, str]] = None,
     rules_hash: Optional[str] = None,
     nonce: Optional[str] = None,
     key_prefix: str = "",
@@ -6378,6 +6379,7 @@ def bootstrap_machine_credit_demo_release(
         worker_amount=worker_amount,
         worker_burn_amount=worker_burn_amount,
         intended_use=intended_use,
+        profile_fields=profile_fields,
         rules_hash=rules_hash,
         nonce=nonce,
         key_prefix=key_prefix,
@@ -6887,7 +6889,7 @@ def _resolve_machine_cli_value(
     return cli_value
 
 
-def resolve_machine_demo_catalog_bootstrap_inputs(
+def resolve_machine_demo_bootstrap_inputs(
     *,
     command_name: str,
     preset_option_name: str,
@@ -10765,8 +10767,9 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
     bootstrap_machine_demo_bundle_parser = subparsers.add_parser("bootstrap-machine-demo-bundle", help="Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle from profile parameters")
-    bootstrap_machine_demo_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the machine-credit demo bundle")
-    bootstrap_machine_demo_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the machine-credit demo bundle")
+    bootstrap_machine_demo_bundle_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_demo_bundle_parser.add_argument("--symbol", help="Asset symbol for the machine-credit demo bundle; required when --preset-json does not provide it")
+    bootstrap_machine_demo_bundle_parser.add_argument("--name", help="Human-readable asset name for the machine-credit demo bundle; required when --preset-json does not provide it")
     bootstrap_machine_demo_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_machine_demo_bundle_parser.add_argument("--output-dir", required=True, help="Directory where signed bundle files will be written")
     bootstrap_machine_demo_bundle_parser.add_argument("--service-scope", default="api-compute", help="Compact machine service scope metadata")
@@ -10791,8 +10794,9 @@ def build_cli_parser() -> Any:
     bootstrap_machine_demo_bundle_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
 
     bootstrap_machine_demo_release_parser = subparsers.add_parser("bootstrap-machine-demo-release", help="Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle plus signed release directory from profile parameters")
-    bootstrap_machine_demo_release_parser.add_argument("--symbol", required=True, help="Asset symbol for the machine-credit demo release")
-    bootstrap_machine_demo_release_parser.add_argument("--name", required=True, help="Human-readable asset name for the machine-credit demo release")
+    bootstrap_machine_demo_release_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_demo_release_parser.add_argument("--symbol", help="Asset symbol for the machine-credit demo release; required when --preset-json does not provide it")
+    bootstrap_machine_demo_release_parser.add_argument("--name", help="Human-readable asset name for the machine-credit demo release; required when --preset-json does not provide it")
     bootstrap_machine_demo_release_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine-credit demo bundle")
     bootstrap_machine_demo_release_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
     bootstrap_machine_demo_release_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the release manifest")
@@ -12248,10 +12252,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-machine-demo-bundle":
         if args.verifier_only and args.scheme != "ed25519":
             raise SatRootError("--verifier-only is only supported for ed25519 bundles")
-        bundle = bootstrap_machine_credit_demo_bundle(
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        machine_preset = load_machine_demo_catalog_preset(preset_path) if preset_path is not None else None
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
+            command_name="bootstrap-machine-demo-bundle",
+            preset_option_name="--preset-json",
+            machine_preset=machine_preset,
             symbol=args.symbol,
             name=args.name,
-            scheme=args.scheme,
             service_scope=args.service_scope,
             billing_unit=args.billing_unit,
             consumption_model=args.consumption_model,
@@ -12265,8 +12273,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             worker_amount=args.worker_amount,
             worker_burn_amount=args.worker_burn_amount,
             intended_use=args.intended_use,
+            profile_fields=None,
             rules_hash=args.rules_hash,
             nonce=args.nonce,
+        )
+        bundle = bootstrap_machine_credit_demo_bundle(
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
+            scheme=args.scheme,
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -12282,18 +12312,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-machine-demo-release":
-        release_metadata = {
-            "channel": args.channel,
-            "label": args.label,
-            "published_at": args.published_at,
-        }
-        released = bootstrap_machine_credit_demo_release(
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        machine_preset = load_machine_demo_catalog_preset(preset_path) if preset_path is not None else None
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
+            command_name="bootstrap-machine-demo-release",
+            preset_option_name="--preset-json",
+            machine_preset=machine_preset,
             symbol=args.symbol,
             name=args.name,
-            bundle_scheme=args.scheme,
-            release_scheme=args.release_scheme,
-            release_key_id=args.release_key_id,
-            output_dir=args.output_dir,
             service_scope=args.service_scope,
             billing_unit=args.billing_unit,
             consumption_model=args.consumption_model,
@@ -12307,8 +12333,38 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             worker_amount=args.worker_amount,
             worker_burn_amount=args.worker_burn_amount,
             intended_use=args.intended_use,
+            profile_fields=None,
             rules_hash=args.rules_hash,
             nonce=args.nonce,
+        )
+        release_metadata = _merge_release_metadata_defaults((machine_preset or {}).get("release_metadata"), {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        })
+        released = bootstrap_machine_credit_demo_release(
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -12322,7 +12378,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-machine-demo-catalog":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         machine_preset = load_machine_demo_catalog_preset(preset_path) if preset_path is not None else None
-        machine_inputs = resolve_machine_demo_catalog_bootstrap_inputs(
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
             command_name="bootstrap-machine-demo-catalog",
             preset_option_name="--preset-json",
             machine_preset=machine_preset,
@@ -12388,7 +12444,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         machine_preset = load_machine_demo_catalog_preset(catalog_preset_path) if catalog_preset_path is not None else None
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
-        machine_inputs = resolve_machine_demo_catalog_bootstrap_inputs(
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
             command_name="bootstrap-machine-publication-catalog-workspace",
             preset_option_name="--catalog-preset-json",
             machine_preset=machine_preset,
@@ -12483,7 +12539,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
-        machine_inputs = resolve_machine_demo_catalog_bootstrap_inputs(
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
             command_name="bootstrap-machine-publication-registry-workspace",
             preset_option_name="--catalog-preset-json",
             machine_preset=machine_preset,

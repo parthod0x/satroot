@@ -220,8 +220,8 @@ This repo also now includes the first machine-credit profile draft:
 - `examples/genesis_apicredit1.json` for an `APICREDIT1` genesis record,
 - `examples/events_apicredit1.json` for a runnable machine-credit ledger flow,
 - `satroot1 bootstrap-machine-demo` for generating new machine-credit demo ledgers on demand,
-- `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters,
-- `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step,
+- `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters or a machine-only preset,
+- `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step, with optional machine-only preset defaults,
 - `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows, now with optional generic demo-catalog preset support,
 - `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step, now with optional nested demo-catalog and publication-catalog-workspace presets,
 - `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets.
@@ -261,7 +261,7 @@ python -m pytest
 Expected result:
 
 ```text
-313 passed
+315 passed
 ```
 
 ## Signing utilities
@@ -392,10 +392,22 @@ Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle:
 satroot1 bootstrap-machine-demo-bundle --symbol APIBUNDLE2 --name "Machine Bundle CLI" --scheme hmac-sha256 --service-scope batch-jobs --output-dir machine_bundle
 ```
 
+That bundle bootstrap can also resolve its machine symbol, name, and profile defaults from a machine-only preset:
+
+```bash
+satroot1 bootstrap-machine-demo-bundle --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --output-dir machine_bundle_preset
+```
+
 Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle plus release directory:
 
 ```bash
 satroot1 bootstrap-machine-demo-release --symbol APIRELCLI1 --name "Machine Release CLI" --scheme hmac-sha256 --release-key-id release-key --service-scope render-farm --channel stable --label "SATROOT Machine Release" --published-at 2026-06-28T06:00:00Z --output-dir machine_release
+```
+
+The release bootstrap can also merge machine ledger defaults and release metadata from the same machine-only preset:
+
+```bash
+satroot1 bootstrap-machine-demo-release --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir machine_release_preset --label "SATROOT Machine Release Override"
 ```
 
 Generate a reusable SATROOT-MACHINE-1 machine-credit demo catalog workspace:

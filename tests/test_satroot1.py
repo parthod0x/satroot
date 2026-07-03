@@ -8128,6 +8128,71 @@ def test_cli_bootstrap_machine_demo_bundle_hmac(tmp_path, capsys):
     assert summary["record_count"] == 4
 
 
+def test_cli_bootstrap_machine_demo_bundle_with_preset_json(tmp_path, capsys):
+    preset_path = tmp_path / "machine_bundle_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APIBUNPRE1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Preset Machine Bundle"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "preset-jobs",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "preset-bundle-credit",
+                }
+            },
+            "profile_structure_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "tenant_account": "tenant_bundle",
+                    "worker_account": "worker_bundle",
+                    "worker_amount": "600000",
+                    "worker_burn_amount": "0",
+                }
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_bundle_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-bundle",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 hmac-sha256 demo bundle to" in captured.out
+
+    genesis = json.loads((output_dir / "genesis.json").read_text(encoding="utf-8"))
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    state = replay(signed_events, verifier=make_hmac_sha256_verifier(json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))))
+    assert genesis["symbol"] == "APIBUNPRE1"
+    assert genesis["name"] == "Preset Machine Bundle"
+    assert genesis["service_scope"] == "preset-jobs"
+    assert genesis["billing_unit"] == "minute"
+    assert genesis["intended_use"] == "preset-bundle-credit"
+    assert signer_key_map == {
+        "issuer": "issuer-key",
+        "tenant_bundle": "tenant_bundle-key",
+    }
+    assert manifest["symbol"] == "APIBUNPRE1"
+    assert state.balances["tenant_bundle"] == 4_400_000
+    assert state.balances["worker_bundle"] == 600_000
+
+
 def test_cli_bootstrap_machine_demo_bundle_ed25519_verifier_only(tmp_path):
     output_dir = tmp_path / "machine_bundle_ed25519"
 
@@ -8222,6 +8287,79 @@ def test_cli_bootstrap_machine_demo_release_hmac(tmp_path, capsys):
 
     summary = verify_signed_release_manifest(
         release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_machine_demo_release_with_preset_json(tmp_path, capsys):
+    preset_path = tmp_path / "machine_release_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APIRELPRE1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Preset Machine Release"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "render-cluster",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "preset-release-credit",
+                }
+            },
+            "profile_structure_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "tenant_account": "tenant_release",
+                    "worker_account": "worker_release",
+                    "worker_burn_amount": "0",
+                }
+            },
+            "release": {
+                "channel": "preset",
+                "label": "Preset Machine Release",
+                "published_at": "2026-07-03T08:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_release_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-release",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--label",
+            "Preset Machine Release Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo release to" in captured.out
+
+    bundle_manifest = json.loads((output_dir / "bundle" / "bundle_manifest.json").read_text(encoding="utf-8"))
+    bundle_index = json.loads((output_dir / "release" / "bundle_index.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((output_dir / "release" / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_manifest["symbol"] == "APIRELPRE1"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["service_scope"] == "render-cluster"
+    assert bundle_manifest["final_state_snapshot"]["balances"]["tenant_release"] == "3800000"
+    assert bundle_manifest["final_state_snapshot"]["balances"]["worker_release"] == "1200000"
+    assert bundle_index["release"]["channel"] == "preset"
+    assert bundle_index["release"]["label"] == "Preset Machine Release Override"
+    assert bundle_index["release"]["published_at"] == "2026-07-03T08:00:00Z"
+
+    summary = verify_signed_release_manifest(
+        output_dir / "release" / "release_manifest.json",
         verifier=make_hmac_sha256_verifier(release_secrets),
     )
     assert summary["bundle_count"] == 1
