@@ -6537,6 +6537,118 @@ def bootstrap_machine_credit_publication_catalog_workspace(
     return publication_catalog_workspace
 
 
+def bootstrap_machine_credit_publication_registry_workspace(
+    *,
+    symbol: str,
+    name: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_catalog_index_dir: str | Path,
+    release_key_id: str,
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    publication_registry_key_id: str,
+    release_scheme: Optional[str] = None,
+    service_scope: str = "api-compute",
+    billing_unit: str = "request",
+    consumption_model: str = "burn-on-use",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    tenant_account: str = "tenant_a",
+    worker_account: str = "worker_node",
+    max_supply: Optional[str] = None,
+    initial_balance: str = "100000000",
+    tenant_amount: str = "5000000",
+    worker_amount: str = "1200000",
+    worker_burn_amount: str = "200000",
+    intended_use: str = "machine-api-credit",
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    publication_network_dir: Optional[str | Path] = None,
+    release_metadata: Optional[Mapping[str, str]] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+    publication_registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    machine_publication_catalog_workspace_dir = root_output_dir / "machine_publication_catalog_workspace"
+
+    machine_publication_catalog_workspace = bootstrap_machine_credit_publication_catalog_workspace(
+        symbol=symbol,
+        name=name,
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+        publication_metadata_key_id=publication_metadata_key_id,
+        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+        output_dir=machine_publication_catalog_workspace_dir,
+        service_scope=service_scope,
+        billing_unit=billing_unit,
+        consumption_model=consumption_model,
+        root_id=root_id,
+        issuer=issuer,
+        tenant_account=tenant_account,
+        worker_account=worker_account,
+        max_supply=max_supply,
+        initial_balance=initial_balance,
+        tenant_amount=tenant_amount,
+        worker_amount=worker_amount,
+        worker_burn_amount=worker_burn_amount,
+        intended_use=intended_use,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata=release_metadata,
+        descriptor_index_metadata=descriptor_index_metadata,
+        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+    )
+    registry_workspace = write_publication_registry_workspace(
+        artifact_paths=[],
+        discover_under=[],
+        recursive=True,
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_catalog_workspace_dir=machine_publication_catalog_workspace_dir,
+        publication_network_dir=publication_network_dir,
+        output_dir=root_output_dir,
+        signature_scheme=bundle_scheme,
+        publication_descriptor_index_key_id=None,
+        publication_metadata_key_id=None,
+        publication_metadata_catalog_key_id=None,
+        publication_registry_key_id=publication_registry_key_id,
+        publication_registry_metadata=publication_registry_metadata,
+    )
+
+    summary = copy.deepcopy(registry_workspace["summary"])
+    summary["source_machine_publication_catalog_workspace_dir"] = str(machine_publication_catalog_workspace_dir.resolve())
+    summary["source_machine_publication_catalog_summary_path"] = machine_publication_catalog_workspace["summary_path"]
+    summary["source_machine_catalog_workspace_dir"] = machine_publication_catalog_workspace["summary"].get(
+        "source_machine_catalog_workspace_dir"
+    )
+    summary["source_machine_catalog_summary_path"] = machine_publication_catalog_workspace["summary"].get(
+        "source_machine_catalog_summary_path"
+    )
+    _write_json_file(root_output_dir / "summary.json", summary)
+
+    registry_workspace["summary"] = summary
+    registry_workspace["machine_publication_catalog_workspace_dir"] = str(machine_publication_catalog_workspace_dir.resolve())
+    registry_workspace["machine_publication_catalog_workspace"] = machine_publication_catalog_workspace
+    return registry_workspace
+
+
 def bootstrap_demo_catalog_release(
     *,
     bundle_scheme: str,
@@ -10592,6 +10704,53 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
 
+    bootstrap_machine_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-machine-publication-registry-workspace", help="Generate a SATROOT-MACHINE-1 machine publication catalog workspace and bind it to a release-catalog-index source in one signed publication registry workspace")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--symbol", required=True, help="Asset symbol for the machine-credit catalog bundle")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--name", required=True, help="Human-readable asset name for the machine-credit catalog bundle")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine demo bundle and generated publication manifests")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for the nested release-manifest signing; defaults to --scheme")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the nested machine catalog release manifest")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-registry-key-id", required=True, help="Signature key identifier to generate and use for the publication registry manifest")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-catalog-index-dir", help="Optional release catalog index publication directory; defaults to <publication-network-dir>/release_catalog_index when --publication-network-dir is provided")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--output-dir", required=True, help="Directory where machine_publication_catalog_workspace/, copied publication_network/ or release_catalog_index/, publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, publication_registry/, and summary.json will be written")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--service-scope", default="api-compute", help="Compact machine service scope metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--billing-unit", default="request", help="Compact machine billing unit metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--consumption-model", default="burn-on-use", help="Compact machine consumption model metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and tenant allocation events")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--tenant-account", default="tenant_a", help="Tenant account receiving the primary machine-credit allocation")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--worker-account", default="worker_node", help="Machine worker account receiving consumable execution credits")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--max-supply", help="Optional explicit max_supply override; defaults to the initial issued balance")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--initial-balance", default="100000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--tenant-amount", default="5000000", help="Amount transferred from the issuer to the tenant account")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--worker-amount", default="1200000", help="Amount transferred from the tenant account to the worker account")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--worker-burn-amount", default="200000", help="Optional worker-side burn amount; use 0 to skip the burn event")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--intended-use", default="machine-api-credit", help="Compact machine intended_use metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Additional machine profile field override in key=value form; may be repeated")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--channel", help="Optional release channel metadata for the nested machine catalog bundle index")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--label", help="Optional human-readable release label for the nested machine catalog bundle index")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the nested machine catalog bundle index")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--descriptor-index-published-at", help="Optional descriptor-index published_at metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-registry-channel", help="Optional publication-registry channel metadata")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-registry-label", help="Optional human-readable publication-registry label")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-registry-published-at", help="Optional publication-registry published_at metadata")
+
     bootstrap_demo_catalog_parser = subparsers.add_parser("bootstrap-demo-catalog", help="Generate stable, machine, and singleton demo bundles plus a signed catalog release workspace")
     bootstrap_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated demo bundles")
     bootstrap_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
@@ -12055,6 +12214,76 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
         )
         print(f"wrote SATROOT-MACHINE-1 publication catalog workspace to {Path(workspace['summary_path']).parent}")
+        return 0
+
+    if args.command == "bootstrap-machine-publication-registry-workspace":
+        publication_network_dir = Path(args.publication_network_dir).resolve() if args.publication_network_dir else None
+        release_catalog_index_dir = args.release_catalog_index_dir
+        if release_catalog_index_dir is None and publication_network_dir is not None:
+            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+        if release_catalog_index_dir is None:
+            raise SatRootError("bootstrap-machine-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
+
+        release_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        descriptor_index_metadata = {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        }
+        publication_metadata_catalog_metadata = {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+        }
+        publication_registry_metadata = {
+            "channel": args.publication_registry_channel,
+            "label": args.publication_registry_label,
+            "published_at": args.publication_registry_published_at,
+        }
+        workspace = bootstrap_machine_credit_publication_registry_workspace(
+            symbol=args.symbol,
+            name=args.name,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_catalog_index_dir=release_catalog_index_dir,
+            release_key_id=args.release_key_id,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            publication_registry_key_id=args.publication_registry_key_id,
+            output_dir=args.output_dir,
+            service_scope=args.service_scope,
+            billing_unit=args.billing_unit,
+            consumption_model=args.consumption_model,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            tenant_account=args.tenant_account,
+            worker_account=args.worker_account,
+            max_supply=args.max_supply,
+            initial_balance=args.initial_balance,
+            tenant_amount=args.tenant_amount,
+            worker_amount=args.worker_amount,
+            worker_burn_amount=args.worker_burn_amount,
+            intended_use=args.intended_use,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            publication_network_dir=publication_network_dir,
+            release_metadata=release_metadata,
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+            publication_registry_metadata=publication_registry_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication registry workspace to {Path(workspace['summary_path']).parent}")
         return 0
 
     if args.command == "bootstrap-demo-catalog":

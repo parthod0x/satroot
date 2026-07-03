@@ -92,6 +92,7 @@ The v0.1 kernel defines:
 - a one-shot SATROOT-MACHINE-1 demo-release bootstrap for bundle plus release publication generation,
 - a one-shot SATROOT-MACHINE-1 demo-catalog bootstrap for workspace-ready machine-profile release lanes,
 - a one-shot SATROOT-MACHINE-1 publication-catalog-workspace bootstrap for machine-profile descriptor and metadata publication lanes,
+- a one-shot SATROOT-MACHINE-1 publication-registry-workspace bootstrap for machine-profile descriptor, metadata, and registry publication lanes,
 - profile-aware lifecycle helpers for singleton receipt, identity, and license transfer, archival, and retirement flows,
 - a one-shot singleton receipt/identity/license demo bootstrap for runnable object-profile lifecycle artifacts,
 - a one-shot singleton receipt/identity/license signed demo-bundle bootstrap for verifiable object-profile artifacts,
@@ -222,7 +223,8 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters,
 - `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step,
 - `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows,
-- `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step.
+- `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step,
+- `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace.
 
 This repo also now includes the first receipt-object profile draft:
 
@@ -259,7 +261,7 @@ python -m pytest
 Expected result:
 
 ```text
-309 passed
+310 passed
 ```
 
 ## Signing utilities
@@ -406,6 +408,12 @@ Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly fro
 
 ```bash
 satroot1 bootstrap-machine-publication-catalog-workspace --symbol APIPUBCAT1 --name "Machine Publication Catalog CLI" --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --service-scope batch-inference --billing-unit job --profile-field intended_use=cluster-credit --channel stable --label "SATROOT Machine Catalog" --descriptor-index-label "Machine Descriptor Index" --publication-metadata-catalog-label "Machine Metadata Catalog" --output-dir machine_publication_catalog_workspace
+```
+
+Generate a reusable SATROOT-MACHINE-1 publication registry workspace directly from machine-profile inputs plus a publication network source:
+
+```bash
+satroot1 bootstrap-machine-publication-registry-workspace --publication-network-dir publication_network --symbol APIPUBREG1 --name "Machine Publication Registry CLI" --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --service-scope batch-inference --billing-unit job --profile-field intended_use=cluster-credit --channel stable --label "SATROOT Machine Catalog" --descriptor-index-label "Machine Descriptor Index" --publication-metadata-catalog-label "Machine Metadata Catalog" --publication-registry-label "Machine Publication Registry" --output-dir machine_publication_registry_workspace
 ```
 
 Generate a full multi-profile demo catalog workspace with `bundles/`, `release/`, and a root `summary.json` in one step:

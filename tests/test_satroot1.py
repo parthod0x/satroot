@@ -3430,6 +3430,82 @@ def test_cli_bootstrap_publication_registry_workspace_from_publication_network(t
     capsys.readouterr()
 
 
+def test_cli_bootstrap_machine_publication_registry_workspace_hmac(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "machine_publication_registry_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--symbol",
+            "APIPUBREG1",
+            "--name",
+            "Machine Publication Registry CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--profile-field",
+            "intended_use=cluster-credit",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Machine Catalog",
+            "--descriptor-index-label",
+            "Machine Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Metadata Catalog",
+            "--publication-registry-label",
+            "Machine Publication Registry",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_machine_publication_catalog_workspace_dir"] == str((output_dir / "machine_publication_catalog_workspace").resolve())
+    assert summary["source_machine_catalog_workspace_dir"] == str(
+        (output_dir / "machine_publication_catalog_workspace" / "machine_catalog_workspace").resolve()
+    )
+    assert summary["source_publication_catalog_workspace_dir"] == str((output_dir / "machine_publication_catalog_workspace").resolve())
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["artifact_count"] == 3
+    assert summary["publication_metadata_bundle_count"] == 3
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Machine Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Machine Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Machine Publication Registry"
+    assert (output_dir / "machine_publication_catalog_workspace" / "summary.json").is_file()
+    assert (output_dir / "machine_publication_catalog_workspace" / "machine_catalog_workspace" / "summary.json").is_file()
+
+    secrets = json.loads((output_dir / "publication_registry" / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry" / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"]["label"] == "Machine Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_catalog_workspace(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_catalog_workspace"
