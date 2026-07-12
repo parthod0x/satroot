@@ -230,7 +230,9 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-publication-network` for generating one or more machine-only publication stacks and publishing them as a release-catalog index,
 - `satroot1 publish-machine-publication-network` for consolidating existing machine-only publication stack workspaces into the same SATROOT-MACHINE-1 publication network shape,
 - `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step, now with optional nested demo-catalog and publication-catalog-workspace presets,
-- `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets.
+- `satroot1 export-machine-publication-catalog-workspace-preset` for exporting that machine publication catalog workspace shape back into a validated reusable preset,
+- `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets,
+- `satroot1 export-machine-publication-registry-workspace-preset` for exporting that machine publication registry workspace shape back into a validated reusable preset.
 
 This repo also now includes the first receipt-object profile draft:
 
@@ -267,7 +269,7 @@ python -m pytest
 Expected result:
 
 ```text
-328 passed
+332 passed
 ```
 
 ## Signing utilities
@@ -905,10 +907,22 @@ To derive a reusable preset back from a generated registry workspace:
 satroot1 export-publication-registry-workspace-preset publication_registry_workspace --output exported_registry_workspace.json
 ```
 
+For the machine-only registry lane, the matching export wrapper validates that the workspace still carries machine provenance:
+
+```bash
+satroot1 export-machine-publication-registry-workspace-preset machine_publication_registry_workspace --output exported_machine_registry_workspace.json
+```
+
 To derive a reusable preset back from a generated publication catalog workspace:
 
 ```bash
 satroot1 export-publication-catalog-workspace-preset publication_catalog_workspace --output exported_catalog_workspace.json
+```
+
+And the machine-only publication catalog lane can be exported with the same validation guard:
+
+```bash
+satroot1 export-machine-publication-catalog-workspace-preset machine_publication_catalog_workspace --output exported_machine_catalog_workspace.json
 ```
 
 To derive a reusable preset back from a generated metadata catalog publication:

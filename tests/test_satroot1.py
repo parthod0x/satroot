@@ -4924,6 +4924,54 @@ def test_cli_export_publication_catalog_workspace_preset(tmp_path):
     assert preset["publication_metadata_catalog"]["label"] == "Workspace Metadata Catalog"
 
 
+def test_cli_export_machine_publication_catalog_workspace_preset(tmp_path):
+    workspace_dir = tmp_path / "machine_publication_catalog_workspace"
+    assert main(
+        [
+            "bootstrap-machine-publication-catalog-workspace",
+            "--symbol",
+            "APIMEXPCAT1",
+            "--name",
+            "Machine Export Catalog Workspace",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--output-dir",
+            str(workspace_dir),
+            "--publication-metadata-catalog-label",
+            "Machine Export Metadata Catalog",
+        ]
+    ) == 0
+
+    preset_path = tmp_path / "exported_machine_catalog_workspace.json"
+    exit_code = main(["export-machine-publication-catalog-workspace-preset", str(workspace_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_catalog_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET"
+    assert len(loaded["artifact_paths"]) == 3
+    assert preset["publication_metadata_catalog"]["label"] == "Machine Export Metadata Catalog"
+
+
+def test_cli_export_machine_publication_catalog_workspace_preset_rejects_generic_workspace(tmp_path):
+    workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="source_machine_catalog_workspace_dir"):
+        main(["export-machine-publication-catalog-workspace-preset", str(workspace_dir)])
+
+
 def test_cli_export_publication_registry_workspace_preset(tmp_path):
     workspace_dir = make_publication_registry_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_registry_workspace.json"
@@ -4940,6 +4988,64 @@ def test_cli_export_publication_registry_workspace_preset(tmp_path):
     assert preset["publication_descriptor_index"]["label"] == "Workspace Descriptor Index"
     assert preset["publication_metadata_catalog"]["label"] == "Workspace Metadata Catalog"
     assert preset["publication_registry"]["label"] == "Workspace Publication Registry"
+
+
+def test_cli_export_machine_publication_registry_workspace_preset(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    workspace_dir = tmp_path / "machine_publication_registry_workspace"
+    assert main(
+        [
+            "bootstrap-machine-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--symbol",
+            "APIMEXPREG1",
+            "--name",
+            "Machine Export Registry Workspace",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--descriptor-index-label",
+            "Machine Export Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Export Metadata Catalog",
+            "--output-dir",
+            str(workspace_dir),
+            "--publication-registry-label",
+            "Machine Export Registry",
+        ]
+    ) == 0
+
+    preset_path = tmp_path / "exported_machine_registry_workspace.json"
+    exit_code = main(["export-machine-publication-registry-workspace-preset", str(workspace_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET"
+    assert Path(loaded["publication_network_dir"]).name == "publication_network"
+    assert Path(loaded["publication_catalog_workspace_dir"]).name == "machine_publication_catalog_workspace"
+    assert preset["publication_registry"]["label"] == "Machine Export Registry"
+
+
+def test_cli_export_machine_publication_registry_workspace_preset_rejects_generic_workspace(tmp_path):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="source_machine_publication_catalog_workspace_dir or source_machine_catalog_workspace_dir"):
+        main(["export-machine-publication-registry-workspace-preset", str(workspace_dir)])
 
 
 def test_cli_export_publication_registry_workspace_preset_preserves_catalog_workspace_reference(tmp_path):

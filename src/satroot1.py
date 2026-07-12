@@ -4482,6 +4482,18 @@ def _require_machine_publication_stack_workspace(publication_stack_dir: str | Pa
         _require_machine_demo_catalog_workspace(nested_workspace_dir, label=nested_label)
 
 
+def _require_machine_publication_catalog_workspace(publication_catalog_workspace_dir: str | Path, *, label: str) -> None:
+    _, summary = _load_workspace_summary(publication_catalog_workspace_dir, label=label)
+    validate_publication_catalog_workspace_summary_consistency(summary)
+    source_machine_catalog_workspace_dir = summary.get("source_machine_catalog_workspace_dir")
+    if not isinstance(source_machine_catalog_workspace_dir, str) or not source_machine_catalog_workspace_dir.strip():
+        raise SatRootError(f"{label} requires source_machine_catalog_workspace_dir provenance")
+    _require_machine_demo_catalog_workspace(
+        Path(source_machine_catalog_workspace_dir).resolve(),
+        label=f"{label} source machine catalog workspace",
+    )
+
+
 def validate_publication_catalog_workspace_summary_consistency(summary: Mapping[str, Any]) -> None:
     artifact_paths = summary.get("artifact_paths")
     metadata_bundles = summary.get("publication_metadata_bundles")
@@ -8595,6 +8607,21 @@ def export_publication_catalog_workspace_preset_from_workspace(
     return preset
 
 
+def export_machine_publication_catalog_workspace_preset_from_workspace(
+    publication_catalog_workspace_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _require_machine_publication_catalog_workspace(
+        publication_catalog_workspace_dir,
+        label="machine publication catalog workspace preset export",
+    )
+    return export_publication_catalog_workspace_preset_from_workspace(
+        publication_catalog_workspace_dir,
+        output_path=output_path,
+    )
+
+
 def export_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
@@ -8756,6 +8783,37 @@ def export_publication_registry_preset_from_workspace(
     if registry_metadata:
         preset["registry"] = registry_metadata
     return preset
+
+
+def export_machine_publication_registry_workspace_preset_from_workspace(
+    publication_registry_workspace_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _, summary = _load_workspace_summary(publication_registry_workspace_dir, label="publication registry workspace")
+    validate_publication_registry_workspace_summary_consistency(summary)
+
+    source_machine_publication_catalog_workspace_dir = summary.get("source_machine_publication_catalog_workspace_dir")
+    if isinstance(source_machine_publication_catalog_workspace_dir, str) and source_machine_publication_catalog_workspace_dir.strip():
+        _require_machine_publication_catalog_workspace(
+            Path(source_machine_publication_catalog_workspace_dir).resolve(),
+            label="machine publication registry workspace preset export source machine publication catalog workspace",
+        )
+    else:
+        source_machine_catalog_workspace_dir = summary.get("source_machine_catalog_workspace_dir")
+        if not isinstance(source_machine_catalog_workspace_dir, str) or not source_machine_catalog_workspace_dir.strip():
+            raise SatRootError(
+                "machine publication registry workspace preset export requires source_machine_publication_catalog_workspace_dir or source_machine_catalog_workspace_dir provenance"
+            )
+        _require_machine_demo_catalog_workspace(
+            Path(source_machine_catalog_workspace_dir).resolve(),
+            label="machine publication registry workspace preset export source machine catalog workspace",
+        )
+
+    return export_publication_registry_workspace_preset_from_workspace(
+        publication_registry_workspace_dir,
+        output_path=output_path,
+    )
 
 
 def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
@@ -11342,9 +11400,17 @@ def build_cli_parser() -> Any:
     export_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory")
     export_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
+    export_machine_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-machine-publication-catalog-workspace-preset", help="Export a SATROOT-MACHINE-1 publication catalog workspace back into a machine-validated reusable publication catalog workspace preset")
+    export_machine_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT-MACHINE-1 publication catalog workspace directory")
+    export_machine_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
+
     export_publication_registry_workspace_preset_parser = subparsers.add_parser("export-publication-registry-workspace-preset", help="Export a SATROOT publication registry workspace back into a reusable publication registry workspace preset")
     export_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
     export_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
+
+    export_machine_publication_registry_workspace_preset_parser = subparsers.add_parser("export-machine-publication-registry-workspace-preset", help="Export a SATROOT-MACHINE-1 publication registry workspace back into a machine-validated reusable publication registry workspace preset")
+    export_machine_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT-MACHINE-1 publication registry workspace directory")
+    export_machine_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_descriptor_index_preset_parser = subparsers.add_parser("export-publication-descriptor-index-preset", help="Export a SATROOT publication descriptor index back into a reusable publication descriptor index preset")
     export_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory")
@@ -13442,8 +13508,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(preset, args.output)
         return 0
 
+    if args.command == "export-machine-publication-catalog-workspace-preset":
+        preset = export_machine_publication_catalog_workspace_preset_from_workspace(
+            args.publication_catalog_workspace_dir,
+            output_path=args.output,
+        )
+        _write_output(preset, args.output)
+        return 0
+
     if args.command == "export-publication-registry-workspace-preset":
         preset = export_publication_registry_workspace_preset_from_workspace(
+            args.publication_registry_workspace_dir,
+            output_path=args.output,
+        )
+        _write_output(preset, args.output)
+        return 0
+
+    if args.command == "export-machine-publication-registry-workspace-preset":
+        preset = export_machine_publication_registry_workspace_preset_from_workspace(
             args.publication_registry_workspace_dir,
             output_path=args.output,
         )
