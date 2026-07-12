@@ -4494,6 +4494,61 @@ def _require_machine_publication_catalog_workspace(publication_catalog_workspace
     )
 
 
+def _find_machine_demo_catalog_workspace_dirs_from_publication_metadata_catalog(
+    publication_metadata_catalog_dir: str | Path,
+    *,
+    label: str,
+) -> list[Path]:
+    _catalog_manifest_path, catalog_path, _catalog_manifest, publication_metadata_catalog = _load_publication_metadata_catalog_publication(
+        publication_metadata_catalog_dir
+    )
+    bundles = publication_metadata_catalog.get("bundles")
+    if not isinstance(bundles, list):
+        raise SatRootError(f"{label} publication metadata catalog bundles must be an array")
+
+    machine_workspace_dirs: list[Path] = []
+    seen_workspace_dirs: set[str] = set()
+    for entry in bundles:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} publication metadata catalog bundles must contain objects")
+        if entry.get("artifact_kind") != "demo-catalog":
+            continue
+
+        bundle_ref = entry.get("publication_metadata_bundle_path")
+        if not isinstance(bundle_ref, str) or not bundle_ref.strip():
+            raise SatRootError(f"{label} publication metadata catalog bundles.publication_metadata_bundle_path must be a non-empty string")
+        bundle_dir = (catalog_path.parent / bundle_ref).resolve()
+        _manifest_path, _report_path, _descriptor_path, _manifest, descriptor = _load_publication_metadata_bundle_publication(bundle_dir)
+        if descriptor.get("artifact_kind") != "demo-catalog":
+            raise SatRootError(f"{label} expected demo-catalog descriptor metadata for bundle: {bundle_ref}")
+
+        bundle_profiles = descriptor.get("bundle_profiles")
+        if not isinstance(bundle_profiles, list) or not bundle_profiles:
+            continue
+        unexpected_profiles = sorted(
+            {
+                str(value)
+                for value in bundle_profiles
+                if not isinstance(value, str) or value != MACHINE_DEMO_CATALOG_PROFILE
+            }
+        )
+        if unexpected_profiles:
+            continue
+
+        artifact_path = descriptor.get("artifact_path")
+        assert isinstance(artifact_path, str)
+        resolved_workspace_dir = str(Path(artifact_path).resolve())
+        if resolved_workspace_dir not in seen_workspace_dirs:
+            machine_workspace_dirs.append(Path(resolved_workspace_dir))
+            seen_workspace_dirs.add(resolved_workspace_dir)
+
+    if not machine_workspace_dirs:
+        raise SatRootError(
+            f"{label} requires at least one publication metadata bundle whose demo-catalog descriptor contains only {MACHINE_DEMO_CATALOG_PROFILE} bundle_profiles"
+        )
+    return machine_workspace_dirs
+
+
 def validate_publication_catalog_workspace_summary_consistency(summary: Mapping[str, Any]) -> None:
     artifact_paths = summary.get("artifact_paths")
     metadata_bundles = summary.get("publication_metadata_bundles")
@@ -7647,6 +7702,72 @@ def publish_publication_registry_workspace(
         publication_registry_key_id=key_id,
         publication_registry_metadata=publication_registry_metadata,
     )
+
+
+def publish_machine_publication_catalog_workspace(
+    *,
+    publication_descriptor_index_dir: str | Path,
+    publication_metadata_catalog_dir: str | Path,
+    output_dir: str | Path,
+) -> Dict[str, Any]:
+    machine_workspace_dirs = _find_machine_demo_catalog_workspace_dirs_from_publication_metadata_catalog(
+        publication_metadata_catalog_dir,
+        label="machine publication catalog publishing source publication metadata catalog",
+    )
+    published = publish_publication_catalog_workspace(
+        publication_descriptor_index_dir=publication_descriptor_index_dir,
+        publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        output_dir=output_dir,
+    )
+
+    summary = copy.deepcopy(published["summary"])
+    summary["source_machine_catalog_workspace_dir"] = str(machine_workspace_dirs[0].resolve())
+    summary_path = Path(str(published["summary_path"])).resolve()
+    _write_json_file(summary_path, summary)
+    published["summary"] = summary
+    return published
+
+
+def publish_machine_publication_registry_workspace(
+    *,
+    publication_catalog_workspace_dir: str | Path,
+    release_catalog_index_dir: str | Path,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    publication_network_dir: Optional[str | Path] = None,
+    publication_registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    source_publication_catalog_workspace_dir = Path(publication_catalog_workspace_dir).resolve()
+    _require_machine_publication_catalog_workspace(
+        source_publication_catalog_workspace_dir,
+        label="machine publication registry publishing source publication catalog workspace",
+    )
+    _source_workspace_path, source_summary = _load_workspace_summary(
+        source_publication_catalog_workspace_dir,
+        label="machine publication registry publishing source publication catalog workspace",
+    )
+    validate_publication_catalog_workspace_summary_consistency(source_summary)
+
+    published = publish_publication_registry_workspace(
+        publication_catalog_workspace_dir=source_publication_catalog_workspace_dir,
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_network_dir=publication_network_dir,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        publication_registry_metadata=publication_registry_metadata,
+    )
+
+    summary = copy.deepcopy(published["summary"])
+    summary["source_machine_publication_catalog_workspace_dir"] = str(source_publication_catalog_workspace_dir)
+    source_machine_catalog_workspace_dir = source_summary.get("source_machine_catalog_workspace_dir")
+    if isinstance(source_machine_catalog_workspace_dir, str) and source_machine_catalog_workspace_dir.strip():
+        summary["source_machine_catalog_workspace_dir"] = source_machine_catalog_workspace_dir
+    summary_path = Path(str(published["summary_path"])).resolve()
+    _write_json_file(summary_path, summary)
+    published["summary"] = summary
+    return published
 
 
 def publish_machine_publication_network_workspace(
@@ -11354,6 +11475,11 @@ def build_cli_parser() -> Any:
     publish_publication_catalog_workspace_parser.add_argument("publication_metadata_catalog_dir", help="Path to an existing SATROOT publication metadata catalog publication directory")
     publish_publication_catalog_workspace_parser.add_argument("--output-dir", required=True, help="Directory where copied publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, and summary.json will be written")
 
+    publish_machine_publication_catalog_workspace_parser = subparsers.add_parser("publish-machine-publication-catalog-workspace", help="Copy an existing machine-validated publication descriptor index plus publication metadata catalog into one SATROOT-MACHINE-1 publication catalog workspace without regenerating nested publications")
+    publish_machine_publication_catalog_workspace_parser.add_argument("publication_descriptor_index_dir", help="Path to an existing SATROOT publication descriptor index publication directory")
+    publish_machine_publication_catalog_workspace_parser.add_argument("publication_metadata_catalog_dir", help="Path to an existing SATROOT publication metadata catalog publication directory that includes at least one SATROOT-MACHINE-1 demo-catalog descriptor")
+    publish_machine_publication_catalog_workspace_parser.add_argument("--output-dir", required=True, help="Directory where copied publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, and summary.json will be written")
+
     publish_publication_registry_workspace_parser = subparsers.add_parser("publish-publication-registry-workspace", help="Copy an existing publication catalog workspace plus release-catalog-index source into one SATROOT publication registry workspace and sign only the top-level registry")
     publish_publication_registry_workspace_parser.add_argument("publication_catalog_workspace_dir", help="Path to an existing SATROOT publication catalog workspace directory")
     publish_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
@@ -11364,6 +11490,17 @@ def build_cli_parser() -> Any:
     publish_publication_registry_workspace_parser.add_argument("--channel", help="Optional publication registry channel metadata")
     publish_publication_registry_workspace_parser.add_argument("--label", help="Optional human-readable publication registry label metadata")
     publish_publication_registry_workspace_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
+
+    publish_machine_publication_registry_workspace_parser = subparsers.add_parser("publish-machine-publication-registry-workspace", help="Copy an existing SATROOT-MACHINE-1 publication catalog workspace plus release-catalog-index source into one machine-validated publication registry workspace and sign only the top-level registry")
+    publish_machine_publication_registry_workspace_parser.add_argument("publication_catalog_workspace_dir", help="Path to an existing SATROOT-MACHINE-1 publication catalog workspace directory")
+    publish_machine_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
+    publish_machine_publication_registry_workspace_parser.add_argument("--release-catalog-index-dir", help="Optional release catalog index publication directory; defaults to <publication-network-dir>/release_catalog_index when --publication-network-dir is provided")
+    publish_machine_publication_registry_workspace_parser.add_argument("--output-dir", required=True, help="Directory where copied machine publication catalog components, copied publication_network/ or release_catalog_index/, publication_registry/, and summary.json will be written")
+    publish_machine_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated publication-registry manifest")
+    publish_machine_publication_registry_workspace_parser.add_argument("--publication-registry-key-id", required=True, help="Signature key identifier to generate and use for the publication registry manifest")
+    publish_machine_publication_registry_workspace_parser.add_argument("--channel", help="Optional publication registry channel metadata")
+    publish_machine_publication_registry_workspace_parser.add_argument("--label", help="Optional human-readable publication registry label metadata")
+    publish_machine_publication_registry_workspace_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
     inventory_artifacts_parser = subparsers.add_parser("inventory-artifacts", help="Scan one or more directories and summarize discovered SATROOT artifacts and workspaces")
     inventory_artifacts_parser.add_argument("search_root", nargs="*", help="Directory root to scan for SATROOT artifacts")
@@ -13424,6 +13561,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote SATROOT publication catalog workspace from existing publications to {Path(args.output_dir).resolve()}")
         return 0
 
+    if args.command == "publish-machine-publication-catalog-workspace":
+        publish_machine_publication_catalog_workspace(
+            publication_descriptor_index_dir=args.publication_descriptor_index_dir,
+            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir,
+            output_dir=args.output_dir,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication catalog workspace from existing publications to {Path(args.output_dir).resolve()}")
+        return 0
+
     if args.command == "publish-publication-registry-workspace":
         publication_network_dir = Path(args.publication_network_dir).resolve() if args.publication_network_dir else None
         release_catalog_index_dir = args.release_catalog_index_dir
@@ -13447,6 +13593,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_registry_metadata=publication_registry_metadata,
         )
         print(f"wrote SATROOT publication registry workspace from existing publication catalog workspace to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-machine-publication-registry-workspace":
+        publication_network_dir = Path(args.publication_network_dir).resolve() if args.publication_network_dir else None
+        release_catalog_index_dir = args.release_catalog_index_dir
+        if release_catalog_index_dir is None and publication_network_dir is not None:
+            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+        if release_catalog_index_dir is None:
+            raise SatRootError("publish-machine-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
+
+        publication_registry_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        publish_machine_publication_registry_workspace(
+            publication_catalog_workspace_dir=args.publication_catalog_workspace_dir,
+            release_catalog_index_dir=release_catalog_index_dir,
+            publication_network_dir=publication_network_dir,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.publication_registry_key_id,
+            publication_registry_metadata=publication_registry_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication registry workspace from existing publication catalog workspace to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "inventory-artifacts":

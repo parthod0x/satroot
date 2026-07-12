@@ -680,6 +680,40 @@ def make_publication_catalog_workspace_dir(tmp_path: Path) -> Path:
     return output_dir
 
 
+def make_machine_publication_catalog_workspace_dir(tmp_path: Path) -> Path:
+    output_dir = tmp_path / "machine_publication_catalog_workspace"
+    assert main(
+        [
+            "bootstrap-machine-publication-catalog-workspace",
+            "--symbol",
+            "APIPUBCAT2",
+            "--name",
+            "Machine Publication Catalog Fixture",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--descriptor-index-label",
+            "Machine Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Metadata Catalog",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+    return output_dir
+
+
 def build_rotation_ledger():
     genesis = copy.deepcopy(load_events()[0])
     genesis["max_supply"] = "1000000000"
@@ -3951,6 +3985,70 @@ def test_cli_publish_publication_catalog_workspace_from_existing_publications(tm
     capsys.readouterr()
 
 
+def test_cli_publish_machine_publication_catalog_workspace_from_existing_publications(tmp_path, capsys):
+    source_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "published_machine_catalog_workspace"
+
+    exit_code = main(
+        [
+            "publish-machine-publication-catalog-workspace",
+            str(source_workspace_dir / "publication_descriptor_index"),
+            str(source_workspace_dir / "publication_metadata_catalog"),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication catalog workspace from existing publications to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_descriptor_index_dir"] == str((source_workspace_dir / "publication_descriptor_index").resolve())
+    assert summary["source_publication_metadata_catalog_dir"] == str((source_workspace_dir / "publication_metadata_catalog").resolve())
+    assert summary["source_machine_catalog_workspace_dir"] == str((source_workspace_dir / "machine_catalog_workspace").resolve())
+    assert summary["artifact_count"] == 3
+    assert summary["publication_metadata_bundle_count"] == 3
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_catalog_workspace_rejects_generic_publications(tmp_path):
+    demo_catalog_dir = make_demo_catalog_workspace_dir(tmp_path)
+    catalog_workspace_dir = tmp_path / "stable_only_publication_catalog_workspace"
+    assert main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            str(demo_catalog_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(catalog_workspace_dir),
+            "--descriptor-index-label",
+            "Stable Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Stable Metadata Catalog",
+        ]
+    ) == 0
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-publication-catalog-workspace",
+                str(catalog_workspace_dir / "publication_descriptor_index"),
+                str(catalog_workspace_dir / "publication_metadata_catalog"),
+                "--output-dir",
+                str(tmp_path / "should_not_exist"),
+            ]
+        )
+
+
 def test_cli_publish_publication_registry_workspace_from_release_catalog_index(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
@@ -3985,6 +4083,63 @@ def test_cli_publish_publication_registry_workspace_from_release_catalog_index(t
     assert summary["publication_registry"]["index"]["label"] == "Published Registry Workspace From Index"
     assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_registry_workspace_from_existing_catalog_workspace(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "published_machine_registry_workspace"
+
+    exit_code = main(
+        [
+            "publish-machine-publication-registry-workspace",
+            str(catalog_workspace_dir),
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Published Machine Registry Workspace",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication registry workspace from existing publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_machine_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_machine_catalog_workspace_dir"] == str((catalog_workspace_dir / "machine_catalog_workspace").resolve())
+    assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["publication_registry"]["index"]["label"] == "Published Machine Registry Workspace"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_registry_workspace_rejects_generic_catalog_workspace(tmp_path):
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="source_machine_catalog_workspace_dir"):
+        main(
+            [
+                "publish-machine-publication-registry-workspace",
+                str(catalog_workspace_dir),
+                "--publication-network-dir",
+                str(network_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--publication-registry-key-id",
+                "registry-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist"),
+            ]
+        )
 
 
 def test_cli_bootstrap_publication_registry_workspace_from_publication_network(tmp_path, capsys):

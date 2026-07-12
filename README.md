@@ -230,8 +230,10 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-publication-network` for generating one or more machine-only publication stacks and publishing them as a release-catalog index,
 - `satroot1 publish-machine-publication-network` for consolidating existing machine-only publication stack workspaces into the same SATROOT-MACHINE-1 publication network shape,
 - `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step, now with optional nested demo-catalog and publication-catalog-workspace presets,
+- `satroot1 publish-machine-publication-catalog-workspace` for re-wrapping existing publication descriptor and metadata lanes back into a machine-validated publication catalog workspace,
 - `satroot1 export-machine-publication-catalog-workspace-preset` for exporting that machine publication catalog workspace shape back into a validated reusable preset,
 - `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets,
+- `satroot1 publish-machine-publication-registry-workspace` for binding an existing machine publication catalog workspace to a release-catalog-index source while preserving machine provenance,
 - `satroot1 export-machine-publication-registry-workspace-preset` for exporting that machine publication registry workspace shape back into a validated reusable preset.
 
 This repo also now includes the first receipt-object profile draft:
@@ -269,7 +271,7 @@ python -m pytest
 Expected result:
 
 ```text
-332 passed
+336 passed
 ```
 
 ## Signing utilities
@@ -733,10 +735,22 @@ If you already have a publication descriptor index and matching publication meta
 satroot1 publish-publication-catalog-workspace publication_descriptor_index publication_metadata_catalog --output-dir publication_catalog_workspace_from_existing
 ```
 
+For a machine-only publication lane, `publish-machine-publication-catalog-workspace` looks for at least one nested demo-catalog descriptor whose `bundle_profiles` are entirely `SATROOT-MACHINE-1` and preserves that source machine workspace provenance in the published summary:
+
+```bash
+satroot1 publish-machine-publication-catalog-workspace machine_publication_descriptor_index machine_publication_metadata_catalog --output-dir machine_publication_catalog_workspace_from_existing
+```
+
 If you already have a publication catalog workspace and just want to bind it to a release-catalog-index source without regenerating the descriptor or metadata lanes, use `publish-publication-registry-workspace`:
 
 ```bash
 satroot1 publish-publication-registry-workspace publication_catalog_workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir publication_registry_workspace_from_existing --label "Published Existing Registry Workspace"
+```
+
+If that source catalog workspace is machine-validated, `publish-machine-publication-registry-workspace` carries forward the machine publication catalog provenance as well:
+
+```bash
+satroot1 publish-machine-publication-registry-workspace machine_publication_catalog_workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir machine_publication_registry_workspace_from_existing --label "Published Machine Registry Workspace"
 ```
 
 To scan a generated tree and see which SATROOT bundles, releases, catalogs, indexes, registries, and workspaces are present, use `inventory-artifacts`:
