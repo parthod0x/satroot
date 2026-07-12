@@ -140,9 +140,11 @@ The v0.1 kernel defines:
 - demo-catalog inspection via `demo-catalog-summary` and structural linting via `demo-catalog-lint`,
 - one-shot `bootstrap-publication-stack` orchestration for preset-driven bundles, releases, and release-catalog outputs in one workspace,
 - `publish-publication-stack` for consolidating existing demo catalog workspaces into one signed release-catalog stack,
+- `publish-machine-publication-stack` for consolidating existing SATROOT-MACHINE-1 demo catalog workspaces into one machine-only signed release-catalog stack,
 - publication-stack inspection via `publication-stack-summary` and structural linting via `publication-stack-lint`,
 - one-shot `bootstrap-publication-network` orchestration for preset-driven stacks plus a top-level release-catalog-index output in one workspace,
 - `publish-publication-network` for consolidating existing publication stack workspaces into one signed release-catalog-index network,
+- `publish-machine-publication-network` for consolidating existing SATROOT-MACHINE-1 publication stack workspaces into one machine-only signed release-catalog-index network,
 - publication-network inspection via `publication-network-summary` and structural linting via `publication-network-lint`,
 - one-shot `bootstrap-publication-catalog-workspace` orchestration for generating reusable descriptor-index and metadata-catalog lanes from arbitrary SATROOT artifacts,
 - `publish-publication-catalog-workspace` for consolidating an existing publication descriptor index plus publication metadata catalog into one reusable publication-catalog workspace,
@@ -224,7 +226,9 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step, with optional machine-only preset defaults,
 - `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows, now with optional generic demo-catalog preset support,
 - `satroot1 bootstrap-machine-publication-stack` for generating one or more machine-only demo catalog workspaces and publishing them as a release-catalog stack,
+- `satroot1 publish-machine-publication-stack` for consolidating existing machine-only demo catalog workspaces into the same SATROOT-MACHINE-1 publication stack shape,
 - `satroot1 bootstrap-machine-publication-network` for generating one or more machine-only publication stacks and publishing them as a release-catalog index,
+- `satroot1 publish-machine-publication-network` for consolidating existing machine-only publication stack workspaces into the same SATROOT-MACHINE-1 publication network shape,
 - `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step, now with optional nested demo-catalog and publication-catalog-workspace presets,
 - `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets.
 
@@ -263,7 +267,7 @@ python -m pytest
 Expected result:
 
 ```text
-324 passed
+328 passed
 ```
 
 ## Signing utilities
@@ -703,10 +707,22 @@ If you already have generated demo catalog workspaces and just want to consolida
 satroot1 publish-publication-stack generated_catalogs/stable_workspace generated_catalogs/machine_workspace --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_existing --label "Published Existing Stack"
 ```
 
+For existing machine-only catalog workspaces, `publish-machine-publication-stack` applies the same publish flow but rejects any nested bundle set that is not purely `SATROOT-MACHINE-1`:
+
+```bash
+satroot1 publish-machine-publication-stack generated_machine_catalogs/catalog_alpha generated_machine_catalogs/catalog_beta --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir machine_publication_stack_from_existing --label "Published Machine Stack"
+```
+
 If you already have generated publication stack workspaces and want a top-level signed network without regenerating the nested stacks, use `publish-publication-network`:
 
 ```bash
 satroot1 publish-publication-network generated_stacks/stack_alpha generated_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Published Existing Network"
+```
+
+For existing machine-only stack workspaces, `publish-machine-publication-network` enforces the same SATROOT-MACHINE-1-only constraint across every nested catalog workspace:
+
+```bash
+satroot1 publish-machine-publication-network generated_machine_stacks/stack_alpha generated_machine_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir machine_publication_network_from_existing --label "Published Machine Network"
 ```
 
 If you already have a publication descriptor index and matching publication metadata catalog publication, you can wrap them back into a reusable catalog workspace with `publish-publication-catalog-workspace`:

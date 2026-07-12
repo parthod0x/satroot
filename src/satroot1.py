@@ -4436,6 +4436,52 @@ def validate_publication_network_summary_consistency(summary: Mapping[str, Any])
         raise SatRootError("publication network summary stack_count mismatch")
 
 
+def _require_machine_demo_catalog_workspace(demo_catalog_dir: str | Path, *, label: str) -> None:
+    _, summary = _load_workspace_summary(demo_catalog_dir, label=label)
+    validate_demo_catalog_summary_consistency(summary)
+    bundles = summary.get("bundles")
+    assert isinstance(bundles, list)
+    unexpected_profiles = sorted(
+        {
+            entry.get("profile")
+            for entry in bundles
+            if isinstance(entry, Mapping) and entry.get("profile") != MACHINE_DEMO_CATALOG_PROFILE
+        }
+    )
+    if unexpected_profiles or not bundles:
+        raise SatRootError(
+            f"{label} must contain only {MACHINE_DEMO_CATALOG_PROFILE} bundles; "
+            f"found {unexpected_profiles or 'none'}"
+        )
+
+
+def _require_machine_publication_stack_workspace(publication_stack_dir: str | Path, *, label: str) -> None:
+    stack_path, summary = _load_workspace_summary(publication_stack_dir, label=label)
+    validate_publication_stack_summary_consistency(summary)
+    workspaces = summary.get("workspaces")
+    assert isinstance(workspaces, list)
+    if not workspaces:
+        raise SatRootError(f"{label} must contain at least one nested demo catalog workspace")
+
+    for entry in workspaces:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid nested workspace entry")
+        workspace_name = entry.get("workspace_name")
+        workspace_dir = entry.get("workspace_dir")
+        if isinstance(workspace_dir, str) and workspace_dir.strip():
+            nested_workspace_dir = Path(workspace_dir).resolve()
+        elif isinstance(workspace_name, str) and workspace_name.strip():
+            nested_workspace_dir = (stack_path / "catalog_workspaces" / workspace_name).resolve()
+        else:
+            raise SatRootError(f"{label} is missing nested demo catalog workspace metadata")
+        nested_label = (
+            f"{label} nested demo catalog workspace {workspace_name!r}"
+            if isinstance(workspace_name, str) and workspace_name.strip()
+            else f"{label} nested demo catalog workspace"
+        )
+        _require_machine_demo_catalog_workspace(nested_workspace_dir, label=nested_label)
+
+
 def validate_publication_catalog_workspace_summary_consistency(summary: Mapping[str, Any]) -> None:
     artifact_paths = summary.get("artifact_paths")
     metadata_bundles = summary.get("publication_metadata_bundles")
@@ -7443,6 +7489,33 @@ def publish_publication_stack_workspace(
     }
 
 
+def publish_machine_publication_stack_workspace(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = [Path(value).resolve() for value in workspace_dirs]
+    if not resolved_workspace_dirs:
+        raise SatRootError("machine publication stack publishing requires at least one demo catalog workspace")
+
+    for workspace_dir in resolved_workspace_dirs:
+        _require_machine_demo_catalog_workspace(
+            workspace_dir,
+            label="machine publication stack publishing source workspace",
+        )
+
+    return publish_publication_stack_workspace(
+        resolved_workspace_dirs,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        release_catalog_metadata=release_catalog_metadata,
+    )
+
+
 def publish_publication_network_workspace(
     workspace_dirs: Sequence[str | Path],
     *,
@@ -7561,6 +7634,33 @@ def publish_publication_registry_workspace(
         publication_metadata_catalog_key_id=None,
         publication_registry_key_id=key_id,
         publication_registry_metadata=publication_registry_metadata,
+    )
+
+
+def publish_machine_publication_network_workspace(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    release_catalog_index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = [Path(value).resolve() for value in workspace_dirs]
+    if not resolved_workspace_dirs:
+        raise SatRootError("machine publication network publishing requires at least one publication stack workspace")
+
+    for workspace_dir in resolved_workspace_dirs:
+        _require_machine_publication_stack_workspace(
+            workspace_dir,
+            label="machine publication network publishing source workspace",
+        )
+
+    return publish_publication_network_workspace(
+        resolved_workspace_dirs,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        release_catalog_index_metadata=release_catalog_index_metadata,
     )
 
 
@@ -11158,6 +11258,17 @@ def build_cli_parser() -> Any:
     publish_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label metadata")
     publish_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
+    publish_machine_publication_stack_parser = subparsers.add_parser("publish-machine-publication-stack", help="Copy existing SATROOT-MACHINE-1 demo catalog workspaces into one machine-only publication stack and publish a signed release catalog")
+    publish_machine_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT-MACHINE-1 demo catalog workspace directory")
+    publish_machine_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 demo catalog workspaces; may be repeated")
+    publish_machine_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    publish_machine_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where copied machine catalog workspaces, release_catalog/, and summary.json will be written")
+    publish_machine_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated release-catalog manifest")
+    publish_machine_publication_stack_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the top-level release catalog manifest")
+    publish_machine_publication_stack_parser.add_argument("--channel", help="Optional release catalog channel metadata")
+    publish_machine_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label metadata")
+    publish_machine_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
+
     publish_publication_network_parser = subparsers.add_parser("publish-publication-network", help="Copy existing publication stack workspaces into one SATROOT publication network and publish a signed release-catalog index")
     publish_publication_network_parser.add_argument("publication_stack_dir", nargs="*", help="Path to an existing SATROOT publication stack workspace directory")
     publish_publication_network_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication stack workspaces; may be repeated")
@@ -11168,6 +11279,17 @@ def build_cli_parser() -> Any:
     publish_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata")
     publish_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label metadata")
     publish_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
+
+    publish_machine_publication_network_parser = subparsers.add_parser("publish-machine-publication-network", help="Copy existing machine-only publication stack workspaces into one SATROOT-MACHINE-1 publication network and publish a signed release-catalog index")
+    publish_machine_publication_network_parser.add_argument("publication_stack_dir", nargs="*", help="Path to an existing SATROOT-MACHINE-1 publication stack workspace directory")
+    publish_machine_publication_network_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 publication stack workspaces; may be repeated")
+    publish_machine_publication_network_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    publish_machine_publication_network_parser.add_argument("--output-dir", required=True, help="Directory where copied machine stack workspaces, release_catalog_index/, and summary.json will be written")
+    publish_machine_publication_network_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated release-catalog-index manifest")
+    publish_machine_publication_network_parser.add_argument("--release-catalog-index-key-id", required=True, help="Signature key identifier to generate and use for the top-level release catalog index manifest")
+    publish_machine_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata")
+    publish_machine_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label metadata")
+    publish_machine_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
     publish_publication_catalog_workspace_parser = subparsers.add_parser("publish-publication-catalog-workspace", help="Copy an existing publication descriptor index plus publication metadata catalog into one SATROOT publication catalog workspace without regenerating nested publications")
     publish_publication_catalog_workspace_parser.add_argument("publication_descriptor_index_dir", help="Path to an existing SATROOT publication descriptor index publication directory")
@@ -13164,6 +13286,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote SATROOT publication stack from existing workspaces to {Path(args.output_dir).resolve()}")
         return 0
 
+    if args.command == "publish-machine-publication-stack":
+        catalog_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        workspace_dirs = resolve_demo_catalog_workspace_inputs(
+            args.catalog_workspace_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        publish_machine_publication_stack_workspace(
+            workspace_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.release_catalog_key_id,
+            release_catalog_metadata=catalog_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication stack from existing workspaces to {Path(args.output_dir).resolve()}")
+        return 0
+
     if args.command == "publish-publication-network":
         index_metadata = {
             "channel": args.channel,
@@ -13183,6 +13326,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_catalog_index_metadata=index_metadata,
         )
         print(f"wrote SATROOT publication network from existing workspaces to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-machine-publication-network":
+        index_metadata = {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }
+        workspace_dirs = resolve_publication_stack_workspace_inputs(
+            args.publication_stack_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        publish_machine_publication_network_workspace(
+            workspace_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.release_catalog_index_key_id,
+            release_catalog_index_metadata=index_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication network from existing workspaces to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "publish-publication-catalog-workspace":

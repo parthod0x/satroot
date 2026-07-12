@@ -3623,6 +3623,254 @@ def test_cli_publish_publication_network_from_existing_stack_workspaces(tmp_path
     capsys.readouterr()
 
 
+def test_cli_publish_machine_publication_stack_from_existing_catalog_workspaces(tmp_path, capsys):
+    machine_alpha_dir = tmp_path / "machine_alpha_workspace"
+    machine_beta_dir = tmp_path / "machine_beta_workspace"
+
+    assert main(
+        [
+            "bootstrap-machine-demo-catalog",
+            "--symbol",
+            "MPSTKA1",
+            "--name",
+            "Machine Publish Stack Alpha",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--label",
+            "Machine Publish Stack Alpha Release",
+            "--output-dir",
+            str(machine_alpha_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-machine-demo-catalog",
+            "--symbol",
+            "MPSTKB1",
+            "--name",
+            "Machine Publish Stack Beta",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "gpu-inference",
+            "--billing-unit",
+            "minute",
+            "--label",
+            "Machine Publish Stack Beta Release",
+            "--output-dir",
+            str(machine_beta_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    output_dir = tmp_path / "published_machine_stack"
+    exit_code = main(
+        [
+            "publish-machine-publication-stack",
+            str(machine_alpha_dir),
+            str(machine_beta_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Published Machine Stack",
+            "--published-at",
+            "2026-07-06T05:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication stack from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["catalog"]["label"] == "Published Machine Stack"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"machine_alpha_workspace", "machine_beta_workspace"}
+
+    alpha_summary = json.loads((output_dir / "catalog_workspaces" / "machine_alpha_workspace" / "summary.json").read_text(encoding="utf-8"))
+    beta_summary = json.loads((output_dir / "catalog_workspaces" / "machine_beta_workspace" / "summary.json").read_text(encoding="utf-8"))
+    assert {entry["profile"] for entry in alpha_summary["bundles"]} == {"SATROOT-MACHINE-1"}
+    assert {entry["profile"] for entry in beta_summary["bundles"]} == {"SATROOT-MACHINE-1"}
+
+    secrets = json.loads((output_dir / "release_catalog" / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog" / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"]["label"] == "Published Machine Stack"
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_stack_rejects_non_machine_workspace(tmp_path):
+    mixed_workspace_dir = make_demo_catalog_workspace_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-publication-stack",
+                str(mixed_workspace_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--release-catalog-key-id",
+                "catalog-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist"),
+            ]
+        )
+
+
+def test_cli_publish_machine_publication_network_from_existing_stack_workspaces(tmp_path, capsys):
+    machine_catalog_preset_a = tmp_path / "machine_publish_network_a.json"
+    write_json(
+        machine_catalog_preset_a,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPNWA1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Publish Network Alpha"},
+            "release": {
+                "channel": "machine",
+                "label": "Machine Publish Network Alpha Release",
+                "published_at": "2026-07-06T05:10:00Z",
+            },
+        },
+    )
+    machine_catalog_preset_b = tmp_path / "machine_publish_network_b.json"
+    write_json(
+        machine_catalog_preset_b,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPNWB1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Publish Network Beta"},
+            "release": {
+                "channel": "machine",
+                "label": "Machine Publish Network Beta Release",
+                "published_at": "2026-07-06T05:20:00Z",
+            },
+        },
+    )
+
+    stack_alpha_dir = tmp_path / "machine_publish_stack_alpha"
+    stack_beta_dir = tmp_path / "machine_publish_stack_beta"
+    assert main(
+        [
+            "bootstrap-machine-publication-stack",
+            "--catalog-preset-json",
+            str(machine_catalog_preset_a),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_alpha_dir),
+            "--label",
+            "Machine Publish Network Stack Alpha",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-machine-publication-stack",
+            "--catalog-preset-json",
+            str(machine_catalog_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_beta_dir),
+            "--label",
+            "Machine Publish Network Stack Beta",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    output_dir = tmp_path / "published_machine_network"
+    exit_code = main(
+        [
+            "publish-machine-publication-network",
+            str(stack_alpha_dir),
+            str(stack_beta_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine-network",
+            "--label",
+            "Published Machine Network",
+            "--published-at",
+            "2026-07-06T05:30:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication network from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["release_catalog_index"]["index"]["label"] == "Published Machine Network"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"machine_publish_stack_alpha", "machine_publish_stack_beta"}
+
+    alpha_summary = json.loads((output_dir / "stack_workspaces" / "machine_publish_stack_alpha" / "summary.json").read_text(encoding="utf-8"))
+    beta_summary = json.loads((output_dir / "stack_workspaces" / "machine_publish_stack_beta" / "summary.json").read_text(encoding="utf-8"))
+    assert alpha_summary["release_catalog"]["catalog"]["label"] == "Machine Publish Network Stack Alpha"
+    assert beta_summary["release_catalog"]["catalog"]["label"] == "Machine Publish Network Stack Beta"
+
+    secrets = json.loads((output_dir / "release_catalog_index" / "release_catalog_index_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 2
+    assert verified["index"]["label"] == "Published Machine Network"
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_network_rejects_non_machine_stack(tmp_path):
+    mixed_stack_dir = make_demo_publication_stack_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-publication-network",
+                str(mixed_stack_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--release-catalog-index-key-id",
+                "index-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist"),
+            ]
+        )
+
+
 def test_cli_publish_publication_registry_workspace_from_existing_catalog_workspace(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
