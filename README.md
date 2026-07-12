@@ -271,7 +271,7 @@ python -m pytest
 Expected result:
 
 ```text
-336 passed
+338 passed
 ```
 
 ## Signing utilities
@@ -769,6 +769,13 @@ To derive a reusable preset back from a generated demo catalog workspace:
 
 ```bash
 satroot1 export-demo-catalog-preset catalog_workspace --output exported_catalog.json
+```
+
+To derive reusable presets back from higher-level signed catalog artifacts:
+
+```bash
+satroot1 export-release-catalog-preset publication_stack/release_catalog --output exported_release_catalog.json
+satroot1 export-release-catalog-index-preset publication_network/release_catalog_index --output exported_release_catalog_index.json
 ```
 
 To derive a publication stack preset and also emit nested demo catalog preset files alongside it:

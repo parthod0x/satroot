@@ -8906,6 +8906,68 @@ def export_publication_registry_preset_from_workspace(
     return preset
 
 
+def export_release_catalog_preset_from_workspace(
+    release_catalog_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _manifest_path, catalog_path, _manifest, catalog = _load_release_catalog_publication(release_catalog_dir)
+
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    preset: Dict[str, Any] = {
+        "type": "SATROOT-RELEASE-CATALOG-PRESET",
+        "version": "0.1",
+    }
+
+    release_dirs: list[str] = []
+    for entry in catalog.get("releases", []):
+        if not isinstance(entry, Mapping):
+            continue
+        release_path = entry.get("release_path")
+        if not isinstance(release_path, str) or not release_path.strip():
+            continue
+        resolved_release_dir = (catalog_path.parent / release_path).resolve()
+        release_dirs.append(_relative_output_path(resolved_release_dir, base_dir=base_dir))
+    if release_dirs:
+        preset["release_dirs"] = release_dirs
+
+    catalog_metadata = _filtered_string_mapping(catalog.get("catalog"))
+    if catalog_metadata:
+        preset["catalog"] = catalog_metadata
+    return preset
+
+
+def export_release_catalog_index_preset_from_workspace(
+    release_catalog_index_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    _manifest_path, index_path, _manifest, index = _load_release_catalog_index_publication(release_catalog_index_dir)
+
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    preset: Dict[str, Any] = {
+        "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
+        "version": "0.1",
+    }
+
+    release_catalog_dirs: list[str] = []
+    for entry in index.get("release_catalogs", []):
+        if not isinstance(entry, Mapping):
+            continue
+        release_catalog_path = entry.get("release_catalog_path")
+        if not isinstance(release_catalog_path, str) or not release_catalog_path.strip():
+            continue
+        resolved_release_catalog_dir = (index_path.parent / release_catalog_path).resolve()
+        release_catalog_dirs.append(_relative_output_path(resolved_release_catalog_dir, base_dir=base_dir))
+    if release_catalog_dirs:
+        preset["release_catalog_dirs"] = release_catalog_dirs
+
+    index_metadata = _filtered_string_mapping(index.get("index"))
+    if index_metadata:
+        preset["index"] = index_metadata
+    return preset
+
+
 def export_machine_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
@@ -11561,6 +11623,14 @@ def build_cli_parser() -> Any:
     export_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory")
     export_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
 
+    export_release_catalog_preset_parser = subparsers.add_parser("export-release-catalog-preset", help="Export a SATROOT release catalog back into a reusable release catalog preset")
+    export_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory")
+    export_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
+
+    export_release_catalog_index_preset_parser = subparsers.add_parser("export-release-catalog-index-preset", help="Export a SATROOT release catalog index back into a reusable release catalog index preset")
+    export_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
+    export_release_catalog_index_preset_parser.add_argument("--output", help="Optional output path")
+
     render_publication_report_parser = subparsers.add_parser("render-publication-report", help="Render a human-readable markdown report for a SATROOT bundle, release, catalog, index, or workspace")
     render_publication_report_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
     render_publication_report_parser.add_argument("--output", help="Optional output path")
@@ -13722,6 +13792,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "export-publication-registry-preset":
         preset = export_publication_registry_preset_from_workspace(
             args.publication_registry_dir,
+            output_path=args.output,
+        )
+        _write_output(preset, args.output)
+        return 0
+
+    if args.command == "export-release-catalog-preset":
+        preset = export_release_catalog_preset_from_workspace(
+            args.release_catalog_dir,
+            output_path=args.output,
+        )
+        _write_output(preset, args.output)
+        return 0
+
+    if args.command == "export-release-catalog-index-preset":
+        preset = export_release_catalog_index_preset_from_workspace(
+            args.release_catalog_index_dir,
             output_path=args.output,
         )
         _write_output(preset, args.output)

@@ -5260,6 +5260,41 @@ def test_cli_export_publication_registry_preset(tmp_path):
     assert preset["registry"]["label"] == "SATROOT Publication Registry"
 
 
+def test_cli_export_release_catalog_preset(tmp_path):
+    release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
+    preset_path = tmp_path / "exported_release_catalog.json"
+
+    exit_code = main(["export-release-catalog-preset", str(release_catalog_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_release_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
+    assert len(loaded["release_dirs"]) == 2
+    assert preset["catalog"]["label"] == "Publication Stack Override"
+
+
+def test_cli_export_release_catalog_index_preset(tmp_path):
+    release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
+    preset_path = tmp_path / "exported_release_catalog_index.json"
+
+    exit_code = main(
+        [
+            "export-release-catalog-index-preset",
+            str(release_catalog_index_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_release_catalog_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-INDEX-PRESET"
+    assert len(loaded["release_catalog_dirs"]) == 2
+    assert preset["index"]["label"] == "Publication Network Override"
+
+
 def test_cli_export_publication_metadata_catalog_preset(tmp_path):
     catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
     preset_path = tmp_path / "exported_publication_metadata_catalog.json"
