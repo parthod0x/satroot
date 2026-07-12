@@ -8354,6 +8354,25 @@ def export_publication_stack_preset_from_workspace(
     return preset
 
 
+def export_machine_publication_stack_preset_from_workspace(
+    publication_stack_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+    catalog_preset_dir: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    preset = export_publication_stack_preset_from_workspace(
+        publication_stack_dir,
+        output_path=output_path,
+        catalog_preset_dir=catalog_preset_dir,
+    )
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    for value in preset.get("catalog_presets", []):
+        if not isinstance(value, str) or not value.strip():
+            continue
+        load_machine_demo_catalog_preset((base_dir / value).resolve())
+    return preset
+
+
 def export_publication_network_preset_from_workspace(
     publication_network_dir: str | Path,
     *,
@@ -8415,6 +8434,27 @@ def export_publication_network_preset_from_workspace(
     }
     if release_catalog_index_metadata:
         preset["release_catalog_index"] = release_catalog_index_metadata
+    return preset
+
+
+def export_machine_publication_network_preset_from_workspace(
+    publication_network_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+    stack_preset_dir: Optional[str | Path] = None,
+    catalog_preset_dir: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    preset = export_publication_network_preset_from_workspace(
+        publication_network_dir,
+        output_path=output_path,
+        stack_preset_dir=stack_preset_dir,
+        catalog_preset_dir=catalog_preset_dir,
+    )
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    for value in preset.get("stack_presets", []):
+        if not isinstance(value, str) or not value.strip():
+            continue
+        load_machine_publication_stack_preset((base_dir / value).resolve())
     return preset
 
 
@@ -11159,11 +11199,22 @@ def build_cli_parser() -> Any:
     export_publication_stack_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported")
     export_publication_stack_preset_parser.add_argument("--output", help="Optional output path")
 
+    export_machine_publication_stack_preset_parser = subparsers.add_parser("export-machine-publication-stack-preset", help="Export a SATROOT-MACHINE-1 publication stack workspace back into a machine-only reusable publication stack preset")
+    export_machine_publication_stack_preset_parser.add_argument("publication_stack_dir", help="Path to a SATROOT-MACHINE-1 publication stack workspace directory")
+    export_machine_publication_stack_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested machine demo catalog presets will also be exported")
+    export_machine_publication_stack_preset_parser.add_argument("--output", help="Optional output path")
+
     export_publication_network_preset_parser = subparsers.add_parser("export-publication-network-preset", help="Export a SATROOT publication network workspace back into a reusable publication network preset")
     export_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network workspace directory")
     export_publication_network_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested publication stack presets will also be exported")
     export_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported alongside generated stack presets")
     export_publication_network_preset_parser.add_argument("--output", help="Optional output path")
+
+    export_machine_publication_network_preset_parser = subparsers.add_parser("export-machine-publication-network-preset", help="Export a SATROOT-MACHINE-1 publication network workspace back into a machine-only reusable publication network preset")
+    export_machine_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT-MACHINE-1 publication network workspace directory")
+    export_machine_publication_network_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested machine publication stack presets will also be exported")
+    export_machine_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested machine demo catalog presets will also be exported alongside generated stack presets")
+    export_machine_publication_network_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-publication-catalog-workspace-preset", help="Export a SATROOT publication catalog workspace back into a reusable publication catalog workspace preset")
     export_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory")
@@ -13190,8 +13241,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(preset, args.output)
         return 0
 
+    if args.command == "export-machine-publication-stack-preset":
+        preset = export_machine_publication_stack_preset_from_workspace(
+            args.publication_stack_dir,
+            output_path=args.output,
+            catalog_preset_dir=args.catalog_preset_dir,
+        )
+        _write_output(preset, args.output)
+        return 0
+
     if args.command == "export-publication-network-preset":
         preset = export_publication_network_preset_from_workspace(
+            args.publication_network_dir,
+            output_path=args.output,
+            stack_preset_dir=args.stack_preset_dir,
+            catalog_preset_dir=args.catalog_preset_dir,
+        )
+        _write_output(preset, args.output)
+        return 0
+
+    if args.command == "export-machine-publication-network-preset":
+        preset = export_machine_publication_network_preset_from_workspace(
             args.publication_network_dir,
             output_path=args.output,
             stack_preset_dir=args.stack_preset_dir,

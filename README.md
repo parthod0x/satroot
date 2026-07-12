@@ -263,7 +263,7 @@ python -m pytest
 Expected result:
 
 ```text
-322 passed
+324 passed
 ```
 
 ## Signing utilities
@@ -745,10 +745,22 @@ To derive a publication stack preset and also emit nested demo catalog preset fi
 satroot1 export-publication-stack-preset publication_stack --catalog-preset-dir exported_catalog_presets --output exported_stack.json
 ```
 
+For a machine-only stack, there is a matching export wrapper that validates nested exported catalog presets stay on `SATROOT-MACHINE-1`:
+
+```bash
+satroot1 export-machine-publication-stack-preset machine_publication_stack --catalog-preset-dir exported_machine_catalog_presets --output exported_machine_stack.json
+```
+
 To derive a publication network preset and recursively emit nested stack and catalog preset files:
 
 ```bash
 satroot1 export-publication-network-preset publication_network --stack-preset-dir exported_stack_presets --catalog-preset-dir exported_catalog_presets --output exported_network.json
+```
+
+And the machine-only network lane can be exported the same way while validating nested stack and catalog presets remain machine-only:
+
+```bash
+satroot1 export-machine-publication-network-preset machine_publication_network --stack-preset-dir exported_machine_stack_presets --catalog-preset-dir exported_machine_catalog_presets --output exported_machine_network.json
 ```
 
 To render a human-readable markdown report for a generated SATROOT artifact or workspace:
