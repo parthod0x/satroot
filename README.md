@@ -453,6 +453,18 @@ And if you already manage signing material yourself, there is a matching publish
 satroot1 publish-machine-release-catalog machine_release_alpha machine_release_beta --output-dir machine_release_catalog --channel machine --label "SATROOT Machine Release Catalog" --published-at 2026-07-04T03:00:00Z --scheme hmac-sha256 --key-id catalog-key --secrets-json release_hmac/release_secrets.json
 ```
 
+To publish a higher-level machine-only index across multiple machine release catalogs, there is now a matching machine wrapper at the release-catalog-index layer:
+
+```bash
+satroot1 bootstrap-machine-release-catalog-index-publication machine_release_catalog_alpha/release_catalog.json machine_release_catalog_beta/release_catalog_manifest.json --output-dir machine_release_catalog_index --channel machine --label "SATROOT Machine Catalog Network" --published-at 2026-07-04T06:00:00Z --scheme hmac-sha256 --key-id index-key
+```
+
+And the publish variant likewise rejects any non-machine release catalog inputs:
+
+```bash
+satroot1 publish-machine-release-catalog-index machine_release_catalog_alpha machine_release_catalog_beta --output-dir machine_release_catalog_index --channel machine --label "SATROOT Machine Catalog Network" --published-at 2026-07-04T06:00:00Z --scheme hmac-sha256 --key-id index-key --secrets-json release_hmac/release_secrets.json
+```
+
 Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly from machine-profile inputs:
 
 ```bash

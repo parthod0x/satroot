@@ -20,6 +20,7 @@ from satroot1 import (
     build_signed_publication_descriptor_index_manifest,
     append_signed_event_to_ledger,
     bootstrap_machine_credit_demo_ledger,
+    bootstrap_machine_release_catalog_publication,
     bootstrap_machine_credit_demo_release,
     bootstrap_publication_descriptor_index_publication,
     bootstrap_release_catalog_index_publication,
@@ -259,6 +260,38 @@ def make_demo_release_catalog_index_dir(tmp_path: Path) -> Path:
     )
     assert Path(published["release_catalog_index_manifest_path"]).is_file()
     return output_dir
+
+
+def make_machine_release_catalog_dirs(tmp_path: Path) -> tuple[Path, Path]:
+    alpha_release_dirs = make_machine_release_dirs(tmp_path / "machine_catalog_alpha_root")
+    beta_release_dirs = make_machine_release_dirs(tmp_path / "machine_catalog_beta_root")
+
+    catalog_alpha_dir = tmp_path / "machine_catalog_alpha"
+    bootstrap_machine_release_catalog_publication(
+        list(alpha_release_dirs),
+        output_dir=catalog_alpha_dir,
+        signature_scheme="hmac-sha256",
+        key_id="machine-catalog-alpha-key",
+        catalog_metadata={
+            "channel": "machine",
+            "label": "SATROOT Machine Catalog Alpha",
+            "published_at": "2026-07-04T04:00:00Z",
+        },
+    )
+
+    catalog_beta_dir = tmp_path / "machine_catalog_beta"
+    bootstrap_machine_release_catalog_publication(
+        list(beta_release_dirs),
+        output_dir=catalog_beta_dir,
+        signature_scheme="hmac-sha256",
+        key_id="machine-catalog-beta-key",
+        catalog_metadata={
+            "channel": "machine",
+            "label": "SATROOT Machine Catalog Beta",
+            "published_at": "2026-07-04T05:00:00Z",
+        },
+    )
+    return catalog_alpha_dir, catalog_beta_dir
 
 
 def make_demo_catalog_workspace_dir(tmp_path: Path) -> Path:
@@ -2988,6 +3021,106 @@ def test_cli_bootstrap_release_catalog_index_publication_with_preset_json_and_cl
     assert index["index"]["channel"] == "network"
     assert index["index"]["label"] == "SATROOT Preset Override Network"
     assert index["index"]["published_at"] == "2026-07-02T06:00:00Z"
+
+
+def test_cli_bootstrap_machine_release_catalog_index_publication(tmp_path, capsys):
+    catalog_alpha_dir, catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
+    output_dir = tmp_path / "machine_release_catalog_index_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-release-catalog-index-publication",
+            str(catalog_alpha_dir),
+            str(catalog_beta_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "SATROOT Machine Catalog Network",
+            "--published-at",
+            "2026-07-04T06:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_index_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "release_catalog_index_secrets.json").read_text(encoding="utf-8"))
+
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "SATROOT Machine Catalog Network"
+    assert manifest["signature_key_id"] == "index-key"
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 2
+    assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_machine_release_catalog_index_publication_from_catalog_json_inputs(tmp_path, capsys):
+    catalog_alpha_dir, catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
+    output_dir = tmp_path / "machine_release_catalog_index_publication_json_inputs"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-release-catalog-index-publication",
+            str(Path(catalog_alpha_dir) / "release_catalog.json"),
+            str(Path(catalog_beta_dir) / "release_catalog_manifest.json"),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "SATROOT Machine Catalog Network via JSON",
+            "--published-at",
+            "2026-07-04T06:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "SATROOT Machine Catalog Network via JSON"
+
+
+def test_cli_publish_machine_release_catalog_index_rejects_non_machine_catalog(tmp_path):
+    machine_catalog_dir, _machine_catalog_dir_two = make_machine_release_catalog_dirs(tmp_path / "machine_root")
+    generic_catalog_dir = make_demo_release_catalog_dir(tmp_path / "generic_root")
+    output_dir = tmp_path / "mixed_machine_release_catalog_index"
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-release-catalog-index",
+                str(machine_catalog_dir),
+                str(generic_catalog_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+            ]
+        )
 
 
 def test_cli_bootstrap_publication_stack_from_presets(tmp_path, capsys):
