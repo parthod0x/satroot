@@ -8949,10 +8949,17 @@ def export_publication_registry_preset_from_workspace(
 
 
 def export_release_catalog_preset_from_workspace(
-    release_catalog_dir: str | Path,
+    path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        release_catalog_dir = candidate_path
+    else:
+        release_catalog_dir = candidate_path.parent
+        if candidate_path.name != "release_catalog.json":
+            raise SatRootError("release catalog preset export requires release_catalog.json or a release catalog directory containing it")
     _manifest_path, catalog_path, _manifest, catalog = _load_release_catalog_publication(release_catalog_dir)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
@@ -9023,10 +9030,19 @@ def export_bundle_index_preset_from_artifact(
 
 
 def export_release_catalog_index_preset_from_workspace(
-    release_catalog_index_dir: str | Path,
+    path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        release_catalog_index_dir = candidate_path
+    else:
+        release_catalog_index_dir = candidate_path.parent
+        if candidate_path.name != "release_catalog_index.json":
+            raise SatRootError(
+                "release catalog index preset export requires release_catalog_index.json or a release catalog index directory containing it"
+            )
     _manifest_path, index_path, _manifest, index = _load_release_catalog_index_publication(release_catalog_index_dir)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
@@ -11713,11 +11729,11 @@ def build_cli_parser() -> Any:
     export_bundle_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_release_catalog_preset_parser = subparsers.add_parser("export-release-catalog-preset", help="Export a SATROOT release catalog back into a reusable release catalog preset")
-    export_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory")
+    export_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory or release_catalog.json file")
     export_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
 
     export_release_catalog_index_preset_parser = subparsers.add_parser("export-release-catalog-index-preset", help="Export a SATROOT release catalog index back into a reusable release catalog index preset")
-    export_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
+    export_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory or release_catalog_index.json file")
     export_release_catalog_index_preset_parser.add_argument("--output", help="Optional output path")
 
     render_publication_report_parser = subparsers.add_parser("render-publication-report", help="Render a human-readable markdown report for a SATROOT bundle, release, catalog, index, or workspace")

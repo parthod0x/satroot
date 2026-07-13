@@ -798,11 +798,11 @@ To derive a reusable bundle-index preset back from either a release directory or
 satroot1 export-bundle-index-preset release_bootstrap --output exported_bundle_index.json
 ```
 
-To derive reusable presets back from higher-level signed catalog artifacts:
+To derive reusable presets back from higher-level signed catalog artifacts, either from the directory or the underlying JSON payload:
 
 ```bash
 satroot1 export-release-catalog-preset publication_stack/release_catalog --output exported_release_catalog.json
-satroot1 export-release-catalog-index-preset publication_network/release_catalog_index --output exported_release_catalog_index.json
+satroot1 export-release-catalog-index-preset publication_network/release_catalog_index/release_catalog_index.json --output exported_release_catalog_index.json
 ```
 
 To derive a publication stack preset and also emit nested demo catalog preset files alongside it:
