@@ -792,10 +792,10 @@ To derive a reusable preset back from a generated demo catalog workspace:
 satroot1 export-demo-catalog-preset catalog_workspace --output exported_catalog.json
 ```
 
-To derive a reusable bundle-index preset back from an existing `bundle_index.json`:
+To derive a reusable bundle-index preset back from either a release directory or an existing `bundle_index.json`:
 
 ```bash
-satroot1 export-bundle-index-preset release_bootstrap/bundle_index.json --output exported_bundle_index.json
+satroot1 export-bundle-index-preset release_bootstrap --output exported_bundle_index.json
 ```
 
 To derive reusable presets back from higher-level signed catalog artifacts:

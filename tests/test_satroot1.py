@@ -5312,6 +5312,53 @@ def test_cli_export_bundle_index_preset(tmp_path):
     assert preset["release"]["label"] == "Exported Bundle Index"
 
 
+def test_cli_export_bundle_index_preset_from_release_dir(tmp_path):
+    bundle_dir = tmp_path / "bundle"
+    release_dir = tmp_path / "release"
+    preset_path = tmp_path / "exported_bundle_index_from_release.json"
+
+    assert main(
+        [
+            "bootstrap-genesis-bundle",
+            "--symbol",
+            "BINDEX2",
+            "--name",
+            "Bundle Index Release Export",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--output-dir",
+            str(bundle_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-release-publication",
+            str(bundle_dir),
+            "--output-dir",
+            str(release_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Release Dir Bundle Index",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+        ]
+    ) == 0
+
+    exit_code = main(["export-bundle-index-preset", str(release_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_bundle_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-BUNDLE-INDEX-PRESET"
+    assert len(loaded["bundle_dirs"]) == 1
+    assert preset["release"]["label"] == "Release Dir Bundle Index"
+
+
 def test_cli_export_release_catalog_preset(tmp_path):
     release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
     preset_path = tmp_path / "exported_release_catalog.json"

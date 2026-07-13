@@ -8980,11 +8980,18 @@ def export_release_catalog_preset_from_workspace(
 
 
 def export_bundle_index_preset_from_artifact(
-    bundle_index_json: str | Path,
+    path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
-    bundle_index_path = Path(bundle_index_json).resolve()
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        bundle_index_path = (candidate_path / "bundle_index.json").resolve()
+    else:
+        bundle_index_path = candidate_path
+    if not bundle_index_path.is_file():
+        raise SatRootError("bundle index preset export requires bundle_index.json or a release directory containing it")
+
     index = _load_json_file(str(bundle_index_path))
     validate_instance_against_schema(index, load_bundle_index_schema())
     if not isinstance(index, Mapping):
@@ -11702,7 +11709,7 @@ def build_cli_parser() -> Any:
     export_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
 
     export_bundle_index_preset_parser = subparsers.add_parser("export-bundle-index-preset", help="Export a SATROOT bundle index back into a reusable bundle index preset")
-    export_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a SATROOT bundle_index.json file")
+    export_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a SATROOT bundle_index.json file or release directory")
     export_bundle_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_release_catalog_preset_parser = subparsers.add_parser("export-release-catalog-preset", help="Export a SATROOT release catalog back into a reusable release catalog preset")
