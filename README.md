@@ -805,6 +805,14 @@ satroot1 export-release-catalog-preset publication_stack/release_catalog --outpu
 satroot1 export-release-catalog-index-preset publication_network/release_catalog_index/release_catalog_index.json --output exported_release_catalog_index.json
 ```
 
+The publication-registry and publication-index exports follow the same pattern, so you can point them at either the publication directory or the generated JSON payload:
+
+```bash
+satroot1 export-publication-registry-preset publication_registry_publication/publication_registry.json --output exported_registry.json
+satroot1 export-publication-metadata-catalog-preset publication_metadata_catalog_publication --output exported_publication_metadata_catalog.json
+satroot1 export-publication-descriptor-index-preset publication_descriptor_index_publication/publication_descriptor_index.json --output exported_publication_descriptor_index.json
+```
+
 To derive a publication stack preset and also emit nested demo catalog preset files alongside it:
 
 ```bash

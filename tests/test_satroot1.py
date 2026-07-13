@@ -5269,6 +5269,29 @@ def test_cli_export_publication_registry_preset(tmp_path):
     assert preset["registry"]["label"] == "SATROOT Publication Registry"
 
 
+def test_cli_export_publication_registry_preset_from_json(tmp_path):
+    registry_dir = make_publication_registry_dir(tmp_path)
+    preset_path = tmp_path / "exported_registry_from_json.json"
+
+    exit_code = main(
+        [
+            "export-publication-registry-preset",
+            str(registry_dir / "publication_registry.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-PRESET"
+    assert Path(loaded["release_catalog_index_dir"]).name == "release_catalog_index"
+    assert Path(loaded["publication_descriptor_index_dir"]).name == "publication_descriptor_index_publication"
+    assert Path(loaded["publication_metadata_catalog_dir"]).name == "publication_metadata_catalog_publication"
+    assert preset["registry"]["label"] == "SATROOT Publication Registry"
+
+
 def test_cli_export_bundle_index_preset(tmp_path):
     bundle_dir = tmp_path / "bundle"
     bundle_index_path = tmp_path / "bundle_index.json"
@@ -5453,11 +5476,58 @@ def test_cli_export_publication_metadata_catalog_preset(tmp_path):
     assert preset["catalog"]["label"] == "SATROOT Metadata Catalog Publication"
 
 
+def test_cli_export_publication_metadata_catalog_preset_from_json(tmp_path):
+    catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+    preset_path = tmp_path / "exported_publication_metadata_catalog_from_json.json"
+
+    exit_code = main(
+        [
+            "export-publication-metadata-catalog-preset",
+            str(catalog_dir / "publication_metadata_catalog.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_metadata_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET"
+    assert sorted(Path(value).name for value in loaded["publication_metadata_bundle_dirs"]) == [
+        "publication_metadata_network",
+        "publication_metadata_release",
+    ]
+    assert preset["catalog"]["label"] == "SATROOT Metadata Catalog Publication"
+
+
 def test_cli_export_publication_descriptor_index_preset(tmp_path):
     descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
     preset_path = tmp_path / "exported_publication_descriptor_index.json"
 
     exit_code = main(["export-publication-descriptor-index-preset", str(descriptor_index_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_descriptor_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET"
+    assert len(loaded["artifact_paths"]) == 12
+    loaded_names = {Path(value).name for value in loaded["artifact_paths"]}
+    assert {"publication_network", "stack_a", "stack_b", "release_catalog_index", "stable_catalog", "machine_catalog"} <= loaded_names
+    assert preset["index"]["label"] == "SATROOT Descriptor Publication"
+
+
+def test_cli_export_publication_descriptor_index_preset_from_json(tmp_path):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+    preset_path = tmp_path / "exported_publication_descriptor_index_from_json.json"
+
+    exit_code = main(
+        [
+            "export-publication-descriptor-index-preset",
+            str(descriptor_index_dir / "publication_descriptor_index.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
     assert exit_code == 0
 
     preset = json.loads(preset_path.read_text(encoding="utf-8"))

@@ -8847,10 +8847,19 @@ def export_publication_registry_workspace_preset_from_workspace(
 
 
 def export_publication_descriptor_index_preset_from_workspace(
-    publication_descriptor_index_dir: str | Path,
+    path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        publication_descriptor_index_dir = candidate_path
+    else:
+        publication_descriptor_index_dir = candidate_path.parent
+        if candidate_path.name != "publication_descriptor_index.json":
+            raise SatRootError(
+                "publication descriptor index preset export requires publication_descriptor_index.json or a publication descriptor index directory containing it"
+            )
     _manifest_path, _descriptor_index_path, _manifest, index = _load_publication_descriptor_index_publication(
         publication_descriptor_index_dir
     )
@@ -8878,10 +8887,19 @@ def export_publication_descriptor_index_preset_from_workspace(
 
 
 def export_publication_metadata_catalog_preset_from_workspace(
-    publication_metadata_catalog_dir: str | Path,
+    path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        publication_metadata_catalog_dir = candidate_path
+    else:
+        publication_metadata_catalog_dir = candidate_path.parent
+        if candidate_path.name != "publication_metadata_catalog.json":
+            raise SatRootError(
+                "publication metadata catalog preset export requires publication_metadata_catalog.json or a publication metadata catalog directory containing it"
+            )
     _manifest_path, catalog_path, _manifest, catalog = _load_publication_metadata_catalog_publication(publication_metadata_catalog_dir)
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
     preset: Dict[str, Any] = {
@@ -8908,10 +8926,19 @@ def export_publication_metadata_catalog_preset_from_workspace(
 
 
 def export_publication_registry_preset_from_workspace(
-    publication_registry_dir: str | Path,
+    path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        publication_registry_dir = candidate_path
+    else:
+        publication_registry_dir = candidate_path.parent
+        if candidate_path.name != "publication_registry.json":
+            raise SatRootError(
+                "publication registry preset export requires publication_registry.json or a publication registry directory containing it"
+            )
     _, registry_path, _manifest, registry = _load_publication_registry_publication(publication_registry_dir)
     validate_publication_registry_consistency(registry)
 
@@ -11713,15 +11740,15 @@ def build_cli_parser() -> Any:
     export_machine_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_descriptor_index_preset_parser = subparsers.add_parser("export-publication-descriptor-index-preset", help="Export a SATROOT publication descriptor index back into a reusable publication descriptor index preset")
-    export_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory")
+    export_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory or publication_descriptor_index.json file")
     export_publication_descriptor_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_metadata_catalog_preset_parser = subparsers.add_parser("export-publication-metadata-catalog-preset", help="Export a SATROOT publication metadata catalog back into a reusable publication metadata catalog preset")
-    export_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory")
+    export_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory or publication_metadata_catalog.json file")
     export_publication_metadata_catalog_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_registry_preset_parser = subparsers.add_parser("export-publication-registry-preset", help="Export a SATROOT publication registry back into a reusable publication registry preset")
-    export_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory")
+    export_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory or publication_registry.json file")
     export_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
 
     export_bundle_index_preset_parser = subparsers.add_parser("export-bundle-index-preset", help="Export a SATROOT bundle index back into a reusable bundle index preset")
