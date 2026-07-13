@@ -459,6 +459,12 @@ If you only want the unsigned JSON catalog first, there is also a machine-valida
 satroot1 build-machine-release-catalog machine_release_alpha machine_release_beta/release_manifest.json --channel machine --label "SATROOT Machine Release Catalog" --published-at 2026-07-04T03:00:00Z --output machine_release_catalog.json
 ```
 
+And if you want to sign that unsigned machine catalog separately, the manifest step has a matching machine-only guard as well:
+
+```bash
+satroot1 build-machine-release-catalog-manifest machine_release_catalog.json --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret --output machine_release_catalog_manifest.json
+```
+
 To publish a higher-level machine-only index across multiple machine release catalogs, there is now a matching machine wrapper at the release-catalog-index layer:
 
 ```bash
@@ -475,6 +481,12 @@ There is also a matching unsigned machine-only builder for the index JSON:
 
 ```bash
 satroot1 build-machine-release-catalog-index machine_release_catalog_alpha machine_release_catalog_beta/release_catalog_manifest.json --channel machine --label "SATROOT Machine Catalog Network" --published-at 2026-07-04T06:00:00Z --output machine_release_catalog_index.json
+```
+
+And the top-level machine catalog index can be signed the same way with machine-only validation preserved:
+
+```bash
+satroot1 build-machine-release-catalog-index-manifest machine_release_catalog_index.json --scheme hmac-sha256 --key-id index-key --secret index-secret --output machine_release_catalog_index_manifest.json
 ```
 
 Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly from machine-profile inputs:
@@ -651,6 +663,12 @@ Build a signed release manifest from a bundle index:
 
 ```bash
 satroot1 build-release-manifest bundle_index.json --scheme hmac-sha256 --key-id release-key --secret release-secret --output release_manifest.json
+```
+
+If that unsigned bundle index should remain machine-only, the matching manifest wrapper validates every referenced nested bundle before signing:
+
+```bash
+satroot1 build-machine-release-manifest machine_bundle_index.json --scheme hmac-sha256 --key-id release-key --secret release-secret --output machine_release_manifest.json
 ```
 
 Bootstrap reusable HMAC release-signing material:

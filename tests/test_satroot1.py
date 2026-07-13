@@ -2852,6 +2852,52 @@ def test_cli_build_machine_release_catalog(tmp_path):
     assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"MRELA1", "MRELB1"}
 
 
+def test_cli_build_machine_release_catalog_manifest(tmp_path):
+    machine_release_alpha_dir, machine_release_beta_dir = make_machine_release_dirs(tmp_path)
+    catalog_path = tmp_path / "machine_release_catalog.json"
+    manifest_path = tmp_path / "machine_release_catalog_manifest.json"
+
+    assert main(["build-machine-release-catalog", machine_release_alpha_dir, machine_release_beta_dir, "--output", str(catalog_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-machine-release-catalog-manifest",
+            str(catalog_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--secret",
+            "catalog-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "release-catalog-manifest"
+    assert manifest["signature_key_id"] == "catalog-key"
+
+
+def test_cli_build_machine_release_catalog_manifest_rejects_non_machine_catalog(tmp_path):
+    catalog_dir = make_demo_release_catalog_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "build-machine-release-catalog-manifest",
+                str(catalog_dir / "release_catalog.json"),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+
+
 def test_build_signed_release_catalog_index_from_catalog_dirs(tmp_path):
     index_dir = make_demo_release_catalog_index_dir(tmp_path)
     catalog_alpha_dir = tmp_path / "catalog_alpha"
@@ -3174,10 +3220,57 @@ def test_cli_build_machine_release_catalog_index(tmp_path):
     index = json.loads(output_path.read_text(encoding="utf-8"))
     assert index["release_catalog_count"] == 2
     assert index["index"]["label"] == "Built Machine Catalog Network"
+
+
+def test_cli_build_machine_release_catalog_index_manifest(tmp_path):
+    catalog_alpha_dir, catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
+    index_path = tmp_path / "machine_release_catalog_index.json"
+    manifest_path = tmp_path / "machine_release_catalog_index_manifest.json"
+
+    assert main(["build-machine-release-catalog-index", str(catalog_alpha_dir), str(catalog_beta_dir), "--output", str(index_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-machine-release-catalog-index-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+            "--secret",
+            "index-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "release-catalog-index-manifest"
+    assert manifest["signature_key_id"] == "index-key"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
     assert sorted(entry["catalog"]["label"] for entry in index["release_catalogs"]) == [
         "SATROOT Machine Catalog Alpha",
         "SATROOT Machine Catalog Beta",
     ]
+
+
+def test_cli_build_machine_release_catalog_index_manifest_rejects_non_machine_index(tmp_path):
+    index_dir = make_demo_release_catalog_index_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "build-machine-release-catalog-index-manifest",
+                str(index_dir / "release_catalog_index.json"),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+            ]
+        )
 
 
 def test_cli_bootstrap_publication_stack_from_presets(tmp_path, capsys):
@@ -9157,6 +9250,61 @@ def test_cli_build_release_manifest(tmp_path):
     assert release_manifest["manifest_type"] == "release-manifest"
     assert release_manifest["signature_scheme"] == "hmac-sha256"
     assert release_manifest["signature_key_id"] == "release-key"
+
+
+def test_cli_build_machine_release_manifest(tmp_path):
+    bundle_alpha_dir = tmp_path / "machine_bundle_alpha"
+    bundle_beta_dir = tmp_path / "machine_bundle_beta"
+    index_path = tmp_path / "machine_bundle_index.json"
+    release_manifest_path = tmp_path / "machine_release_manifest.json"
+
+    assert main(["bootstrap-machine-demo-bundle", "--symbol", "MMANREL1", "--name", "Machine Manifest Release Alpha", "--scheme", "hmac-sha256", "--output-dir", str(bundle_alpha_dir)]) == 0
+    assert main(["bootstrap-machine-demo-bundle", "--symbol", "MMANREL2", "--name", "Machine Manifest Release Beta", "--scheme", "hmac-sha256", "--output-dir", str(bundle_beta_dir)]) == 0
+    assert main(["build-machine-bundle-index", str(bundle_alpha_dir), str(bundle_beta_dir), "--output", str(index_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-machine-release-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secret",
+            "release-secret",
+            "--output",
+            str(release_manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    release_manifest = json.loads(release_manifest_path.read_text(encoding="utf-8"))
+    assert release_manifest["manifest_type"] == "release-manifest"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+
+def test_cli_build_machine_release_manifest_rejects_non_machine_bundle_index(tmp_path):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["build-bundle-index", str(bundle_dir), "--output", str(index_path)]) == 0
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "build-machine-release-manifest",
+                str(index_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+            ]
+        )
 
 
 def test_cli_bootstrap_release_hmac_and_sign_manifest(tmp_path):

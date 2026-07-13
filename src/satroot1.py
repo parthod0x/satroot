@@ -2662,6 +2662,34 @@ def resolve_machine_bundle_directory_inputs(
     return resolved
 
 
+def _require_machine_bundle_index_json(bundle_index_json: str | Path, *, label: str) -> None:
+    bundle_index_path = Path(bundle_index_json).resolve()
+    index = _load_json_file(str(bundle_index_path))
+    validate_instance_against_schema(index, load_bundle_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("bundle index must contain an object")
+    validate_bundle_index_consistency(index)
+
+    bundles = index.get("bundles")
+    assert isinstance(bundles, list)
+    if not bundles:
+        raise SatRootError(f"{label} must contain at least one nested {MACHINE_DEMO_CATALOG_PROFILE} bundle")
+
+    for entry in bundles:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid nested bundle entry")
+        manifest_path_ref = entry.get("manifest_path")
+        if not isinstance(manifest_path_ref, str) or not manifest_path_ref.strip():
+            raise SatRootError(f"{label} is missing nested bundle metadata")
+        bundle_manifest_path = (bundle_index_path.parent / manifest_path_ref).resolve()
+        if not bundle_manifest_path.is_file():
+            raise SatRootError(f"{label} bundle manifest not found: {manifest_path_ref}")
+        _require_machine_bundle_directory(
+            bundle_manifest_path.parent,
+            label=f"{label} nested bundle {manifest_path_ref!r}",
+        )
+
+
 def validate_bundle_index_consistency(index: Mapping[str, Any]) -> None:
     bundles = index.get("bundles")
     bundle_count = index.get("bundle_count")
@@ -4655,6 +4683,58 @@ def resolve_machine_release_catalog_directory_inputs(
     for release_catalog_dir in resolved:
         _require_machine_release_catalog_publication(release_catalog_dir, label=label)
     return resolved
+
+
+def _require_machine_release_catalog_json(release_catalog_json: str | Path, *, label: str) -> None:
+    release_catalog_path = Path(release_catalog_json).resolve()
+    catalog = _load_json_file(str(release_catalog_path))
+    validate_instance_against_schema(catalog, load_release_catalog_schema())
+    if not isinstance(catalog, dict):
+        raise SatRootError("release catalog must contain an object")
+    validate_release_catalog_consistency(catalog)
+
+    releases = catalog.get("releases")
+    assert isinstance(releases, list)
+    if not releases:
+        raise SatRootError(f"{label} must contain at least one nested {MACHINE_DEMO_CATALOG_PROFILE} release")
+
+    for entry in releases:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid nested release entry")
+        release_path_ref = entry.get("release_path")
+        if not isinstance(release_path_ref, str) or not release_path_ref.strip():
+            raise SatRootError(f"{label} is missing nested release metadata")
+        nested_release_dir = (release_catalog_path.parent / release_path_ref).resolve()
+        _require_machine_release_publication(
+            nested_release_dir,
+            label=f"{label} nested release {release_path_ref!r}",
+        )
+
+
+def _require_machine_release_catalog_index_json(release_catalog_index_json: str | Path, *, label: str) -> None:
+    release_catalog_index_path = Path(release_catalog_index_json).resolve()
+    index = _load_json_file(str(release_catalog_index_path))
+    validate_instance_against_schema(index, load_release_catalog_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("release catalog index must contain an object")
+    validate_release_catalog_index_consistency(index)
+
+    release_catalogs = index.get("release_catalogs")
+    assert isinstance(release_catalogs, list)
+    if not release_catalogs:
+        raise SatRootError(f"{label} must contain at least one nested {MACHINE_DEMO_CATALOG_PROFILE} release catalog")
+
+    for entry in release_catalogs:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid nested release catalog entry")
+        release_catalog_path_ref = entry.get("release_catalog_path")
+        if not isinstance(release_catalog_path_ref, str) or not release_catalog_path_ref.strip():
+            raise SatRootError(f"{label} is missing nested release catalog metadata")
+        nested_release_catalog_dir = (release_catalog_index_path.parent / release_catalog_path_ref).resolve()
+        _require_machine_release_catalog_publication(
+            nested_release_catalog_dir,
+            label=f"{label} nested release catalog {release_catalog_path_ref!r}",
+        )
 
 
 def _require_machine_publication_stack_workspace(publication_stack_dir: str | Path, *, label: str) -> None:
@@ -12452,6 +12532,16 @@ def build_cli_parser() -> Any:
     release_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
     release_manifest_parser.add_argument("--output", help="Optional output path")
 
+    machine_release_manifest_parser = subparsers.add_parser("build-machine-release-manifest", help="Build a signed machine-only SATROOT-MACHINE-1 release manifest from a machine bundle index")
+    machine_release_manifest_parser.add_argument("bundle_index_json", help="Path to machine-only bundle_index.json")
+    machine_release_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    machine_release_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release manifest")
+    machine_release_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    machine_release_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-manifest signing")
+    machine_release_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    machine_release_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
+    machine_release_manifest_parser.add_argument("--output", help="Optional output path")
+
     publish_release_parser = subparsers.add_parser("publish-release", help="Build bundle_index.json plus release_manifest.json in one SATROOT-1 release directory")
     publish_release_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     publish_release_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with bundle roots and release metadata defaults")
@@ -12538,6 +12628,16 @@ def build_cli_parser() -> Any:
     release_catalog_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-manifest signing")
     release_catalog_manifest_parser.add_argument("--output", help="Optional output path")
 
+    machine_release_catalog_manifest_parser = subparsers.add_parser("build-machine-release-catalog-manifest", help="Build a signed machine-only SATROOT-MACHINE-1 release catalog manifest from a machine release catalog")
+    machine_release_catalog_manifest_parser.add_argument("release_catalog_json", help="Path to machine-only release_catalog.json")
+    machine_release_catalog_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    machine_release_catalog_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release catalog manifest")
+    machine_release_catalog_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    machine_release_catalog_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-catalog-manifest signing")
+    machine_release_catalog_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    machine_release_catalog_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-manifest signing")
+    machine_release_catalog_manifest_parser.add_argument("--output", help="Optional output path")
+
     release_catalog_index_parser = subparsers.add_parser("build-release-catalog-index", help="Build a SATROOT-1 release catalog index from one or more signed release catalog directories")
     release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
@@ -12567,6 +12667,16 @@ def build_cli_parser() -> Any:
     release_catalog_index_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
     release_catalog_index_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-index-manifest signing")
     release_catalog_index_manifest_parser.add_argument("--output", help="Optional output path")
+
+    machine_release_catalog_index_manifest_parser = subparsers.add_parser("build-machine-release-catalog-index-manifest", help="Build a signed machine-only SATROOT-MACHINE-1 release catalog index manifest from a machine release catalog index")
+    machine_release_catalog_index_manifest_parser.add_argument("release_catalog_index_json", help="Path to machine-only release_catalog_index.json")
+    machine_release_catalog_index_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    machine_release_catalog_index_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release catalog index manifest")
+    machine_release_catalog_index_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    machine_release_catalog_index_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-catalog-index-manifest signing")
+    machine_release_catalog_index_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    machine_release_catalog_index_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-index-manifest signing")
+    machine_release_catalog_index_manifest_parser.add_argument("--output", help="Optional output path")
 
     publish_release_catalog_parser = subparsers.add_parser("publish-release-catalog", help="Build release_catalog.json plus release_catalog_manifest.json in one SATROOT-1 catalog directory")
     publish_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory or release_manifest.json/bundle_index.json file")
@@ -15042,6 +15152,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(manifest, output_path)
         return 0
 
+    if args.command == "build-machine-release-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        _require_machine_bundle_index_json(
+            args.bundle_index_json,
+            label="machine release manifest source bundle index",
+        )
+        manifest = build_signed_release_manifest(
+            args.bundle_index_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
     if args.command == "build-release-catalog":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
@@ -15089,6 +15217,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         signer = _release_manifest_signer_from_args(args)
+        manifest = build_signed_release_catalog_manifest(
+            args.release_catalog_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
+    if args.command == "build-machine-release-catalog-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        _require_machine_release_catalog_json(
+            args.release_catalog_json,
+            label="machine release catalog manifest source catalog",
+        )
         manifest = build_signed_release_catalog_manifest(
             args.release_catalog_json,
             signature_scheme=args.scheme,
@@ -15154,6 +15300,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         signer = _release_manifest_signer_from_args(args)
+        manifest = build_signed_release_catalog_index_manifest(
+            args.release_catalog_index_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
+    if args.command == "build-machine-release-catalog-index-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        _require_machine_release_catalog_index_json(
+            args.release_catalog_index_json,
+            label="machine release catalog index manifest source index",
+        )
         manifest = build_signed_release_catalog_index_manifest(
             args.release_catalog_index_json,
             signature_scheme=args.scheme,
