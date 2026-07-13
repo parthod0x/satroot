@@ -2741,9 +2741,15 @@ def verify_signed_release_manifest(
 def _load_release_publication(
     release_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    release_path = Path(release_dir).resolve()
-    if not release_path.is_dir():
-        raise SatRootError("release directory must be an existing directory")
+    candidate_path = Path(release_dir).resolve()
+    if candidate_path.is_dir():
+        release_path = candidate_path
+    else:
+        release_path = candidate_path.parent
+        if candidate_path.name not in {"release_manifest.json", "bundle_index.json"}:
+            raise SatRootError(
+                "release publication operations require a release directory or release_manifest.json/bundle_index.json"
+            )
 
     manifest_path = release_path / "release_manifest.json"
     if not manifest_path.is_file():
@@ -3254,9 +3260,15 @@ def bootstrap_release_catalog_publication(
 def _load_release_catalog_publication(
     release_catalog_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    catalog_path = Path(release_catalog_dir).resolve()
-    if not catalog_path.is_dir():
-        raise SatRootError("release catalog directory must be an existing directory")
+    candidate_path = Path(release_catalog_dir).resolve()
+    if candidate_path.is_dir():
+        catalog_path = candidate_path
+    else:
+        catalog_path = candidate_path.parent
+        if candidate_path.name not in {"release_catalog_manifest.json", "release_catalog.json"}:
+            raise SatRootError(
+                "release catalog publication operations require a release catalog directory or release_catalog_manifest.json/release_catalog.json"
+            )
 
     manifest_path = catalog_path / "release_catalog_manifest.json"
     if not manifest_path.is_file():
@@ -3956,9 +3968,15 @@ def bootstrap_release_catalog_index_publication(
 def _load_release_catalog_index_publication(
     release_catalog_index_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    index_path = Path(release_catalog_index_dir).resolve()
-    if not index_path.is_dir():
-        raise SatRootError("release catalog index directory must be an existing directory")
+    candidate_path = Path(release_catalog_index_dir).resolve()
+    if candidate_path.is_dir():
+        index_path = candidate_path
+    else:
+        index_path = candidate_path.parent
+        if candidate_path.name not in {"release_catalog_index_manifest.json", "release_catalog_index.json"}:
+            raise SatRootError(
+                "release catalog index publication operations require a release catalog index directory or release_catalog_index_manifest.json/release_catalog_index.json"
+            )
 
     manifest_path = index_path / "release_catalog_index_manifest.json"
     if not manifest_path.is_file():
@@ -12051,22 +12069,22 @@ def build_cli_parser() -> Any:
     bundle_lint_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
     release_summary_parser = subparsers.add_parser("release-summary", help="Read release_manifest.json plus bundle_index.json and print a release-level summary without signature verification")
-    release_summary_parser.add_argument("release_dir", help="Path to a SATROOT release directory")
+    release_summary_parser.add_argument("release_dir", help="Path to a SATROOT release directory or release_manifest.json/bundle_index.json file")
 
     release_lint_parser = subparsers.add_parser("release-lint", help="Check release_manifest.json, bundle_index.json, and referenced bundle manifests without signature verification")
-    release_lint_parser.add_argument("release_dir", help="Path to a SATROOT release directory")
+    release_lint_parser.add_argument("release_dir", help="Path to a SATROOT release directory or release_manifest.json/bundle_index.json file")
 
     release_catalog_summary_parser = subparsers.add_parser("release-catalog-summary", help="Read release_catalog_manifest.json plus release_catalog.json and print a catalog-level summary without signature verification")
-    release_catalog_summary_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory")
+    release_catalog_summary_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory or release_catalog_manifest.json/release_catalog.json file")
 
     release_catalog_lint_parser = subparsers.add_parser("release-catalog-lint", help="Check release_catalog_manifest.json, release_catalog.json, and referenced release publications without signature verification")
-    release_catalog_lint_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory")
+    release_catalog_lint_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory or release_catalog_manifest.json/release_catalog.json file")
 
     release_catalog_index_summary_parser = subparsers.add_parser("release-catalog-index-summary", help="Read release_catalog_index_manifest.json plus release_catalog_index.json and print an index-level summary without signature verification")
-    release_catalog_index_summary_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
+    release_catalog_index_summary_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory or release_catalog_index_manifest.json/release_catalog_index.json file")
 
     release_catalog_index_lint_parser = subparsers.add_parser("release-catalog-index-lint", help="Check release_catalog_index_manifest.json, release_catalog_index.json, and referenced release catalog publications without signature verification")
-    release_catalog_index_lint_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory")
+    release_catalog_index_lint_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory or release_catalog_index_manifest.json/release_catalog_index.json file")
 
     publication_descriptor_index_summary_parser = subparsers.add_parser("publication-descriptor-index-summary", help="Read publication_descriptor_index_manifest.json plus publication_descriptor_index.json and print a descriptor-index summary without signature verification")
     publication_descriptor_index_summary_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory")

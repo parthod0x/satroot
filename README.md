@@ -1023,6 +1023,14 @@ Inspect a release catalog publication without signature verification:
 satroot1 release-catalog-summary release_catalog_bootstrap
 ```
 
+Those read-only release inspection commands also accept the generated manifest or payload file directly when you are already focused on one artifact:
+
+```bash
+satroot1 release-summary stable_release/release_manifest.json
+satroot1 release-catalog-lint release_catalog_bootstrap/release_catalog.json
+satroot1 release-catalog-index-summary release_catalog_index_bootstrap/release_catalog_index_manifest.json
+```
+
 Lint a release catalog publication and all referenced release directories:
 
 ```bash

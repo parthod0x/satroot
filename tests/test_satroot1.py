@@ -7933,6 +7933,46 @@ def test_cli_release_summary_reads_manifest_and_index(tmp_path, capsys):
     assert '"bundle_symbols":["FLOOR1"]' in captured.out
 
 
+def test_cli_release_summary_accepts_manifest_json(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    release_material_dir = tmp_path / "release_hmac"
+    release_dir = tmp_path / "release"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["bootstrap-release-hmac", "--key-id", "release-key", "--output-dir", str(release_material_dir)]) == 0
+    assert main(
+        [
+            "publish-release",
+            str(bundle_dir),
+            "--output-dir",
+            str(release_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT FLOOR1 Demo",
+            "--published-at",
+            "2026-06-28T20:15:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secrets-json",
+            str(release_material_dir / "release_secrets.json"),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    exit_code = main(["release-summary", str(release_dir / "release_manifest.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"release-key"' in captured.out
+    assert '"bundle_count":1' in captured.out
+
+
 def test_cli_release_lint_accepts_clean_release(tmp_path, capsys):
     events_path = tmp_path / "events.json"
     bundle_dir = tmp_path / "bundle"
@@ -8033,6 +8073,18 @@ def test_cli_release_catalog_summary_reads_manifest_and_catalog(tmp_path, capsys
     assert '"release_labels":["Machine Release Workspace","Stable Release Workspace"]' in captured.out
 
 
+def test_cli_release_catalog_lint_accepts_catalog_json(tmp_path, capsys):
+    catalog_dir = make_demo_release_catalog_dir(tmp_path)
+
+    exit_code = main(["release-catalog-lint", str(catalog_dir / "release_catalog.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"release_catalog_hash_matches":true' in captured.out
+    assert '"missing_release_manifests":[]' in captured.out
+
+
 def test_cli_release_catalog_lint_accepts_clean_catalog(tmp_path, capsys):
     catalog_dir = make_demo_release_catalog_dir(tmp_path)
 
@@ -8075,6 +8127,18 @@ def test_cli_release_catalog_index_summary_reads_manifest_and_index(tmp_path, ca
     captured = capsys.readouterr()
     assert '"signature_scheme":"hmac-sha256"' in captured.out
     assert '"signature_key_id":"index-key"' in captured.out
+    assert '"release_catalog_count":2' in captured.out
+    assert '"catalog_labels":["SATROOT Catalog Alpha","SATROOT Catalog Beta"]' in captured.out
+
+
+def test_cli_release_catalog_index_summary_accepts_manifest_json(tmp_path, capsys):
+    index_dir = make_demo_release_catalog_index_dir(tmp_path)
+
+    exit_code = main(["release-catalog-index-summary", str(index_dir / "release_catalog_index_manifest.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
     assert '"release_catalog_count":2' in captured.out
     assert '"catalog_labels":["SATROOT Catalog Alpha","SATROOT Catalog Beta"]' in captured.out
 
