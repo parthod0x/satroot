@@ -50,6 +50,7 @@ from satroot1 import (
     hmac_sha256_sign,
     load_bundle_index_schema,
     load_bundle_manifest_schema,
+    load_bundle_index_preset,
     load_demo_catalog_summary_schema,
     load_demo_catalog_preset,
     load_machine_publication_network_preset,
@@ -1126,6 +1127,14 @@ def test_load_release_catalog_index_preset_example():
     assert preset["discover_under"] == [str((ROOT / "generated_release_catalogs").resolve())]
     assert preset["recursive"] is True
     assert preset["index_metadata"]["label"] == "SATROOT AI Compute Catalog Network"
+
+
+def test_load_bundle_index_preset_example():
+    preset = load_bundle_index_preset(ROOT / "examples" / "bundle_index_presets" / "ai_compute_bundle_index.json")
+    assert preset["bundle_dirs"] == []
+    assert preset["discover_under"] == [str((ROOT / "generated_bundle_collection").resolve())]
+    assert preset["recursive"] is True
+    assert preset["release_metadata"]["label"] == "SATROOT AI Compute Bundle Index"
 
 
 def test_load_publication_descriptor_index_preset_example():
@@ -5260,6 +5269,49 @@ def test_cli_export_publication_registry_preset(tmp_path):
     assert preset["registry"]["label"] == "SATROOT Publication Registry"
 
 
+def test_cli_export_bundle_index_preset(tmp_path):
+    bundle_dir = tmp_path / "bundle"
+    bundle_index_path = tmp_path / "bundle_index.json"
+    preset_path = tmp_path / "exported_bundle_index.json"
+
+    assert main(
+        [
+            "bootstrap-genesis-bundle",
+            "--symbol",
+            "BINDEX1",
+            "--name",
+            "Bundle Index Export",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--output-dir",
+            str(bundle_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "build-bundle-index",
+            str(bundle_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Exported Bundle Index",
+            "--output",
+            str(bundle_index_path),
+        ]
+    ) == 0
+
+    exit_code = main(["export-bundle-index-preset", str(bundle_index_path), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_bundle_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-BUNDLE-INDEX-PRESET"
+    assert len(loaded["bundle_dirs"]) == 1
+    assert preset["release"]["label"] == "Exported Bundle Index"
+
+
 def test_cli_export_release_catalog_preset(tmp_path):
     release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
     preset_path = tmp_path / "exported_release_catalog.json"
@@ -8285,6 +8337,39 @@ def test_cli_build_bundle_index_with_discovery_root(tmp_path):
     assert {entry["bundle_path"] for entry in index["bundles"]} == {"bundles/floor_bundle", "bundles/machine_bundle"}
 
 
+def test_cli_build_bundle_index_with_preset_json(tmp_path):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    bundle_root = tmp_path / "bundles"
+    floor_bundle_dir = bundle_root / "floor_bundle"
+    machine_bundle_dir = bundle_root / "machine_bundle"
+    preset_path = tmp_path / "bundle_index_preset.json"
+    index_path = tmp_path / "bundle_index.json"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-BUNDLE-INDEX-PRESET",
+            "version": "0.1",
+            "discover_under": [str(bundle_root.relative_to(tmp_path))],
+            "release": {
+                "channel": "stable",
+                "label": "Preset Bundle Index",
+            },
+        },
+    )
+
+    assert main(["build-bundle-index", "--preset-json", str(preset_path), "--output", str(index_path)]) == 0
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 2
+    assert index["release"]["label"] == "Preset Bundle Index"
+
+
 def test_cli_validate_bundle_index(tmp_path, capsys):
     events_path = tmp_path / "events.json"
     bundle_dir = tmp_path / "bundle"
@@ -8559,6 +8644,59 @@ def test_cli_publish_release_with_discovery_root(tmp_path):
     assert release_manifest["bundle_count"] == 2
 
 
+def test_cli_publish_release_with_preset_json(tmp_path):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    bundle_root = tmp_path / "bundles"
+    floor_bundle_dir = bundle_root / "floor_bundle"
+    machine_bundle_dir = bundle_root / "machine_bundle"
+    release_material_dir = tmp_path / "release_hmac"
+    release_dir = tmp_path / "release"
+    preset_path = tmp_path / "bundle_index_preset.json"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+    assert main(["bootstrap-release-hmac", "--key-id", "release-key", "--output-dir", str(release_material_dir)]) == 0
+
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-BUNDLE-INDEX-PRESET",
+            "version": "0.1",
+            "discover_under": [str(bundle_root.relative_to(tmp_path))],
+            "release": {
+                "channel": "preset",
+                "label": "Preset Publish Release",
+            },
+        },
+    )
+
+    assert (
+        main(
+            [
+                "publish-release",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(release_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secrets-json",
+                str(release_material_dir / "release_secrets.json"),
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 2
+    assert bundle_index["release"]["label"] == "Preset Publish Release"
+
+
 def test_cli_bootstrap_release_publication(tmp_path, capsys):
     bundle_dir = tmp_path / "bundle"
     release_dir = tmp_path / "release"
@@ -8663,6 +8801,63 @@ def test_cli_bootstrap_release_publication_with_discovery_root(tmp_path, capsys)
     assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"FLOOR1", "APICREDIT1"}
     assert release_manifest["bundle_count"] == 2
 
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert summary["bundle_count"] == 2
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_release_publication_with_preset_json(tmp_path, capsys):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    bundle_root = tmp_path / "bundles"
+    floor_bundle_dir = bundle_root / "floor_bundle"
+    machine_bundle_dir = bundle_root / "machine_bundle"
+    release_dir = tmp_path / "release"
+    preset_path = tmp_path / "bundle_index_preset.json"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-BUNDLE-INDEX-PRESET",
+            "version": "0.1",
+            "discover_under": [str(bundle_root.relative_to(tmp_path))],
+            "release": {
+                "channel": "preset",
+                "label": "Preset Bootstrapped Release",
+            },
+        },
+    )
+
+    exit_code = main(
+        [
+            "bootstrap-release-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(release_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release publication to" in captured.out
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 2
+    assert bundle_index["release"]["label"] == "Preset Bootstrapped Release"
     summary = verify_signed_release_manifest(
         release_dir / "release_manifest.json",
         verifier=make_hmac_sha256_verifier(release_secrets),

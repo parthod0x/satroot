@@ -45,6 +45,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `examples/` - the `FLOOR1` demo token ledger.
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
+- `examples/bundle_index_presets/` - reusable SATROOT bundle-index presets.
 - `examples/release_catalog_presets/` - reusable SATROOT release-catalog publication presets.
 - `examples/release_catalog_index_presets/` - reusable SATROOT release-catalog-index publication presets.
 - `examples/publication_descriptor_index_presets/` - reusable SATROOT publication-descriptor-index presets.
@@ -123,6 +124,7 @@ The v0.1 kernel defines:
 - signed release-manifest generation for authenticating distributable bundle-index publications,
 - release-key bootstrap helpers for HMAC and Ed25519 publication signing workflows,
 - one-shot `publish-release` orchestration for ready-to-verify release directories,
+- preset export commands for deriving reusable bundle-index presets back from generated signed release inputs,
 - deterministic release-catalog generation for aggregating multiple signed release publications,
 - catalog-level inspection via `release-catalog-summary` when signature verification is unnecessary,
 - structural release-catalog linting via `release-catalog-lint` for catalog and nested release drift,
@@ -133,6 +135,7 @@ The v0.1 kernel defines:
 - structural release-catalog-index linting via `release-catalog-index-lint` for index and nested catalog drift,
 - signed release-catalog-index-manifest generation for authenticating multi-catalog release indexes,
 - one-shot `publish-release-catalog-index` orchestration for ready-to-verify release-catalog-index directories,
+- preset export commands for deriving reusable release-catalog and release-catalog-index presets back from generated signed artifact layers,
 - one-shot `bootstrap-genesis-bundle` scaffolding for signed starter bundles from profile-aware genesis defaults,
 - one-shot `bootstrap-release-publication` orchestration for release material plus signed publication outputs,
 - one-shot `bootstrap-release-catalog-publication` orchestration for release-catalog material plus signed publication outputs,
@@ -271,7 +274,7 @@ python -m pytest
 Expected result:
 
 ```text
-338 passed
+343 passed
 ```
 
 ## Signing utilities
@@ -584,6 +587,12 @@ Build a bundle index catalog from one or more bundle directories:
 satroot1 build-bundle-index signed_hmac_bundle --output bundle_index.json
 ```
 
+Or drive the same bundle discovery and release metadata defaults from a preset:
+
+```bash
+satroot1 build-bundle-index --preset-json examples/bundle_index_presets/ai_compute_bundle_index.json --output bundle_index.json
+```
+
 Or discover bundle directories recursively under a parent artifacts folder:
 
 ```bash
@@ -626,6 +635,12 @@ That same release flow can also discover multiple bundle directories under a par
 satroot1 publish-release --discover-under generated_artifacts --output-dir catalog_release --channel stable --label "SATROOT Multi Bundle Demo" --published-at 2026-06-28T18:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
 ```
 
+And that same bundle discovery plus release metadata can come from the bundle-index preset:
+
+```bash
+satroot1 publish-release --preset-json examples/bundle_index_presets/ai_compute_bundle_index.json --output-dir catalog_release --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
+```
+
 Bootstrap release signing material and publish a ready-to-verify release directory in one step:
 
 ```bash
@@ -636,6 +651,12 @@ For catalog-style packaging, you can point that bootstrap flow at a parent direc
 
 ```bash
 satroot1 bootstrap-release-publication --discover-under generated_artifacts --output-dir catalog_bootstrap --channel stable --label "SATROOT Catalog Release" --published-at 2026-06-28T19:00:00Z --scheme hmac-sha256 --key-id release-key
+```
+
+That bootstrap path also accepts the same bundle-index preset:
+
+```bash
+satroot1 bootstrap-release-publication --preset-json examples/bundle_index_presets/ai_compute_bundle_index.json --output-dir catalog_bootstrap --scheme hmac-sha256 --key-id release-key
 ```
 
 Build a higher-level release catalog from multiple signed release directories:
@@ -769,6 +790,12 @@ To derive a reusable preset back from a generated demo catalog workspace:
 
 ```bash
 satroot1 export-demo-catalog-preset catalog_workspace --output exported_catalog.json
+```
+
+To derive a reusable bundle-index preset back from an existing `bundle_index.json`:
+
+```bash
+satroot1 export-bundle-index-preset release_bootstrap/bundle_index.json --output exported_bundle_index.json
 ```
 
 To derive reusable presets back from higher-level signed catalog artifacts:

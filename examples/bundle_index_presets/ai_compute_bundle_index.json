@@ -1,0 +1,13 @@
+{
+  "type": "SATROOT-BUNDLE-INDEX-PRESET",
+  "version": "0.1",
+  "discover_under": [
+    "../../generated_bundle_collection"
+  ],
+  "recursive": true,
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT AI Compute Bundle Index",
+    "published_at": "2026-07-08T05:00:00Z"
+  }
+}

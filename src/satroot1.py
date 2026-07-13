@@ -981,6 +981,48 @@ def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
     }
 
 
+def load_bundle_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="bundle index preset")
+    if preset.get("type") != "SATROOT-BUNDLE-INDEX-PRESET":
+        raise SatRootError("unsupported bundle index preset type")
+    if preset.get("version") != "0.1":
+        raise SatRootError("unsupported bundle index preset version")
+
+    allowed_keys = {
+        "type",
+        "version",
+        "bundle_dirs",
+        "discover_under",
+        "recursive",
+        "release",
+    }
+    unexpected = set(preset) - allowed_keys
+    if unexpected:
+        raise SatRootError(f"unsupported bundle index preset keys: {sorted(unexpected)}")
+
+    bundle_dirs = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(preset.get("bundle_dirs"), label="bundle index preset bundle_dirs")
+    ]
+    discover_under = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(preset.get("discover_under"), label="bundle index preset discover_under")
+    ]
+    recursive = preset.get("recursive", True)
+    if not isinstance(recursive, bool):
+        raise SatRootError("bundle index preset recursive must be a boolean")
+    if not bundle_dirs and not discover_under:
+        raise SatRootError("bundle index preset must contain at least one bundle_dir or discover_under path")
+
+    return {
+        "bundle_dirs": bundle_dirs,
+        "discover_under": discover_under,
+        "recursive": recursive,
+        "release_metadata": validate_release_metadata_mapping(preset.get("release")),
+    }
+
+
 def load_publication_descriptor_index_preset(path: str | Path) -> Dict[str, Any]:
     preset_path = Path(path).resolve()
     preset = _load_json_object_file(str(preset_path), label="publication descriptor index preset")
@@ -8937,6 +8979,42 @@ def export_release_catalog_preset_from_workspace(
     return preset
 
 
+def export_bundle_index_preset_from_artifact(
+    bundle_index_json: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    bundle_index_path = Path(bundle_index_json).resolve()
+    index = _load_json_file(str(bundle_index_path))
+    validate_instance_against_schema(index, load_bundle_index_schema())
+    if not isinstance(index, Mapping):
+        raise SatRootError("bundle index must contain an object")
+    validate_bundle_index_consistency(index)
+
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    preset: Dict[str, Any] = {
+        "type": "SATROOT-BUNDLE-INDEX-PRESET",
+        "version": "0.1",
+    }
+
+    bundle_dirs: list[str] = []
+    for entry in index.get("bundles", []):
+        if not isinstance(entry, Mapping):
+            continue
+        bundle_path = entry.get("bundle_path")
+        if not isinstance(bundle_path, str) or not bundle_path.strip():
+            continue
+        resolved_bundle_dir = (bundle_index_path.parent / bundle_path).resolve()
+        bundle_dirs.append(_relative_output_path(resolved_bundle_dir, base_dir=base_dir))
+    if bundle_dirs:
+        preset["bundle_dirs"] = bundle_dirs
+
+    release_metadata = _filtered_string_mapping(index.get("release"))
+    if release_metadata:
+        preset["release"] = release_metadata
+    return preset
+
+
 def export_release_catalog_index_preset_from_workspace(
     release_catalog_index_dir: str | Path,
     *,
@@ -11623,6 +11701,10 @@ def build_cli_parser() -> Any:
     export_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory")
     export_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
 
+    export_bundle_index_preset_parser = subparsers.add_parser("export-bundle-index-preset", help="Export a SATROOT bundle index back into a reusable bundle index preset")
+    export_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a SATROOT bundle_index.json file")
+    export_bundle_index_preset_parser.add_argument("--output", help="Optional output path")
+
     export_release_catalog_preset_parser = subparsers.add_parser("export-release-catalog-preset", help="Export a SATROOT release catalog back into a reusable release catalog preset")
     export_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory")
     export_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
@@ -11958,6 +12040,7 @@ def build_cli_parser() -> Any:
 
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
     bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
+    bundle_index_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with bundle roots and release metadata defaults")
     bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
     bundle_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bundle_index_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
@@ -11977,6 +12060,7 @@ def build_cli_parser() -> Any:
 
     publish_release_parser = subparsers.add_parser("publish-release", help="Build bundle_index.json plus release_manifest.json in one SATROOT-1 release directory")
     publish_release_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
+    publish_release_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with bundle roots and release metadata defaults")
     publish_release_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
     publish_release_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_release_parser.add_argument("--output-dir", required=True, help="Directory where bundle_index.json and release_manifest.json will be written")
@@ -11992,6 +12076,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_release_publication_parser = subparsers.add_parser("bootstrap-release-publication", help="Generate release signing material and write a ready-to-verify SATROOT-1 release directory")
     bootstrap_release_publication_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
+    bootstrap_release_publication_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with bundle roots and release metadata defaults")
     bootstrap_release_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
     bootstrap_release_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bootstrap_release_publication_parser.add_argument("--output-dir", required=True, help="Directory where release material plus bundle_index.json and release_manifest.json will be written")
@@ -13797,6 +13882,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(preset, args.output)
         return 0
 
+    if args.command == "export-bundle-index-preset":
+        preset = export_bundle_index_preset_from_artifact(
+            args.bundle_index_json,
+            output_path=args.output,
+        )
+        _write_output(preset, args.output)
+        return 0
+
     if args.command == "export-release-catalog-preset":
         preset = export_release_catalog_preset_from_workspace(
             args.release_catalog_dir,
@@ -14397,15 +14490,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-bundle-index":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        release_metadata = {
+        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        release_metadata = dict((preset or {}).get("release_metadata", {}))
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                release_metadata[key] = value
         bundle_dirs = resolve_bundle_directory_inputs(
-            args.bundle_dir,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
         index = build_signed_ledger_bundle_index(bundle_dirs, base_dir=base_dir, release_metadata=release_metadata)
         _write_output(index, output_path)
@@ -14501,15 +14598,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-release":
         signer = _release_manifest_signer_from_args(args)
-        release_metadata = {
+        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        release_metadata = dict((preset or {}).get("release_metadata", {}))
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                release_metadata[key] = value
         bundle_dirs = resolve_bundle_directory_inputs(
-            args.bundle_dir,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
         published = publish_signed_release(
             bundle_dirs,
@@ -14577,15 +14678,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-release-publication":
-        release_metadata = {
+        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        release_metadata = dict((preset or {}).get("release_metadata", {}))
+        for key, value in {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        }.items():
+            if value is not None:
+                release_metadata[key] = value
         bundle_dirs = resolve_bundle_directory_inputs(
-            args.bundle_dir,
-            discover_under=args.discover_under,
-            recursive=not args.non_recursive,
+            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
         published = bootstrap_release_publication(
             bundle_dirs,
