@@ -1017,6 +1017,13 @@ Lint a publication descriptor index and its referenced SATROOT artifacts:
 satroot1 publication-descriptor-index-lint publication_descriptor_index_publication
 ```
 
+Those publication descriptor and registry inspection commands also accept the generated manifest or payload file directly:
+
+```bash
+satroot1 publication-descriptor-index-summary publication_descriptor_index_publication/publication_descriptor_index_manifest.json
+satroot1 publication-registry-lint publication_registry_publication/publication_registry.json
+```
+
 Inspect a release catalog publication without signature verification:
 
 ```bash

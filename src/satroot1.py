@@ -4002,9 +4002,15 @@ def _load_release_catalog_index_publication(
 def _load_publication_registry_publication(
     publication_registry_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    registry_dir = Path(publication_registry_dir).resolve()
-    if not registry_dir.is_dir():
-        raise SatRootError("publication registry directory must be an existing directory")
+    candidate_path = Path(publication_registry_dir).resolve()
+    if candidate_path.is_dir():
+        registry_dir = candidate_path
+    else:
+        registry_dir = candidate_path.parent
+        if candidate_path.name not in {"publication_registry_manifest.json", "publication_registry.json"}:
+            raise SatRootError(
+                "publication registry operations require a publication registry directory or publication_registry_manifest.json/publication_registry.json"
+            )
 
     manifest_path = registry_dir / "publication_registry_manifest.json"
     if not manifest_path.is_file():
@@ -9667,9 +9673,15 @@ def verify_signed_publication_descriptor_index_manifest(
 def _load_publication_descriptor_index_publication(
     publication_descriptor_index_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    index_path = Path(publication_descriptor_index_dir).resolve()
-    if not index_path.is_dir():
-        raise SatRootError("publication descriptor index directory must be an existing directory")
+    candidate_path = Path(publication_descriptor_index_dir).resolve()
+    if candidate_path.is_dir():
+        index_path = candidate_path
+    else:
+        index_path = candidate_path.parent
+        if candidate_path.name not in {"publication_descriptor_index_manifest.json", "publication_descriptor_index.json"}:
+            raise SatRootError(
+                "publication descriptor index operations require a publication descriptor index directory or publication_descriptor_index_manifest.json/publication_descriptor_index.json"
+            )
 
     manifest_path = index_path / "publication_descriptor_index_manifest.json"
     if not manifest_path.is_file():
@@ -12087,10 +12099,10 @@ def build_cli_parser() -> Any:
     release_catalog_index_lint_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory or release_catalog_index_manifest.json/release_catalog_index.json file")
 
     publication_descriptor_index_summary_parser = subparsers.add_parser("publication-descriptor-index-summary", help="Read publication_descriptor_index_manifest.json plus publication_descriptor_index.json and print a descriptor-index summary without signature verification")
-    publication_descriptor_index_summary_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory")
+    publication_descriptor_index_summary_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory or publication_descriptor_index_manifest.json/publication_descriptor_index.json file")
 
     publication_descriptor_index_lint_parser = subparsers.add_parser("publication-descriptor-index-lint", help="Check publication_descriptor_index_manifest.json, publication_descriptor_index.json, and referenced SATROOT artifacts without signature verification")
-    publication_descriptor_index_lint_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory")
+    publication_descriptor_index_lint_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory or publication_descriptor_index_manifest.json/publication_descriptor_index.json file")
 
     demo_catalog_summary_parser = subparsers.add_parser("demo-catalog-summary", help="Read summary.json plus release/ and print a demo-catalog workspace summary without signature verification")
     demo_catalog_summary_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory")
@@ -12123,10 +12135,10 @@ def build_cli_parser() -> Any:
     publication_registry_workspace_lint_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
 
     publication_registry_summary_parser = subparsers.add_parser("publication-registry-summary", help="Read publication_registry_manifest.json plus publication_registry.json and print a publication-registry summary without signature verification")
-    publication_registry_summary_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory")
+    publication_registry_summary_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory or publication_registry_manifest.json/publication_registry.json file")
 
     publication_registry_lint_parser = subparsers.add_parser("publication-registry-lint", help="Check publication_registry_manifest.json, publication_registry.json, and referenced publication components without signature verification")
-    publication_registry_lint_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory")
+    publication_registry_lint_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory or publication_registry_manifest.json/publication_registry.json file")
 
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
     bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")

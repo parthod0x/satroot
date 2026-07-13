@@ -8189,6 +8189,23 @@ def test_cli_publication_descriptor_index_summary_reads_manifest_and_index(tmp_p
     assert '"artifact_kinds":["bundle","demo-catalog","publication-network","publication-stack","release","release-catalog","release-catalog-index"]' in captured.out
 
 
+def test_cli_publication_descriptor_index_summary_accepts_manifest_json(tmp_path, capsys):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+
+    exit_code = main(
+        [
+            "publication-descriptor-index-summary",
+            str(descriptor_index_dir / "publication_descriptor_index_manifest.json"),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"descriptor-key"' in captured.out
+    assert '"artifact_count":12' in captured.out
+
+
 def test_cli_publication_descriptor_index_lint_accepts_clean_index(tmp_path, capsys):
     descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
 
@@ -8466,6 +8483,17 @@ def test_cli_publication_registry_summary_reads_manifest_and_registry(tmp_path, 
     assert '"component_count":3' in captured.out
     assert '"publication_descriptor_index_publication":' in captured.out
     assert '"publication_metadata_catalog_publication":' in captured.out
+
+
+def test_cli_publication_registry_lint_accepts_registry_json(tmp_path, capsys):
+    registry_dir = make_publication_registry_dir(tmp_path)
+
+    exit_code = main(["publication-registry-lint", str(registry_dir / "publication_registry.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"component_lint_failures":[]' in captured.out
 
 
 def test_cli_publication_registry_lint_accepts_clean_registry(tmp_path, capsys):
