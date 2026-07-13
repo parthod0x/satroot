@@ -9064,6 +9064,42 @@ def test_cli_build_bundle_index_with_preset_json(tmp_path):
     assert index["release"]["label"] == "Preset Bundle Index"
 
 
+def test_cli_build_machine_bundle_index(tmp_path):
+    machine_events_alpha_path = tmp_path / "machine_events_alpha.json"
+    machine_events_beta_path = tmp_path / "machine_events_beta.json"
+    bundle_root = tmp_path / "machine_bundles"
+    machine_bundle_alpha_dir = bundle_root / "machine_alpha_bundle"
+    machine_bundle_beta_dir = bundle_root / "machine_beta_bundle"
+    index_path = tmp_path / "machine_bundle_index.json"
+    machine_events_alpha_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+    machine_events_beta_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(machine_events_alpha_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_alpha_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_beta_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_beta_dir)]) == 0
+
+    exit_code = main(
+        [
+            "build-machine-bundle-index",
+            str(machine_bundle_alpha_dir),
+            str(machine_bundle_beta_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Bundle Index",
+            "--published-at",
+            "2026-07-14T02:00:00Z",
+            "--output",
+            str(index_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 2
+    assert index["release"]["label"] == "Machine Bundle Index"
+    assert {entry["symbol"] for entry in index["bundles"]} == {"APICREDIT1"}
+
+
 def test_cli_validate_bundle_index(tmp_path, capsys):
     events_path = tmp_path / "events.json"
     bundle_dir = tmp_path / "bundle"
@@ -9449,6 +9485,114 @@ def test_cli_bootstrap_release_publication(tmp_path, capsys):
     )
     assert summary["bundle_count"] == 1
     assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_machine_release_publication(tmp_path, capsys):
+    bundle_alpha_dir = tmp_path / "machine_bundle_alpha"
+    bundle_beta_dir = tmp_path / "machine_bundle_beta"
+    release_dir = tmp_path / "machine_release"
+
+    assert (
+        main(
+            [
+                "bootstrap-machine-demo-bundle",
+                "--symbol",
+                "MRELCLI1",
+                "--name",
+                "Machine Release CLI Alpha",
+                "--scheme",
+                "hmac-sha256",
+                "--output-dir",
+                str(bundle_alpha_dir),
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "bootstrap-machine-demo-bundle",
+                "--symbol",
+                "MRELCLI2",
+                "--name",
+                "Machine Release CLI Beta",
+                "--scheme",
+                "hmac-sha256",
+                "--output-dir",
+                str(bundle_beta_dir),
+                "--service-scope",
+                "batch-jobs",
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "bootstrap-machine-release-publication",
+            str(bundle_alpha_dir),
+            str(bundle_beta_dir),
+            "--output-dir",
+            str(release_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "SATROOT Machine Release CLI",
+            "--published-at",
+            "2026-07-14T03:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 release publication to" in captured.out
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_index["release"]["channel"] == "machine"
+    assert release_manifest["signature_key_id"] == "release-key"
+    assert set(secrets) == {"release-key"}
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert summary["bundle_count"] == 2
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_publish_machine_release_rejects_non_machine_bundle(tmp_path):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    stable_bundle_dir = tmp_path / "stable_bundle"
+    machine_bundle_dir = tmp_path / "machine_bundle"
+    output_dir = tmp_path / "mixed_machine_release"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(stable_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-release",
+                str(stable_bundle_dir),
+                str(machine_bundle_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+            ]
+        )
 
 
 def test_cli_bootstrap_release_publication_with_discovery_root(tmp_path, capsys):

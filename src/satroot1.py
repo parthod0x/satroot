@@ -2634,6 +2634,34 @@ def resolve_bundle_directory_inputs(
     return resolved
 
 
+def _require_machine_bundle_directory(bundle_dir: str | Path, *, label: str) -> None:
+    bundle_manifest = _load_validated_bundle_manifest(Path(bundle_dir).resolve())
+    final_snapshot = bundle_manifest.get("final_state_snapshot")
+    profile = final_snapshot.get("profile") if isinstance(final_snapshot, Mapping) else None
+    if profile != MACHINE_DEMO_CATALOG_PROFILE:
+        raise SatRootError(
+            f"{label} must contain only {MACHINE_DEMO_CATALOG_PROFILE} bundles; "
+            f"found {profile if profile is not None else 'none'}"
+        )
+
+
+def resolve_machine_bundle_directory_inputs(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    label: str,
+) -> list[str | Path]:
+    resolved = resolve_bundle_directory_inputs(
+        bundle_dirs,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    for bundle_dir in resolved:
+        _require_machine_bundle_directory(bundle_dir, label=label)
+    return resolved
+
+
 def validate_bundle_index_consistency(index: Mapping[str, Any]) -> None:
     bundles = index.get("bundles")
     bundle_count = index.get("bundle_count")
@@ -7757,6 +7785,62 @@ def publish_machine_publication_stack_workspace(
     )
 
 
+def publish_machine_release(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    release_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_bundle_dirs = [Path(value).resolve() for value in bundle_dirs]
+    if not resolved_bundle_dirs:
+        raise SatRootError("machine release publishing requires at least one SATROOT-MACHINE-1 bundle")
+
+    for bundle_dir in resolved_bundle_dirs:
+        _require_machine_bundle_directory(
+            bundle_dir,
+            label="machine release publishing source bundle",
+        )
+
+    return publish_signed_release(
+        resolved_bundle_dirs,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        release_metadata=release_metadata,
+    )
+
+
+def bootstrap_machine_release_publication(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    release_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_bundle_dirs = [Path(value).resolve() for value in bundle_dirs]
+    if not resolved_bundle_dirs:
+        raise SatRootError("machine release publishing requires at least one SATROOT-MACHINE-1 bundle")
+
+    for bundle_dir in resolved_bundle_dirs:
+        _require_machine_bundle_directory(
+            bundle_dir,
+            label="machine release publishing source bundle",
+        )
+
+    return bootstrap_release_publication(
+        resolved_bundle_dirs,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        release_metadata=release_metadata,
+    )
+
+
 def publish_machine_release_catalog(
     release_dirs: Sequence[str | Path],
     *,
@@ -12348,6 +12432,16 @@ def build_cli_parser() -> Any:
     bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
     bundle_index_parser.add_argument("--output", help="Optional output path")
 
+    machine_bundle_index_parser = subparsers.add_parser("build-machine-bundle-index", help="Build a machine-only SATROOT-MACHINE-1 bundle index from one or more signed machine bundle directories")
+    machine_bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 bundle directory")
+    machine_bundle_index_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with machine bundle roots and release metadata defaults")
+    machine_bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 bundle_manifest.json files; may be repeated")
+    machine_bundle_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    machine_bundle_index_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    machine_bundle_index_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    machine_bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+    machine_bundle_index_parser.add_argument("--output", help="Optional output path")
+
     release_manifest_parser = subparsers.add_parser("build-release-manifest", help="Build a signed SATROOT-1 release manifest from a bundle index")
     release_manifest_parser.add_argument("bundle_index_json", help="Path to bundle_index.json")
     release_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
@@ -12374,6 +12468,22 @@ def build_cli_parser() -> Any:
     publish_release_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
     publish_release_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
 
+    publish_machine_release_parser = subparsers.add_parser("publish-machine-release", help="Build bundle_index.json plus release_manifest.json in one machine-only SATROOT-MACHINE-1 release directory")
+    publish_machine_release_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 bundle directory")
+    publish_machine_release_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with machine bundle roots and release metadata defaults")
+    publish_machine_release_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 bundle_manifest.json files; may be repeated")
+    publish_machine_release_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    publish_machine_release_parser.add_argument("--output-dir", required=True, help="Directory where bundle_index.json and release_manifest.json will be written")
+    publish_machine_release_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    publish_machine_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    publish_machine_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+    publish_machine_release_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_machine_release_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release manifest")
+    publish_machine_release_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_machine_release_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-manifest signing")
+    publish_machine_release_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_machine_release_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-manifest signing")
+
     bootstrap_release_publication_parser = subparsers.add_parser("bootstrap-release-publication", help="Generate release signing material and write a ready-to-verify SATROOT-1 release directory")
     bootstrap_release_publication_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     bootstrap_release_publication_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with bundle roots and release metadata defaults")
@@ -12385,6 +12495,18 @@ def build_cli_parser() -> Any:
     bootstrap_release_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
     bootstrap_release_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_release_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release manifest")
+
+    bootstrap_machine_release_publication_parser = subparsers.add_parser("bootstrap-machine-release-publication", help="Generate release signing material and write a ready-to-verify machine-only SATROOT-MACHINE-1 release directory")
+    bootstrap_machine_release_publication_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 bundle directory")
+    bootstrap_machine_release_publication_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with machine bundle roots and release metadata defaults")
+    bootstrap_machine_release_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 bundle_manifest.json files; may be repeated")
+    bootstrap_machine_release_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    bootstrap_machine_release_publication_parser.add_argument("--output-dir", required=True, help="Directory where release material plus bundle_index.json and release_manifest.json will be written")
+    bootstrap_machine_release_publication_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
+    bootstrap_machine_release_publication_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
+    bootstrap_machine_release_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+    bootstrap_machine_release_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_machine_release_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release manifest")
 
     release_catalog_parser = subparsers.add_parser("build-release-catalog", help="Build a SATROOT-1 release catalog from one or more signed release directories")
     release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory or release_manifest.json/bundle_index.json file")
@@ -14884,6 +15006,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(index, output_path)
         return 0
 
+    if args.command == "build-machine-bundle-index":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        release_metadata = dict((preset or {}).get("release_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                release_metadata[key] = value
+        bundle_dirs = resolve_machine_bundle_directory_inputs(
+            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+            label="machine bundle index build source bundle",
+        )
+        index = build_signed_ledger_bundle_index(bundle_dirs, base_dir=base_dir, release_metadata=release_metadata)
+        _write_output(index, output_path)
+        return 0
+
     if args.command == "build-release-manifest":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
@@ -15047,6 +15191,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote SATROOT release publication to {Path(published['release_manifest_path']).parent}")
         return 0
 
+    if args.command == "publish-machine-release":
+        signer = _release_manifest_signer_from_args(args)
+        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        release_metadata = dict((preset or {}).get("release_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                release_metadata[key] = value
+        bundle_dirs = resolve_machine_bundle_directory_inputs(
+            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+            label="machine release publishing source bundle",
+        )
+        published = publish_machine_release(
+            bundle_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            release_metadata=release_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 release publication to {Path(published['release_manifest_path']).parent}")
+        return 0
+
     if args.command == "publish-release-catalog":
         signer = _release_manifest_signer_from_args(args)
         preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
@@ -15180,6 +15352,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_metadata=release_metadata,
         )
         print(f"wrote bootstrapped SATROOT release publication to {Path(published['release_manifest_path']).parent}")
+        return 0
+
+    if args.command == "bootstrap-machine-release-publication":
+        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        release_metadata = dict((preset or {}).get("release_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                release_metadata[key] = value
+        bundle_dirs = resolve_machine_bundle_directory_inputs(
+            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+            label="machine release publishing source bundle",
+        )
+        published = bootstrap_machine_release_publication(
+            bundle_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            release_metadata=release_metadata,
+        )
+        print(f"wrote bootstrapped SATROOT-MACHINE-1 release publication to {Path(published['release_manifest_path']).parent}")
         return 0
 
     if args.command == "bootstrap-release-catalog-publication":

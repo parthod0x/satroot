@@ -623,6 +623,12 @@ Build a bundle index catalog from one or more bundle directories:
 satroot1 build-bundle-index signed_hmac_bundle --output bundle_index.json
 ```
 
+If the source bundles should remain strictly inside the SATROOT-MACHINE-1 lane, the machine-only wrapper rejects any non-machine bundle before writing the unsigned index:
+
+```bash
+satroot1 build-machine-bundle-index machine_bundle_alpha machine_bundle_beta --channel machine --label "SATROOT Machine Bundle Index" --published-at 2026-07-14T02:00:00Z --output machine_bundle_index.json
+```
+
 Or drive the same bundle discovery and release metadata defaults from a preset:
 
 ```bash
@@ -663,6 +669,16 @@ Publish a release directory with both `bundle_index.json` and `release_manifest.
 
 ```bash
 satroot1 publish-release signed_hmac_bundle --output-dir stable_release --channel stable --label "SATROOT FLOOR1 Demo" --published-at 2026-06-26T12:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
+```
+
+For the machine-only release lane, `publish-machine-release` and `bootstrap-machine-release-publication` give the same convenience flow while enforcing SATROOT-MACHINE-1 bundle inputs:
+
+```bash
+satroot1 publish-machine-release machine_bundle_alpha machine_bundle_beta --output-dir machine_release --channel machine --label "SATROOT Machine Release" --published-at 2026-07-14T03:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
+```
+
+```bash
+satroot1 bootstrap-machine-release-publication machine_bundle_alpha machine_bundle_beta --output-dir machine_release_bootstrap --channel machine --label "SATROOT Machine Release" --published-at 2026-07-14T03:00:00Z --scheme hmac-sha256 --key-id release-key
 ```
 
 That same release flow can also discover multiple bundle directories under a parent workspace:
