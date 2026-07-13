@@ -4487,9 +4487,13 @@ def _load_workspace_summary(
     *,
     label: str,
 ) -> tuple[Path, Dict[str, Any]]:
-    workspace_path = Path(workspace_dir).resolve()
-    if not workspace_path.is_dir():
-        raise SatRootError(f"{label} directory must be an existing directory")
+    candidate_path = Path(workspace_dir).resolve()
+    if candidate_path.is_dir():
+        workspace_path = candidate_path
+    else:
+        workspace_path = candidate_path.parent
+        if candidate_path.name != "summary.json":
+            raise SatRootError(f"{label} operations require a workspace directory or summary.json")
     summary_path = workspace_path / "summary.json"
     if not summary_path.is_file():
         raise SatRootError(f"summary.json is required for {label} operations")
@@ -12105,34 +12109,34 @@ def build_cli_parser() -> Any:
     publication_descriptor_index_lint_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory or publication_descriptor_index_manifest.json/publication_descriptor_index.json file")
 
     demo_catalog_summary_parser = subparsers.add_parser("demo-catalog-summary", help="Read summary.json plus release/ and print a demo-catalog workspace summary without signature verification")
-    demo_catalog_summary_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory")
+    demo_catalog_summary_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory or summary.json file")
 
     demo_catalog_lint_parser = subparsers.add_parser("demo-catalog-lint", help="Check summary.json, release/, and referenced bundle directories without signature verification")
-    demo_catalog_lint_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory")
+    demo_catalog_lint_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory or summary.json file")
 
     publication_stack_summary_parser = subparsers.add_parser("publication-stack-summary", help="Read summary.json plus release_catalog/ and print a publication-stack summary without signature verification")
-    publication_stack_summary_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack directory")
+    publication_stack_summary_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack directory or summary.json file")
 
     publication_stack_lint_parser = subparsers.add_parser("publication-stack-lint", help="Check summary.json, release_catalog/, and referenced catalog workspace summaries without signature verification")
-    publication_stack_lint_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack directory")
+    publication_stack_lint_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack directory or summary.json file")
 
     publication_network_summary_parser = subparsers.add_parser("publication-network-summary", help="Read summary.json plus release_catalog_index/ and print a publication-network summary without signature verification")
-    publication_network_summary_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network directory")
+    publication_network_summary_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network directory or summary.json file")
 
     publication_network_lint_parser = subparsers.add_parser("publication-network-lint", help="Check summary.json, release_catalog_index/, and referenced publication stack summaries without signature verification")
-    publication_network_lint_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network directory")
+    publication_network_lint_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network directory or summary.json file")
 
     publication_catalog_workspace_summary_parser = subparsers.add_parser("publication-catalog-workspace-summary", help="Read summary.json plus generated publication catalog components and print a publication-catalog workspace summary without signature verification")
-    publication_catalog_workspace_summary_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory")
+    publication_catalog_workspace_summary_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory or summary.json file")
 
     publication_catalog_workspace_lint_parser = subparsers.add_parser("publication-catalog-workspace-lint", help="Check summary.json, generated publication catalog components, and referenced publication metadata bundles without signature verification")
-    publication_catalog_workspace_lint_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory")
+    publication_catalog_workspace_lint_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory or summary.json file")
 
     publication_registry_workspace_summary_parser = subparsers.add_parser("publication-registry-workspace-summary", help="Read summary.json plus copied/generated publication components and print a publication-registry workspace summary without signature verification")
-    publication_registry_workspace_summary_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
+    publication_registry_workspace_summary_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory or summary.json file")
 
     publication_registry_workspace_lint_parser = subparsers.add_parser("publication-registry-workspace-lint", help="Check summary.json, copied/generated publication components, and referenced publication metadata bundles without signature verification")
-    publication_registry_workspace_lint_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
+    publication_registry_workspace_lint_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory or summary.json file")
 
     publication_registry_summary_parser = subparsers.add_parser("publication-registry-summary", help="Read publication_registry_manifest.json plus publication_registry.json and print a publication-registry summary without signature verification")
     publication_registry_summary_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory or publication_registry_manifest.json/publication_registry.json file")

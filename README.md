@@ -1068,6 +1068,16 @@ Lint a demo catalog workspace, its nested release, and all referenced bundle dir
 satroot1 demo-catalog-lint catalog_workspace
 ```
 
+Those workspace inspection commands also accept the generated `summary.json` directly when you already have the summary file open:
+
+```bash
+satroot1 demo-catalog-summary catalog_workspace/summary.json
+satroot1 publication-stack-lint publication_stack/summary.json
+satroot1 publication-network-summary publication_network/summary.json
+satroot1 publication-catalog-workspace-lint publication_catalog_workspace/summary.json
+satroot1 publication-registry-workspace-summary publication_registry_workspace/summary.json
+```
+
 Inspect a publication stack workspace without signature verification:
 
 ```bash

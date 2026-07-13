@@ -8250,6 +8250,17 @@ def test_cli_demo_catalog_summary_reads_summary_and_release(tmp_path, capsys):
     assert '"release_summary":' in captured.out
 
 
+def test_cli_demo_catalog_summary_accepts_summary_json(tmp_path, capsys):
+    output_dir = make_demo_catalog_workspace_dir(tmp_path)
+
+    exit_code = main(["demo-catalog-summary", str(output_dir / "summary.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"bundle_count":2' in captured.out
+    assert '"bundle_names":["machine","stable"]' in captured.out
+
+
 def test_cli_demo_catalog_lint_accepts_clean_workspace(tmp_path, capsys):
     output_dir = make_demo_catalog_workspace_dir(tmp_path)
 
@@ -8290,6 +8301,17 @@ def test_cli_publication_stack_summary_reads_summary_and_catalog(tmp_path, capsy
     assert '"workspace_count":2' in captured.out
     assert '"workspace_names":["machine_catalog","stable_catalog"]' in captured.out
     assert '"release_catalog_summary":' in captured.out
+
+
+def test_cli_publication_stack_lint_accepts_summary_json(tmp_path, capsys):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+
+    exit_code = main(["publication-stack-lint", str(stack_dir / "summary.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"release_catalog_lint":' in captured.out
 
 
 def test_cli_publication_stack_lint_accepts_clean_stack(tmp_path, capsys):
@@ -8354,6 +8376,17 @@ def test_cli_publication_network_summary_reads_summary_and_index(tmp_path, capsy
     assert '"release_catalog_index_summary":' in captured.out
 
 
+def test_cli_publication_network_summary_accepts_summary_json(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    exit_code = main(["publication-network-summary", str(network_dir / "summary.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"stack_count":2' in captured.out
+    assert '"workspace_names":["stack_a","stack_b"]' in captured.out
+
+
 def test_cli_publication_network_lint_accepts_clean_network(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
 
@@ -8397,6 +8430,17 @@ def test_cli_publication_registry_workspace_summary_reads_summary_and_components
     assert '"publication_registry_summary":' in captured.out
 
 
+def test_cli_publication_registry_workspace_summary_accepts_summary_json(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    exit_code = main(["publication-registry-workspace-summary", str(workspace_dir / "summary.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"artifact_count":12' in captured.out
+    assert '"publication_registry_summary":' in captured.out
+
+
 def test_cli_publication_catalog_workspace_summary_reads_summary_and_components(tmp_path, capsys):
     workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
 
@@ -8407,6 +8451,17 @@ def test_cli_publication_catalog_workspace_summary_reads_summary_and_components(
     assert '"artifact_count":12' in captured.out
     assert '"publication_descriptor_index_summary":' in captured.out
     assert '"publication_metadata_catalog":' in captured.out
+
+
+def test_cli_publication_catalog_workspace_lint_accepts_summary_json(tmp_path, capsys):
+    workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+
+    exit_code = main(["publication-catalog-workspace-lint", str(workspace_dir / "summary.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"publication_descriptor_index_lint":' in captured.out
 
 
 def test_cli_publication_registry_workspace_lint_accepts_clean_workspace(tmp_path, capsys):
