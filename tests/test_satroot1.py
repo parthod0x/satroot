@@ -2579,6 +2579,39 @@ def test_cli_bootstrap_release_catalog_publication(tmp_path, capsys):
     assert verified["catalog"] == catalog["catalog"]
 
 
+def test_cli_bootstrap_release_catalog_publication_from_release_json_inputs(tmp_path, capsys):
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+    output_dir = tmp_path / "release_catalog_publication_json_inputs"
+
+    exit_code = main(
+        [
+            "bootstrap-release-catalog-publication",
+            str(Path(stable_release_dir) / "bundle_index.json"),
+            str(Path(machine_release_dir) / "release_manifest.json"),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Catalog of Releases via JSON",
+            "--published-at",
+            "2026-06-30T05:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "SATROOT Catalog of Releases via JSON"
+
+
 def test_cli_bootstrap_release_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
     stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
     preset_path = tmp_path / "release_catalog_preset.json"
@@ -2740,6 +2773,40 @@ def test_cli_bootstrap_release_catalog_index_publication(tmp_path, capsys):
     )
     assert verified["release_catalog_count"] == 2
     assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_release_catalog_index_publication_from_catalog_json_inputs(tmp_path, capsys):
+    catalog_alpha_dir = make_demo_release_catalog_dir(tmp_path / "catalog_alpha_root")
+    catalog_beta_dir = make_demo_release_catalog_dir(tmp_path / "catalog_beta_root")
+    output_dir = tmp_path / "release_catalog_index_publication_json_inputs"
+
+    exit_code = main(
+        [
+            "bootstrap-release-catalog-index-publication",
+            str(Path(catalog_alpha_dir) / "release_catalog.json"),
+            str(Path(catalog_beta_dir) / "release_catalog_manifest.json"),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Catalog Network via JSON",
+            "--published-at",
+            "2026-07-02T05:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "SATROOT Catalog Network via JSON"
 
 
 def test_cli_bootstrap_release_catalog_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):

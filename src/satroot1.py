@@ -3050,6 +3050,17 @@ def discover_signed_release_publication_dirs(
     return sorted(discovered.values())
 
 
+def _normalize_release_publication_input(path: str | Path) -> str:
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        return str(candidate_path)
+    if candidate_path.name not in {"release_manifest.json", "bundle_index.json"}:
+        raise SatRootError(
+            "release catalog inputs must be release directories or release_manifest.json/bundle_index.json files"
+        )
+    return str(candidate_path.parent)
+
+
 def resolve_release_directory_inputs(
     release_dirs: Sequence[str | Path],
     *,
@@ -3060,9 +3071,9 @@ def resolve_release_directory_inputs(
     seen: set[str] = set()
 
     for release_dir in release_dirs:
-        release_path = str(Path(release_dir).resolve())
+        release_path = _normalize_release_publication_input(release_dir)
         if release_path not in seen:
-            resolved.append(release_dir)
+            resolved.append(release_path)
             seen.add(release_path)
 
     if discover_under:
@@ -3525,6 +3536,17 @@ def discover_signed_release_catalog_publication_dirs(
     return sorted(discovered.values())
 
 
+def _normalize_release_catalog_publication_input(path: str | Path) -> str:
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        return str(candidate_path)
+    if candidate_path.name not in {"release_catalog_manifest.json", "release_catalog.json"}:
+        raise SatRootError(
+            "release catalog index inputs must be release catalog directories or release_catalog_manifest.json/release_catalog.json files"
+        )
+    return str(candidate_path.parent)
+
+
 def resolve_release_catalog_directory_inputs(
     release_catalog_dirs: Sequence[str | Path],
     *,
@@ -3535,9 +3557,9 @@ def resolve_release_catalog_directory_inputs(
     seen: set[str] = set()
 
     for release_catalog_dir in release_catalog_dirs:
-        release_catalog_path = str(Path(release_catalog_dir).resolve())
+        release_catalog_path = _normalize_release_catalog_publication_input(release_catalog_dir)
         if release_catalog_path not in seen:
-            resolved.append(release_catalog_dir)
+            resolved.append(release_catalog_path)
             seen.add(release_catalog_path)
 
     if discover_under:
@@ -12137,7 +12159,7 @@ def build_cli_parser() -> Any:
     bootstrap_release_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release manifest")
 
     release_catalog_parser = subparsers.add_parser("build-release-catalog", help="Build a SATROOT-1 release catalog from one or more signed release directories")
-    release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory")
+    release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory or release_manifest.json/bundle_index.json file")
     release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
     release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -12157,7 +12179,7 @@ def build_cli_parser() -> Any:
     release_catalog_manifest_parser.add_argument("--output", help="Optional output path")
 
     release_catalog_index_parser = subparsers.add_parser("build-release-catalog-index", help="Build a SATROOT-1 release catalog index from one or more signed release catalog directories")
-    release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory")
+    release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
     release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
     release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -12177,7 +12199,7 @@ def build_cli_parser() -> Any:
     release_catalog_index_manifest_parser.add_argument("--output", help="Optional output path")
 
     publish_release_catalog_parser = subparsers.add_parser("publish-release-catalog", help="Build release_catalog.json plus release_catalog_manifest.json in one SATROOT-1 catalog directory")
-    publish_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory")
+    publish_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory or release_manifest.json/bundle_index.json file")
     publish_release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
     publish_release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     publish_release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -12193,7 +12215,7 @@ def build_cli_parser() -> Any:
     publish_release_catalog_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-manifest signing")
 
     publish_release_catalog_index_parser = subparsers.add_parser("publish-release-catalog-index", help="Build release_catalog_index.json plus release_catalog_index_manifest.json in one SATROOT-1 index directory")
-    publish_release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory")
+    publish_release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     publish_release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
     publish_release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
     publish_release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -12209,7 +12231,7 @@ def build_cli_parser() -> Any:
     publish_release_catalog_index_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-index-manifest signing")
 
     bootstrap_release_catalog_publication_parser = subparsers.add_parser("bootstrap-release-catalog-publication", help="Generate signing material and write a ready-to-verify SATROOT-1 release catalog directory")
-    bootstrap_release_catalog_publication_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory")
+    bootstrap_release_catalog_publication_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory or release_manifest.json/bundle_index.json file")
     bootstrap_release_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
     bootstrap_release_catalog_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     bootstrap_release_catalog_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -12221,7 +12243,7 @@ def build_cli_parser() -> Any:
     bootstrap_release_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
 
     bootstrap_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-release-catalog-index-publication", help="Generate signing material and write a ready-to-verify SATROOT-1 release catalog index directory")
-    bootstrap_release_catalog_index_publication_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory")
+    bootstrap_release_catalog_index_publication_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     bootstrap_release_catalog_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
     bootstrap_release_catalog_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
     bootstrap_release_catalog_index_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")

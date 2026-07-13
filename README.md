@@ -665,6 +665,12 @@ Build a higher-level release catalog from multiple signed release directories:
 satroot1 build-release-catalog stable_release machine_release --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --output release_catalog.json
 ```
 
+Those release-catalog flows also accept the generated release files directly, so you can mix `release_manifest.json` and `bundle_index.json` inputs when that is what you already have on hand:
+
+```bash
+satroot1 bootstrap-release-catalog-publication stable_release/bundle_index.json machine_release/release_manifest.json --output-dir release_catalog_bootstrap --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
 Publish a signed release catalog directory in one step:
 
 ```bash
@@ -688,6 +694,12 @@ For a higher-level network of signed release catalogs, you can build and publish
 ```bash
 satroot1 build-release-catalog-index release_catalog_bootstrap another_release_catalog --channel network --label "SATROOT Catalog Network" --published-at 2026-07-02T05:00:00Z --output release_catalog_index.json
 satroot1 bootstrap-release-catalog-index-publication --preset-json examples/release_catalog_index_presets/ai_compute_catalog_network.json --output-dir release_catalog_index_bootstrap --label "SATROOT AI Compute Catalog Network Override" --scheme hmac-sha256 --key-id index-key
+```
+
+That higher-level index lane likewise accepts either the signed catalog directory or the generated `release_catalog.json` / `release_catalog_manifest.json` files:
+
+```bash
+satroot1 bootstrap-release-catalog-index-publication release_catalog_bootstrap/release_catalog.json another_release_catalog/release_catalog_manifest.json --output-dir release_catalog_index_bootstrap --channel network --label "SATROOT Catalog Network" --published-at 2026-07-02T05:00:00Z --scheme hmac-sha256 --key-id index-key
 ```
 
 For a single end-to-end workspace, `bootstrap-publication-stack` can take multiple demo-catalog presets plus an optional release-catalog preset and emit catalog workspaces and a top-level release catalog in one shot:
