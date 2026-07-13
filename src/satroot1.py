@@ -4668,6 +4668,26 @@ def _require_machine_release_catalog_publication(release_catalog_dir: str | Path
         )
 
 
+def _require_machine_release_catalog_index_publication(release_catalog_index_dir: str | Path, *, label: str) -> None:
+    manifest_path, _index_path, _manifest, index = _load_release_catalog_index_publication(release_catalog_index_dir)
+    release_catalogs = index.get("release_catalogs")
+    assert isinstance(release_catalogs, list)
+    if not release_catalogs:
+        raise SatRootError(f"{label} must contain at least one nested SATROOT-MACHINE-1 release catalog")
+
+    for entry in release_catalogs:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid nested release catalog entry")
+        release_catalog_path_ref = entry.get("release_catalog_path")
+        if not isinstance(release_catalog_path_ref, str) or not release_catalog_path_ref.strip():
+            raise SatRootError(f"{label} is missing nested release catalog metadata")
+        nested_release_catalog_dir = (manifest_path.parent / release_catalog_path_ref).resolve()
+        _require_machine_release_catalog_publication(
+            nested_release_catalog_dir,
+            label=f"{label} nested release catalog {release_catalog_path_ref!r}",
+        )
+
+
 def resolve_machine_release_catalog_directory_inputs(
     release_catalog_dirs: Sequence[str | Path],
     *,
@@ -4735,6 +4755,244 @@ def _require_machine_release_catalog_index_json(release_catalog_index_json: str 
             nested_release_catalog_dir,
             label=f"{label} nested release catalog {release_catalog_path_ref!r}",
         )
+
+
+def _require_machine_publication_metadata_bundle_publication(
+    publication_metadata_bundle_dir: str | Path,
+    *,
+    label: str,
+    seen: Optional[set[tuple[str, str]]] = None,
+) -> None:
+    _manifest_path, _report_path, _descriptor_path, _manifest, descriptor = _load_publication_metadata_bundle_publication(
+        publication_metadata_bundle_dir
+    )
+    artifact_path = descriptor.get("artifact_path")
+    if not isinstance(artifact_path, str) or not artifact_path.strip():
+        raise SatRootError(f"{label} is missing nested machine artifact metadata")
+    _require_machine_satroot_artifact_path(
+        artifact_path,
+        label=f"{label} nested artifact {artifact_path!r}",
+        seen=seen,
+    )
+
+
+def _require_machine_publication_metadata_catalog_publication(
+    publication_metadata_catalog_dir: str | Path,
+    *,
+    label: str,
+    seen: Optional[set[tuple[str, str]]] = None,
+) -> None:
+    _catalog_manifest_path, catalog_path, _catalog_manifest, publication_metadata_catalog = _load_publication_metadata_catalog_publication(
+        publication_metadata_catalog_dir
+    )
+    bundles = publication_metadata_catalog.get("bundles")
+    assert isinstance(bundles, list)
+    if not bundles:
+        raise SatRootError(f"{label} must contain at least one nested machine publication metadata bundle")
+
+    for entry in bundles:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid nested publication metadata bundle entry")
+        bundle_ref = entry.get("publication_metadata_bundle_path")
+        if not isinstance(bundle_ref, str) or not bundle_ref.strip():
+            raise SatRootError(f"{label} is missing nested publication metadata bundle metadata")
+        bundle_dir = (catalog_path.parent / bundle_ref).resolve()
+        _require_machine_publication_metadata_bundle_publication(
+            bundle_dir,
+            label=f"{label} nested publication metadata bundle {bundle_ref!r}",
+            seen=seen,
+        )
+
+
+def _require_machine_publication_descriptor_index_json(
+    publication_descriptor_index_json: str | Path,
+    *,
+    label: str,
+    seen: Optional[set[tuple[str, str]]] = None,
+) -> None:
+    descriptor_index_path = Path(publication_descriptor_index_json).resolve()
+    index = _load_json_file(str(descriptor_index_path))
+    validate_instance_against_schema(index, load_publication_descriptor_index_schema())
+    if not isinstance(index, dict):
+        raise SatRootError("publication descriptor index must contain an object")
+    validate_publication_descriptor_index_consistency(index)
+
+    artifacts = index.get("artifacts")
+    assert isinstance(artifacts, list)
+    if not artifacts:
+        raise SatRootError(f"{label} must contain at least one nested machine artifact")
+
+    for entry in artifacts:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid nested machine artifact entry")
+        artifact_path = entry.get("artifact_path")
+        if not isinstance(artifact_path, str) or not artifact_path.strip():
+            raise SatRootError(f"{label} is missing nested machine artifact metadata")
+        _require_machine_satroot_artifact_path(
+            artifact_path,
+            label=f"{label} nested artifact {artifact_path!r}",
+            seen=seen,
+        )
+
+
+def _require_machine_publication_descriptor_index_publication(
+    publication_descriptor_index_dir: str | Path,
+    *,
+    label: str,
+    seen: Optional[set[tuple[str, str]]] = None,
+) -> None:
+    _manifest_path, descriptor_index_path, _manifest, _index = _load_publication_descriptor_index_publication(
+        publication_descriptor_index_dir
+    )
+    _require_machine_publication_descriptor_index_json(
+        descriptor_index_path,
+        label=label,
+        seen=seen,
+    )
+
+
+def _require_machine_publication_network_workspace(publication_network_dir: str | Path, *, label: str) -> None:
+    network_path, summary = _load_workspace_summary(publication_network_dir, label=label)
+    validate_publication_network_summary_consistency(summary)
+    workspaces = summary.get("workspaces")
+    assert isinstance(workspaces, list)
+    if not workspaces:
+        raise SatRootError(f"{label} must contain at least one nested publication stack workspace")
+
+    for entry in workspaces:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid nested workspace entry")
+        workspace_name = entry.get("workspace_name")
+        workspace_dir = entry.get("workspace_dir")
+        if isinstance(workspace_dir, str) and workspace_dir.strip():
+            nested_workspace_dir = Path(workspace_dir).resolve()
+        elif isinstance(workspace_name, str) and workspace_name.strip():
+            nested_workspace_dir = (network_path / "stack_workspaces" / workspace_name).resolve()
+        else:
+            raise SatRootError(f"{label} is missing nested publication stack workspace metadata")
+        nested_label = (
+            f"{label} nested publication stack workspace {workspace_name!r}"
+            if isinstance(workspace_name, str) and workspace_name.strip()
+            else f"{label} nested publication stack workspace"
+        )
+        _require_machine_publication_stack_workspace(nested_workspace_dir, label=nested_label)
+
+    _require_machine_release_catalog_index_publication(
+        network_path / "release_catalog_index",
+        label=f"{label} release catalog index",
+    )
+
+
+def _require_machine_publication_registry_publication(
+    publication_registry_dir: str | Path,
+    *,
+    label: str,
+    seen: Optional[set[tuple[str, str]]] = None,
+) -> None:
+    _manifest_path, registry_path, _manifest, registry = _load_publication_registry_publication(publication_registry_dir)
+    release_catalog_index_component = registry.get("release_catalog_index_publication")
+    if isinstance(release_catalog_index_component, Mapping):
+        publication_dir_ref = release_catalog_index_component.get("publication_directory_path")
+        if not isinstance(publication_dir_ref, str) or not publication_dir_ref.strip():
+            raise SatRootError(f"{label} is missing nested release catalog index publication metadata")
+        _require_machine_release_catalog_index_publication(
+            (registry_path.parent / publication_dir_ref).resolve(),
+            label=f"{label} nested release catalog index publication",
+        )
+
+    descriptor_component = registry.get("publication_descriptor_index_publication")
+    if isinstance(descriptor_component, Mapping):
+        publication_dir_ref = descriptor_component.get("publication_directory_path")
+        if not isinstance(publication_dir_ref, str) or not publication_dir_ref.strip():
+            raise SatRootError(f"{label} is missing nested publication descriptor index metadata")
+        _require_machine_publication_descriptor_index_publication(
+            (registry_path.parent / publication_dir_ref).resolve(),
+            label=f"{label} nested publication descriptor index",
+            seen=seen,
+        )
+
+    metadata_component = registry.get("publication_metadata_catalog_publication")
+    if isinstance(metadata_component, Mapping):
+        publication_dir_ref = metadata_component.get("publication_directory_path")
+        if not isinstance(publication_dir_ref, str) or not publication_dir_ref.strip():
+            raise SatRootError(f"{label} is missing nested publication metadata catalog metadata")
+        _require_machine_publication_metadata_catalog_publication(
+            (registry_path.parent / publication_dir_ref).resolve(),
+            label=f"{label} nested publication metadata catalog",
+            seen=seen,
+        )
+
+
+def _require_machine_publication_registry_workspace(publication_registry_workspace_dir: str | Path, *, label: str) -> None:
+    workspace_path, summary = _load_workspace_summary(publication_registry_workspace_dir, label=label)
+    validate_publication_registry_workspace_summary_consistency(summary)
+    _require_machine_publication_catalog_workspace(
+        workspace_path,
+        label=f"{label} nested publication catalog workspace",
+    )
+
+    component_dirs = _resolve_publication_registry_workspace_component_dirs(workspace_path)
+    release_catalog_index_dir = component_dirs["release_catalog_index_dir"]
+    if release_catalog_index_dir.is_dir():
+        _require_machine_release_catalog_index_publication(
+            release_catalog_index_dir,
+            label=f"{label} nested release catalog index",
+        )
+
+    publication_network_dir = component_dirs["publication_network_dir"]
+    if publication_network_dir.is_dir():
+        _require_machine_publication_network_workspace(
+            publication_network_dir,
+            label=f"{label} nested publication network workspace",
+        )
+
+
+def _require_machine_satroot_artifact_path(
+    artifact_path: str | Path,
+    *,
+    label: str,
+    seen: Optional[set[tuple[str, str]]] = None,
+) -> None:
+    if seen is None:
+        seen = set()
+    artifact_kind, resolved_path = _detect_satroot_artifact_kind(artifact_path)
+    resolved_path = Path(resolved_path).resolve()
+    visit_key = (artifact_kind, str(resolved_path))
+    if visit_key in seen:
+        return
+    seen.add(visit_key)
+
+    if artifact_kind == "bundle":
+        _require_machine_bundle_directory(resolved_path, label=label)
+        return
+    if artifact_kind == "release":
+        _require_machine_release_publication(resolved_path, label=label)
+        return
+    if artifact_kind == "release-catalog":
+        _require_machine_release_catalog_publication(resolved_path, label=label)
+        return
+    if artifact_kind == "release-catalog-index":
+        _require_machine_release_catalog_index_publication(resolved_path, label=label)
+        return
+    if artifact_kind == "demo-catalog":
+        _require_machine_demo_catalog_workspace(resolved_path, label=label)
+        return
+    if artifact_kind == "publication-stack":
+        _require_machine_publication_stack_workspace(resolved_path, label=label)
+        return
+    if artifact_kind == "publication-network":
+        _require_machine_publication_network_workspace(resolved_path, label=label)
+        return
+    if artifact_kind == "publication-catalog-workspace":
+        _require_machine_publication_catalog_workspace(resolved_path, label=label)
+        return
+    if artifact_kind == "publication-registry-workspace":
+        _require_machine_publication_registry_workspace(resolved_path, label=label)
+        return
+    if artifact_kind == "publication-registry":
+        _require_machine_publication_registry_publication(resolved_path, label=label, seen=seen)
+        return
+    raise SatRootError(f"{label} must resolve to a supported SATROOT machine artifact; found {artifact_kind!r}")
 
 
 def _require_machine_publication_stack_workspace(publication_stack_dir: str | Path, *, label: str) -> None:
@@ -12195,6 +12453,16 @@ def build_cli_parser() -> Any:
     build_publication_descriptor_index_parser.add_argument("--published-at", help="Optional descriptor-index published_at metadata")
     build_publication_descriptor_index_parser.add_argument("--output", help="Optional output path")
 
+    build_machine_publication_descriptor_index_parser = subparsers.add_parser("build-machine-publication-descriptor-index", help="Build a machine-only SATROOT publication descriptor index from explicit machine artifact paths and/or discovery roots")
+    build_machine_publication_descriptor_index_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with machine artifact paths, discovery roots, and index metadata defaults")
+    build_machine_publication_descriptor_index_parser.add_argument("path", nargs="*", help="Path to a machine-only SATROOT artifact file or directory")
+    build_machine_publication_descriptor_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine-only SATROOT artifacts; may be repeated")
+    build_machine_publication_descriptor_index_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    build_machine_publication_descriptor_index_parser.add_argument("--channel", help="Optional descriptor-index channel metadata")
+    build_machine_publication_descriptor_index_parser.add_argument("--label", help="Optional human-readable descriptor-index label metadata")
+    build_machine_publication_descriptor_index_parser.add_argument("--published-at", help="Optional descriptor-index published_at metadata")
+    build_machine_publication_descriptor_index_parser.add_argument("--output", help="Optional output path")
+
     build_publication_descriptor_index_manifest_parser = subparsers.add_parser("build-publication-descriptor-index-manifest", help="Build a signed SATROOT publication descriptor index manifest from a descriptor index")
     build_publication_descriptor_index_manifest_parser.add_argument("publication_descriptor_index_json", help="Path to publication_descriptor_index.json")
     build_publication_descriptor_index_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
@@ -12204,6 +12472,16 @@ def build_cli_parser() -> Any:
     build_publication_descriptor_index_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
     build_publication_descriptor_index_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-descriptor-index-manifest signing")
     build_publication_descriptor_index_manifest_parser.add_argument("--output", help="Optional output path")
+
+    build_machine_publication_descriptor_index_manifest_parser = subparsers.add_parser("build-machine-publication-descriptor-index-manifest", help="Build a signed machine-only SATROOT publication descriptor index manifest from a machine descriptor index")
+    build_machine_publication_descriptor_index_manifest_parser.add_argument("publication_descriptor_index_json", help="Path to machine-only publication_descriptor_index.json")
+    build_machine_publication_descriptor_index_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    build_machine_publication_descriptor_index_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication descriptor index manifest")
+    build_machine_publication_descriptor_index_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    build_machine_publication_descriptor_index_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-descriptor-index-manifest signing")
+    build_machine_publication_descriptor_index_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    build_machine_publication_descriptor_index_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-descriptor-index-manifest signing")
+    build_machine_publication_descriptor_index_manifest_parser.add_argument("--output", help="Optional output path")
 
     build_publication_metadata_manifest_parser = subparsers.add_parser("build-publication-metadata-manifest", help="Build a signed SATROOT publication metadata manifest from a report and descriptor pair")
     build_publication_metadata_manifest_parser.add_argument("publication_report_path", help="Path to publication_report.md")
@@ -12267,6 +12545,18 @@ def build_cli_parser() -> Any:
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the descriptor index")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+
+    bootstrap_machine_publication_descriptor_index_publication_parser = subparsers.add_parser("bootstrap-machine-publication-descriptor-index-publication", help="Generate signing material and write a ready-to-verify machine-only SATROOT publication descriptor index directory")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with machine artifact paths, discovery roots, and index metadata defaults")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("path", nargs="*", help="Path to a machine-only SATROOT artifact file or directory")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine-only SATROOT artifacts; may be repeated")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--output-dir", required=True, help="Directory where index material plus publication_descriptor_index.json and publication_descriptor_index_manifest.json will be written")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--channel", help="Optional descriptor-index channel metadata")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--label", help="Optional human-readable descriptor-index label")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the descriptor index")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
 
     bootstrap_publication_metadata_bundle_parser = subparsers.add_parser("bootstrap-publication-metadata-bundle", help="Generate signing material, a publication report, a publication descriptor, and a ready-to-verify publication metadata manifest")
     bootstrap_publication_metadata_bundle_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
@@ -14545,10 +14835,59 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(index, args.output)
         return 0
 
+    if args.command == "build-machine-publication-descriptor-index":
+        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        index_metadata = {
+            **dict((preset or {}).get("index_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        artifact_paths = resolve_satroot_artifact_inputs(
+            [*(preset or {}).get("artifact_paths", []), *args.path],
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
+        )
+        for artifact_path in artifact_paths:
+            _require_machine_satroot_artifact_path(
+                artifact_path,
+                label="machine publication descriptor index source artifact",
+            )
+        index = build_satroot_publication_descriptor_index(
+            artifact_paths,
+            discover_under=None,
+            recursive=True,
+            index_metadata=index_metadata,
+        )
+        _write_output(index, args.output)
+        return 0
+
     if args.command == "build-publication-descriptor-index-manifest":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         signer = _release_manifest_signer_from_args(args)
+        manifest = build_signed_publication_descriptor_index_manifest(
+            args.publication_descriptor_index_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
+    if args.command == "build-machine-publication-descriptor-index-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        _require_machine_publication_descriptor_index_json(
+            args.publication_descriptor_index_json,
+            label="machine publication descriptor index manifest source index",
+        )
         manifest = build_signed_publication_descriptor_index_manifest(
             args.publication_descriptor_index_json,
             signature_scheme=args.scheme,
@@ -14672,6 +15011,40 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             index_metadata=index_metadata,
         )
         print(f"wrote bootstrapped SATROOT publication descriptor index to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-machine-publication-descriptor-index-publication":
+        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        index_metadata = {
+            **dict((preset or {}).get("index_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        artifact_paths = resolve_satroot_artifact_inputs(
+            [*(preset or {}).get("artifact_paths", []), *args.path],
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
+        )
+        for artifact_path in artifact_paths:
+            _require_machine_satroot_artifact_path(
+                artifact_path,
+                label="machine publication descriptor index source artifact",
+            )
+        bootstrap_publication_descriptor_index_publication(
+            artifact_paths,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            discover_under=None,
+            recursive=True,
+            index_metadata=index_metadata,
+        )
+        print(f"wrote bootstrapped SATROOT-MACHINE-1 publication descriptor index to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-publication-metadata-bundle":

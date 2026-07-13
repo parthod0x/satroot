@@ -6260,6 +6260,50 @@ def test_cli_build_publication_descriptor_index_for_catalog_workspace_path(tmp_p
     assert index["artifacts"][0]["artifact_kind"] == "publication-catalog-workspace"
 
 
+def test_cli_build_machine_publication_descriptor_index(tmp_path):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path / "machine_catalogs")
+    output_path = tmp_path / "machine_descriptor_index.json"
+
+    exit_code = main(
+        [
+            "build-machine-publication-descriptor-index",
+            str(machine_catalog_workspace_dir),
+            str(catalog_alpha_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Descriptor Index",
+            "--published-at",
+            "2026-07-14T04:00:00Z",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 2
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert index["artifact_kind_counts"]["release-catalog"] == 1
+    assert index["index"]["label"] == "Machine Descriptor Index"
+
+
+def test_cli_build_machine_publication_descriptor_index_rejects_non_machine_artifact(tmp_path):
+    workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    output_path = tmp_path / "machine_descriptor_index.json"
+
+    with pytest.raises(SatRootError, match="source_machine_catalog_workspace_dir provenance"):
+        main(
+            [
+                "build-machine-publication-descriptor-index",
+                str(workspace_dir),
+                "--output",
+                str(output_path),
+            ]
+        )
+
+
 def test_validate_publication_descriptor_index_schema_accepts_generated_index(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     index = json.loads((tmp_path / "descriptor_index.json").read_text(encoding="utf-8")) if (tmp_path / "descriptor_index.json").exists() else None
@@ -6307,6 +6351,54 @@ def test_build_and_verify_signed_publication_descriptor_index_manifest_hmac(tmp_
     assert summary["artifact_count"] == index["artifact_count"]
 
 
+def test_cli_build_machine_publication_descriptor_index_manifest(tmp_path):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    index_path = tmp_path / "machine_descriptor_index.json"
+    manifest_path = tmp_path / "machine_publication_descriptor_index_manifest.json"
+
+    assert main(["build-machine-publication-descriptor-index", str(machine_catalog_workspace_dir), "--output", str(index_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-machine-publication-descriptor-index-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+            "--secret",
+            "descriptor-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-descriptor-index-manifest"
+    assert manifest["signature_key_id"] == "descriptor-key"
+
+
+def test_cli_build_machine_publication_descriptor_index_manifest_rejects_non_machine_index(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    index_path = tmp_path / "descriptor_index.json"
+    assert main(["build-publication-descriptor-index", "--discover-under", str(network_dir), "--output", str(index_path)]) == 0
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "build-machine-publication-descriptor-index-manifest",
+                str(index_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "descriptor-key",
+                "--secret",
+                "descriptor-secret",
+            ]
+        )
+
+
 def test_cli_bootstrap_publication_descriptor_index_publication(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_descriptor_index_publication"
@@ -6348,6 +6440,50 @@ def test_cli_bootstrap_publication_descriptor_index_publication(tmp_path, capsys
         verifier=make_hmac_sha256_verifier(secrets),
     )
     assert verified["artifact_count"] == 12
+    assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_machine_publication_descriptor_index_publication(tmp_path, capsys):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "machine_publication_descriptor_index_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-descriptor-index-publication",
+            str(machine_catalog_workspace_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Descriptor Publication",
+            "--published-at",
+            "2026-07-14T04:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_descriptor_index_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_descriptor_index_secrets.json").read_text(encoding="utf-8"))
+
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert index["index"]["label"] == "Machine Descriptor Publication"
+    assert manifest["signature_key_id"] == "descriptor-key"
+
+    verified = verify_signed_publication_descriptor_index_manifest(
+        output_dir / "publication_descriptor_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["artifact_count"] == 1
     assert verified["index"] == index["index"]
 
 

@@ -943,10 +943,26 @@ To aggregate many detected artifacts into one descriptor registry, use `build-pu
 satroot1 build-publication-descriptor-index --discover-under publication_network --channel network --label "SATROOT Descriptor Index" --output publication_descriptor_index.json
 ```
 
+If those discovered artifacts must stay fully inside the SATROOT-MACHINE-1 lane, the machine-only wrapper validates each nested artifact before writing the unsigned index:
+
+```bash
+satroot1 build-machine-publication-descriptor-index machine_publication_catalog_workspace machine_release_catalog_alpha --channel machine --label "Machine Descriptor Index" --published-at 2026-07-14T04:00:00Z --output machine_publication_descriptor_index.json
+```
+
 To bootstrap signing material plus a ready-to-verify signed publication descriptor index:
 
 ```bash
 satroot1 bootstrap-publication-descriptor-index-publication --discover-under publication_network --output-dir publication_descriptor_index_publication --channel network --label "SATROOT Descriptor Publication" --scheme hmac-sha256 --key-id descriptor-key
+```
+
+That descriptor-index lane now also has matching machine-only manifest and bootstrap wrappers:
+
+```bash
+satroot1 build-machine-publication-descriptor-index-manifest machine_publication_descriptor_index.json --scheme hmac-sha256 --key-id descriptor-key --secret descriptor-secret --output machine_publication_descriptor_index_manifest.json
+```
+
+```bash
+satroot1 bootstrap-machine-publication-descriptor-index-publication machine_publication_catalog_workspace --output-dir machine_publication_descriptor_index_publication --channel machine --label "Machine Descriptor Publication" --published-at 2026-07-14T04:30:00Z --scheme hmac-sha256 --key-id descriptor-key
 ```
 
 For repeatable descriptor-index packaging, that same command can also load a preset:
