@@ -441,6 +441,18 @@ That machine catalog bootstrap can also resolve its symbol, name, machine fields
 satroot1 bootstrap-machine-demo-catalog --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir machine_catalog_workspace_preset --label "SATROOT Machine Catalog Override"
 ```
 
+If you already have multiple machine-credit release directories and want a machine-validated signed catalog without stepping up into the publication stack yet:
+
+```bash
+satroot1 bootstrap-machine-release-catalog-publication machine_release_alpha/release_manifest.json machine_release_beta/bundle_index.json --output-dir machine_release_catalog --channel machine --label "SATROOT Machine Release Catalog" --published-at 2026-07-04T03:00:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
+And if you already manage signing material yourself, there is a matching publish wrapper that rejects any non-machine release inputs:
+
+```bash
+satroot1 publish-machine-release-catalog machine_release_alpha machine_release_beta --output-dir machine_release_catalog --channel machine --label "SATROOT Machine Release Catalog" --published-at 2026-07-04T03:00:00Z --scheme hmac-sha256 --key-id catalog-key --secrets-json release_hmac/release_secrets.json
+```
+
 Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly from machine-profile inputs:
 
 ```bash

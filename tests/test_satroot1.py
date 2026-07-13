@@ -163,6 +163,38 @@ def make_demo_release_dirs(tmp_path: Path) -> tuple[str, str]:
     return stable["release_dir"], machine["release_dir"]
 
 
+def make_machine_release_dirs(tmp_path: Path) -> tuple[str, str]:
+    alpha = bootstrap_machine_credit_demo_release(
+        symbol="MRELA1",
+        name="Machine Release Alpha",
+        bundle_scheme="hmac-sha256",
+        output_dir=tmp_path / "machine_alpha_workspace",
+        release_key_id="release-key",
+        service_scope="batch-inference",
+        billing_unit="job",
+        release_metadata={
+            "channel": "machine",
+            "label": "Machine Release Alpha",
+            "published_at": "2026-07-04T01:00:00Z",
+        },
+    )
+    beta = bootstrap_machine_credit_demo_release(
+        symbol="MRELB1",
+        name="Machine Release Beta",
+        bundle_scheme="hmac-sha256",
+        output_dir=tmp_path / "machine_beta_workspace",
+        release_key_id="release-key",
+        service_scope="vector-index",
+        billing_unit="call",
+        release_metadata={
+            "channel": "machine",
+            "label": "Machine Release Beta",
+            "published_at": "2026-07-04T02:00:00Z",
+        },
+    )
+    return alpha["release_dir"], beta["release_dir"]
+
+
 def make_demo_release_catalog_dir(tmp_path: Path) -> Path:
     stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
     output_dir = tmp_path / "release_catalog_publication"
@@ -2659,6 +2691,105 @@ def test_cli_bootstrap_release_catalog_publication_with_preset_json_and_cli_over
     assert catalog["catalog"]["channel"] == "beta"
     assert catalog["catalog"]["label"] == "SATROOT Preset Override Stack"
     assert catalog["catalog"]["published_at"] == "2026-07-01T01:00:00Z"
+
+
+def test_cli_bootstrap_machine_release_catalog_publication(tmp_path, capsys):
+    machine_release_alpha_dir, machine_release_beta_dir = make_machine_release_dirs(tmp_path)
+    output_dir = tmp_path / "machine_release_catalog_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-release-catalog-publication",
+            machine_release_alpha_dir,
+            machine_release_beta_dir,
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "SATROOT Machine Release Catalog",
+            "--published-at",
+            "2026-07-04T03:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "SATROOT Machine Release Catalog"
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"MRELA1", "MRELB1"}
+    assert manifest["signature_key_id"] == "catalog-key"
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"] == catalog["catalog"]
+
+
+def test_cli_bootstrap_machine_release_catalog_publication_from_release_json_inputs(tmp_path, capsys):
+    machine_release_alpha_dir, machine_release_beta_dir = make_machine_release_dirs(tmp_path)
+    output_dir = tmp_path / "machine_release_catalog_publication_json_inputs"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-release-catalog-publication",
+            str(Path(machine_release_alpha_dir) / "bundle_index.json"),
+            str(Path(machine_release_beta_dir) / "release_manifest.json"),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "SATROOT Machine Release Catalog via JSON",
+            "--published-at",
+            "2026-07-04T03:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "SATROOT Machine Release Catalog via JSON"
+
+
+def test_cli_publish_machine_release_catalog_rejects_non_machine_release(tmp_path):
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+    output_dir = tmp_path / "mixed_machine_release_catalog"
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-release-catalog",
+                stable_release_dir,
+                machine_release_dir,
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
 
 
 def test_build_signed_release_catalog_index_from_catalog_dirs(tmp_path):

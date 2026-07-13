@@ -4547,6 +4547,51 @@ def _require_machine_demo_catalog_workspace(demo_catalog_dir: str | Path, *, lab
         )
 
 
+def _require_machine_release_publication(release_dir: str | Path, *, label: str) -> None:
+    _, bundle_index_path, _manifest, index = _load_release_publication(release_dir)
+    bundles = index.get("bundles")
+    assert isinstance(bundles, list)
+
+    unexpected_profiles: set[Any] = set()
+    for entry in bundles:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} has an invalid bundle entry")
+        manifest_path_ref = entry.get("manifest_path")
+        if not isinstance(manifest_path_ref, str) or not manifest_path_ref.strip():
+            raise SatRootError(f"{label} is missing nested bundle manifest metadata")
+        manifest_path = (bundle_index_path.parent / manifest_path_ref).resolve()
+        if not manifest_path.is_file():
+            raise SatRootError(f"{label} bundle manifest not found: {manifest_path_ref}")
+        bundle_manifest = _load_validated_bundle_manifest(manifest_path.parent)
+        final_snapshot = bundle_manifest.get("final_state_snapshot")
+        profile = final_snapshot.get("profile") if isinstance(final_snapshot, Mapping) else None
+        if profile != MACHINE_DEMO_CATALOG_PROFILE:
+            unexpected_profiles.add(profile)
+
+    if unexpected_profiles or not bundles:
+        raise SatRootError(
+            f"{label} must contain only {MACHINE_DEMO_CATALOG_PROFILE} bundles; "
+            f"found {sorted(unexpected_profiles) or 'none'}"
+        )
+
+
+def resolve_machine_release_directory_inputs(
+    release_dirs: Sequence[str | Path],
+    *,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    label: str,
+) -> list[str | Path]:
+    resolved = resolve_release_directory_inputs(
+        release_dirs,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    for release_dir in resolved:
+        _require_machine_release_publication(release_dir, label=label)
+    return resolved
+
+
 def _require_machine_publication_stack_workspace(publication_stack_dir: str | Path, *, label: str) -> None:
     stack_path, summary = _load_workspace_summary(publication_stack_dir, label=label)
     validate_publication_stack_summary_consistency(summary)
@@ -7672,6 +7717,62 @@ def publish_machine_publication_stack_workspace(
         signature_scheme=signature_scheme,
         key_id=key_id,
         release_catalog_metadata=release_catalog_metadata,
+    )
+
+
+def publish_machine_release_catalog(
+    release_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_release_dirs = [Path(value).resolve() for value in release_dirs]
+    if not resolved_release_dirs:
+        raise SatRootError("machine release catalog publishing requires at least one SATROOT-MACHINE-1 release")
+
+    for release_dir in resolved_release_dirs:
+        _require_machine_release_publication(
+            release_dir,
+            label="machine release catalog publishing source release",
+        )
+
+    return publish_signed_release_catalog(
+        resolved_release_dirs,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        catalog_metadata=catalog_metadata,
+    )
+
+
+def bootstrap_machine_release_catalog_publication(
+    release_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_release_dirs = [Path(value).resolve() for value in release_dirs]
+    if not resolved_release_dirs:
+        raise SatRootError("machine release catalog publishing requires at least one SATROOT-MACHINE-1 release")
+
+    for release_dir in resolved_release_dirs:
+        _require_machine_release_publication(
+            release_dir,
+            label="machine release catalog publishing source release",
+        )
+
+    return bootstrap_release_catalog_publication(
+        resolved_release_dirs,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        catalog_metadata=catalog_metadata,
     )
 
 
@@ -12248,6 +12349,22 @@ def build_cli_parser() -> Any:
     publish_release_catalog_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
     publish_release_catalog_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-manifest signing")
 
+    publish_machine_release_catalog_parser = subparsers.add_parser("publish-machine-release-catalog", help="Build release_catalog.json plus release_catalog_manifest.json in one machine-only SATROOT-MACHINE-1 catalog directory")
+    publish_machine_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release directory or release_manifest.json/bundle_index.json file")
+    publish_machine_release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with machine release roots and catalog metadata defaults")
+    publish_machine_release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_manifest.json files; may be repeated")
+    publish_machine_release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    publish_machine_release_catalog_parser.add_argument("--output-dir", required=True, help="Directory where release_catalog.json and release_catalog_manifest.json will be written")
+    publish_machine_release_catalog_parser.add_argument("--channel", help="Optional catalog channel metadata")
+    publish_machine_release_catalog_parser.add_argument("--label", help="Optional human-readable catalog label")
+    publish_machine_release_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    publish_machine_release_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_machine_release_catalog_parser.add_argument("--key-id", required=True, help="Signature key identifier for the release catalog manifest")
+    publish_machine_release_catalog_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_machine_release_catalog_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 release-catalog-manifest signing")
+    publish_machine_release_catalog_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_machine_release_catalog_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 release-catalog-manifest signing")
+
     publish_release_catalog_index_parser = subparsers.add_parser("publish-release-catalog-index", help="Build release_catalog_index.json plus release_catalog_index_manifest.json in one SATROOT-1 index directory")
     publish_release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     publish_release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
@@ -12275,6 +12392,18 @@ def build_cli_parser() -> Any:
     bootstrap_release_catalog_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
     bootstrap_release_catalog_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_release_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
+
+    bootstrap_machine_release_catalog_publication_parser = subparsers.add_parser("bootstrap-machine-release-catalog-publication", help="Generate signing material and write a ready-to-verify machine-only SATROOT-MACHINE-1 release catalog directory")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release directory or release_manifest.json/bundle_index.json file")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with machine release roots and catalog metadata defaults")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_manifest.json files; may be repeated")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--output-dir", required=True, help="Directory where catalog material plus release_catalog.json and release_catalog_manifest.json will be written")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--channel", help="Optional catalog channel metadata")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--label", help="Optional human-readable catalog label")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
 
     bootstrap_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-release-catalog-index-publication", help="Generate signing material and write a ready-to-verify SATROOT-1 release catalog index directory")
     bootstrap_release_catalog_index_publication_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
@@ -14756,6 +14885,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote SATROOT release catalog publication to {Path(published['release_catalog_manifest_path']).parent}")
         return 0
 
+    if args.command == "publish-machine-release-catalog":
+        signer = _release_manifest_signer_from_args(args)
+        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+        release_dirs = resolve_machine_release_directory_inputs(
+            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+            label="machine release catalog publishing source release",
+        )
+        published = publish_machine_release_catalog(
+            release_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            catalog_metadata=catalog_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 release catalog publication to {Path(published['release_catalog_manifest_path']).parent}")
+        return 0
+
     if args.command == "publish-release-catalog-index":
         signer = _release_manifest_signer_from_args(args)
         preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
@@ -14831,6 +14988,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             catalog_metadata=catalog_metadata,
         )
         print(f"wrote bootstrapped SATROOT release catalog publication to {Path(published['release_catalog_manifest_path']).parent}")
+        return 0
+
+    if args.command == "bootstrap-machine-release-catalog-publication":
+        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+        release_dirs = resolve_machine_release_directory_inputs(
+            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+            label="machine release catalog publishing source release",
+        )
+        published = bootstrap_machine_release_catalog_publication(
+            release_dirs,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            catalog_metadata=catalog_metadata,
+        )
+        print(f"wrote bootstrapped SATROOT-MACHINE-1 release catalog publication to {Path(published['release_catalog_manifest_path']).parent}")
         return 0
 
     if args.command == "bootstrap-release-catalog-index-publication":
