@@ -2825,6 +2825,33 @@ def test_cli_publish_machine_release_catalog_rejects_non_machine_release(tmp_pat
         )
 
 
+def test_cli_build_machine_release_catalog(tmp_path):
+    machine_release_alpha_dir, machine_release_beta_dir = make_machine_release_dirs(tmp_path)
+    output_path = tmp_path / "machine_release_catalog.json"
+
+    exit_code = main(
+        [
+            "build-machine-release-catalog",
+            machine_release_alpha_dir,
+            str(Path(machine_release_beta_dir) / "release_manifest.json"),
+            "--channel",
+            "machine",
+            "--label",
+            "Built Machine Release Catalog",
+            "--published-at",
+            "2026-07-04T03:45:00Z",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    catalog = json.loads(output_path.read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Built Machine Release Catalog"
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"MRELA1", "MRELB1"}
+
+
 def test_build_signed_release_catalog_index_from_catalog_dirs(tmp_path):
     index_dir = make_demo_release_catalog_index_dir(tmp_path)
     catalog_alpha_dir = tmp_path / "catalog_alpha"
@@ -3121,6 +3148,36 @@ def test_cli_publish_machine_release_catalog_index_rejects_non_machine_catalog(t
                 "index-secret",
             ]
         )
+
+
+def test_cli_build_machine_release_catalog_index(tmp_path):
+    catalog_alpha_dir, catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
+    output_path = tmp_path / "machine_release_catalog_index.json"
+
+    exit_code = main(
+        [
+            "build-machine-release-catalog-index",
+            str(catalog_alpha_dir),
+            str(Path(catalog_beta_dir) / "release_catalog_manifest.json"),
+            "--channel",
+            "machine",
+            "--label",
+            "Built Machine Catalog Network",
+            "--published-at",
+            "2026-07-04T06:45:00Z",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Built Machine Catalog Network"
+    assert sorted(entry["catalog"]["label"] for entry in index["release_catalogs"]) == [
+        "SATROOT Machine Catalog Alpha",
+        "SATROOT Machine Catalog Beta",
+    ]
 
 
 def test_cli_bootstrap_publication_stack_from_presets(tmp_path, capsys):

@@ -12396,6 +12396,16 @@ def build_cli_parser() -> Any:
     release_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
     release_catalog_parser.add_argument("--output", help="Optional output path")
 
+    machine_release_catalog_parser = subparsers.add_parser("build-machine-release-catalog", help="Build a machine-only SATROOT-MACHINE-1 release catalog from one or more signed machine release directories")
+    machine_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release directory or release_manifest.json/bundle_index.json file")
+    machine_release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with machine release roots and catalog metadata defaults")
+    machine_release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_manifest.json files; may be repeated")
+    machine_release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    machine_release_catalog_parser.add_argument("--channel", help="Optional catalog channel metadata")
+    machine_release_catalog_parser.add_argument("--label", help="Optional human-readable catalog label")
+    machine_release_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    machine_release_catalog_parser.add_argument("--output", help="Optional output path")
+
     release_catalog_manifest_parser = subparsers.add_parser("build-release-catalog-manifest", help="Build a signed SATROOT-1 release catalog manifest from a release catalog")
     release_catalog_manifest_parser.add_argument("release_catalog_json", help="Path to release_catalog.json")
     release_catalog_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
@@ -12415,6 +12425,16 @@ def build_cli_parser() -> Any:
     release_catalog_index_parser.add_argument("--label", help="Optional human-readable index label")
     release_catalog_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
     release_catalog_index_parser.add_argument("--output", help="Optional output path")
+
+    machine_release_catalog_index_parser = subparsers.add_parser("build-machine-release-catalog-index", help="Build a machine-only SATROOT-MACHINE-1 release catalog index from one or more signed machine release catalog directories")
+    machine_release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
+    machine_release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with machine release catalog roots and index metadata defaults")
+    machine_release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_catalog_manifest.json files; may be repeated")
+    machine_release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    machine_release_catalog_index_parser.add_argument("--channel", help="Optional index channel metadata")
+    machine_release_catalog_index_parser.add_argument("--label", help="Optional human-readable index label")
+    machine_release_catalog_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+    machine_release_catalog_index_parser.add_argument("--output", help="Optional output path")
 
     release_catalog_index_manifest_parser = subparsers.add_parser("build-release-catalog-index-manifest", help="Build a signed SATROOT-1 release catalog index manifest from a release catalog index")
     release_catalog_index_manifest_parser.add_argument("release_catalog_index_json", help="Path to release_catalog_index.json")
@@ -14899,6 +14919,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_output(catalog, output_path)
         return 0
 
+    if args.command == "build-machine-release-catalog":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+        release_dirs = resolve_machine_release_directory_inputs(
+            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+            label="machine release catalog build source release",
+        )
+        catalog = build_signed_release_catalog(release_dirs, base_dir=base_dir, catalog_metadata=catalog_metadata)
+        _write_output(catalog, output_path)
+        return 0
+
     if args.command == "build-release-catalog-manifest":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
@@ -14929,6 +14971,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+        )
+        index = build_signed_release_catalog_index(
+            release_catalog_dirs,
+            base_dir=base_dir,
+            index_metadata=index_metadata,
+        )
+        _write_output(index, output_path)
+        return 0
+
+    if args.command == "build-machine-release-catalog-index":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        index_metadata = dict((preset or {}).get("index_metadata", {}))
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        release_catalog_dirs = resolve_machine_release_catalog_directory_inputs(
+            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
+            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+            label="machine release catalog index build source catalog",
         )
         index = build_signed_release_catalog_index(
             release_catalog_dirs,
