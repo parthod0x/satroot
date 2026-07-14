@@ -7,7 +7,7 @@
   "properties": {
     "protocol": {"const": "SATROOT-1"},
     "version": {"const": "0.1"},
-    "action": {"enum": ["genesis", "mint", "transfer", "burn", "rotate-authority"]},
+    "action": {"enum": ["genesis", "mint", "transfer", "burn", "rotate-authority", "freeze"]},
     "root_id": {"type": "string", "pattern": "^[a-fA-F0-9]{64}:[0-9]+$"},
     "sequence": {"type": "integer", "minimum": 0},
     "prev_event_id": {"type": ["string", "null"], "pattern": "^sha256:[a-fA-F0-9]{64}$"},
@@ -47,6 +47,8 @@
     },
     "from": {"type": "string", "minLength": 1},
     "to": {"type": "string", "minLength": 1},
+    "account": {"type": "string", "minLength": 1},
+    "frozen": {"type": "boolean"},
     "new_mint_authority": {"type": "string", "minLength": 1},
     "amount": {"type": "string", "pattern": "^[1-9][0-9]*$"},
     "signer": {"type": "string", "minLength": 1},
@@ -190,6 +192,13 @@
         "required": ["action"]
       },
       "then": {"required": ["prev_event_id", "new_mint_authority", "signer", "signature"]}
+    },
+    {
+      "if": {
+        "properties": {"action": {"const": "freeze"}},
+        "required": ["action"]
+      },
+      "then": {"required": ["prev_event_id", "account", "frozen", "signer", "signature"]}
     }
   ],
   "additionalProperties": false

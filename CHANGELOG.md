@@ -13,6 +13,7 @@
 - Adds a one-shot `bootstrap-release-publication` workflow for release signing material plus published release directories.
 - Adds event scaffolding helpers and an `init-event` CLI command for non-genesis records.
 - Adds an `append-event` CLI workflow plus helper for extending existing ledgers with signed events.
+- Adds first-class `freeze` events for authority-controlled account locking and unlocking.
 - Adds a `bootstrap-stable-demo` workflow for generating runnable reference-only SATROOT-STABLE-1 ledgers.
 - Adds a `bootstrap-stable-demo-bundle` workflow for generating signed reference-only SATROOT-STABLE-1 bundles.
 - Adds a `bootstrap-stable-demo-release` workflow for generating signed reference-only SATROOT-STABLE-1 bundles plus release directories.

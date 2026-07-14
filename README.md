@@ -73,11 +73,12 @@ The v0.1 kernel defines:
 
 - a `root_id` bound to a one-satoshi UTXO,
 - a genesis record,
-- `mint`, `transfer`, `burn`, and `rotate-authority` events,
+- `mint`, `transfer`, `burn`, `freeze`, and `rotate-authority` events,
 - strict sequencing with `prev_event_id`,
 - deterministic replay and balance computation,
 - a supply invariant,
 - explicit root authority rotation for mint-control handoff,
+- explicit freeze / unfreeze controls for account-level balance locks,
 - registry-backed profile compatibility checks,
 - runtime guardrails for stable reference-only profile metadata,
 - runtime guardrails for machine and singleton-object profile metadata,

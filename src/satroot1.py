@@ -634,20 +634,7 @@ def _parse_demo_catalog_structure_override_value(kind: str, value: Any, *, label
             return str(parse_amount(value))
         raise SatRootError(f"invalid {label}: {value!r}")
     if kind == "bool":
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, int):
-            if value in {0, 1}:
-                return bool(value)
-            raise SatRootError(f"invalid {label}: {value!r}")
-        if not isinstance(value, str):
-            raise SatRootError(f"invalid {label}: {value!r}")
-        normalized = value.strip().lower()
-        if normalized in {"true", "1", "yes", "on"}:
-            return True
-        if normalized in {"false", "0", "no", "off"}:
-            return False
-        raise SatRootError(f"invalid {label}: {value!r}")
+        return parse_bool_text(value, label=label)
     raise SatRootError(f"unsupported demo catalog structure override kind: {kind}")
 
 
@@ -1339,7 +1326,9 @@ def scaffold_event_record(
     signer: str,
     from_account: Optional[str] = None,
     to_account: Optional[str] = None,
+    account: Optional[str] = None,
     amount: Optional[str] = None,
+    frozen: Optional[str | bool] = None,
     new_mint_authority: Optional[str] = None,
     profile: Optional[str] = None,
     profile_mode: Optional[str] = None,
@@ -1383,6 +1372,10 @@ def scaffold_event_record(
         parse_positive_amount(amount or "")
         event["from"] = from_account
         event["amount"] = amount
+    elif action == "freeze":
+        require_account_name(account, "account")
+        event["account"] = account
+        event["frozen"] = parse_bool_text(frozen, label="frozen")
     elif action == "rotate-authority":
         require_account_name(new_mint_authority, "new_mint_authority")
         event["new_mint_authority"] = new_mint_authority
@@ -1399,7 +1392,9 @@ def scaffold_event_from_ledger(
     signer: str,
     from_account: Optional[str] = None,
     to_account: Optional[str] = None,
+    account: Optional[str] = None,
     amount: Optional[str] = None,
+    frozen: Optional[str | bool] = None,
     new_mint_authority: Optional[str] = None,
     verifier: Optional[SignatureVerifier] = None,
 ) -> Dict[str, Any]:
@@ -1419,7 +1414,9 @@ def scaffold_event_from_ledger(
         signer=signer,
         from_account=from_account,
         to_account=to_account,
+        account=account,
         amount=amount,
+        frozen=frozen,
         new_mint_authority=new_mint_authority,
         profile=profile,
         profile_mode=profile_mode,
@@ -1634,6 +1631,23 @@ def parse_amount(value: str) -> int:
     if not isinstance(value, str) or not value.isdigit():
         raise SatRootError(f"invalid amount: {value!r}")
     return int(value)
+
+
+def parse_bool_text(value: Any, *, label: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value in {0, 1}:
+            return bool(value)
+        raise SatRootError(f"invalid {label}: {value!r}")
+    if not isinstance(value, str):
+        raise SatRootError(f"invalid {label}: {value!r}")
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    raise SatRootError(f"invalid {label}: {value!r}")
 
 
 def demo_signature_verifier(event: Dict[str, Any], payload: str) -> bool:
@@ -6546,6 +6560,7 @@ class SatRootState:
     profile_mode: Optional[str] = None
     genesis_metadata: Dict[str, Any] = field(default_factory=dict)
     balances: Dict[str, int] = field(default_factory=dict)
+    frozen_accounts: set[str] = field(default_factory=set)
     supply: int = 0
     sequence: int = 0
     last_event_id: Optional[str] = None
@@ -6561,6 +6576,7 @@ class SatRootState:
             "profile": self.profile,
             "profile_mode": self.profile_mode,
             "balances": {k: str(v) for k, v in sorted(self.balances.items()) if v != 0},
+            "frozen_accounts": sorted(self.frozen_accounts),
             "supply": str(self.supply),
             "sequence": self.sequence,
             "last_event_id": self.last_event_id,
@@ -6626,6 +6642,7 @@ def apply_genesis(event: Dict[str, Any]) -> SatRootState:
         profile_mode=event.get("profile_mode"),
         genesis_metadata=extract_genesis_metadata(event),
         balances=initial,
+        frozen_accounts=set(),
         supply=supply,
         sequence=0,
         last_event_id=event_id(event),
@@ -6671,6 +6688,8 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
         if event.get("signer") != next_state.mint_authority:
             raise SatRootError("unauthorized mint")
         to = require_account_name(event["to"], "to")
+        if to in next_state.frozen_accounts:
+            raise SatRootError("account is frozen")
         if next_state.max_supply is not None and next_state.supply + amount > next_state.max_supply:
             raise SatRootError("mint exceeds max supply")
         next_state.balances[to] = next_state.balances.get(to, 0) + amount
@@ -6684,6 +6703,8 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
         # v0.1 placeholder: signer must equal sender account string.
         if event.get("signer") != sender:
             raise SatRootError("unauthorized transfer")
+        if sender in next_state.frozen_accounts or recipient in next_state.frozen_accounts:
+            raise SatRootError("account is frozen")
         if next_state.balances.get(sender, 0) < amount:
             raise SatRootError("insufficient balance")
         next_state.balances[sender] -= amount
@@ -6695,10 +6716,25 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
         burner = require_account_name(event["from"], "from")
         if event.get("signer") != burner:
             raise SatRootError("unauthorized burn")
+        if burner in next_state.frozen_accounts:
+            raise SatRootError("account is frozen")
         if next_state.balances.get(burner, 0) < amount:
             raise SatRootError("insufficient balance")
         next_state.balances[burner] -= amount
         next_state.supply -= amount
+
+    elif action == "freeze":
+        require_fields(event, ["account", "frozen"])
+        if event.get("signer") != next_state.mint_authority:
+            raise SatRootError("unauthorized freeze")
+        account = require_account_name(event["account"], "account")
+        frozen_value = event.get("frozen")
+        if not isinstance(frozen_value, bool):
+            raise SatRootError("freeze event frozen must be a boolean")
+        if frozen_value:
+            next_state.frozen_accounts.add(account)
+        else:
+            next_state.frozen_accounts.discard(account)
 
     elif action == "rotate-authority":
         require_fields(event, ["new_mint_authority"])
@@ -12870,7 +12906,7 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_registry_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication registry manifest")
 
     init_event_parser = subparsers.add_parser("init-event", help="Scaffold a SATROOT-1 non-genesis event record")
-    init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], required=True)
+    init_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority", "freeze"], required=True)
     init_event_parser.add_argument("--events-json", help="Optional path to an existing SATROOT-1 ledger array; derives root_id, sequence, prev_event_id, and profile metadata")
     init_event_parser.add_argument("--root-id", help="Explicit root_id when not deriving from --events-json")
     init_event_parser.add_argument("--sequence", type=int, help="Explicit sequence when not deriving from --events-json")
@@ -12878,18 +12914,22 @@ def build_cli_parser() -> Any:
     init_event_parser.add_argument("--signer", required=True, help="Signer account name for the new event")
     init_event_parser.add_argument("--from", dest="from_account", help="Source account for transfer/burn actions")
     init_event_parser.add_argument("--to", dest="to_account", help="Destination account for mint/transfer actions")
+    init_event_parser.add_argument("--account", help="Target account for freeze actions")
     init_event_parser.add_argument("--amount", help="Positive amount for mint/transfer/burn actions")
+    init_event_parser.add_argument("--frozen", help="Boolean freeze state for freeze actions")
     init_event_parser.add_argument("--new-mint-authority", help="New mint authority for rotate-authority actions")
     init_event_parser.add_argument("--output", help="Optional output path")
 
     append_event_parser = subparsers.add_parser("append-event", help="Append a scaffolded or supplied SATROOT-1 event to an existing ledger and optionally sign it")
     append_event_parser.add_argument("events_json", help="Path to an existing SATROOT-1 ledger array")
     append_event_parser.add_argument("--event-json", help="Optional path to an event object to append; otherwise scaffold from the ledger tip")
-    append_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority"], help="Action to scaffold when --event-json is not provided")
+    append_event_parser.add_argument("--action", choices=["mint", "transfer", "burn", "rotate-authority", "freeze"], help="Action to scaffold when --event-json is not provided")
     append_event_parser.add_argument("--signer", help="Signer account name for the appended event")
     append_event_parser.add_argument("--from", dest="from_account", help="Source account for transfer/burn actions")
     append_event_parser.add_argument("--to", dest="to_account", help="Destination account for mint/transfer actions")
+    append_event_parser.add_argument("--account", help="Target account for freeze actions")
     append_event_parser.add_argument("--amount", help="Positive amount for mint/transfer/burn actions")
+    append_event_parser.add_argument("--frozen", help="Boolean freeze state for freeze actions")
     append_event_parser.add_argument("--new-mint-authority", help="New mint authority for rotate-authority actions")
     append_event_parser.add_argument("--scheme", choices=["demo", "hmac-sha256", "ed25519"], default="demo")
     append_event_parser.add_argument("--key-id", help="Explicit signature key identifier for non-demo event signing")
@@ -13788,7 +13828,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 signer=args.signer,
                 from_account=args.from_account,
                 to_account=args.to_account,
+                account=args.account,
                 amount=args.amount,
+                frozen=args.frozen,
                 new_mint_authority=args.new_mint_authority,
             )
         else:
@@ -13802,7 +13844,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 signer=args.signer,
                 from_account=args.from_account,
                 to_account=args.to_account,
+                account=args.account,
                 amount=args.amount,
+                frozen=args.frozen,
                 new_mint_authority=args.new_mint_authority,
             )
         _write_output(event, args.output)
@@ -13832,7 +13876,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 signer=args.signer,
                 from_account=args.from_account,
                 to_account=args.to_account,
+                account=args.account,
                 amount=args.amount,
+                frozen=args.frozen,
                 new_mint_authority=args.new_mint_authority,
                 verifier=verifier,
             )

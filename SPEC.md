@@ -63,7 +63,7 @@ Token balances are computed by replaying signed SATROOT-1 events:
 - `transfer`
 - `burn`
 - `rotate-authority`
-- `freeze` optional in future versions
+- `freeze`
 - `delegate` optional in future versions
 
 Every non-genesis event must reference:
@@ -199,7 +199,22 @@ It is valid only if:
 
 This event changes control over future authority-gated actions such as `mint`. It does not move balances by itself and should not be confused with a token transfer.
 
-### 6.5 Signature verification interface
+### 6.5 Freeze / unfreeze account
+
+A `freeze` event changes whether a named account is balance-locked.
+
+It is valid only if:
+
+- signer matches the current mint authority,
+- `account` is a valid non-empty account identifier,
+- `frozen` is a boolean,
+- sequence is exactly previous sequence + 1.
+
+When an account is frozen, balance-affecting lifecycle actions must reject that account as a sender, burner, mint recipient, or transfer recipient until a later `freeze` event sets `frozen=false` for the same account.
+
+This event changes account transferability state. It does not mint, burn, or transfer balances by itself.
+
+### 6.6 Signature verification interface
 
 The reference engine exposes a pluggable signature verifier interface:
 
@@ -233,7 +248,7 @@ The same pattern is exposed for controlled shared-secret deployments, where sign
 
 The reference CLI may also expose profile-aware genesis scaffolding so valid base or profiled `genesis` objects can be emitted with safe defaults before downstream replay, signing, or bundling steps.
 
-The reference CLI may also expose event scaffolding helpers so valid non-genesis `mint`, `transfer`, `burn`, or `rotate-authority` records can be derived from an existing ledger tip or from explicit `root_id`, `sequence`, and `prev_event_id` inputs.
+The reference CLI may also expose event scaffolding helpers so valid non-genesis `mint`, `transfer`, `burn`, `freeze`, or `rotate-authority` records can be derived from an existing ledger tip or from explicit `root_id`, `sequence`, and `prev_event_id` inputs.
 
 Those helpers may also be composed into append workflows so an existing ledger can be replayed, a next event scaffolded or supplied, and that new event signed and appended in one step without manual JSON surgery.
 

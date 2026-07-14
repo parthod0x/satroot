@@ -909,6 +909,51 @@ def build_rotation_ledger():
     return [genesis, rotate, mint]
 
 
+def build_freeze_ledger():
+    genesis = copy.deepcopy(load_events()[0])
+    genesis["max_supply"] = "1000000000"
+    genesis["initial_balances"] = {"issuer": "900000000", "alice": "100000000"}
+
+    freeze = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "action": "freeze",
+        "root_id": genesis["root_id"],
+        "sequence": 1,
+        "prev_event_id": event_id(genesis),
+        "account": "alice",
+        "frozen": True,
+        "signer": "issuer",
+        "signature": "demo",
+    }
+    unfreeze = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "action": "freeze",
+        "root_id": genesis["root_id"],
+        "sequence": 2,
+        "prev_event_id": event_id(freeze),
+        "account": "alice",
+        "frozen": False,
+        "signer": "issuer",
+        "signature": "demo",
+    }
+    transfer = {
+        "protocol": "SATROOT-1",
+        "version": "0.1",
+        "action": "transfer",
+        "root_id": genesis["root_id"],
+        "sequence": 3,
+        "prev_event_id": event_id(unfreeze),
+        "from": "alice",
+        "to": "bob",
+        "amount": "1000",
+        "signer": "alice",
+        "signature": "demo",
+    }
+    return [genesis, freeze, unfreeze, transfer]
+
+
 def test_replay_demo_ledger():
     state = replay(load_events())
     assert state.symbol == "FLOOR1"
@@ -1064,6 +1109,81 @@ def test_rotate_authority_allows_new_minter():
     assert state.balances["alice"] == 50_000_000
 
 
+def test_freeze_unfreeze_allows_later_transfer():
+    state = replay(build_freeze_ledger())
+    assert "alice" not in state.frozen_accounts
+    assert state.balances["alice"] == 99_999_000
+    assert state.balances["bob"] == 1_000
+
+
+def test_reject_unauthorized_freeze():
+    events = build_freeze_ledger()
+    events[1]["signer"] = "alice"
+    with pytest.raises(SatRootError):
+        replay(events[:2])
+
+
+def test_reject_transfer_from_frozen_account():
+    events = build_freeze_ledger()
+    events = events[:2] + [
+        {
+            "protocol": "SATROOT-1",
+            "version": "0.1",
+            "action": "transfer",
+            "root_id": events[0]["root_id"],
+            "sequence": 2,
+            "prev_event_id": event_id(events[1]),
+            "from": "alice",
+            "to": "bob",
+            "amount": "1000",
+            "signer": "alice",
+            "signature": "demo",
+        }
+    ]
+    with pytest.raises(SatRootError, match="account is frozen"):
+        replay(events)
+
+
+def test_reject_burn_from_frozen_account():
+    events = build_freeze_ledger()
+    events = events[:2] + [
+        {
+            "protocol": "SATROOT-1",
+            "version": "0.1",
+            "action": "burn",
+            "root_id": events[0]["root_id"],
+            "sequence": 2,
+            "prev_event_id": event_id(events[1]),
+            "from": "alice",
+            "amount": "1000",
+            "signer": "alice",
+            "signature": "demo",
+        }
+    ]
+    with pytest.raises(SatRootError, match="account is frozen"):
+        replay(events)
+
+
+def test_reject_mint_to_frozen_account():
+    events = build_freeze_ledger()
+    events = events[:2] + [
+        {
+            "protocol": "SATROOT-1",
+            "version": "0.1",
+            "action": "mint",
+            "root_id": events[0]["root_id"],
+            "sequence": 2,
+            "prev_event_id": event_id(events[1]),
+            "to": "alice",
+            "amount": "1000",
+            "signer": "issuer",
+            "signature": "demo",
+        }
+    ]
+    with pytest.raises(SatRootError, match="account is frozen"):
+        replay(events)
+
+
 def test_reject_unauthorized_rotate_authority():
     events = build_rotation_ledger()
     events[1]["signer"] = "alice"
@@ -1181,7 +1301,7 @@ def test_accept_matching_event_id_and_state_hash():
 
 def test_floor1_state_hash_regression():
     state = replay(load_events())
-    assert state.state_hash() == "sha256:5e57031b9c736b6d3d6f73c07e9df5d6d86123af032119e16148859080797721"
+    assert state.state_hash() == "sha256:1b8db2e38125abc6cab4f05c63056b7821ee441154939de11431282370bfe2fc"
 
 
 def test_profile_registry_contains_supported_profiles():
@@ -1740,9 +1860,10 @@ def test_scaffold_singleton_object_retirement_event_from_archived_receipt_ledger
     assert event["sequence"] == 3
 
 
-def test_load_protocol_schema_supports_rotate_authority():
+def test_load_protocol_schema_supports_rotate_authority_and_freeze():
     schema = load_protocol_schema()
     assert "rotate-authority" in schema["properties"]["action"]["enum"]
+    assert "freeze" in schema["properties"]["action"]["enum"]
 
 
 def test_load_bundle_manifest_schema_supports_signed_ledger_bundles():
@@ -8323,6 +8444,38 @@ def test_cli_init_event_manual_rotate_authority(tmp_path):
     assert event["action"] == "rotate-authority"
     assert event["new_mint_authority"] == "issuer_v2"
     assert event["sequence"] == 1
+
+
+def test_cli_init_event_manual_freeze(tmp_path):
+    output_path = tmp_path / "event.json"
+
+    exit_code = main(
+        [
+            "init-event",
+            "--action",
+            "freeze",
+            "--root-id",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff:0",
+            "--sequence",
+            "1",
+            "--prev-event-id",
+            "sha256:" + ("2" * 64),
+            "--signer",
+            "issuer",
+            "--account",
+            "alice",
+            "--frozen",
+            "true",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    event = json.loads(output_path.read_text(encoding="utf-8"))
+    assert event["action"] == "freeze"
+    assert event["account"] == "alice"
+    assert event["frozen"] is True
 
 
 def test_cli_append_event_hmac(tmp_path):
