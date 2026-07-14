@@ -21,6 +21,7 @@ That means one satoshi can anchor a replayable semantic ledger without pretendin
 This repository currently ships the `SATROOT-1` genesis implementation:
 
 - `SPEC.md` - human-readable v0.1 specification.
+- `ARCHITECTURE.md` - top-level model, layer boundaries, and deliverable framing.
 - `BOUNDARIES.md` - claim discipline, non-goals, and legal boundary language.
 - `ROADMAP.md` - project scope, deliverables, and planned protocol profiles.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
@@ -65,6 +66,8 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 ## SATROOT-1 in one sentence
 
 `SATROOT-1` turns one satoshi into a root-bound namespace for deterministic semantic token state.
+
+For the higher-level framing of how BSV, the SATROOT kernel, and the profile system fit together, see `ARCHITECTURE.md`.
 
 The v0.1 kernel defines:
 

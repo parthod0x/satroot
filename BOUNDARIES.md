@@ -9,6 +9,7 @@ SATROOT-1 is a protocol primitive, not a financial product.
 - Protocol-defined token balances can be computed above that root by replaying events.
 - The semantic token supply can be arbitrary if the protocol rules permit it.
 - The same root model can later support separate profiles without changing the base primitive.
+- Root satoshi movement is not automatically equivalent to semantic token transfer; SATROOT state follows valid protocol events.
 
 ## What SATROOT-1 does not claim
 
