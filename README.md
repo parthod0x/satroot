@@ -887,6 +887,13 @@ satroot1 export-release-catalog-preset publication_stack/release_catalog --outpu
 satroot1 export-release-catalog-index-preset publication_network/release_catalog_index/release_catalog_index.json --output exported_release_catalog_index.json
 ```
 
+The machine-only release lanes have matching preset-export wrappers:
+
+```bash
+satroot1 export-machine-bundle-index-preset machine_release_bootstrap --output exported_machine_bundle_index.json
+satroot1 export-machine-release-catalog-preset machine_release_catalog_alpha/release_catalog.json --output exported_machine_release_catalog.json
+```
+
 The publication-registry and publication-index exports follow the same pattern, so you can point them at either the publication directory or the generated JSON payload:
 
 ```bash
@@ -989,6 +996,20 @@ To aggregate multiple publication metadata bundles into one signed catalog:
 satroot1 bootstrap-publication-metadata-catalog-publication --discover-under publication_metadata_root --output-dir publication_metadata_catalog_publication --channel network --label "SATROOT Metadata Catalog" --scheme hmac-sha256 --key-id catalog-key
 ```
 
+If those publication metadata bundles must stay entirely inside the SATROOT-MACHINE-1 lane, the machine-only wrappers validate each nested artifact before building, signing, or bootstrapping the catalog:
+
+```bash
+satroot1 build-machine-publication-metadata-catalog machine_publication_metadata_workspace machine_publication_metadata_catalog --channel machine --label "Machine Metadata Catalog" --published-at 2026-07-14T05:00:00Z --output machine_publication_metadata_catalog.json
+```
+
+```bash
+satroot1 build-machine-publication-metadata-catalog-manifest machine_publication_metadata_catalog.json --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret --output machine_publication_metadata_catalog_manifest.json
+```
+
+```bash
+satroot1 bootstrap-machine-publication-metadata-catalog-publication machine_publication_metadata_workspace machine_publication_metadata_catalog --output-dir machine_publication_metadata_catalog_publication --channel machine --label "Machine Metadata Catalog Publication" --published-at 2026-07-14T05:30:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
 For repeatable metadata-catalog packaging, that same command can also load a preset:
 
 ```bash
@@ -1005,6 +1026,20 @@ To bind the release-catalog-index, descriptor-index, and metadata-catalog lanes 
 
 ```bash
 satroot1 bootstrap-publication-registry-publication --release-catalog-index-dir publication_network/release_catalog_index --publication-descriptor-index-dir publication_descriptor_index_publication --publication-metadata-catalog-dir publication_metadata_catalog_publication --output-dir publication_registry_publication --channel network --label "SATROOT Publication Registry" --scheme hmac-sha256 --key-id registry-key
+```
+
+If all three component lanes must remain SATROOT-MACHINE-1 validated, the machine-only wrappers enforce that before building, signing, or bootstrapping the top-level registry:
+
+```bash
+satroot1 build-machine-publication-registry --release-catalog-index-dir machine_release_catalog_index_publication --publication-descriptor-index-dir machine_publication_descriptor_index_publication --publication-metadata-catalog-dir machine_publication_metadata_catalog_publication --channel machine --label "Machine Publication Registry" --published-at 2026-07-14T06:00:00Z --output machine_publication_registry.json
+```
+
+```bash
+satroot1 build-machine-publication-registry-manifest machine_publication_registry.json --scheme hmac-sha256 --key-id registry-key --secret registry-secret --output machine_publication_registry_manifest.json
+```
+
+```bash
+satroot1 bootstrap-machine-publication-registry-publication --release-catalog-index-dir machine_release_catalog_index_publication --publication-descriptor-index-dir machine_publication_descriptor_index_publication --publication-metadata-catalog-dir machine_publication_metadata_catalog_publication --output-dir machine_publication_registry_publication --channel machine --label "Machine Publication Registry" --published-at 2026-07-14T06:30:00Z --scheme hmac-sha256 --key-id registry-key
 ```
 
 To generate that whole registry workspace from an existing publication network in one shot:
@@ -1053,6 +1088,24 @@ To derive a reusable preset back from a generated registry publication:
 
 ```bash
 satroot1 export-publication-registry-preset publication_registry_publication --output exported_registry.json
+```
+
+Machine-only publication lanes now have matching preset-export wrappers too:
+
+```bash
+satroot1 export-machine-release-catalog-index-preset machine_release_catalog_index_publication --output exported_machine_release_catalog_index.json
+```
+
+```bash
+satroot1 export-machine-publication-descriptor-index-preset machine_publication_descriptor_index_publication --output exported_machine_publication_descriptor_index.json
+```
+
+```bash
+satroot1 export-machine-publication-metadata-catalog-preset machine_publication_metadata_catalog_publication --output exported_machine_publication_metadata_catalog.json
+```
+
+```bash
+satroot1 export-machine-publication-registry-preset machine_publication_registry_publication --output exported_machine_registry.json
 ```
 
 To derive a reusable preset back from a generated registry workspace:

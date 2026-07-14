@@ -528,6 +528,39 @@ def make_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path, Path]:
     return release_bundle_dir, network_bundle_dir
 
 
+def make_machine_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path, Path]:
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path / "machine_catalogs")
+    workspace_bundle_dir = tmp_path / "machine_publication_metadata_workspace"
+    catalog_bundle_dir = tmp_path / "machine_publication_metadata_catalog"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(machine_catalog_workspace_dir),
+            "--output-dir",
+            str(workspace_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(catalog_alpha_dir),
+            "--output-dir",
+            str(catalog_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    return workspace_bundle_dir, catalog_bundle_dir
+
+
 def make_publication_metadata_catalog_dir(tmp_path: Path) -> Path:
     _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
     output_dir = tmp_path / "publication_metadata_catalog_publication"
@@ -641,6 +674,71 @@ def make_publication_registry_component_dirs(tmp_path: Path) -> tuple[Path, Path
             "network",
             "--label",
             "Registry Metadata Catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+
+    return release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir
+
+
+def make_machine_publication_registry_component_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
+    catalog_alpha_dir, catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path / "machine_registry_catalog_root")
+    release_catalog_index_dir = tmp_path / "machine_release_catalog_index_publication"
+    assert main(
+        [
+            "bootstrap-machine-release-catalog-index-publication",
+            str(catalog_alpha_dir),
+            str(catalog_beta_dir),
+            "--output-dir",
+            str(release_catalog_index_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Registry Catalog Network",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    ) == 0
+
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path / "machine_registry_descriptor_root")
+    descriptor_index_dir = tmp_path / "machine_publication_descriptor_index_publication"
+    assert main(
+        [
+            "bootstrap-machine-publication-descriptor-index-publication",
+            str(machine_catalog_workspace_dir),
+            "--output-dir",
+            str(descriptor_index_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Registry Descriptor Index",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(
+        tmp_path / "machine_registry_metadata_root"
+    )
+    metadata_catalog_dir = tmp_path / "machine_publication_metadata_catalog_publication"
+    assert main(
+        [
+            "bootstrap-machine-publication-metadata-catalog-publication",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--output-dir",
+            str(metadata_catalog_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Registry Metadata Catalog",
             "--scheme",
             "hmac-sha256",
             "--key-id",
@@ -5773,6 +5871,61 @@ def test_cli_export_publication_registry_preset_from_json(tmp_path):
     assert preset["registry"]["label"] == "SATROOT Publication Registry"
 
 
+def test_cli_export_machine_publication_registry_preset(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    registry_dir = tmp_path / "machine_publication_registry_publication"
+    assert (
+        main(
+            [
+                "bootstrap-machine-publication-registry-publication",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output-dir",
+                str(registry_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Machine Export Registry",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+            ]
+        )
+        == 0
+    )
+    preset_path = tmp_path / "exported_machine_registry.json"
+
+    exit_code = main(
+        [
+            "export-machine-publication-registry-preset",
+            str(registry_dir / "publication_registry.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-PRESET"
+    assert Path(loaded["release_catalog_index_dir"]).name == "machine_release_catalog_index_publication"
+    assert Path(loaded["publication_descriptor_index_dir"]).name == "machine_publication_descriptor_index_publication"
+    assert Path(loaded["publication_metadata_catalog_dir"]).name == "machine_publication_metadata_catalog_publication"
+    assert preset["registry"]["label"] == "Machine Export Registry"
+
+
+def test_cli_export_machine_publication_registry_preset_rejects_generic_registry(tmp_path):
+    registry_dir = make_publication_registry_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(["export-machine-publication-registry-preset", str(registry_dir)])
+
+
 def test_cli_export_bundle_index_preset(tmp_path):
     bundle_dir = tmp_path / "bundle"
     bundle_index_path = tmp_path / "bundle_index.json"
@@ -5863,6 +6016,34 @@ def test_cli_export_bundle_index_preset_from_release_dir(tmp_path):
     assert preset["release"]["label"] == "Release Dir Bundle Index"
 
 
+def test_cli_export_machine_bundle_index_preset(tmp_path):
+    release_dir, _other_release_dir = make_machine_release_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_bundle_index.json"
+
+    exit_code = main(
+        [
+            "export-machine-bundle-index-preset",
+            str(Path(release_dir) / "bundle_index.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_bundle_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-BUNDLE-INDEX-PRESET"
+    assert len(loaded["bundle_dirs"]) == 1
+    assert preset["release"]["label"] == "Machine Release Alpha"
+
+
+def test_cli_export_machine_bundle_index_preset_rejects_generic_release(tmp_path):
+    release_dir, _other_release_dir = make_demo_release_dirs(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(["export-machine-bundle-index-preset", str(release_dir)])
+
+
 def test_cli_export_release_catalog_preset(tmp_path):
     release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
     preset_path = tmp_path / "exported_release_catalog.json"
@@ -5875,6 +6056,34 @@ def test_cli_export_release_catalog_preset(tmp_path):
     assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
     assert len(loaded["release_dirs"]) == 2
     assert preset["catalog"]["label"] == "Publication Stack Override"
+
+
+def test_cli_export_machine_release_catalog_preset(tmp_path):
+    catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_release_catalog.json"
+
+    exit_code = main(
+        [
+            "export-machine-release-catalog-preset",
+            str(catalog_alpha_dir / "release_catalog.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_release_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
+    assert len(loaded["release_dirs"]) == 2
+    assert preset["catalog"]["label"] == "SATROOT Machine Catalog Alpha"
+
+
+def test_cli_export_machine_release_catalog_preset_rejects_generic_catalog(tmp_path):
+    release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(["export-machine-release-catalog-preset", str(release_catalog_dir)])
 
 
 def test_cli_export_release_catalog_preset_from_json(tmp_path):
@@ -5940,6 +6149,34 @@ def test_cli_export_release_catalog_index_preset_from_json(tmp_path):
     assert preset["index"]["label"] == "Publication Network Override"
 
 
+def test_cli_export_machine_release_catalog_index_preset(tmp_path):
+    release_catalog_index_dir, _descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_release_catalog_index.json"
+
+    exit_code = main(
+        [
+            "export-machine-release-catalog-index-preset",
+            str(release_catalog_index_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_release_catalog_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-INDEX-PRESET"
+    assert len(loaded["release_catalog_dirs"]) == 2
+    assert preset["index"]["label"] == "Machine Registry Catalog Network"
+
+
+def test_cli_export_machine_release_catalog_index_preset_rejects_generic_index(tmp_path):
+    release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(["export-machine-release-catalog-index-preset", str(release_catalog_index_dir)])
+
+
 def test_cli_export_publication_metadata_catalog_preset(tmp_path):
     catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
     preset_path = tmp_path / "exported_publication_metadata_catalog.json"
@@ -5955,6 +6192,37 @@ def test_cli_export_publication_metadata_catalog_preset(tmp_path):
         "publication_metadata_release",
     ]
     assert preset["catalog"]["label"] == "SATROOT Metadata Catalog Publication"
+
+
+def test_cli_export_machine_publication_metadata_catalog_preset(tmp_path):
+    _release_catalog_index_dir, _descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_publication_metadata_catalog.json"
+
+    exit_code = main(
+        [
+            "export-machine-publication-metadata-catalog-preset",
+            str(metadata_catalog_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_metadata_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET"
+    assert sorted(Path(value).name for value in loaded["publication_metadata_bundle_dirs"]) == [
+        "machine_publication_metadata_catalog",
+        "machine_publication_metadata_workspace",
+    ]
+    assert preset["catalog"]["label"] == "Machine Registry Metadata Catalog"
+
+
+def test_cli_export_machine_publication_metadata_catalog_preset_rejects_generic_catalog(tmp_path):
+    catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(["export-machine-publication-metadata-catalog-preset", str(catalog_dir)])
 
 
 def test_cli_export_publication_metadata_catalog_preset_from_json(tmp_path):
@@ -5995,6 +6263,35 @@ def test_cli_export_publication_descriptor_index_preset(tmp_path):
     loaded_names = {Path(value).name for value in loaded["artifact_paths"]}
     assert {"publication_network", "stack_a", "stack_b", "release_catalog_index", "stable_catalog", "machine_catalog"} <= loaded_names
     assert preset["index"]["label"] == "SATROOT Descriptor Publication"
+
+
+def test_cli_export_machine_publication_descriptor_index_preset(tmp_path):
+    _release_catalog_index_dir, descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_publication_descriptor_index.json"
+
+    exit_code = main(
+        [
+            "export-machine-publication-descriptor-index-preset",
+            str(descriptor_index_dir / "publication_descriptor_index.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_descriptor_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET"
+    assert len(loaded["artifact_paths"]) == 1
+    assert {Path(value).name for value in loaded["artifact_paths"]} == {"machine_publication_catalog_workspace"}
+    assert preset["index"]["label"] == "Machine Registry Descriptor Index"
+
+
+def test_cli_export_machine_publication_descriptor_index_preset_rejects_generic_index(tmp_path):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(["export-machine-publication-descriptor-index-preset", str(descriptor_index_dir)])
 
 
 def test_cli_export_publication_descriptor_index_preset_from_json(tmp_path):
@@ -6726,6 +7023,49 @@ def test_cli_build_publication_metadata_catalog_recursive(tmp_path):
     assert catalog["index"]["label"] == "SATROOT Metadata Catalog"
 
 
+def test_cli_build_machine_publication_metadata_catalog(tmp_path):
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "machine_publication_metadata_catalog.json"
+
+    exit_code = main(
+        [
+            "build-machine-publication-metadata-catalog",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Metadata Catalog",
+            "--published-at",
+            "2026-07-14T05:00:00Z",
+            "--output",
+            str(catalog_path),
+        ]
+    )
+    assert exit_code == 0
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert catalog["artifact_kind_counts"]["release-catalog"] == 1
+    assert catalog["index"]["label"] == "Machine Metadata Catalog"
+
+
+def test_cli_build_machine_publication_metadata_catalog_rejects_non_machine_bundle(tmp_path):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "machine_publication_metadata_catalog.json"
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(
+            [
+                "build-machine-publication-metadata-catalog",
+                str(release_bundle_dir),
+                "--output",
+                str(catalog_path),
+            ]
+        )
+
+
 def test_validate_publication_metadata_catalog_schema_accepts_generated_catalog(tmp_path):
     release_bundle_dir, network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
     catalog = build_publication_metadata_catalog([release_bundle_dir, network_bundle_dir], base_dir=tmp_path)
@@ -6767,6 +7107,76 @@ def test_build_and_verify_signed_publication_metadata_catalog_manifest_hmac(tmp_
     assert summary["bundle_count"] == 2
 
 
+def test_cli_build_machine_publication_metadata_catalog_manifest(tmp_path):
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "machine_publication_metadata_catalog.json"
+    manifest_path = tmp_path / "machine_publication_metadata_catalog_manifest.json"
+
+    assert (
+        main(
+            [
+                "build-machine-publication-metadata-catalog",
+                str(workspace_bundle_dir),
+                str(catalog_bundle_dir),
+                "--output",
+                str(catalog_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "build-machine-publication-metadata-catalog-manifest",
+            str(catalog_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--secret",
+            "catalog-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-metadata-catalog-manifest"
+    assert manifest["signature_key_id"] == "catalog-key"
+
+
+def test_cli_build_machine_publication_metadata_catalog_manifest_rejects_non_machine_catalog(tmp_path):
+    release_bundle_dir, network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "publication_metadata_catalog.json"
+    assert (
+        main(
+            [
+                "build-publication-metadata-catalog",
+                str(release_bundle_dir),
+                str(network_bundle_dir),
+                "--output",
+                str(catalog_path),
+            ]
+        )
+        == 0
+    )
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(
+            [
+                "build-machine-publication-metadata-catalog-manifest",
+                str(catalog_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+
+
 def test_cli_bootstrap_publication_metadata_catalog_publication(tmp_path, capsys):
     _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
     output_dir = tmp_path / "publication_metadata_catalog_publication"
@@ -6801,6 +7211,52 @@ def test_cli_bootstrap_publication_metadata_catalog_publication(tmp_path, capsys
 
     assert catalog["bundle_count"] == 2
     assert catalog["index"]["label"] == "SATROOT Metadata Catalog Publication"
+    assert manifest["signature_key_id"] == "catalog-key"
+
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["bundle_count"] == 2
+    assert verified["index"] == catalog["index"]
+
+
+def test_cli_bootstrap_machine_publication_metadata_catalog_publication(tmp_path, capsys):
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(tmp_path)
+    output_dir = tmp_path / "machine_publication_metadata_catalog_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-metadata-catalog-publication",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Metadata Catalog Publication",
+            "--published-at",
+            "2026-07-14T05:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_metadata_catalog_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_metadata_catalog_secrets.json").read_text(encoding="utf-8"))
+
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert catalog["artifact_kind_counts"]["release-catalog"] == 1
+    assert catalog["index"]["label"] == "Machine Metadata Catalog Publication"
     assert manifest["signature_key_id"] == "catalog-key"
 
     verified = verify_signed_publication_metadata_catalog_manifest(
@@ -6911,6 +7367,56 @@ def test_validate_publication_registry_schema_accepts_generated_registry(tmp_pat
     validate_publication_registry_consistency(registry)
 
 
+def test_cli_build_machine_publication_registry(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "machine_publication_registry.json"
+
+    exit_code = main(
+        [
+            "build-machine-publication-registry",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Publication Registry",
+            "--published-at",
+            "2026-07-14T06:00:00Z",
+            "--output",
+            str(registry_path),
+        ]
+    )
+    assert exit_code == 0
+
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Machine Publication Registry"
+
+
+def test_cli_build_machine_publication_registry_rejects_generic_component(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "machine_publication_registry.json"
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(
+            [
+                "build-machine-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output",
+                str(registry_path),
+            ]
+        )
+
+
 def test_build_and_verify_signed_publication_registry_manifest_hmac(tmp_path):
     release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
     registry = build_publication_registry(
@@ -6943,6 +7449,84 @@ def test_build_and_verify_signed_publication_registry_manifest_hmac(tmp_path):
     assert summary["signature_key_id"] == "registry-key"
     assert summary["publication_registry_path"] == "publication_registry.json"
     assert summary["component_count"] == 3
+
+
+def test_cli_build_machine_publication_registry_manifest(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "machine_publication_registry.json"
+    manifest_path = tmp_path / "machine_publication_registry_manifest.json"
+
+    assert (
+        main(
+            [
+                "build-machine-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output",
+                str(registry_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "build-machine-publication-registry-manifest",
+            str(registry_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+            "--secret",
+            "registry-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-registry-manifest"
+    assert manifest["signature_key_id"] == "registry-key"
+
+
+def test_cli_build_machine_publication_registry_manifest_rejects_non_machine_registry(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "publication_registry.json"
+    assert (
+        main(
+            [
+                "build-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output",
+                str(registry_path),
+            ]
+        )
+        == 0
+    )
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(
+            [
+                "build-machine-publication-registry-manifest",
+                str(registry_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+                "--secret",
+                "registry-secret",
+            ]
+        )
 
 
 def test_cli_bootstrap_publication_registry_publication(tmp_path, capsys):
@@ -6983,6 +7567,54 @@ def test_cli_bootstrap_publication_registry_publication(tmp_path, capsys):
 
     assert registry["component_count"] == 3
     assert registry["index"]["label"] == "SATROOT Publication Registry"
+    assert manifest["signature_key_id"] == "registry-key"
+
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"] == registry["index"]
+
+
+def test_cli_bootstrap_machine_publication_registry_publication(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "machine_publication_registry_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-registry-publication",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Publication Registry",
+            "--published-at",
+            "2026-07-14T06:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_registry_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Machine Publication Registry"
     assert manifest["signature_key_id"] == "registry-key"
 
     verified = verify_signed_publication_registry_manifest(
