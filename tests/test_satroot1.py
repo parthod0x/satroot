@@ -6600,6 +6600,40 @@ def test_cli_export_publication_registry_preset(tmp_path):
     assert preset["registry"]["label"] == "SATROOT Publication Registry"
 
 
+def test_cli_bootstrap_publication_registry_from_exported_preset_round_trip(tmp_path, capsys):
+    registry_dir = make_publication_registry_dir(tmp_path)
+    preset_path = tmp_path / "exported_registry.json"
+
+    assert main(["export-publication-registry-preset", str(registry_dir), "--output", str(preset_path)]) == 0
+
+    output_dir = tmp_path / "publication_registry_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-registry-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+            "--label",
+            "Roundtrip Publication Registry",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Roundtrip Publication Registry"
+    assert main(["publication-registry-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_publication_registry_preset_from_json(tmp_path):
     registry_dir = make_publication_registry_dir(tmp_path)
     preset_path = tmp_path / "exported_registry_from_json.json"
@@ -6669,6 +6703,76 @@ def test_cli_export_machine_publication_registry_preset(tmp_path):
     assert Path(loaded["publication_descriptor_index_dir"]).name == "machine_publication_descriptor_index_publication"
     assert Path(loaded["publication_metadata_catalog_dir"]).name == "machine_publication_metadata_catalog_publication"
     assert preset["registry"]["label"] == "Machine Export Registry"
+
+
+def test_cli_bootstrap_machine_publication_registry_from_exported_preset_round_trip(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    registry_dir = tmp_path / "machine_publication_registry_publication"
+    assert (
+        main(
+            [
+                "bootstrap-machine-publication-registry-publication",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output-dir",
+                str(registry_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Machine Export Registry",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_machine_registry.json"
+    assert (
+        main(
+            [
+                "export-machine-publication-registry-preset",
+                str(registry_dir / "publication_registry.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "machine_publication_registry_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-registry-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+            "--label",
+            "Roundtrip Machine Publication Registry",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Roundtrip Machine Publication Registry"
+    assert main(["publication-registry-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_export_machine_publication_registry_preset_rejects_generic_registry(tmp_path):
@@ -6810,6 +6914,40 @@ def test_cli_export_release_catalog_preset(tmp_path):
     assert preset["catalog"]["label"] == "Publication Stack Override"
 
 
+def test_cli_bootstrap_release_catalog_from_exported_preset_round_trip(tmp_path, capsys):
+    release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
+    preset_path = tmp_path / "exported_release_catalog.json"
+
+    assert main(["export-release-catalog-preset", str(release_catalog_dir), "--output", str(preset_path)]) == 0
+
+    output_dir = tmp_path / "release_catalog_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-release-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--label",
+            "Roundtrip Release Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Roundtrip Release Catalog"
+    assert main(["release-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_machine_release_catalog_preset(tmp_path):
     catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
     preset_path = tmp_path / "exported_machine_release_catalog.json"
@@ -6829,6 +6967,50 @@ def test_cli_export_machine_release_catalog_preset(tmp_path):
     assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
     assert len(loaded["release_dirs"]) == 2
     assert preset["catalog"]["label"] == "SATROOT Machine Catalog Alpha"
+
+
+def test_cli_bootstrap_machine_release_catalog_from_exported_preset_round_trip(tmp_path, capsys):
+    catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_release_catalog.json"
+
+    assert (
+        main(
+            [
+                "export-machine-release-catalog-preset",
+                str(catalog_alpha_dir / "release_catalog.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "machine_release_catalog_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-release-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--label",
+            "Roundtrip Machine Release Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Roundtrip Machine Release Catalog"
+    assert main(["release-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_export_machine_release_catalog_preset_rejects_generic_catalog(tmp_path):
@@ -6880,6 +7062,50 @@ def test_cli_export_release_catalog_index_preset(tmp_path):
     assert preset["index"]["label"] == "Publication Network Override"
 
 
+def test_cli_bootstrap_release_catalog_index_from_exported_preset_round_trip(tmp_path, capsys):
+    release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
+    preset_path = tmp_path / "exported_release_catalog_index.json"
+
+    assert (
+        main(
+            [
+                "export-release-catalog-index-preset",
+                str(release_catalog_index_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "release_catalog_index_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-release-catalog-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+            "--label",
+            "Roundtrip Release Catalog Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Roundtrip Release Catalog Index"
+    assert main(["release-catalog-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_release_catalog_index_preset_from_json(tmp_path):
     release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
     preset_path = tmp_path / "exported_release_catalog_index_from_json.json"
@@ -6922,6 +7148,50 @@ def test_cli_export_machine_release_catalog_index_preset(tmp_path):
     assert preset["index"]["label"] == "Machine Registry Catalog Network"
 
 
+def test_cli_bootstrap_machine_release_catalog_index_from_exported_preset_round_trip(tmp_path, capsys):
+    release_catalog_index_dir, _descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_release_catalog_index.json"
+
+    assert (
+        main(
+            [
+                "export-machine-release-catalog-index-preset",
+                str(release_catalog_index_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "machine_release_catalog_index_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-release-catalog-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+            "--label",
+            "Roundtrip Machine Release Catalog Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Roundtrip Machine Release Catalog Index"
+    assert main(["release-catalog-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_machine_release_catalog_index_preset_rejects_generic_index(tmp_path):
     release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
 
@@ -6946,6 +7216,40 @@ def test_cli_export_publication_metadata_catalog_preset(tmp_path):
     assert preset["catalog"]["label"] == "SATROOT Metadata Catalog Publication"
 
 
+def test_cli_bootstrap_publication_metadata_catalog_from_exported_preset_round_trip(tmp_path, capsys):
+    catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+    preset_path = tmp_path / "exported_publication_metadata_catalog.json"
+
+    assert main(["export-publication-metadata-catalog-preset", str(catalog_dir), "--output", str(preset_path)]) == 0
+
+    output_dir = tmp_path / "publication_metadata_catalog_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--label",
+            "Roundtrip Publication Metadata Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["index"]["label"] == "Roundtrip Publication Metadata Catalog"
+    assert main(["publication-metadata-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_machine_publication_metadata_catalog_preset(tmp_path):
     _release_catalog_index_dir, _descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
     preset_path = tmp_path / "exported_machine_publication_metadata_catalog.json"
@@ -6968,6 +7272,50 @@ def test_cli_export_machine_publication_metadata_catalog_preset(tmp_path):
         "machine_publication_metadata_workspace",
     ]
     assert preset["catalog"]["label"] == "Machine Registry Metadata Catalog"
+
+
+def test_cli_bootstrap_machine_publication_metadata_catalog_from_exported_preset_round_trip(tmp_path, capsys):
+    _release_catalog_index_dir, _descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_publication_metadata_catalog.json"
+
+    assert (
+        main(
+            [
+                "export-machine-publication-metadata-catalog-preset",
+                str(metadata_catalog_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "machine_publication_metadata_catalog_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-metadata-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--label",
+            "Roundtrip Machine Publication Metadata Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["index"]["label"] == "Roundtrip Machine Publication Metadata Catalog"
+    assert main(["publication-metadata-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_export_machine_publication_metadata_catalog_preset_rejects_generic_catalog(tmp_path):
@@ -7017,6 +7365,50 @@ def test_cli_export_publication_descriptor_index_preset(tmp_path):
     assert preset["index"]["label"] == "SATROOT Descriptor Publication"
 
 
+def test_cli_bootstrap_publication_descriptor_index_from_exported_preset_round_trip(tmp_path, capsys):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+    preset_path = tmp_path / "exported_publication_descriptor_index.json"
+
+    assert (
+        main(
+            [
+                "export-publication-descriptor-index-preset",
+                str(descriptor_index_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "publication_descriptor_index_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+            "--label",
+            "Roundtrip Publication Descriptor Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 12
+    assert index["index"]["label"] == "Roundtrip Publication Descriptor Index"
+    assert main(["publication-descriptor-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_machine_publication_descriptor_index_preset(tmp_path):
     _release_catalog_index_dir, descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
     preset_path = tmp_path / "exported_machine_publication_descriptor_index.json"
@@ -7037,6 +7429,50 @@ def test_cli_export_machine_publication_descriptor_index_preset(tmp_path):
     assert len(loaded["artifact_paths"]) == 1
     assert {Path(value).name for value in loaded["artifact_paths"]} == {"machine_publication_catalog_workspace"}
     assert preset["index"]["label"] == "Machine Registry Descriptor Index"
+
+
+def test_cli_bootstrap_machine_publication_descriptor_index_from_exported_preset_round_trip(tmp_path, capsys):
+    _release_catalog_index_dir, descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_publication_descriptor_index.json"
+
+    assert (
+        main(
+            [
+                "export-machine-publication-descriptor-index-preset",
+                str(descriptor_index_dir / "publication_descriptor_index.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "machine_publication_descriptor_index_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-descriptor-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+            "--label",
+            "Roundtrip Machine Publication Descriptor Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["index"]["label"] == "Roundtrip Machine Publication Descriptor Index"
+    assert main(["publication-descriptor-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_export_machine_publication_descriptor_index_preset_rejects_generic_index(tmp_path):
