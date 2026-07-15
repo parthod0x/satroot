@@ -5886,6 +5886,46 @@ def test_cli_export_publication_catalog_workspace_preset(tmp_path):
     assert preset["publication_metadata_catalog"]["label"] == "Workspace Metadata Catalog"
 
 
+def test_cli_bootstrap_publication_catalog_workspace_from_exported_preset_round_trip(tmp_path, capsys):
+    workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_catalog_workspace.json"
+
+    assert main(["export-publication-catalog-workspace-preset", str(workspace_dir), "--output", str(preset_path)]) == 0
+
+    roundtrip_dir = tmp_path / "publication_catalog_workspace_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--descriptor-index-label",
+            "Roundtrip Workspace Descriptor Index",
+            "--output-dir",
+            str(roundtrip_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication catalog workspace to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 12
+    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Roundtrip Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_machine_publication_catalog_workspace_preset(tmp_path):
     workspace_dir = tmp_path / "machine_publication_catalog_workspace"
     assert main(
@@ -6023,6 +6063,52 @@ def test_cli_export_publication_registry_workspace_preset(tmp_path):
     assert preset["publication_descriptor_index"]["label"] == "Workspace Descriptor Index"
     assert preset["publication_metadata_catalog"]["label"] == "Workspace Metadata Catalog"
     assert preset["publication_registry"]["label"] == "Workspace Publication Registry"
+
+
+def test_cli_bootstrap_publication_registry_workspace_from_exported_preset_round_trip(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_registry_workspace.json"
+
+    assert main(["export-publication-registry-workspace-preset", str(workspace_dir), "--output", str(preset_path)]) == 0
+
+    roundtrip_dir = tmp_path / "publication_registry_workspace_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--publication-registry-label",
+            "Roundtrip Workspace Publication Registry",
+            "--output-dir",
+            str(roundtrip_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication registry workspace to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    source_workspace_summary = json.loads((workspace_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_network_dir"] == source_workspace_summary["source_publication_network_dir"]
+    assert summary["source_publication_catalog_workspace_dir"] is None
+    assert summary["artifact_count"] == 12
+    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Roundtrip Workspace Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_export_machine_publication_registry_workspace_preset(tmp_path):
