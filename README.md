@@ -175,6 +175,7 @@ The v0.1 kernel defines:
 - `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
 - signed publication-metadata-catalog-manifest generation for authenticating publication metadata catalogs,
 - one-shot `bootstrap-publication-metadata-catalog-publication` orchestration for metadata catalogs plus signing material,
+- publication-metadata-catalog inspection via `publication-metadata-catalog-summary` and structural linting via `publication-metadata-catalog-lint`,
 - preset export commands for deriving reusable publication-metadata-catalog presets back from generated metadata catalog publications,
 - `build-publication-registry` for binding descriptor, metadata, and release-catalog-index publications into one top-level signed namespace artifact,
 - signed publication-registry-manifest generation for authenticating top-level publication registries,
@@ -950,7 +951,7 @@ To render a human-readable markdown report for a generated SATROOT artifact or w
 satroot1 render-publication-report publication_network
 ```
 
-The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, demo-catalog, publication-stack, publication-network, publication-catalog-workspace, publication-registry-workspace, and publication-registry inputs, and it can also write to a file:
+The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, publication-descriptor-index, publication-metadata-catalog, demo-catalog, publication-stack, publication-network, publication-catalog-workspace, publication-registry-workspace, and publication-registry inputs, and it can also write to a file:
 
 ```bash
 satroot1 render-publication-report stable_release --output stable_release_report.md
@@ -1179,6 +1180,24 @@ Those publication descriptor and registry inspection commands also accept the ge
 ```bash
 satroot1 publication-descriptor-index-summary publication_descriptor_index_publication/publication_descriptor_index_manifest.json
 satroot1 publication-registry-lint publication_registry_publication/publication_registry.json
+```
+
+Inspect a publication metadata catalog without signature verification:
+
+```bash
+satroot1 publication-metadata-catalog-summary publication_metadata_catalog_publication
+```
+
+Lint a publication metadata catalog and its referenced publication metadata bundles:
+
+```bash
+satroot1 publication-metadata-catalog-lint publication_metadata_catalog_publication
+```
+
+Those publication metadata catalog inspection commands also accept the generated manifest or payload file directly:
+
+```bash
+satroot1 publication-metadata-catalog-summary publication_metadata_catalog_publication/publication_metadata_catalog_manifest.json
 ```
 
 Inspect a release catalog publication without signature verification:

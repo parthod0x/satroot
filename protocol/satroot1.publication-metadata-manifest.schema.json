@@ -27,6 +27,8 @@
         "release",
         "release-catalog",
         "release-catalog-index",
+        "publication-descriptor-index",
+        "publication-metadata-catalog",
         "demo-catalog",
         "publication-stack",
         "publication-network",

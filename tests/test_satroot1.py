@@ -5597,6 +5597,18 @@ def test_cli_inventory_artifacts_reports_publication_catalog_workspace(tmp_path,
     assert '"publication_network_count":0' in captured.out
 
 
+def test_cli_inventory_artifacts_reports_publication_components_recursively(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    exit_code = main(["inventory-artifacts", str(workspace_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"publication_descriptor_index_count":1' in captured.out
+    assert '"publication_metadata_catalog_count":1' in captured.out
+    assert '"publication_registry_count":1' in captured.out
+
+
 def test_cli_export_demo_catalog_preset_from_workspace(tmp_path):
     output_dir = make_demo_catalog_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_catalog.json"
@@ -6478,6 +6490,32 @@ def test_cli_render_publication_report_for_registry(tmp_path, capsys):
     assert "Release Catalog Index" in captured.out
 
 
+def test_cli_render_publication_report_for_descriptor_index(tmp_path, capsys):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+
+    exit_code = main(["render-publication-report", str(descriptor_index_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "# SATROOT Publication Descriptor Index Report" in captured.out
+    assert "- Artifact count: `12`" in captured.out
+    assert "## Artifact Kinds" in captured.out
+    assert "`publication-network`" in captured.out
+
+
+def test_cli_render_publication_report_for_metadata_catalog(tmp_path, capsys):
+    metadata_catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+
+    exit_code = main(["render-publication-report", str(metadata_catalog_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "# SATROOT Publication Metadata Catalog Report" in captured.out
+    assert "- Bundle count: `2`" in captured.out
+    assert "## Artifact Kinds" in captured.out
+    assert "`publication-network`" in captured.out
+
+
 def test_cli_render_publication_report_for_registry_workspace(tmp_path, capsys):
     workspace_dir = make_publication_registry_workspace_dir(tmp_path)
 
@@ -6535,6 +6573,34 @@ def test_cli_export_publication_descriptor_for_registry(tmp_path):
         "publication_metadata_catalog_publication",
         "release_catalog_index_publication",
     ]
+
+
+def test_cli_export_publication_descriptor_for_descriptor_index(tmp_path):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+    output_path = tmp_path / "descriptor_index_descriptor.json"
+
+    exit_code = main(["export-publication-descriptor", str(descriptor_index_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    descriptor = json.loads(output_path.read_text(encoding="utf-8"))
+    assert descriptor["descriptor_type"] == "SATROOT-ARTIFACT-DESCRIPTOR"
+    assert descriptor["artifact_kind"] == "publication-descriptor-index"
+    assert descriptor["artifact_count"] == 12
+    assert "publication-network" in descriptor["artifact_kinds"]
+
+
+def test_cli_export_publication_descriptor_for_metadata_catalog(tmp_path):
+    metadata_catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+    output_path = tmp_path / "metadata_catalog_descriptor.json"
+
+    exit_code = main(["export-publication-descriptor", str(metadata_catalog_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    descriptor = json.loads(output_path.read_text(encoding="utf-8"))
+    assert descriptor["descriptor_type"] == "SATROOT-ARTIFACT-DESCRIPTOR"
+    assert descriptor["artifact_kind"] == "publication-metadata-catalog"
+    assert descriptor["bundle_count"] == 2
+    assert "publication-network" in descriptor["artifact_kinds"]
 
 
 def test_cli_export_publication_descriptor_for_registry_workspace(tmp_path):
@@ -9703,6 +9769,68 @@ def test_cli_publication_descriptor_index_lint_reports_findings(tmp_path, capsys
     assert '"publication_descriptor_index_hash_matches":false' in captured.out
     assert '"index_metadata_matches":false' in captured.out
     assert '"missing_artifact_paths":[' in captured.out
+
+
+def test_cli_publication_metadata_catalog_summary_reads_manifest_and_catalog(tmp_path, capsys):
+    metadata_catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+
+    exit_code = main(["publication-metadata-catalog-summary", str(metadata_catalog_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"catalog-key"' in captured.out
+    assert '"bundle_count":2' in captured.out
+    assert '"artifact_kinds":["publication-network","release"]' in captured.out
+
+
+def test_cli_publication_metadata_catalog_summary_accepts_manifest_json(tmp_path, capsys):
+    metadata_catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+
+    exit_code = main(
+        [
+            "publication-metadata-catalog-summary",
+            str(metadata_catalog_dir / "publication_metadata_catalog_manifest.json"),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"catalog-key"' in captured.out
+    assert '"bundle_count":2' in captured.out
+
+
+def test_cli_publication_metadata_catalog_lint_accepts_clean_catalog(tmp_path, capsys):
+    metadata_catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+
+    exit_code = main(["publication-metadata-catalog-lint", str(metadata_catalog_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"publication_metadata_catalog_hash_matches":true' in captured.out
+    assert '"missing_bundle_manifests":[]' in captured.out
+    assert '"publication_metadata_bundle_mismatches":[]' in captured.out
+
+
+def test_cli_publication_metadata_catalog_lint_reports_findings(tmp_path, capsys):
+    metadata_catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+
+    catalog_path = metadata_catalog_dir / "publication_metadata_catalog.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    catalog["index"]["label"] = "Tampered Metadata Catalog Label"
+    catalog["bundles"][0]["artifact_path"] = str(tmp_path / "missing_artifact")
+    write_json(catalog_path, catalog)
+
+    exit_code = main(["publication-metadata-catalog-lint", str(metadata_catalog_dir)])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"publication_metadata_catalog_hash_matches":false' in captured.out
+    assert '"index_metadata_matches":false' in captured.out
+    assert '"publication_metadata_bundle_mismatches":[' in captured.out
 
 
 def test_cli_demo_catalog_summary_reads_summary_and_release(tmp_path, capsys):

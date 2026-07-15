@@ -3778,6 +3778,66 @@ def discover_signed_publication_registry_publication_dirs(
     return sorted(discovered.values())
 
 
+def discover_signed_publication_descriptor_index_publication_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    if not search_roots:
+        raise SatRootError("at least one publication descriptor index discovery root is required")
+
+    discovered: Dict[str, str] = {}
+    for search_root in search_roots:
+        root_path = Path(search_root).resolve()
+        if not root_path.exists():
+            raise SatRootError(f"publication descriptor index discovery root not found: {search_root}")
+        if not root_path.is_dir():
+            raise SatRootError(f"publication descriptor index discovery root must be a directory: {search_root}")
+
+        manifest_paths = (
+            root_path.rglob("publication_descriptor_index_manifest.json")
+            if recursive
+            else root_path.glob("publication_descriptor_index_manifest.json")
+        )
+        for manifest_path in manifest_paths:
+            publication_dir = str(manifest_path.parent.resolve())
+            discovered.setdefault(publication_dir, publication_dir)
+
+    if not discovered:
+        raise SatRootError("no publication descriptor index directories found under the provided discovery roots")
+    return sorted(discovered.values())
+
+
+def discover_signed_publication_metadata_catalog_publication_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    if not search_roots:
+        raise SatRootError("at least one publication metadata catalog discovery root is required")
+
+    discovered: Dict[str, str] = {}
+    for search_root in search_roots:
+        root_path = Path(search_root).resolve()
+        if not root_path.exists():
+            raise SatRootError(f"publication metadata catalog discovery root not found: {search_root}")
+        if not root_path.is_dir():
+            raise SatRootError(f"publication metadata catalog discovery root must be a directory: {search_root}")
+
+        manifest_paths = (
+            root_path.rglob("publication_metadata_catalog_manifest.json")
+            if recursive
+            else root_path.glob("publication_metadata_catalog_manifest.json")
+        )
+        for manifest_path in manifest_paths:
+            publication_dir = str(manifest_path.parent.resolve())
+            discovered.setdefault(publication_dir, publication_dir)
+
+    if not discovered:
+        raise SatRootError("no publication metadata catalog directories found under the provided discovery roots")
+    return sorted(discovered.values())
+
+
 def _discover_workspace_dirs(
     search_roots: Sequence[str | Path],
     *,
@@ -4222,6 +4282,30 @@ def summarize_publication_descriptor_index_publication(publication_descriptor_in
     }
 
 
+def summarize_publication_metadata_catalog_publication(publication_metadata_catalog_dir: str | Path) -> Dict[str, Any]:
+    _, catalog_path, manifest, catalog = _load_publication_metadata_catalog_publication(publication_metadata_catalog_dir)
+    bundles = catalog.get("bundles")
+    assert isinstance(bundles, list)
+    return {
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "publication_metadata_catalog_path": manifest.get("publication_metadata_catalog_path"),
+        "publication_metadata_catalog_hash": manifest.get("publication_metadata_catalog_hash"),
+        "publication_metadata_catalog_resolved_path": str(catalog_path),
+        "bundle_count": catalog.get("bundle_count"),
+        "index": copy.deepcopy(catalog.get("index")),
+        "artifact_paths": sorted(str(entry.get("artifact_path")) for entry in bundles),
+        "artifact_kinds": sorted(
+            {
+                str(entry.get("artifact_kind"))
+                for entry in bundles
+                if isinstance(entry.get("artifact_kind"), str)
+            }
+        ),
+        "bundles": copy.deepcopy(bundles),
+    }
+
+
 def summarize_publication_registry_publication(publication_registry_dir: str | Path) -> Dict[str, Any]:
     _, registry_path, manifest, registry = _load_publication_registry_publication(publication_registry_dir)
     summary: Dict[str, Any] = {
@@ -4305,6 +4389,183 @@ def lint_publication_descriptor_index_publication(publication_descriptor_index_d
         "duplicate_artifact_paths": duplicate_artifact_paths,
         "missing_artifact_paths": sorted(missing_artifact_paths),
         "artifact_descriptor_mismatches": artifact_descriptor_mismatches,
+    }
+
+
+def lint_publication_metadata_catalog_publication(publication_metadata_catalog_dir: str | Path) -> Dict[str, Any]:
+    manifest_path, catalog_path, manifest, catalog = _load_publication_metadata_catalog_publication(publication_metadata_catalog_dir)
+    bundles = catalog.get("bundles")
+    assert isinstance(bundles, list)
+
+    actual_catalog_hash = "sha256:" + sha256_hex_bytes(catalog_path.read_bytes())
+    publication_metadata_catalog_hash_matches = manifest.get("publication_metadata_catalog_hash") == actual_catalog_hash
+    bundle_count_matches = manifest.get("bundle_count") == catalog.get("bundle_count")
+    index_metadata_matches = manifest.get("index") == catalog.get("index")
+
+    bundle_id_counts: Dict[str, int] = {}
+    bundle_path_counts: Dict[str, int] = {}
+    manifest_path_counts: Dict[str, int] = {}
+    report_path_counts: Dict[str, int] = {}
+    descriptor_path_counts: Dict[str, int] = {}
+    for entry in bundles:
+        bundle_id = entry.get("publication_metadata_bundle_id")
+        bundle_path_ref = entry.get("publication_metadata_bundle_path")
+        manifest_path_ref = entry.get("publication_metadata_manifest_path")
+        report_path_ref = entry.get("publication_report_path")
+        descriptor_path_ref = entry.get("publication_descriptor_path")
+        if isinstance(bundle_id, str):
+            bundle_id_counts[bundle_id] = bundle_id_counts.get(bundle_id, 0) + 1
+        if isinstance(bundle_path_ref, str):
+            bundle_path_counts[bundle_path_ref] = bundle_path_counts.get(bundle_path_ref, 0) + 1
+        if isinstance(manifest_path_ref, str):
+            manifest_path_counts[manifest_path_ref] = manifest_path_counts.get(manifest_path_ref, 0) + 1
+        if isinstance(report_path_ref, str):
+            report_path_counts[report_path_ref] = report_path_counts.get(report_path_ref, 0) + 1
+        if isinstance(descriptor_path_ref, str):
+            descriptor_path_counts[descriptor_path_ref] = descriptor_path_counts.get(descriptor_path_ref, 0) + 1
+
+    duplicate_bundle_ids = sorted(value for value, count in bundle_id_counts.items() if count > 1)
+    duplicate_bundle_paths = sorted(value for value, count in bundle_path_counts.items() if count > 1)
+    duplicate_manifest_paths = sorted(value for value, count in manifest_path_counts.items() if count > 1)
+    duplicate_report_paths = sorted(value for value, count in report_path_counts.items() if count > 1)
+    duplicate_descriptor_paths = sorted(value for value, count in descriptor_path_counts.items() if count > 1)
+
+    bundle_manifest_path_mismatches: list[str] = []
+    missing_bundle_directories: list[str] = []
+    missing_bundle_manifests: list[str] = []
+    missing_publication_reports: list[str] = []
+    missing_publication_descriptors: list[str] = []
+    publication_metadata_manifest_hash_mismatches: list[str] = []
+    publication_report_hash_mismatches: list[str] = []
+    publication_descriptor_hash_mismatches: list[str] = []
+    publication_metadata_bundle_mismatches: list[Dict[str, Any]] = []
+
+    for entry in bundles:
+        bundle_path_ref = entry.get("publication_metadata_bundle_path")
+        manifest_path_ref = entry.get("publication_metadata_manifest_path")
+        report_path_ref = entry.get("publication_report_path")
+        descriptor_path_ref = entry.get("publication_descriptor_path")
+        if not isinstance(bundle_path_ref, str) or not bundle_path_ref.strip():
+            continue
+        if not isinstance(manifest_path_ref, str) or not manifest_path_ref.strip():
+            continue
+        if not isinstance(report_path_ref, str) or not report_path_ref.strip():
+            continue
+        if not isinstance(descriptor_path_ref, str) or not descriptor_path_ref.strip():
+            continue
+
+        expected_manifest_path = (
+            "publication_metadata_manifest.json"
+            if bundle_path_ref in {"", "."}
+            else f"{bundle_path_ref}/publication_metadata_manifest.json"
+        )
+        if manifest_path_ref != expected_manifest_path:
+            bundle_manifest_path_mismatches.append(bundle_path_ref)
+
+        resolved_bundle_dir = (manifest_path.parent / bundle_path_ref).resolve()
+        resolved_manifest_path = (manifest_path.parent / manifest_path_ref).resolve()
+        resolved_report_path = (manifest_path.parent / report_path_ref).resolve()
+        resolved_descriptor_path = (manifest_path.parent / descriptor_path_ref).resolve()
+        if not resolved_bundle_dir.is_dir():
+            missing_bundle_directories.append(bundle_path_ref)
+        if not resolved_manifest_path.is_file():
+            missing_bundle_manifests.append(manifest_path_ref)
+            continue
+        if not resolved_report_path.is_file():
+            missing_publication_reports.append(report_path_ref)
+            continue
+        if not resolved_descriptor_path.is_file():
+            missing_publication_descriptors.append(descriptor_path_ref)
+            continue
+
+        actual_manifest_hash = "sha256:" + sha256_hex_bytes(resolved_manifest_path.read_bytes())
+        actual_report_hash = "sha256:" + sha256_hex_bytes(resolved_report_path.read_bytes())
+        actual_descriptor_hash = "sha256:" + sha256_hex_bytes(resolved_descriptor_path.read_bytes())
+        if entry.get("publication_metadata_manifest_hash") != actual_manifest_hash:
+            publication_metadata_manifest_hash_mismatches.append(manifest_path_ref)
+        if entry.get("publication_report_hash") != actual_report_hash:
+            publication_report_hash_mismatches.append(report_path_ref)
+        if entry.get("publication_descriptor_hash") != actual_descriptor_hash:
+            publication_descriptor_hash_mismatches.append(descriptor_path_ref)
+
+        _nested_manifest_path, nested_report_path, nested_descriptor_path, nested_manifest, nested_descriptor = (
+            _load_publication_metadata_bundle_publication(resolved_bundle_dir)
+        )
+        mismatched_fields = [
+            field_name
+            for field_name in [
+                "artifact_kind",
+                "artifact_path",
+                "signature_scheme",
+                "signature_key_id",
+                "publication_report_hash",
+                "publication_descriptor_hash",
+            ]
+            if entry.get(field_name) != nested_manifest.get(field_name)
+        ]
+        if resolved_manifest_path != _nested_manifest_path and "publication_metadata_manifest_path" not in mismatched_fields:
+            mismatched_fields.append("publication_metadata_manifest_path")
+        if resolved_report_path != nested_report_path and "publication_report_path" not in mismatched_fields:
+            mismatched_fields.append("publication_report_path")
+        if resolved_descriptor_path != nested_descriptor_path and "publication_descriptor_path" not in mismatched_fields:
+            mismatched_fields.append("publication_descriptor_path")
+        if entry.get("artifact_kind") != nested_descriptor.get("artifact_kind") and "artifact_kind" not in mismatched_fields:
+            mismatched_fields.append("artifact_kind")
+        if entry.get("artifact_path") != nested_descriptor.get("artifact_path") and "artifact_path" not in mismatched_fields:
+            mismatched_fields.append("artifact_path")
+
+        if mismatched_fields:
+            publication_metadata_bundle_mismatches.append(
+                {
+                    "publication_metadata_bundle_path": bundle_path_ref,
+                    "fields": sorted(set(mismatched_fields)),
+                }
+            )
+
+    return {
+        "ok": not any(
+            [
+                not publication_metadata_catalog_hash_matches,
+                not bundle_count_matches,
+                not index_metadata_matches,
+                duplicate_bundle_ids,
+                duplicate_bundle_paths,
+                duplicate_manifest_paths,
+                duplicate_report_paths,
+                duplicate_descriptor_paths,
+                bundle_manifest_path_mismatches,
+                missing_bundle_directories,
+                missing_bundle_manifests,
+                missing_publication_reports,
+                missing_publication_descriptors,
+                publication_metadata_manifest_hash_mismatches,
+                publication_report_hash_mismatches,
+                publication_descriptor_hash_mismatches,
+                publication_metadata_bundle_mismatches,
+            ]
+        ),
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "publication_metadata_catalog_path": manifest.get("publication_metadata_catalog_path"),
+        "publication_metadata_catalog_hash_matches": publication_metadata_catalog_hash_matches,
+        "bundle_count_matches": bundle_count_matches,
+        "index_metadata_matches": index_metadata_matches,
+        "declared_bundle_count": len(bundles),
+        "bundle_count": catalog.get("bundle_count"),
+        "duplicate_bundle_ids": duplicate_bundle_ids,
+        "duplicate_bundle_paths": duplicate_bundle_paths,
+        "duplicate_manifest_paths": duplicate_manifest_paths,
+        "duplicate_report_paths": duplicate_report_paths,
+        "duplicate_descriptor_paths": duplicate_descriptor_paths,
+        "bundle_manifest_path_mismatches": sorted(bundle_manifest_path_mismatches),
+        "missing_bundle_directories": sorted(missing_bundle_directories),
+        "missing_bundle_manifests": sorted(missing_bundle_manifests),
+        "missing_publication_reports": sorted(missing_publication_reports),
+        "missing_publication_descriptors": sorted(missing_publication_descriptors),
+        "publication_metadata_manifest_hash_mismatches": sorted(publication_metadata_manifest_hash_mismatches),
+        "publication_report_hash_mismatches": sorted(publication_report_hash_mismatches),
+        "publication_descriptor_hash_mismatches": sorted(publication_descriptor_hash_mismatches),
+        "publication_metadata_bundle_mismatches": publication_metadata_bundle_mismatches,
     }
 
 
@@ -5136,6 +5397,12 @@ def _require_machine_satroot_artifact_path(
         return
     if artifact_kind == "release-catalog-index":
         _require_machine_release_catalog_index_publication(resolved_path, label=label)
+        return
+    if artifact_kind == "publication-descriptor-index":
+        _require_machine_publication_descriptor_index_publication(resolved_path, label=label)
+        return
+    if artifact_kind == "publication-metadata-catalog":
+        _require_machine_publication_metadata_catalog_publication(resolved_path, label=label)
         return
     if artifact_kind == "demo-catalog":
         _require_machine_demo_catalog_workspace(resolved_path, label=label)
@@ -9163,6 +9430,16 @@ def inventory_workspace_artifacts(
     release_catalog_dirs = _discover_optional_paths(discover_signed_release_catalog_publication_dirs, resolved_search_roots, recursive=recursive)
     release_catalog_index_dirs = _discover_optional_paths(discover_signed_release_catalog_index_publication_dirs, resolved_search_roots, recursive=recursive)
     publication_registry_dirs = _discover_optional_paths(discover_signed_publication_registry_publication_dirs, resolved_search_roots, recursive=recursive)
+    publication_descriptor_index_dirs = _discover_optional_paths(
+        discover_signed_publication_descriptor_index_publication_dirs,
+        resolved_search_roots,
+        recursive=recursive,
+    )
+    publication_metadata_catalog_dirs = _discover_optional_paths(
+        discover_signed_publication_metadata_catalog_publication_dirs,
+        resolved_search_roots,
+        recursive=recursive,
+    )
     demo_catalog_workspace_dirs = _discover_optional_paths(discover_demo_catalog_workspace_dirs, resolved_search_roots, recursive=recursive)
     publication_stack_dirs = _discover_optional_paths(discover_publication_stack_workspace_dirs, resolved_search_roots, recursive=recursive)
     publication_network_dirs = _discover_optional_paths(discover_publication_network_workspace_dirs, resolved_search_roots, recursive=recursive)
@@ -9204,6 +9481,34 @@ def inventory_workspace_artifacts(
                 "bundle_count": release_summary.get("bundle_count"),
                 "release": copy.deepcopy(release_summary.get("release")),
                 "bundle_symbols": copy.deepcopy(release_summary.get("bundle_symbols")),
+            }
+        )
+
+    publication_descriptor_index_entries: list[Dict[str, Any]] = []
+    for publication_dir in publication_descriptor_index_dirs:
+        descriptor_index_summary = summarize_publication_descriptor_index_publication(publication_dir)
+        publication_descriptor_index_entries.append(
+            {
+                "publication_descriptor_index_dir": str(Path(publication_dir).resolve()),
+                "signature_scheme": descriptor_index_summary.get("signature_scheme"),
+                "signature_key_id": descriptor_index_summary.get("signature_key_id"),
+                "artifact_count": descriptor_index_summary.get("artifact_count"),
+                "artifact_kinds": copy.deepcopy(descriptor_index_summary.get("artifact_kinds")),
+                "index": copy.deepcopy(descriptor_index_summary.get("index")),
+            }
+        )
+
+    publication_metadata_catalog_entries: list[Dict[str, Any]] = []
+    for publication_dir in publication_metadata_catalog_dirs:
+        metadata_catalog_summary = summarize_publication_metadata_catalog_publication(publication_dir)
+        publication_metadata_catalog_entries.append(
+            {
+                "publication_metadata_catalog_dir": str(Path(publication_dir).resolve()),
+                "signature_scheme": metadata_catalog_summary.get("signature_scheme"),
+                "signature_key_id": metadata_catalog_summary.get("signature_key_id"),
+                "bundle_count": metadata_catalog_summary.get("bundle_count"),
+                "artifact_kinds": copy.deepcopy(metadata_catalog_summary.get("artifact_kinds")),
+                "index": copy.deepcopy(metadata_catalog_summary.get("index")),
             }
         )
 
@@ -9339,6 +9644,8 @@ def inventory_workspace_artifacts(
         "release_count": len(release_entries),
         "release_catalog_count": len(release_catalog_entries),
         "release_catalog_index_count": len(release_catalog_index_entries),
+        "publication_descriptor_index_count": len(publication_descriptor_index_entries),
+        "publication_metadata_catalog_count": len(publication_metadata_catalog_entries),
         "publication_registry_count": len(publication_registry_entries),
         "demo_catalog_workspace_count": len(demo_catalog_workspace_entries),
         "publication_stack_count": len(publication_stack_entries),
@@ -9349,6 +9656,8 @@ def inventory_workspace_artifacts(
         "releases": release_entries,
         "release_catalogs": release_catalog_entries,
         "release_catalog_indexes": release_catalog_index_entries,
+        "publication_descriptor_indexes": publication_descriptor_index_entries,
+        "publication_metadata_catalogs": publication_metadata_catalog_entries,
         "publication_registries": publication_registry_entries,
         "demo_catalog_workspaces": demo_catalog_workspace_entries,
         "publication_stacks": publication_stack_entries,
@@ -10082,6 +10391,14 @@ def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
         name = resolved_path.name
         if name == "publication_registry_manifest.json":
             return "publication-registry", parent
+        if name == "publication_descriptor_index_manifest.json":
+            return "publication-descriptor-index", parent
+        if name == "publication_descriptor_index.json":
+            return "publication-descriptor-index", parent
+        if name == "publication_metadata_catalog_manifest.json":
+            return "publication-metadata-catalog", parent
+        if name == "publication_metadata_catalog.json":
+            return "publication-metadata-catalog", parent
         if name == "summary.json":
             if (parent / "publication_registry").is_dir() and (parent / "publication_descriptor_index").is_dir() and (parent / "publication_metadata_catalog").is_dir():
                 return "publication-registry-workspace", parent
@@ -10119,6 +10436,10 @@ def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
             return "demo-catalog", resolved_path
     if (resolved_path / "publication_registry_manifest.json").is_file():
         return "publication-registry", resolved_path
+    if (resolved_path / "publication_descriptor_index_manifest.json").is_file():
+        return "publication-descriptor-index", resolved_path
+    if (resolved_path / "publication_metadata_catalog_manifest.json").is_file():
+        return "publication-metadata-catalog", resolved_path
     if (resolved_path / "release_catalog_index_manifest.json").is_file():
         return "release-catalog-index", resolved_path
     if (resolved_path / "release_catalog_manifest.json").is_file():
@@ -10203,6 +10524,34 @@ def build_satroot_artifact_descriptor(path: str | Path) -> Dict[str, Any]:
                 "index": copy.deepcopy(summary.get("index")),
                 "catalog_labels": copy.deepcopy(summary.get("catalog_labels")),
                 "release_catalog_paths": copy.deepcopy(summary.get("release_catalog_paths")),
+            }
+        )
+        return descriptor
+
+    if kind == "publication-descriptor-index":
+        summary = summarize_publication_descriptor_index_publication(artifact_path)
+        descriptor.update(
+            {
+                "signature_scheme": summary.get("signature_scheme"),
+                "signature_key_id": summary.get("signature_key_id"),
+                "artifact_count": summary.get("artifact_count"),
+                "index": copy.deepcopy(summary.get("index")),
+                "artifact_kinds": copy.deepcopy(summary.get("artifact_kinds")),
+                "artifact_paths": copy.deepcopy(summary.get("artifact_paths")),
+            }
+        )
+        return descriptor
+
+    if kind == "publication-metadata-catalog":
+        summary = summarize_publication_metadata_catalog_publication(artifact_path)
+        descriptor.update(
+            {
+                "signature_scheme": summary.get("signature_scheme"),
+                "signature_key_id": summary.get("signature_key_id"),
+                "bundle_count": summary.get("bundle_count"),
+                "index": copy.deepcopy(summary.get("index")),
+                "artifact_kinds": copy.deepcopy(summary.get("artifact_kinds")),
+                "artifact_paths": copy.deepcopy(summary.get("artifact_paths")),
             }
         )
         return descriptor
@@ -10316,6 +10665,8 @@ def validate_publication_descriptor_consistency(descriptor: Mapping[str, Any]) -
         "release",
         "release-catalog",
         "release-catalog-index",
+        "publication-descriptor-index",
+        "publication-metadata-catalog",
         "demo-catalog",
         "publication-stack",
         "publication-network",
@@ -10356,6 +10707,10 @@ def discover_satroot_artifact_paths(
         add_artifact("release-catalog", artifact_path)
     for artifact_path in _discover_optional_paths(discover_signed_release_catalog_index_publication_dirs, resolved_search_roots, recursive=recursive):
         add_artifact("release-catalog-index", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_signed_publication_descriptor_index_publication_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("publication-descriptor-index", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_signed_publication_metadata_catalog_publication_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("publication-metadata-catalog", artifact_path)
     for artifact_path in _discover_optional_paths(discover_signed_publication_registry_publication_dirs, resolved_search_roots, recursive=recursive):
         add_artifact("publication-registry", artifact_path)
     for artifact_path in _discover_optional_paths(discover_demo_catalog_workspace_dirs, resolved_search_roots, recursive=recursive):
@@ -10419,6 +10774,8 @@ def build_satroot_publication_descriptor_index(
         "release",
         "release-catalog",
         "release-catalog-index",
+        "publication-descriptor-index",
+        "publication-metadata-catalog",
         "demo-catalog",
         "publication-stack",
         "publication-network",
@@ -10464,6 +10821,8 @@ def validate_publication_descriptor_index_consistency(index: Mapping[str, Any]) 
         "release",
         "release-catalog",
         "release-catalog-index",
+        "publication-descriptor-index",
+        "publication-metadata-catalog",
         "demo-catalog",
         "publication-stack",
         "publication-network",
@@ -11011,6 +11370,8 @@ def build_publication_metadata_catalog(
         "release",
         "release-catalog",
         "release-catalog-index",
+        "publication-descriptor-index",
+        "publication-metadata-catalog",
         "demo-catalog",
         "publication-stack",
         "publication-network",
@@ -11056,6 +11417,8 @@ def validate_publication_metadata_catalog_consistency(catalog: Mapping[str, Any]
         "release",
         "release-catalog",
         "release-catalog-index",
+        "publication-descriptor-index",
+        "publication-metadata-catalog",
         "demo-catalog",
         "publication-stack",
         "publication-network",
@@ -11292,9 +11655,16 @@ def bootstrap_publication_metadata_catalog_publication(
 def _load_publication_metadata_catalog_publication(
     publication_metadata_catalog_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    catalog_dir = Path(publication_metadata_catalog_dir).resolve()
-    if not catalog_dir.is_dir():
-        raise SatRootError("publication metadata catalog directory must be an existing directory")
+    candidate_path = Path(publication_metadata_catalog_dir).resolve()
+    if candidate_path.is_dir():
+        catalog_dir = candidate_path
+    else:
+        catalog_dir = candidate_path.parent
+        if candidate_path.name not in {"publication_metadata_catalog_manifest.json", "publication_metadata_catalog.json"}:
+            raise SatRootError(
+                "publication metadata catalog operations require a publication metadata catalog directory or "
+                "publication_metadata_catalog_manifest.json/publication_metadata_catalog.json"
+            )
 
     manifest_path = catalog_dir / "publication_metadata_catalog_manifest.json"
     if not manifest_path.is_file():
@@ -11767,6 +12137,50 @@ def render_satroot_artifact_report(path: str | Path) -> str:
                 if isinstance(channel, str) and channel.strip():
                     parts.append(f"channel `{channel}`")
                 lines.append(f"- {', '.join(parts) if parts else 'release catalog'}")
+        lines.append("")
+        return "\n".join(lines)
+
+    if kind == "publication-descriptor-index":
+        summary = summarize_publication_descriptor_index_publication(artifact_path)
+        index_metadata = summary.get("index")
+        lines.extend(
+            [
+                "# SATROOT Publication Descriptor Index Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Signature scheme: `{summary.get('signature_scheme')}`",
+                f"- Signature key ID: `{summary.get('signature_key_id')}`",
+                f"- Artifact count: `{summary.get('artifact_count')}`",
+            ]
+        )
+        if isinstance(index_metadata, Mapping):
+            _append_metadata_lines(lines, index_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        artifact_kinds = summary.get("artifact_kinds")
+        if isinstance(artifact_kinds, list):
+            lines.extend(["", "## Artifact Kinds", ""])
+            lines.extend(f"- `{value}`" for value in artifact_kinds if isinstance(value, str))
+        lines.append("")
+        return "\n".join(lines)
+
+    if kind == "publication-metadata-catalog":
+        summary = summarize_publication_metadata_catalog_publication(artifact_path)
+        index_metadata = summary.get("index")
+        lines.extend(
+            [
+                "# SATROOT Publication Metadata Catalog Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Signature scheme: `{summary.get('signature_scheme')}`",
+                f"- Signature key ID: `{summary.get('signature_key_id')}`",
+                f"- Bundle count: `{summary.get('bundle_count')}`",
+            ]
+        )
+        if isinstance(index_metadata, Mapping):
+            _append_metadata_lines(lines, index_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        artifact_kinds = summary.get("artifact_kinds")
+        if isinstance(artifact_kinds, list):
+            lines.extend(["", "## Artifact Kinds", ""])
+            lines.extend(f"- `{value}`" for value in artifact_kinds if isinstance(value, str))
         lines.append("")
         return "\n".join(lines)
 
@@ -13153,6 +13567,12 @@ def build_cli_parser() -> Any:
 
     publication_descriptor_index_lint_parser = subparsers.add_parser("publication-descriptor-index-lint", help="Check publication_descriptor_index_manifest.json, publication_descriptor_index.json, and referenced SATROOT artifacts without signature verification")
     publication_descriptor_index_lint_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory or publication_descriptor_index_manifest.json/publication_descriptor_index.json file")
+
+    publication_metadata_catalog_summary_parser = subparsers.add_parser("publication-metadata-catalog-summary", help="Read publication_metadata_catalog_manifest.json plus publication_metadata_catalog.json and print a metadata-catalog summary without signature verification")
+    publication_metadata_catalog_summary_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory or publication_metadata_catalog_manifest.json/publication_metadata_catalog.json file")
+
+    publication_metadata_catalog_lint_parser = subparsers.add_parser("publication-metadata-catalog-lint", help="Check publication_metadata_catalog_manifest.json, publication_metadata_catalog.json, and referenced publication metadata bundles without signature verification")
+    publication_metadata_catalog_lint_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory or publication_metadata_catalog_manifest.json/publication_metadata_catalog.json file")
 
     demo_catalog_summary_parser = subparsers.add_parser("demo-catalog-summary", help="Read summary.json plus release/ and print a demo-catalog workspace summary without signature verification")
     demo_catalog_summary_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory or summary.json file")
@@ -16047,6 +16467,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publication-descriptor-index-lint":
         report = lint_publication_descriptor_index_publication(args.publication_descriptor_index_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-metadata-catalog-summary":
+        summary = summarize_publication_metadata_catalog_publication(args.publication_metadata_catalog_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-metadata-catalog-lint":
+        report = lint_publication_metadata_catalog_publication(args.publication_metadata_catalog_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 
