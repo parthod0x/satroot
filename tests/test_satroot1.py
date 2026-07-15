@@ -9227,6 +9227,138 @@ def test_cli_bundle_lint_reports_findings(tmp_path, capsys):
     assert '"extra_files":["unexpected.txt"]' in captured.out
 
 
+def test_cli_bundle_index_summary_reads_index_json(tmp_path, capsys):
+    floor_events_path = tmp_path / "floor_events.json"
+    stable_events_path = tmp_path / "stable_events.json"
+    floor_bundle_dir = tmp_path / "floor_bundle"
+    stable_bundle_dir = tmp_path / "stable_bundle"
+    index_path = tmp_path / "bundle_index.json"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    stable_events_path.write_text(json.dumps(load_events("events_usdroot1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(stable_events_path), "--scheme", "hmac-sha256", "--output-dir", str(stable_bundle_dir)]) == 0
+    assert main(
+        [
+            "build-bundle-index",
+            str(floor_bundle_dir),
+            str(stable_bundle_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Bundle Index",
+            "--output",
+            str(index_path),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    exit_code = main(["bundle-index-summary", str(index_path)])
+    assert exit_code == 0
+
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["bundle_count"] == 2
+    assert summary["bundle_symbols"] == ["FLOOR1", "USDROOT1"]
+    assert summary["release"] == {"channel": "stable", "label": "SATROOT Bundle Index"}
+    assert summary["bundle_index_path"] == str(index_path.resolve())
+
+
+def test_cli_bundle_index_summary_accepts_release_manifest_json(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    release_material_dir = tmp_path / "release_hmac"
+    release_dir = tmp_path / "release"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["bootstrap-release-hmac", "--key-id", "release-key", "--output-dir", str(release_material_dir)]) == 0
+    assert main(
+        [
+            "publish-release",
+            str(bundle_dir),
+            "--output-dir",
+            str(release_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT FLOOR1 Demo",
+            "--published-at",
+            "2026-07-15T01:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secrets-json",
+            str(release_material_dir / "release_secrets.json"),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    exit_code = main(["bundle-index-summary", str(release_dir / "release_manifest.json")])
+    assert exit_code == 0
+
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["bundle_count"] == 1
+    assert summary["bundle_symbols"] == ["FLOOR1"]
+    assert summary["release"] == {
+        "channel": "stable",
+        "label": "SATROOT FLOOR1 Demo",
+        "published_at": "2026-07-15T01:00:00Z",
+    }
+
+
+def test_cli_bundle_index_lint_accepts_clean_index(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["build-bundle-index", str(bundle_dir), "--output", str(index_path)]) == 0
+    capsys.readouterr()
+
+    lint_exit_code = main(["bundle-index-lint", str(index_path)])
+    assert lint_exit_code == 0
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is True
+    assert report["duplicate_bundle_ids"] == []
+    assert report["missing_bundle_manifests"] == []
+
+
+def test_cli_bundle_index_lint_reports_findings(tmp_path, capsys):
+    events_path = tmp_path / "events.json"
+    bundle_dir = tmp_path / "bundle"
+    index_path = tmp_path / "bundle_index.json"
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(["build-bundle-index", str(bundle_dir), "--output", str(index_path)]) == 0
+    capsys.readouterr()
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    duplicate_entry = copy.deepcopy(index["bundles"][0])
+    duplicate_entry["symbol"] = "BROKEN1"
+    duplicate_entry["manifest_hash"] = "sha256:" + ("1" * 64)
+    index["bundles"].append(duplicate_entry)
+    index["bundle_count"] = 2
+    write_json(index_path, index)
+
+    lint_exit_code = main(["bundle-index-lint", str(index_path)])
+    assert lint_exit_code == 1
+
+    report = json.loads(capsys.readouterr().out)
+    manifest_path = index["bundles"][0]["manifest_path"]
+    bundle_path = index["bundles"][0]["bundle_path"]
+    bundle_id = index["bundles"][0]["bundle_id"]
+    assert report["ok"] is False
+    assert report["duplicate_bundle_ids"] == [bundle_id]
+    assert report["duplicate_bundle_paths"] == [bundle_path]
+    assert report["duplicate_manifest_paths"] == [manifest_path]
+    assert report["manifest_hash_mismatches"] == [manifest_path]
+    assert report["bundle_manifest_metadata_mismatches"] == [{"bundle_path": bundle_path, "fields": ["symbol"]}]
+
+
 def test_cli_release_summary_reads_manifest_and_index(tmp_path, capsys):
     events_path = tmp_path / "events.json"
     bundle_dir = tmp_path / "bundle"

@@ -14,6 +14,7 @@
 - Adds event scaffolding helpers and an `init-event` CLI command for non-genesis records.
 - Adds an `append-event` CLI workflow plus helper for extending existing ledgers with signed events.
 - Adds first-class `freeze` events for authority-controlled account locking and unlocking.
+- Adds `bundle-index-summary` and `bundle-index-lint` commands for inspecting unsigned multi-bundle bundle indexes before release signing.
 - Adds a `bootstrap-stable-demo` workflow for generating runnable reference-only SATROOT-STABLE-1 ledgers.
 - Adds a `bootstrap-stable-demo-bundle` workflow for generating signed reference-only SATROOT-STABLE-1 bundles.
 - Adds a `bootstrap-stable-demo-release` workflow for generating signed reference-only SATROOT-STABLE-1 bundles plus release directories.

@@ -120,6 +120,8 @@ The v0.1 kernel defines:
 - machine-readable signed bundle manifests describing artifacts, verifier-material scope, per-file hashes, and the full final replay snapshot,
 - manifest-only bundle inspection via `bundle-summary` when replay is unnecessary,
 - structural bundle linting via `bundle-lint` for missing files and manifest layout drift,
+- unsigned multi-bundle inspection via `bundle-index-summary` before release signing,
+- structural bundle-index linting via `bundle-index-lint` for nested bundle manifest drift,
 - release-level inspection via `release-summary` when signature verification is unnecessary,
 - structural release linting via `release-lint` for bundle-index and manifest drift,
 - deterministic bundle-index generation for release catalogs spanning multiple bundles,
@@ -661,6 +663,18 @@ Attach lightweight release metadata to a bundle index:
 
 ```bash
 satroot1 build-bundle-index signed_hmac_bundle --channel stable --label "SATROOT FLOOR1 Demo" --published-at 2026-06-22T12:00:00Z --output bundle_index.json
+```
+
+Inspect that unsigned bundle index before signing it into a release:
+
+```bash
+satroot1 bundle-index-summary bundle_index.json
+```
+
+Lint the unsigned bundle index and its referenced nested manifests without needing a release manifest first:
+
+```bash
+satroot1 bundle-index-lint bundle_index.json
 ```
 
 Build a signed release manifest from a bundle index:
