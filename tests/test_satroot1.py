@@ -5711,6 +5711,98 @@ def test_cli_export_demo_catalog_preset_from_workspace(tmp_path):
     assert loaded["release_metadata"]["published_at"] == "2026-07-05T02:00:00Z"
 
 
+def test_cli_bootstrap_demo_catalog_from_exported_preset_round_trip(tmp_path, capsys):
+    output_dir = make_demo_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_catalog.json"
+
+    assert main(["export-demo-catalog-preset", str(output_dir), "--output", str(preset_path)]) == 0
+
+    roundtrip_dir = tmp_path / "catalog_workspace_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-demo-catalog",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Demo Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT demo catalog workspace to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["bundle_count"] == 2
+    assert summary["release"]["label"] == "Roundtrip Demo Catalog"
+    assert {entry["profile"] for entry in summary["bundles"]} == {"SATROOT-STABLE-1", "SATROOT-MACHINE-1"}
+    assert main(["demo-catalog-summary", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_machine_demo_catalog_from_exported_preset_round_trip(tmp_path, capsys):
+    workspace_dir = tmp_path / "machine_catalog_workspace"
+    assert main(
+        [
+            "bootstrap-machine-demo-catalog",
+            "--symbol",
+            "MDEXPRT1",
+            "--name",
+            "Machine Demo Catalog Export Source",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--output-dir",
+            str(workspace_dir),
+            "--label",
+            "Machine Demo Catalog Source",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_machine_catalog.json"
+    assert main(["export-demo-catalog-preset", str(workspace_dir), "--output", str(preset_path)]) == 0
+
+    roundtrip_dir = tmp_path / "machine_catalog_workspace_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-catalog",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Machine Demo Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo catalog workspace to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["bundle_count"] == 1
+    assert summary["release"]["label"] == "Roundtrip Machine Demo Catalog"
+    assert {entry["profile"] for entry in summary["bundles"]} == {"SATROOT-MACHINE-1"}
+    assert main(["demo-catalog-summary", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_publication_stack_preset_with_generated_catalog_presets(tmp_path):
     stack_dir = make_demo_publication_stack_dir(tmp_path)
     preset_path = tmp_path / "exported_stack.json"
@@ -6825,6 +6917,61 @@ def test_cli_export_bundle_index_preset(tmp_path):
     assert preset["release"]["label"] == "Exported Bundle Index"
 
 
+def test_cli_build_bundle_index_from_exported_preset_round_trip(tmp_path):
+    bundle_dir = tmp_path / "bundle"
+    bundle_index_path = tmp_path / "bundle_index.json"
+    preset_path = tmp_path / "exported_bundle_index.json"
+
+    assert main(
+        [
+            "bootstrap-genesis-bundle",
+            "--symbol",
+            "BINDEXRT1",
+            "--name",
+            "Bundle Index Roundtrip Source",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--output-dir",
+            str(bundle_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "build-bundle-index",
+            str(bundle_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Exported Bundle Index",
+            "--output",
+            str(bundle_index_path),
+        ]
+    ) == 0
+    assert main(["export-bundle-index-preset", str(bundle_index_path), "--output", str(preset_path)]) == 0
+
+    roundtrip_index_path = tmp_path / "bundle_index_roundtrip.json"
+    exit_code = main(
+        [
+            "build-bundle-index",
+            "--preset-json",
+            str(preset_path),
+            "--channel",
+            "stable",
+            "--label",
+            "Roundtrip Bundle Index",
+            "--output",
+            str(roundtrip_index_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(roundtrip_index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 1
+    assert index["release"]["label"] == "Roundtrip Bundle Index"
+
+
 def test_cli_export_bundle_index_preset_from_release_dir(tmp_path):
     bundle_dir = tmp_path / "bundle"
     release_dir = tmp_path / "release"
@@ -6891,6 +7038,43 @@ def test_cli_export_machine_bundle_index_preset(tmp_path):
     assert preset["type"] == "SATROOT-BUNDLE-INDEX-PRESET"
     assert len(loaded["bundle_dirs"]) == 1
     assert preset["release"]["label"] == "Machine Release Alpha"
+
+
+def test_cli_build_machine_bundle_index_from_exported_preset_round_trip(tmp_path):
+    release_dir, _other_release_dir = make_machine_release_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_bundle_index.json"
+
+    assert (
+        main(
+            [
+                "export-machine-bundle-index-preset",
+                str(Path(release_dir) / "bundle_index.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    roundtrip_index_path = tmp_path / "machine_bundle_index_roundtrip.json"
+    exit_code = main(
+        [
+            "build-machine-bundle-index",
+            "--preset-json",
+            str(preset_path),
+            "--channel",
+            "machine",
+            "--label",
+            "Roundtrip Machine Bundle Index",
+            "--output",
+            str(roundtrip_index_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(roundtrip_index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 1
+    assert index["release"]["label"] == "Roundtrip Machine Bundle Index"
 
 
 def test_cli_export_machine_bundle_index_preset_rejects_generic_release(tmp_path):

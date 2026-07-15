@@ -9783,7 +9783,14 @@ def export_demo_catalog_preset_from_workspace(demo_catalog_dir: str | Path) -> D
 
         structure_overrides = entry.get("structure_overrides")
         if isinstance(structure_overrides, Mapping) and structure_overrides:
-            profile_structure_overrides[profile] = copy.deepcopy(dict(structure_overrides))
+            allowed_structure_keys = set(DEMO_CATALOG_STRUCTURE_OVERRIDE_SPECS.get(profile, {}))
+            filtered_structure_overrides = {
+                key: copy.deepcopy(value)
+                for key, value in structure_overrides.items()
+                if isinstance(key, str) and key in allowed_structure_keys
+            }
+            if filtered_structure_overrides:
+                profile_structure_overrides[profile] = filtered_structure_overrides
 
     preset: Dict[str, Any] = {
         "type": "SATROOT-DEMO-CATALOG-PRESET",
