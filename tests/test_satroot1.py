@@ -7231,6 +7231,37 @@ def test_build_and_verify_signed_publication_metadata_manifest_hmac(tmp_path):
     assert summary["publication_descriptor_path"] == "publication_descriptor.json"
 
 
+def test_cli_build_publication_metadata_manifest(tmp_path):
+    release_dir, _ = make_demo_release_dirs(tmp_path)
+    report_path = tmp_path / "publication_report.md"
+    descriptor_path = tmp_path / "publication_descriptor.json"
+    manifest_path = tmp_path / "publication_metadata_manifest.json"
+
+    assert main(["render-publication-report", str(release_dir), "--output", str(report_path)]) == 0
+    assert main(["export-publication-descriptor", str(release_dir), "--output", str(descriptor_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-publication-metadata-manifest",
+            str(report_path),
+            str(descriptor_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+            "--secret",
+            "metadata-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-metadata-manifest"
+    assert manifest["signature_key_id"] == "metadata-key"
+
+
 def test_cli_build_machine_publication_metadata_manifest(tmp_path):
     machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
     report_path = tmp_path / "machine_publication_report.md"
@@ -7547,6 +7578,45 @@ def test_cli_build_publication_metadata_catalog_accepts_publication_metadata_bun
     assert catalog["bundle_count"] == 1
     assert catalog["artifact_kind_counts"]["publication-metadata-bundle"] == 1
     assert catalog["bundles"][0]["artifact_kind"] == "publication-metadata-bundle"
+
+
+def test_cli_build_publication_metadata_catalog_manifest(tmp_path):
+    release_bundle_dir, network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "publication_metadata_catalog.json"
+    manifest_path = tmp_path / "publication_metadata_catalog_manifest.json"
+
+    assert (
+        main(
+            [
+                "build-publication-metadata-catalog",
+                str(release_bundle_dir),
+                str(network_bundle_dir),
+                "--output",
+                str(catalog_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "build-publication-metadata-catalog-manifest",
+            str(catalog_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--secret",
+            "catalog-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-metadata-catalog-manifest"
+    assert manifest["signature_key_id"] == "catalog-key"
 
 
 def test_cli_build_machine_publication_metadata_catalog(tmp_path):
@@ -7975,6 +8045,79 @@ def test_build_and_verify_signed_publication_registry_manifest_hmac(tmp_path):
     assert summary["signature_key_id"] == "registry-key"
     assert summary["publication_registry_path"] == "publication_registry.json"
     assert summary["component_count"] == 3
+
+
+def test_cli_build_publication_registry(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "publication_registry.json"
+
+    exit_code = main(
+        [
+            "build-publication-registry",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--channel",
+            "network",
+            "--label",
+            "SATROOT Publication Registry",
+            "--published-at",
+            "2026-07-08T05:00:00Z",
+            "--output",
+            str(registry_path),
+        ]
+    )
+    assert exit_code == 0
+
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "SATROOT Publication Registry"
+
+
+def test_cli_build_publication_registry_manifest(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "publication_registry.json"
+    manifest_path = tmp_path / "publication_registry_manifest.json"
+
+    assert (
+        main(
+            [
+                "build-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output",
+                str(registry_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "build-publication-registry-manifest",
+            str(registry_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+            "--secret",
+            "registry-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-registry-manifest"
+    assert manifest["signature_key_id"] == "registry-key"
 
 
 def test_cli_build_machine_publication_registry_manifest(tmp_path):

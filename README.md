@@ -1018,6 +1018,10 @@ To bootstrap a signed publication report plus descriptor bundle for one artifact
 satroot1 bootstrap-publication-metadata-bundle publication_network --output-dir publication_metadata_bundle --scheme hmac-sha256 --key-id metadata-key
 ```
 
+```bash
+satroot1 build-publication-metadata-manifest publication_metadata_bundle/publication_report.md publication_metadata_bundle/publication_descriptor.json --scheme hmac-sha256 --key-id metadata-key --secret metadata-secret --output publication_metadata_manifest.json
+```
+
 To verify that bundle later:
 
 ```bash
@@ -1028,6 +1032,14 @@ To aggregate multiple publication metadata bundles into one signed catalog:
 
 ```bash
 satroot1 bootstrap-publication-metadata-catalog-publication --discover-under publication_metadata_root --output-dir publication_metadata_catalog_publication --channel network --label "SATROOT Metadata Catalog" --scheme hmac-sha256 --key-id catalog-key
+```
+
+```bash
+satroot1 build-publication-metadata-catalog publication_metadata_bundle_alpha publication_metadata_bundle_beta --channel network --label "SATROOT Metadata Catalog" --published-at 2026-07-08T04:00:00Z --output publication_metadata_catalog.json
+```
+
+```bash
+satroot1 build-publication-metadata-catalog-manifest publication_metadata_catalog.json --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret --output publication_metadata_catalog_manifest.json
 ```
 
 If those publication metadata bundles must stay entirely inside the SATROOT-MACHINE-1 lane, the machine-only wrappers validate each nested artifact before building, signing, or bootstrapping the catalog:
@@ -1068,6 +1080,14 @@ To bind the release-catalog-index, descriptor-index, and metadata-catalog lanes 
 
 ```bash
 satroot1 bootstrap-publication-registry-publication --release-catalog-index-dir publication_network/release_catalog_index --publication-descriptor-index-dir publication_descriptor_index_publication --publication-metadata-catalog-dir publication_metadata_catalog_publication --output-dir publication_registry_publication --channel network --label "SATROOT Publication Registry" --scheme hmac-sha256 --key-id registry-key
+```
+
+```bash
+satroot1 build-publication-registry --release-catalog-index-dir publication_network/release_catalog_index --publication-descriptor-index-dir publication_descriptor_index_publication --publication-metadata-catalog-dir publication_metadata_catalog_publication --channel network --label "SATROOT Publication Registry" --published-at 2026-07-08T05:00:00Z --output publication_registry.json
+```
+
+```bash
+satroot1 build-publication-registry-manifest publication_registry.json --scheme hmac-sha256 --key-id registry-key --secret registry-secret --output publication_registry_manifest.json
 ```
 
 If all three component lanes must remain SATROOT-MACHINE-1 validated, the machine-only wrappers enforce that before building, signing, or bootstrapping the top-level registry:
