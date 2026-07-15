@@ -25,6 +25,7 @@
       "enum": [
         "bundle",
         "bundle-index",
+        "publication-metadata-bundle",
         "release",
         "release-catalog",
         "release-catalog-index",

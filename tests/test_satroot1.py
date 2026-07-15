@@ -587,6 +587,41 @@ def make_machine_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path,
     return workspace_bundle_dir, catalog_bundle_dir
 
 
+def make_isolated_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path, Path]:
+    source_root = tmp_path / "bundle_sources"
+    bundle_root = tmp_path / "bundle_publications"
+    release_dir, _ = make_demo_release_dirs(source_root)
+    network_dir = make_demo_publication_network_dir(source_root)
+    release_bundle_dir = bundle_root / "publication_metadata_release"
+    network_bundle_dir = bundle_root / "publication_metadata_network"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            release_dir,
+            "--output-dir",
+            str(release_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(network_dir),
+            "--output-dir",
+            str(network_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    return release_bundle_dir, network_bundle_dir
+
+
 def make_publication_metadata_catalog_dir(tmp_path: Path) -> Path:
     _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
     output_dir = tmp_path / "publication_metadata_catalog_publication"
@@ -5648,6 +5683,18 @@ def test_cli_inventory_artifacts_reports_standalone_bundle_index(tmp_path, capsy
     assert '"bundle_symbols":["FLOOR1"]' in captured.out
 
 
+def test_cli_inventory_artifacts_reports_publication_metadata_bundle(tmp_path, capsys):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+
+    exit_code = main(["inventory-artifacts", str(release_bundle_dir), "--non-recursive"])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"publication_metadata_bundle_count":1' in captured.out
+    assert '"publication_metadata_catalog_count":0' in captured.out
+    assert '"packaged_artifact_kind":"release"' in captured.out
+
+
 def test_cli_export_demo_catalog_preset_from_workspace(tmp_path):
     output_dir = make_demo_catalog_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_catalog.json"
@@ -6530,6 +6577,19 @@ def test_cli_render_publication_report_for_bundle_index(tmp_path, capsys):
     assert "- `FLOOR1`" in captured.out
 
 
+def test_cli_render_publication_report_for_publication_metadata_bundle(tmp_path, capsys):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+
+    exit_code = main(["render-publication-report", str(release_bundle_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "# SATROOT Publication Metadata Bundle Report" in captured.out
+    assert "- Signature scheme: `hmac-sha256`" in captured.out
+    assert "- Packaged artifact kind: `release`" in captured.out
+    assert "- Publication descriptor path:" in captured.out
+
+
 def test_cli_render_publication_report_for_registry(tmp_path, capsys):
     registry_dir = make_publication_registry_dir(tmp_path)
 
@@ -6716,6 +6776,21 @@ def test_cli_export_publication_descriptor_for_bundle_index(tmp_path):
     assert descriptor["bundle_symbols"] == ["FLOOR1"]
 
 
+def test_cli_export_publication_descriptor_for_publication_metadata_bundle(tmp_path):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    output_path = tmp_path / "publication_metadata_bundle_descriptor.json"
+
+    exit_code = main(["export-publication-descriptor", str(release_bundle_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    descriptor = json.loads(output_path.read_text(encoding="utf-8"))
+    assert descriptor["descriptor_type"] == "SATROOT-ARTIFACT-DESCRIPTOR"
+    assert descriptor["artifact_kind"] == "publication-metadata-bundle"
+    assert descriptor["packaged_artifact_kind"] == "release"
+    assert descriptor["signature_scheme"] == "hmac-sha256"
+    assert descriptor["publication_metadata_manifest_path"].endswith("publication_metadata_manifest.json")
+
+
 def test_cli_build_publication_descriptor_index_recursive(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_path = tmp_path / "descriptor_index.json"
@@ -6762,6 +6837,19 @@ def test_cli_build_publication_descriptor_index_discovers_standalone_bundle_inde
     assert index["artifact_kind_counts"]["bundle"] == 1
     assert index["artifact_kind_counts"]["bundle-index"] == 1
     assert {entry["artifact_kind"] for entry in index["artifacts"]} == {"bundle", "bundle-index"}
+
+
+def test_cli_build_publication_descriptor_index_discovers_publication_metadata_bundles(tmp_path):
+    release_bundle_dir, network_bundle_dir = make_isolated_publication_metadata_bundle_dirs(tmp_path)
+    output_path = tmp_path / "publication_metadata_bundle_descriptor_index.json"
+
+    exit_code = main(["build-publication-descriptor-index", "--discover-under", str(release_bundle_dir.parent), "--output", str(output_path)])
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 2
+    assert index["artifact_kind_counts"]["publication-metadata-bundle"] == 2
+    assert {entry["artifact_path"] for entry in index["artifacts"]} == {str(release_bundle_dir.resolve()), str(network_bundle_dir.resolve())}
 
 
 def test_cli_build_publication_descriptor_index_non_recursive(tmp_path):
@@ -6853,6 +6941,19 @@ def test_cli_build_machine_publication_descriptor_index(tmp_path):
     assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
     assert index["artifact_kind_counts"]["release-catalog"] == 1
     assert index["index"]["label"] == "Machine Descriptor Index"
+
+
+def test_cli_build_machine_publication_descriptor_index_accepts_metadata_bundle(tmp_path):
+    workspace_bundle_dir, _catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(tmp_path)
+    output_path = tmp_path / "machine_metadata_bundle_descriptor_index.json"
+
+    exit_code = main(["build-machine-publication-descriptor-index", str(workspace_bundle_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-metadata-bundle"] == 1
+    assert index["artifacts"][0]["artifact_kind"] == "publication-metadata-bundle"
 
 
 def test_cli_build_machine_publication_descriptor_index_rejects_non_machine_artifact(tmp_path):
@@ -7315,6 +7416,31 @@ def test_cli_build_publication_metadata_catalog_accepts_bundle_index_bundles(tmp
     assert catalog["bundle_count"] == 1
     assert catalog["artifact_kind_counts"]["bundle-index"] == 1
     assert catalog["bundles"][0]["artifact_kind"] == "bundle-index"
+
+
+def test_cli_build_publication_metadata_catalog_accepts_publication_metadata_bundle_artifacts(tmp_path):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    nested_bundle_dir = tmp_path / "publication_metadata_of_metadata"
+    catalog_path = tmp_path / "publication_metadata_bundle_catalog.json"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(release_bundle_dir),
+            "--output-dir",
+            str(nested_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(["build-publication-metadata-catalog", str(nested_bundle_dir), "--output", str(catalog_path)]) == 0
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 1
+    assert catalog["artifact_kind_counts"]["publication-metadata-bundle"] == 1
+    assert catalog["bundles"][0]["artifact_kind"] == "publication-metadata-bundle"
 
 
 def test_cli_build_machine_publication_metadata_catalog(tmp_path):

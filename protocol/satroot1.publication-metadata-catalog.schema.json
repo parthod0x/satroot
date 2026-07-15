@@ -19,6 +19,7 @@
       "required": [
         "bundle",
         "bundle-index",
+        "publication-metadata-bundle",
         "release",
         "release-catalog",
         "release-catalog-index",
@@ -34,6 +35,7 @@
       "properties": {
         "bundle": {"type": "integer", "minimum": 0},
         "bundle-index": {"type": "integer", "minimum": 0},
+        "publication-metadata-bundle": {"type": "integer", "minimum": 0},
         "release": {"type": "integer", "minimum": 0},
         "release-catalog": {"type": "integer", "minimum": 0},
         "release-catalog-index": {"type": "integer", "minimum": 0},
@@ -92,6 +94,7 @@
             "enum": [
               "bundle",
               "bundle-index",
+              "publication-metadata-bundle",
               "release",
               "release-catalog",
               "release-catalog-index",
