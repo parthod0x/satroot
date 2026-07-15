@@ -2957,6 +2957,49 @@ def test_cli_bootstrap_release_catalog_publication_from_release_json_inputs(tmp_
     assert catalog["catalog"]["label"] == "SATROOT Catalog of Releases via JSON"
 
 
+def test_cli_publish_release_catalog_from_exported_preset_round_trip(tmp_path):
+    release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
+    output_dir = tmp_path / "release_catalog_roundtrip"
+    preset_path = tmp_path / "exported_release_catalog.json"
+
+    assert main(["export-release-catalog-preset", str(release_catalog_dir), "--output", str(preset_path)]) == 0
+
+    assert (
+        main(
+            [
+                "publish-release-catalog",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Roundtrip Release Catalog Publication",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_manifest.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Roundtrip Release Catalog Publication"
+    assert manifest["release_count"] == 2
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert verified["release_count"] == 2
+
+
 def test_cli_bootstrap_release_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
     stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
     preset_path = tmp_path / "release_catalog_preset.json"
@@ -3377,6 +3420,59 @@ def test_cli_bootstrap_release_catalog_index_publication_from_catalog_json_input
     index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
     assert index["release_catalog_count"] == 2
     assert index["index"]["label"] == "SATROOT Catalog Network via JSON"
+
+
+def test_cli_publish_release_catalog_index_from_exported_preset_round_trip(tmp_path):
+    release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
+    output_dir = tmp_path / "release_catalog_index_roundtrip"
+    preset_path = tmp_path / "exported_release_catalog_index.json"
+
+    assert (
+        main(
+            [
+                "export-release-catalog-index-preset",
+                str(release_catalog_index_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        main(
+            [
+                "publish-release-catalog-index",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "network",
+                "--label",
+                "Roundtrip Release Catalog Index Publication",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_index_manifest.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Roundtrip Release Catalog Index Publication"
+    assert manifest["release_catalog_count"] == 2
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"index-key": "index-secret"}),
+    )
+    assert verified["release_catalog_count"] == 2
 
 
 def test_cli_bootstrap_release_catalog_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
@@ -12697,6 +12793,49 @@ def test_cli_publish_release_with_preset_json(tmp_path):
     bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
     assert bundle_index["bundle_count"] == 2
     assert bundle_index["release"]["label"] == "Preset Publish Release"
+
+
+def test_cli_publish_release_from_exported_preset_round_trip(tmp_path):
+    source_release_dir, _other_release_dir = make_demo_release_dirs(tmp_path)
+    release_dir = tmp_path / "release_roundtrip"
+    preset_path = tmp_path / "exported_bundle_index.json"
+
+    assert main(["export-bundle-index-preset", str(source_release_dir), "--output", str(preset_path)]) == 0
+
+    assert (
+        main(
+            [
+                "publish-release",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(release_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Roundtrip Publish Release",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 1
+    assert bundle_index["release"]["label"] == "Roundtrip Publish Release"
+    assert release_manifest["bundle_count"] == 1
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
+    )
+    assert summary["bundle_count"] == 1
 
 
 def test_cli_bootstrap_release_publication(tmp_path, capsys):
