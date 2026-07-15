@@ -1070,6 +1070,10 @@ For repeatable metadata-catalog packaging, that same command can also load a pre
 satroot1 bootstrap-publication-metadata-catalog-publication --preset-json examples/publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json --output-dir publication_metadata_catalog_publication --label "SATROOT Metadata Catalog Override" --scheme hmac-sha256 --key-id catalog-key
 ```
 
+```bash
+satroot1 bootstrap-machine-publication-metadata-catalog-publication --preset-json examples/publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json --output-dir machine_publication_metadata_catalog_publication --label "SATROOT Machine Metadata Catalog Override" --scheme hmac-sha256 --key-id catalog-key
+```
+
 To verify that catalog later:
 
 ```bash
@@ -1138,6 +1142,10 @@ For a checked-in repeatable top-level registry publication, use the publication 
 
 ```bash
 satroot1 bootstrap-publication-registry-publication --preset-json examples/registry_presets/ai_compute_publication_registry.json --output-dir publication_registry_publication --label "SATROOT Publication Registry Override" --scheme hmac-sha256 --key-id registry-key
+```
+
+```bash
+satroot1 bootstrap-machine-publication-registry-publication --preset-json examples/registry_presets/ai_compute_publication_registry.json --output-dir machine_publication_registry_publication --label "SATROOT Machine Registry Override" --scheme hmac-sha256 --key-id registry-key
 ```
 
 To verify that registry later:

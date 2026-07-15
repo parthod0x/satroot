@@ -7863,6 +7863,54 @@ def test_cli_bootstrap_machine_publication_metadata_catalog_publication(tmp_path
     assert verified["index"] == catalog["index"]
 
 
+def test_cli_bootstrap_machine_publication_metadata_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(tmp_path)
+    preset_path = tmp_path / "machine_publication_metadata_catalog_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET",
+            "version": "0.1",
+            "publication_metadata_bundle_dirs": [
+                str(Path(workspace_bundle_dir).relative_to(tmp_path)),
+                str(Path(catalog_bundle_dir).relative_to(tmp_path)),
+            ],
+            "catalog": {
+                "channel": "machine",
+                "label": "Preset Machine Metadata Catalog",
+                "published_at": "2026-07-14T05:45:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_publication_metadata_catalog_preset_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-metadata-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--label",
+            "CLI Machine Metadata Catalog Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["index"]["channel"] == "machine"
+    assert catalog["index"]["label"] == "CLI Machine Metadata Catalog Override"
+    assert catalog["index"]["published_at"] == "2026-07-14T05:45:00Z"
+
+
 def test_cli_bootstrap_publication_metadata_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
     _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
     preset_path = tmp_path / "publication_metadata_catalog_preset.json"
@@ -8338,6 +8386,53 @@ def test_cli_bootstrap_publication_registry_publication_with_preset_json_and_cli
     assert registry["index"]["channel"] == "mesh"
     assert registry["index"]["label"] == "CLI Publication Registry Override"
     assert registry["index"]["published_at"] == "2026-07-08T06:00:00Z"
+
+
+def test_cli_bootstrap_machine_publication_registry_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "machine_publication_registry_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
+            "version": "0.1",
+            "release_catalog_index_dir": str(Path(release_catalog_index_dir).relative_to(tmp_path)),
+            "publication_descriptor_index_dir": str(Path(descriptor_index_dir).relative_to(tmp_path)),
+            "publication_metadata_catalog_dir": str(Path(metadata_catalog_dir).relative_to(tmp_path)),
+            "registry": {
+                "channel": "machine",
+                "label": "Preset Machine Publication Registry",
+                "published_at": "2026-07-14T06:45:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_publication_registry_preset_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-registry-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+            "--label",
+            "CLI Machine Publication Registry Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["channel"] == "machine"
+    assert registry["index"]["label"] == "CLI Machine Publication Registry Override"
+    assert registry["index"]["published_at"] == "2026-07-14T06:45:00Z"
 
 
 def test_cli_validate_and_verify_publication_registry_manifest(tmp_path, capsys):
