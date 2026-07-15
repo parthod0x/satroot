@@ -7199,6 +7199,52 @@ def test_cli_bootstrap_publication_descriptor_index_publication_with_preset_json
     assert index["index"]["published_at"] == "2026-07-08T02:30:00Z"
 
 
+def test_cli_bootstrap_machine_publication_descriptor_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "machine_publication_descriptor_index_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET",
+            "version": "0.1",
+            "artifact_paths": [str(Path(machine_catalog_workspace_dir).relative_to(tmp_path))],
+            "index": {
+                "channel": "machine",
+                "label": "Preset Machine Descriptor Index",
+                "published_at": "2026-07-14T04:45:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_publication_descriptor_index_publication_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-descriptor-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "CLI Machine Descriptor Index Override",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert index["index"]["channel"] == "machine"
+    assert index["index"]["label"] == "CLI Machine Descriptor Index Override"
+    assert index["index"]["published_at"] == "2026-07-14T04:45:00Z"
+
+
 def test_build_and_verify_signed_publication_metadata_manifest_hmac(tmp_path):
     release_dir, _ = make_demo_release_dirs(tmp_path)
     report_path = tmp_path / "publication_report.md"

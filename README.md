@@ -1012,6 +1012,10 @@ For repeatable descriptor-index packaging, that same command can also load a pre
 satroot1 bootstrap-publication-descriptor-index-publication --preset-json examples/publication_descriptor_index_presets/ai_compute_publication_descriptor_index.json --output-dir publication_descriptor_index_publication --label "SATROOT Descriptor Publication Override" --scheme hmac-sha256 --key-id descriptor-key
 ```
 
+```bash
+satroot1 bootstrap-machine-publication-descriptor-index-publication --preset-json examples/publication_descriptor_index_presets/ai_compute_publication_descriptor_index.json --output-dir machine_publication_descriptor_index_publication --label "SATROOT Machine Descriptor Publication Override" --scheme hmac-sha256 --key-id descriptor-key
+```
+
 To bootstrap a signed publication report plus descriptor bundle for one artifact:
 
 ```bash
