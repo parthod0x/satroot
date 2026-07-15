@@ -951,7 +951,7 @@ To render a human-readable markdown report for a generated SATROOT artifact or w
 satroot1 render-publication-report publication_network
 ```
 
-The report renderer auto-detects bundle, release, release-catalog, release-catalog-index, publication-descriptor-index, publication-metadata-catalog, demo-catalog, publication-stack, publication-network, publication-catalog-workspace, publication-registry-workspace, and publication-registry inputs, and it can also write to a file:
+The report renderer auto-detects bundle, bundle-index, release, release-catalog, release-catalog-index, publication-descriptor-index, publication-metadata-catalog, demo-catalog, publication-stack, publication-network, publication-catalog-workspace, publication-registry-workspace, and publication-registry inputs, and it can also write to a file:
 
 ```bash
 satroot1 render-publication-report stable_release --output stable_release_report.md
@@ -961,6 +961,12 @@ For a normalized machine-readable export of the same detected artifact metadata,
 
 ```bash
 satroot1 export-publication-descriptor publication_network --output publication_network_descriptor.json
+```
+
+That same descriptor export path also accepts raw `bundle_index.json` inputs or directories that contain them:
+
+```bash
+satroot1 export-publication-descriptor bundle_index.json --output bundle_index_descriptor.json
 ```
 
 To aggregate many detected artifacts into one descriptor registry, use `build-publication-descriptor-index`:

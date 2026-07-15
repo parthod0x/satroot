@@ -24,6 +24,7 @@
     "artifact_kind": {
       "enum": [
         "bundle",
+        "bundle-index",
         "release",
         "release-catalog",
         "release-catalog-index",

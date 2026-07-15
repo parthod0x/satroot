@@ -3197,6 +3197,34 @@ def discover_signed_release_publication_dirs(
     return sorted(discovered.values())
 
 
+def discover_bundle_index_artifact_dirs(
+    search_roots: Sequence[str | Path],
+    *,
+    recursive: bool = True,
+) -> list[str]:
+    if not search_roots:
+        raise SatRootError("at least one bundle index discovery root is required")
+
+    discovered: Dict[str, str] = {}
+    for search_root in search_roots:
+        root_path = Path(search_root).resolve()
+        if not root_path.exists():
+            raise SatRootError(f"bundle index discovery root not found: {search_root}")
+        if not root_path.is_dir():
+            raise SatRootError(f"bundle index discovery root must be a directory: {search_root}")
+
+        index_paths = root_path.rglob("bundle_index.json") if recursive else root_path.glob("bundle_index.json")
+        for index_path in index_paths:
+            bundle_index_dir = index_path.parent.resolve()
+            if (bundle_index_dir / "release_manifest.json").is_file():
+                continue
+            discovered.setdefault(str(bundle_index_dir), str(bundle_index_dir))
+
+    if not discovered:
+        raise SatRootError("no standalone bundle index directories found under the provided discovery roots")
+    return sorted(discovered.values())
+
+
 def _normalize_release_publication_input(path: str | Path) -> str:
     candidate_path = Path(path).resolve()
     if candidate_path.is_dir():
@@ -5388,6 +5416,9 @@ def _require_machine_satroot_artifact_path(
 
     if artifact_kind == "bundle":
         _require_machine_bundle_directory(resolved_path, label=label)
+        return
+    if artifact_kind == "bundle-index":
+        _require_machine_bundle_index_json(resolved_path / "bundle_index.json", label=label)
         return
     if artifact_kind == "release":
         _require_machine_release_publication(resolved_path, label=label)
@@ -9426,6 +9457,7 @@ def inventory_workspace_artifacts(
         raise SatRootError("inventory-artifacts requires at least one directory path or --discover-under root")
 
     bundle_dirs = _discover_optional_paths(discover_signed_ledger_bundle_dirs, resolved_search_roots, recursive=recursive)
+    bundle_index_dirs = _discover_optional_paths(discover_bundle_index_artifact_dirs, resolved_search_roots, recursive=recursive)
     release_dirs = _discover_optional_paths(discover_signed_release_publication_dirs, resolved_search_roots, recursive=recursive)
     release_catalog_dirs = _discover_optional_paths(discover_signed_release_catalog_publication_dirs, resolved_search_roots, recursive=recursive)
     release_catalog_index_dirs = _discover_optional_paths(discover_signed_release_catalog_index_publication_dirs, resolved_search_roots, recursive=recursive)
@@ -9467,6 +9499,21 @@ def inventory_workspace_artifacts(
                 "profile": final_snapshot.get("profile"),
                 "record_count": bundle_summary.get("record_count"),
                 "verification_material_scope": bundle_summary.get("verification_material_scope"),
+            }
+        )
+
+    bundle_index_entries: list[Dict[str, Any]] = []
+    for bundle_index_dir in bundle_index_dirs:
+        bundle_index_summary = summarize_bundle_index_artifact(bundle_index_dir)
+        bundle_index_entries.append(
+            {
+                "bundle_index_dir": str(Path(bundle_index_dir).resolve()),
+                "bundle_count": bundle_index_summary.get("bundle_count"),
+                "release": copy.deepcopy(bundle_index_summary.get("release")),
+                "bundle_symbols": copy.deepcopy(bundle_index_summary.get("bundle_symbols")),
+                "bundle_root_ids": copy.deepcopy(bundle_index_summary.get("bundle_root_ids")),
+                "bundle_index_path": bundle_index_summary.get("bundle_index_path"),
+                "bundle_index_hash": bundle_index_summary.get("bundle_index_hash"),
             }
         )
 
@@ -9641,6 +9688,7 @@ def inventory_workspace_artifacts(
         "search_roots": resolved_search_roots,
         "recursive": recursive,
         "bundle_count": len(bundle_entries),
+        "bundle_index_count": len(bundle_index_entries),
         "release_count": len(release_entries),
         "release_catalog_count": len(release_catalog_entries),
         "release_catalog_index_count": len(release_catalog_index_entries),
@@ -9653,6 +9701,7 @@ def inventory_workspace_artifacts(
         "publication_catalog_workspace_count": len(publication_catalog_workspace_entries),
         "publication_registry_workspace_count": len(publication_registry_workspace_entries),
         "bundles": bundle_entries,
+        "bundle_indexes": bundle_index_entries,
         "releases": release_entries,
         "release_catalogs": release_catalog_entries,
         "release_catalog_indexes": release_catalog_index_entries,
@@ -10412,6 +10461,8 @@ def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
                 return "demo-catalog", parent
         if name == "bundle_manifest.json":
             return "bundle", parent
+        if name == "bundle_index.json":
+            return "bundle-index", parent
         if name == "release_manifest.json":
             return "release", parent
         if name == "release_catalog_manifest.json":
@@ -10446,6 +10497,8 @@ def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
         return "release-catalog", resolved_path
     if (resolved_path / "release_manifest.json").is_file():
         return "release", resolved_path
+    if (resolved_path / "bundle_index.json").is_file():
+        return "bundle-index", resolved_path
     if (resolved_path / "bundle_manifest.json").is_file():
         return "bundle", resolved_path
     raise SatRootError(f"unable to detect SATROOT artifact kind at: {resolved_path}")
@@ -10481,6 +10534,20 @@ def build_satroot_artifact_descriptor(path: str | Path) -> Dict[str, Any]:
                 "verification_material_scope": summary.get("verification_material_scope"),
                 "final_event_id": summary.get("final_event_id"),
                 "final_state_hash": summary.get("final_state_hash"),
+            }
+        )
+        return descriptor
+
+    if kind == "bundle-index":
+        summary = summarize_bundle_index_artifact(artifact_path)
+        descriptor.update(
+            {
+                "bundle_count": summary.get("bundle_count"),
+                "release": copy.deepcopy(summary.get("release")),
+                "bundle_symbols": copy.deepcopy(summary.get("bundle_symbols")),
+                "bundle_root_ids": copy.deepcopy(summary.get("bundle_root_ids")),
+                "bundle_index_path": summary.get("bundle_index_path"),
+                "bundle_index_hash": summary.get("bundle_index_hash"),
             }
         )
         return descriptor
@@ -10662,6 +10729,7 @@ def validate_publication_descriptor_consistency(descriptor: Mapping[str, Any]) -
     artifact_kind = descriptor.get("artifact_kind")
     if artifact_kind not in {
         "bundle",
+        "bundle-index",
         "release",
         "release-catalog",
         "release-catalog-index",
@@ -10701,6 +10769,8 @@ def discover_satroot_artifact_paths(
 
     for artifact_path in _discover_optional_paths(discover_signed_ledger_bundle_dirs, resolved_search_roots, recursive=recursive):
         add_artifact("bundle", artifact_path)
+    for artifact_path in _discover_optional_paths(discover_bundle_index_artifact_dirs, resolved_search_roots, recursive=recursive):
+        add_artifact("bundle-index", artifact_path)
     for artifact_path in _discover_optional_paths(discover_signed_release_publication_dirs, resolved_search_roots, recursive=recursive):
         add_artifact("release", artifact_path)
     for artifact_path in _discover_optional_paths(discover_signed_release_catalog_publication_dirs, resolved_search_roots, recursive=recursive):
@@ -10771,6 +10841,7 @@ def build_satroot_publication_descriptor_index(
 
     kind_order = [
         "bundle",
+        "bundle-index",
         "release",
         "release-catalog",
         "release-catalog-index",
@@ -10818,6 +10889,7 @@ def validate_publication_descriptor_index_consistency(index: Mapping[str, Any]) 
 
     required_kinds = [
         "bundle",
+        "bundle-index",
         "release",
         "release-catalog",
         "release-catalog-index",
@@ -11367,6 +11439,7 @@ def build_publication_metadata_catalog(
 
     kind_order = [
         "bundle",
+        "bundle-index",
         "release",
         "release-catalog",
         "release-catalog-index",
@@ -11414,6 +11487,7 @@ def validate_publication_metadata_catalog_consistency(catalog: Mapping[str, Any]
 
     required_kinds = [
         "bundle",
+        "bundle-index",
         "release",
         "release-catalog",
         "release-catalog-index",
@@ -12042,6 +12116,27 @@ def render_satroot_artifact_report(path: str | Path) -> str:
                 "",
             ]
         )
+        return "\n".join(lines)
+
+    if kind == "bundle-index":
+        summary = summarize_bundle_index_artifact(artifact_path)
+        release_metadata = summary.get("release")
+        lines.extend(
+            [
+                "# SATROOT Bundle Index Report",
+                "",
+                f"- Path: `{artifact_path}`",
+                f"- Bundle count: `{summary.get('bundle_count')}`",
+                f"- Bundle index hash: `{summary.get('bundle_index_hash')}`",
+            ]
+        )
+        if isinstance(release_metadata, Mapping):
+            _append_metadata_lines(lines, release_metadata, [("channel", "Channel"), ("label", "Label"), ("published_at", "Published at")])
+        bundle_symbols = summary.get("bundle_symbols")
+        if isinstance(bundle_symbols, list):
+            lines.extend(["", "## Bundles", ""])
+            lines.extend(f"- `{symbol}`" for symbol in bundle_symbols if isinstance(symbol, str))
+        lines.append("")
         return "\n".join(lines)
 
     if kind == "release":

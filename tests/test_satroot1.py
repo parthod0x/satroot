@@ -196,6 +196,32 @@ def make_machine_release_dirs(tmp_path: Path) -> tuple[str, str]:
     return alpha["release_dir"], beta["release_dir"]
 
 
+def make_standalone_bundle_index_dir(tmp_path: Path) -> Path:
+    bundle_root = tmp_path / "bundle_index_workspace"
+    bundle_dir = bundle_root / "bundle"
+    index_path = bundle_root / "bundle_index.json"
+    events_path = bundle_root / "events.json"
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+    events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(events_path), "--scheme", "hmac-sha256", "--output-dir", str(bundle_dir)]) == 0
+    assert main(
+        [
+            "build-bundle-index",
+            str(bundle_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Standalone Bundle Index",
+            "--published-at",
+            "2026-07-15T02:00:00Z",
+            "--output",
+            str(index_path),
+        ]
+    ) == 0
+    return bundle_root
+
+
 def make_demo_release_catalog_dir(tmp_path: Path) -> Path:
     stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
     output_dir = tmp_path / "release_catalog_publication"
@@ -5609,6 +5635,19 @@ def test_cli_inventory_artifacts_reports_publication_components_recursively(tmp_
     assert '"publication_registry_count":1' in captured.out
 
 
+def test_cli_inventory_artifacts_reports_standalone_bundle_index(tmp_path, capsys):
+    bundle_index_dir = make_standalone_bundle_index_dir(tmp_path)
+
+    exit_code = main(["inventory-artifacts", str(bundle_index_dir), "--non-recursive"])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"bundle_index_count":1' in captured.out
+    assert '"release_count":0' in captured.out
+    assert '"bundle_count":1' in captured.out
+    assert '"bundle_symbols":["FLOOR1"]' in captured.out
+
+
 def test_cli_export_demo_catalog_preset_from_workspace(tmp_path):
     output_dir = make_demo_catalog_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_catalog.json"
@@ -6477,6 +6516,20 @@ def test_cli_render_publication_report_for_release(tmp_path, capsys):
     assert "- `RELSTB1`" in captured.out
 
 
+def test_cli_render_publication_report_for_bundle_index(tmp_path, capsys):
+    bundle_index_dir = make_standalone_bundle_index_dir(tmp_path)
+
+    exit_code = main(["render-publication-report", str(bundle_index_dir / "bundle_index.json")])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "# SATROOT Bundle Index Report" in captured.out
+    assert "- Bundle count: `1`" in captured.out
+    assert "- Label: `Standalone Bundle Index`" in captured.out
+    assert "## Bundles" in captured.out
+    assert "- `FLOOR1`" in captured.out
+
+
 def test_cli_render_publication_report_for_registry(tmp_path, capsys):
     registry_dir = make_publication_registry_dir(tmp_path)
 
@@ -6648,6 +6701,21 @@ def test_cli_export_publication_descriptor_for_release(tmp_path):
     assert descriptor["bundle_symbols"] == ["RELSTB1"]
 
 
+def test_cli_export_publication_descriptor_for_bundle_index(tmp_path):
+    bundle_index_dir = make_standalone_bundle_index_dir(tmp_path)
+    output_path = tmp_path / "bundle_index_descriptor.json"
+
+    exit_code = main(["export-publication-descriptor", str(bundle_index_dir / "bundle_index.json"), "--output", str(output_path)])
+    assert exit_code == 0
+
+    descriptor = json.loads(output_path.read_text(encoding="utf-8"))
+    assert descriptor["descriptor_type"] == "SATROOT-ARTIFACT-DESCRIPTOR"
+    assert descriptor["artifact_kind"] == "bundle-index"
+    assert descriptor["bundle_count"] == 1
+    assert descriptor["release"]["label"] == "Standalone Bundle Index"
+    assert descriptor["bundle_symbols"] == ["FLOOR1"]
+
+
 def test_cli_build_publication_descriptor_index_recursive(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_path = tmp_path / "descriptor_index.json"
@@ -6680,6 +6748,20 @@ def test_cli_build_publication_descriptor_index_recursive(tmp_path):
     assert index["artifact_kind_counts"]["publication-stack"] == 2
     assert index["artifact_kind_counts"]["publication-network"] == 1
     assert index["index"]["label"] == "SATROOT Descriptor Index"
+
+
+def test_cli_build_publication_descriptor_index_discovers_standalone_bundle_index(tmp_path):
+    bundle_index_dir = make_standalone_bundle_index_dir(tmp_path)
+    output_path = tmp_path / "bundle_index_descriptor_index.json"
+
+    exit_code = main(["build-publication-descriptor-index", "--discover-under", str(bundle_index_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 2
+    assert index["artifact_kind_counts"]["bundle"] == 1
+    assert index["artifact_kind_counts"]["bundle-index"] == 1
+    assert {entry["artifact_kind"] for entry in index["artifacts"]} == {"bundle", "bundle-index"}
 
 
 def test_cli_build_publication_descriptor_index_non_recursive(tmp_path):
@@ -7208,6 +7290,31 @@ def test_cli_build_publication_metadata_catalog_recursive(tmp_path):
     assert catalog["artifact_kind_counts"]["release"] == 1
     assert catalog["artifact_kind_counts"]["publication-network"] == 1
     assert catalog["index"]["label"] == "SATROOT Metadata Catalog"
+
+
+def test_cli_build_publication_metadata_catalog_accepts_bundle_index_bundles(tmp_path):
+    bundle_index_dir = make_standalone_bundle_index_dir(tmp_path)
+    metadata_bundle_dir = tmp_path / "bundle_index_metadata_bundle"
+    catalog_path = tmp_path / "bundle_index_metadata_catalog.json"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(bundle_index_dir / "bundle_index.json"),
+            "--output-dir",
+            str(metadata_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(["build-publication-metadata-catalog", str(metadata_bundle_dir), "--output", str(catalog_path)]) == 0
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 1
+    assert catalog["artifact_kind_counts"]["bundle-index"] == 1
+    assert catalog["bundles"][0]["artifact_kind"] == "bundle-index"
 
 
 def test_cli_build_machine_publication_metadata_catalog(tmp_path):
