@@ -8933,10 +8933,22 @@ def publish_machine_publication_registry_workspace(
     publication_registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     source_publication_catalog_workspace_dir = Path(publication_catalog_workspace_dir).resolve()
+    resolved_release_catalog_index_dir = Path(release_catalog_index_dir).resolve()
     _require_machine_publication_catalog_workspace(
         source_publication_catalog_workspace_dir,
         label="machine publication registry publishing source publication catalog workspace",
     )
+    _require_machine_release_catalog_index_json(
+        resolved_release_catalog_index_dir / "release_catalog_index.json"
+        if resolved_release_catalog_index_dir.is_dir()
+        else resolved_release_catalog_index_dir,
+        label="machine publication registry publishing source release catalog index",
+    )
+    if publication_network_dir is not None:
+        _require_machine_publication_network_workspace(
+            publication_network_dir,
+            label="machine publication registry publishing source publication network workspace",
+        )
     _source_workspace_path, source_summary = _load_workspace_summary(
         source_publication_catalog_workspace_dir,
         label="machine publication registry publishing source publication catalog workspace",
@@ -8945,7 +8957,7 @@ def publish_machine_publication_registry_workspace(
 
     published = publish_publication_registry_workspace(
         publication_catalog_workspace_dir=source_publication_catalog_workspace_dir,
-        release_catalog_index_dir=release_catalog_index_dir,
+        release_catalog_index_dir=resolved_release_catalog_index_dir,
         publication_network_dir=publication_network_dir,
         output_dir=output_dir,
         signature_scheme=signature_scheme,

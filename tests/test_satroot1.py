@@ -5058,7 +5058,58 @@ def test_cli_publish_publication_registry_workspace_from_release_catalog_index(t
 
 
 def test_cli_publish_machine_publication_registry_workspace_from_existing_catalog_workspace(tmp_path, capsys):
-    network_dir = make_demo_publication_network_dir(tmp_path)
+    machine_catalog_preset = tmp_path / "machine_registry_catalog.json"
+    write_json(
+        machine_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MREGNW1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Registry Network Catalog"},
+            "release": {
+                "channel": "machine",
+                "label": "Machine Registry Network Release",
+                "published_at": "2026-07-06T05:40:00Z",
+            },
+        },
+    )
+    stack_preset = tmp_path / "machine_registry_stack.json"
+    write_json(
+        stack_preset,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(machine_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "machine",
+                "label": "Machine Registry Network Stack",
+                "published_at": "2026-07-06T05:45:00Z",
+            },
+        },
+    )
+    network_dir = tmp_path / "machine_registry_network"
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--stack-preset-json",
+            str(stack_preset),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--label",
+            "Machine Registry Network",
+        ]
+    ) == 0
+    capsys.readouterr()
+
     catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
     output_dir = tmp_path / "published_machine_registry_workspace"
 
@@ -5091,6 +5142,137 @@ def test_cli_publish_machine_publication_registry_workspace_from_existing_catalo
     assert summary["publication_registry"]["index"]["label"] == "Published Machine Registry Workspace"
     assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_registry_workspace_from_release_catalog_index(tmp_path, capsys):
+    machine_catalog_preset = tmp_path / "machine_registry_index_catalog.json"
+    write_json(
+        machine_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MREGIX1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Registry Index Catalog"},
+            "release": {
+                "channel": "machine",
+                "label": "Machine Registry Index Release",
+                "published_at": "2026-07-06T05:50:00Z",
+            },
+        },
+    )
+    stack_preset = tmp_path / "machine_registry_index_stack.json"
+    write_json(
+        stack_preset,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(machine_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "machine",
+                "label": "Machine Registry Index Stack",
+                "published_at": "2026-07-06T05:55:00Z",
+            },
+        },
+    )
+    network_dir = tmp_path / "machine_registry_index_network"
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--stack-preset-json",
+            str(stack_preset),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--label",
+            "Machine Registry Index Network",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    release_catalog_index_dir = network_dir / "release_catalog_index"
+    catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "published_machine_registry_workspace_release_index"
+
+    exit_code = main(
+        [
+            "publish-machine-publication-registry-workspace",
+            str(catalog_workspace_dir),
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Published Machine Registry Workspace From Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication registry workspace from existing publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_machine_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_machine_catalog_workspace_dir"] == str((catalog_workspace_dir / "machine_catalog_workspace").resolve())
+    assert summary["source_publication_network_dir"] is None
+    assert summary["publication_network_dir"] == str((output_dir / "publication_network").resolve())
+    assert Path(summary["release_catalog_index_dir"]) == (output_dir / "publication_network" / "release_catalog_index").resolve()
+    assert summary["publication_registry"]["index"]["label"] == "Published Machine Registry Workspace From Index"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_registry_workspace_rejects_generic_release_catalog_index(tmp_path):
+    catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-publication-registry-workspace",
+                str(catalog_workspace_dir),
+                "--release-catalog-index-dir",
+                str(network_dir / "release_catalog_index"),
+                "--scheme",
+                "hmac-sha256",
+                "--publication-registry-key-id",
+                "registry-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist_index"),
+            ]
+        )
+
+
+def test_cli_publish_machine_publication_registry_workspace_rejects_generic_publication_network(tmp_path):
+    catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-publication-registry-workspace",
+                str(catalog_workspace_dir),
+                "--publication-network-dir",
+                str(network_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--publication-registry-key-id",
+                "registry-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist_network"),
+            ]
+        )
 
 
 def test_cli_publish_machine_publication_registry_workspace_rejects_generic_catalog_workspace(tmp_path):
