@@ -8904,6 +8904,10 @@ def publish_machine_publication_catalog_workspace(
     publication_metadata_catalog_dir: str | Path,
     output_dir: str | Path,
 ) -> Dict[str, Any]:
+    _require_machine_publication_descriptor_index_publication(
+        publication_descriptor_index_dir,
+        label="machine publication catalog publishing source publication descriptor index",
+    )
     machine_workspace_dirs = _find_machine_demo_catalog_workspace_dirs_from_publication_metadata_catalog(
         publication_metadata_catalog_dir,
         label="machine publication catalog publishing source publication metadata catalog",

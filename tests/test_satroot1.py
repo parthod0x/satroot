@@ -5021,6 +5021,26 @@ def test_cli_publish_machine_publication_catalog_workspace_rejects_generic_publi
         )
 
 
+def test_cli_publish_machine_publication_catalog_workspace_rejects_generic_descriptor_index(tmp_path):
+    generic_root = tmp_path / "generic_root"
+    machine_root = tmp_path / "machine_root"
+    generic_root.mkdir()
+    machine_root.mkdir()
+    generic_workspace_dir = make_publication_catalog_workspace_dir(generic_root)
+    machine_workspace_dir = make_machine_publication_catalog_workspace_dir(machine_root)
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1"):
+        main(
+            [
+                "publish-machine-publication-catalog-workspace",
+                str(generic_workspace_dir / "publication_descriptor_index"),
+                str(machine_workspace_dir / "publication_metadata_catalog"),
+                "--output-dir",
+                str(tmp_path / "should_not_exist_mixed_descriptor"),
+            ]
+        )
+
+
 def test_cli_publish_publication_registry_workspace_from_release_catalog_index(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
