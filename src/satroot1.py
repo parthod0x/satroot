@@ -11231,6 +11231,37 @@ def verify_signed_publication_metadata_manifest(
     }
 
 
+def _require_machine_publication_metadata_artifact_inputs(
+    publication_report_path: str | Path,
+    publication_descriptor_json: str | Path,
+    *,
+    label: str,
+) -> None:
+    report_path = Path(publication_report_path).resolve()
+    if not report_path.is_file():
+        raise SatRootError(f"{label} publication report file must exist")
+
+    descriptor_path = Path(publication_descriptor_json).resolve()
+    descriptor = _load_json_object_file(str(descriptor_path), label="publication descriptor")
+    validate_publication_descriptor_consistency(descriptor)
+
+    artifact_path = descriptor.get("artifact_path")
+    assert isinstance(artifact_path, str)
+    _require_machine_satroot_artifact_path(
+        artifact_path,
+        label=f"{label} source artifact",
+    )
+
+    expected_descriptor = build_satroot_artifact_descriptor(artifact_path)
+    if descriptor != expected_descriptor:
+        raise SatRootError(f"{label} publication descriptor must match the current machine artifact descriptor")
+
+    expected_report = render_satroot_artifact_report(artifact_path)
+    actual_report = report_path.read_text(encoding="utf-8")
+    if actual_report != expected_report:
+        raise SatRootError(f"{label} publication report must match the current machine artifact report")
+
+
 def bootstrap_publication_metadata_bundle(
     artifact_path: str | Path,
     *,
@@ -13485,6 +13516,17 @@ def build_cli_parser() -> Any:
     build_publication_metadata_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
     build_publication_metadata_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-manifest signing")
     build_publication_metadata_manifest_parser.add_argument("--output", help="Optional output path")
+
+    build_machine_publication_metadata_manifest_parser = subparsers.add_parser("build-machine-publication-metadata-manifest", help="Build a signed machine-only SATROOT publication metadata manifest from a machine report and descriptor pair")
+    build_machine_publication_metadata_manifest_parser.add_argument("publication_report_path", help="Path to publication_report.md")
+    build_machine_publication_metadata_manifest_parser.add_argument("publication_descriptor_json", help="Path to publication_descriptor.json")
+    build_machine_publication_metadata_manifest_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    build_machine_publication_metadata_manifest_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication metadata manifest")
+    build_machine_publication_metadata_manifest_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    build_machine_publication_metadata_manifest_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-metadata-manifest signing")
+    build_machine_publication_metadata_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    build_machine_publication_metadata_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-manifest signing")
+    build_machine_publication_metadata_manifest_parser.add_argument("--output", help="Optional output path")
 
     build_publication_metadata_catalog_parser = subparsers.add_parser("build-publication-metadata-catalog", help="Build a SATROOT publication metadata catalog from one or more publication metadata bundle directories")
     build_publication_metadata_catalog_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with bundle paths, discovery roots, and catalog metadata defaults")
@@ -16040,6 +16082,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         signer = _release_manifest_signer_from_args(args)
+        manifest = build_signed_publication_metadata_manifest(
+            args.publication_report_path,
+            args.publication_descriptor_json,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            base_dir=base_dir,
+        )
+        _write_output(manifest, output_path)
+        return 0
+
+    if args.command == "build-machine-publication-metadata-manifest":
+        output_path = args.output
+        base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+        signer = _release_manifest_signer_from_args(args)
+        _require_machine_publication_metadata_artifact_inputs(
+            args.publication_report_path,
+            args.publication_descriptor_json,
+            label="machine publication metadata manifest",
+        )
         manifest = build_signed_publication_metadata_manifest(
             args.publication_report_path,
             args.publication_descriptor_json,

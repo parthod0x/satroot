@@ -7231,6 +7231,61 @@ def test_build_and_verify_signed_publication_metadata_manifest_hmac(tmp_path):
     assert summary["publication_descriptor_path"] == "publication_descriptor.json"
 
 
+def test_cli_build_machine_publication_metadata_manifest(tmp_path):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    report_path = tmp_path / "machine_publication_report.md"
+    descriptor_path = tmp_path / "machine_publication_descriptor.json"
+    manifest_path = tmp_path / "machine_publication_metadata_manifest.json"
+
+    assert main(["render-publication-report", str(machine_catalog_workspace_dir), "--output", str(report_path)]) == 0
+    assert main(["export-publication-descriptor", str(machine_catalog_workspace_dir), "--output", str(descriptor_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-machine-publication-metadata-manifest",
+            str(report_path),
+            str(descriptor_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+            "--secret",
+            "metadata-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-metadata-manifest"
+    assert manifest["signature_key_id"] == "metadata-key"
+
+
+def test_cli_build_machine_publication_metadata_manifest_rejects_non_machine_artifact(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    report_path = tmp_path / "publication_report.md"
+    descriptor_path = tmp_path / "publication_descriptor.json"
+
+    assert main(["render-publication-report", str(network_dir), "--output", str(report_path)]) == 0
+    assert main(["export-publication-descriptor", str(network_dir), "--output", str(descriptor_path)]) == 0
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
+        main(
+            [
+                "build-machine-publication-metadata-manifest",
+                str(report_path),
+                str(descriptor_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+                "--secret",
+                "metadata-secret",
+            ]
+        )
+
+
 def test_cli_bootstrap_publication_metadata_bundle(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_metadata_bundle"

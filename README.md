@@ -172,6 +172,7 @@ The v0.1 kernel defines:
 - publication-descriptor-index inspection via `publication-descriptor-index-summary` and structural linting via `publication-descriptor-index-lint`,
 - preset export commands for deriving reusable publication-descriptor-index presets back from generated descriptor index publications,
 - signed publication-metadata-manifest generation for authenticating one artifact's rendered report plus normalized descriptor,
+- `build-machine-publication-metadata-manifest` for signing only machine-validated publication report and descriptor pairs,
 - publication-metadata-bundle inspection via `publication-metadata-bundle-summary` and structural linting via `publication-metadata-bundle-lint`,
 - `bootstrap-machine-publication-metadata-bundle` for generating machine-only publication metadata bundles with SATROOT-MACHINE-1 artifact validation before signing,
 - `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
@@ -1033,6 +1034,10 @@ If those publication metadata bundles must stay entirely inside the SATROOT-MACH
 
 ```bash
 satroot1 bootstrap-machine-publication-metadata-bundle machine_publication_catalog_workspace --output-dir machine_publication_metadata_bundle --scheme hmac-sha256 --key-id metadata-key
+```
+
+```bash
+satroot1 build-machine-publication-metadata-manifest machine_publication_metadata_bundle/publication_report.md machine_publication_metadata_bundle/publication_descriptor.json --scheme hmac-sha256 --key-id metadata-key --secret metadata-secret --output machine_publication_metadata_manifest.json
 ```
 
 ```bash
