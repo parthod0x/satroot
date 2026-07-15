@@ -13596,6 +13596,12 @@ def build_cli_parser() -> Any:
     bootstrap_publication_metadata_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_publication_metadata_bundle_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata manifest")
 
+    bootstrap_machine_publication_metadata_bundle_parser = subparsers.add_parser("bootstrap-machine-publication-metadata-bundle", help="Generate signing material, a publication report, a publication descriptor, and a ready-to-verify machine-only SATROOT publication metadata manifest")
+    bootstrap_machine_publication_metadata_bundle_parser.add_argument("path", help="Path to a machine-only SATROOT artifact file or directory")
+    bootstrap_machine_publication_metadata_bundle_parser.add_argument("--output-dir", required=True, help="Directory where publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json will be written")
+    bootstrap_machine_publication_metadata_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_machine_publication_metadata_bundle_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata manifest")
+
     bootstrap_publication_metadata_catalog_publication_parser = subparsers.add_parser("bootstrap-publication-metadata-catalog-publication", help="Generate signing material and write a ready-to-verify SATROOT publication metadata catalog directory")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with bundle paths, discovery roots, and catalog metadata defaults")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a publication metadata bundle directory")
@@ -16295,6 +16301,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             key_id=args.key_id,
         )
         print(f"wrote bootstrapped SATROOT publication metadata bundle to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-machine-publication-metadata-bundle":
+        _require_machine_satroot_artifact_path(
+            args.path,
+            label="machine publication metadata bundle source artifact",
+        )
+        bootstrap_publication_metadata_bundle(
+            args.path,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+        )
+        print(f"wrote bootstrapped SATROOT-MACHINE-1 publication metadata bundle to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-publication-metadata-catalog-publication":

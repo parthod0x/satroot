@@ -7332,6 +7332,57 @@ def test_cli_bootstrap_publication_metadata_bundle_for_catalog_workspace(tmp_pat
     assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
 
 
+def test_cli_bootstrap_machine_publication_metadata_bundle(tmp_path, capsys):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "machine_publication_metadata_bundle"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-metadata-bundle",
+            str(machine_catalog_workspace_dir),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication metadata bundle to" in captured.out
+
+    descriptor = json.loads((output_dir / "publication_descriptor.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_metadata_secrets.json").read_text(encoding="utf-8"))
+    assert descriptor["artifact_kind"] == "publication-catalog-workspace"
+
+    verified = verify_signed_publication_metadata_manifest(
+        output_dir / "publication_metadata_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["artifact_kind"] == "publication-catalog-workspace"
+
+
+def test_cli_bootstrap_machine_publication_metadata_bundle_rejects_non_machine_artifact(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "machine_publication_metadata_bundle"
+
+    with pytest.raises(SatRootError, match="must contain only SATROOT-MACHINE-1 bundles"):
+        main(
+            [
+                "bootstrap-machine-publication-metadata-bundle",
+                str(network_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+            ]
+        )
+
+
 def test_cli_validate_and_verify_publication_metadata_manifest(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_metadata_bundle"

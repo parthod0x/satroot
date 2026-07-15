@@ -19,6 +19,7 @@
 - Makes raw standalone `bundle_index.json` artifacts first-class detected artifact kinds across inventory, reports, descriptor export, descriptor-index discovery, and publication metadata catalog flows.
 - Makes bootstrapped publication metadata bundles first-class detected artifact kinds across inventory, reports, descriptor export, descriptor-index discovery, and machine-only wrapper flows.
 - Adds `publication-metadata-bundle-summary` and `publication-metadata-bundle-lint` commands for inspecting bootstrapped publication metadata bundles plus packaged artifact drift.
+- Adds `bootstrap-machine-publication-metadata-bundle` for enforcing SATROOT-MACHINE-1 validation before publication metadata bundle signing.
 - Adds a `bootstrap-stable-demo` workflow for generating runnable reference-only SATROOT-STABLE-1 ledgers.
 - Adds a `bootstrap-stable-demo-bundle` workflow for generating signed reference-only SATROOT-STABLE-1 bundles.
 - Adds a `bootstrap-stable-demo-release` workflow for generating signed reference-only SATROOT-STABLE-1 bundles plus release directories.

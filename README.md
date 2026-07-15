@@ -173,6 +173,7 @@ The v0.1 kernel defines:
 - preset export commands for deriving reusable publication-descriptor-index presets back from generated descriptor index publications,
 - signed publication-metadata-manifest generation for authenticating one artifact's rendered report plus normalized descriptor,
 - publication-metadata-bundle inspection via `publication-metadata-bundle-summary` and structural linting via `publication-metadata-bundle-lint`,
+- `bootstrap-machine-publication-metadata-bundle` for generating machine-only publication metadata bundles with SATROOT-MACHINE-1 artifact validation before signing,
 - `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
 - signed publication-metadata-catalog-manifest generation for authenticating publication metadata catalogs,
 - one-shot `bootstrap-publication-metadata-catalog-publication` orchestration for metadata catalogs plus signing material,
@@ -1029,6 +1030,10 @@ satroot1 bootstrap-publication-metadata-catalog-publication --discover-under pub
 ```
 
 If those publication metadata bundles must stay entirely inside the SATROOT-MACHINE-1 lane, the machine-only wrappers validate each nested artifact before building, signing, or bootstrapping the catalog:
+
+```bash
+satroot1 bootstrap-machine-publication-metadata-bundle machine_publication_catalog_workspace --output-dir machine_publication_metadata_bundle --scheme hmac-sha256 --key-id metadata-key
+```
 
 ```bash
 satroot1 build-machine-publication-metadata-catalog machine_publication_metadata_workspace machine_publication_metadata_catalog --channel machine --label "Machine Metadata Catalog" --published-at 2026-07-14T05:00:00Z --output machine_publication_metadata_catalog.json
