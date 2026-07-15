@@ -3083,6 +3083,59 @@ def test_cli_bootstrap_machine_release_catalog_publication_from_release_json_inp
     assert catalog["catalog"]["label"] == "SATROOT Machine Release Catalog via JSON"
 
 
+def test_cli_publish_machine_release_catalog_from_exported_preset_round_trip(tmp_path):
+    catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
+    output_dir = tmp_path / "machine_release_catalog_roundtrip"
+    preset_path = tmp_path / "exported_machine_release_catalog.json"
+
+    assert (
+        main(
+            [
+                "export-machine-release-catalog-preset",
+                str(catalog_alpha_dir / "release_catalog.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        main(
+            [
+                "publish-machine-release-catalog",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Roundtrip Machine Release Catalog Publication",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_manifest.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Roundtrip Machine Release Catalog Publication"
+    assert manifest["release_count"] == 2
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert verified["release_count"] == 2
+
+
 def test_cli_publish_machine_release_catalog_rejects_non_machine_release(tmp_path):
     stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
     output_dir = tmp_path / "mixed_machine_release_catalog"
@@ -3451,6 +3504,59 @@ def test_cli_bootstrap_machine_release_catalog_index_publication_from_catalog_js
     index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
     assert index["release_catalog_count"] == 2
     assert index["index"]["label"] == "SATROOT Machine Catalog Network via JSON"
+
+
+def test_cli_publish_machine_release_catalog_index_from_exported_preset_round_trip(tmp_path):
+    release_catalog_index_dir, _descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "machine_release_catalog_index_roundtrip"
+    preset_path = tmp_path / "exported_machine_release_catalog_index.json"
+
+    assert (
+        main(
+            [
+                "export-machine-release-catalog-index-preset",
+                str(release_catalog_index_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        main(
+            [
+                "publish-machine-release-catalog-index",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Roundtrip Machine Release Catalog Index Publication",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_index_manifest.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Roundtrip Machine Release Catalog Index Publication"
+    assert manifest["release_catalog_count"] == 2
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"index-key": "index-secret"}),
+    )
+    assert verified["release_catalog_count"] == 2
 
 
 def test_cli_publish_machine_release_catalog_index_rejects_non_machine_catalog(tmp_path):
@@ -12729,6 +12835,115 @@ def test_cli_bootstrap_machine_release_publication(tmp_path, capsys):
     )
     assert summary["bundle_count"] == 2
     assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_publish_machine_release_from_exported_preset_round_trip(tmp_path):
+    bundle_alpha_dir = tmp_path / "machine_bundle_alpha"
+    bundle_beta_dir = tmp_path / "machine_bundle_beta"
+    source_release_dir = tmp_path / "machine_release_source"
+    release_dir = tmp_path / "machine_release_roundtrip"
+    preset_path = tmp_path / "exported_machine_bundle_index.json"
+
+    assert (
+        main(
+            [
+                "bootstrap-machine-demo-bundle",
+                "--symbol",
+                "MPUBREL1",
+                "--name",
+                "Machine Publish Release Alpha",
+                "--scheme",
+                "hmac-sha256",
+                "--output-dir",
+                str(bundle_alpha_dir),
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "bootstrap-machine-demo-bundle",
+                "--symbol",
+                "MPUBREL2",
+                "--name",
+                "Machine Publish Release Beta",
+                "--scheme",
+                "hmac-sha256",
+                "--output-dir",
+                str(bundle_beta_dir),
+                "--service-scope",
+                "batch-jobs",
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "bootstrap-machine-release-publication",
+                str(bundle_alpha_dir),
+                str(bundle_beta_dir),
+                "--output-dir",
+                str(source_release_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Machine Publish Release Source",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "export-machine-bundle-index-preset",
+                str(Path(source_release_dir) / "bundle_index.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        main(
+            [
+                "publish-machine-release",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(release_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Roundtrip Machine Release Publication",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 2
+    assert bundle_index["release"]["label"] == "Roundtrip Machine Release Publication"
+    assert release_manifest["bundle_count"] == 2
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
+    )
+    assert summary["bundle_count"] == 2
 
 
 def test_cli_publish_machine_release_rejects_non_machine_bundle(tmp_path):
