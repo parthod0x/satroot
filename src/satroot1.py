@@ -22,7 +22,7 @@ import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence
 
 
 class SatRootError(ValueError):
@@ -1297,6 +1297,126 @@ def _copy_workspace_directory(source_dir: str | Path, target_dir: str | Path, *,
     target_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source_path, target_path)
     return target_path
+
+
+def _copy_workspace_directory_once(
+    source_dir: str | Path,
+    target_dir: str | Path,
+    *,
+    label: str,
+    copied_dirs: MutableMapping[str, str],
+) -> Path:
+    source_path = Path(source_dir).resolve()
+    target_path = Path(target_dir).resolve()
+    cache_key = str(target_path)
+    source_key = str(source_path)
+    existing_source = copied_dirs.get(cache_key)
+    if existing_source is not None:
+        if existing_source != source_key:
+            raise SatRootError(f"conflicting {label} copy target: {target_path}")
+        return target_path
+    copied_path = _copy_workspace_directory(source_path, target_path, label=label)
+    copied_dirs[cache_key] = source_key
+    return copied_path
+
+
+def _relocate_release_publication_dependencies(
+    source_release_dir: str | Path,
+    target_release_dir: str | Path,
+    *,
+    copied_dirs: MutableMapping[str, str],
+) -> Path:
+    source_release_path = Path(source_release_dir).resolve()
+    _copy_workspace_directory_once(
+        source_release_dir,
+        target_release_dir,
+        label="release publication",
+        copied_dirs=copied_dirs,
+    )
+    _manifest_path, bundle_index_path, _manifest, bundle_index = _load_release_publication(source_release_path)
+    bundles = bundle_index.get("bundles")
+    assert isinstance(bundles, list)
+
+    for entry in bundles:
+        if not isinstance(entry, Mapping):
+            raise SatRootError("bundle index bundles must contain objects")
+        bundle_ref = entry.get("bundle_path")
+        if not isinstance(bundle_ref, str) or not bundle_ref.strip():
+            raise SatRootError("bundle index bundle_path must be a non-empty string")
+        source_bundle_dir = (bundle_index_path.parent / bundle_ref).resolve()
+        target_bundle_dir = (Path(target_release_dir).resolve() / bundle_ref).resolve()
+        _copy_workspace_directory_once(
+            source_bundle_dir,
+            target_bundle_dir,
+            label="bundle directory",
+            copied_dirs=copied_dirs,
+        )
+    return Path(target_release_dir).resolve()
+
+
+def _relocate_release_catalog_publication_dependencies(
+    source_release_catalog_dir: str | Path,
+    target_release_catalog_dir: str | Path,
+    *,
+    copied_dirs: MutableMapping[str, str],
+) -> Path:
+    source_catalog_path = Path(source_release_catalog_dir).resolve()
+    _copy_workspace_directory_once(
+        source_release_catalog_dir,
+        target_release_catalog_dir,
+        label="release catalog publication",
+        copied_dirs=copied_dirs,
+    )
+    _manifest_path, release_catalog_path, _manifest, release_catalog = _load_release_catalog_publication(source_catalog_path)
+    releases = release_catalog.get("releases")
+    assert isinstance(releases, list)
+
+    for entry in releases:
+        if not isinstance(entry, Mapping):
+            raise SatRootError("release catalog releases must contain objects")
+        release_ref = entry.get("release_path")
+        if not isinstance(release_ref, str) or not release_ref.strip():
+            raise SatRootError("release catalog release_path must be a non-empty string")
+        source_release_dir = (release_catalog_path.parent / release_ref).resolve()
+        target_release_dir = (Path(target_release_catalog_dir).resolve() / release_ref).resolve()
+        _relocate_release_publication_dependencies(
+            source_release_dir,
+            target_release_dir,
+            copied_dirs=copied_dirs,
+        )
+    return Path(target_release_catalog_dir).resolve()
+
+
+def _relocate_release_catalog_index_publication_dependencies(
+    source_release_catalog_index_dir: str | Path,
+    target_release_catalog_index_dir: str | Path,
+) -> Path:
+    copied_dirs: Dict[str, str] = {}
+    source_index_path = Path(source_release_catalog_index_dir).resolve()
+    _copy_workspace_directory_once(
+        source_release_catalog_index_dir,
+        target_release_catalog_index_dir,
+        label="release catalog index publication",
+        copied_dirs=copied_dirs,
+    )
+    _manifest_path, release_catalog_index_path, _manifest, release_catalog_index = _load_release_catalog_index_publication(source_index_path)
+    release_catalogs = release_catalog_index.get("release_catalogs")
+    assert isinstance(release_catalogs, list)
+
+    for entry in release_catalogs:
+        if not isinstance(entry, Mapping):
+            raise SatRootError("release catalog index release_catalogs must contain objects")
+        release_catalog_ref = entry.get("release_catalog_path")
+        if not isinstance(release_catalog_ref, str) or not release_catalog_ref.strip():
+            raise SatRootError("release catalog index release_catalog_path must be a non-empty string")
+        source_release_catalog_dir = (release_catalog_index_path.parent / release_catalog_ref).resolve()
+        target_release_catalog_dir = (Path(target_release_catalog_index_dir).resolve() / release_catalog_ref).resolve()
+        _relocate_release_catalog_publication_dependencies(
+            source_release_catalog_dir,
+            target_release_catalog_dir,
+            copied_dirs=copied_dirs,
+        )
+    return Path(target_release_catalog_index_dir).resolve()
 
 
 def _require_consistent_workspace_scheme(
@@ -9324,10 +9444,9 @@ def write_publication_registry_workspace(
         if resolved_release_catalog_index_dir == (resolved_publication_network_dir / "release_catalog_index").resolve():
             copied_release_catalog_index_dir = copied_publication_network_dir / "release_catalog_index"
         else:
-            copied_release_catalog_index_dir = _copy_workspace_directory(
+            copied_release_catalog_index_dir = _relocate_release_catalog_index_publication_dependencies(
                 resolved_release_catalog_index_dir,
                 root_output_dir / "release_catalog_index",
-                label="release catalog index publication",
             )
     else:
         inferred_publication_network_dir = resolved_release_catalog_index_dir.parent
@@ -9351,10 +9470,9 @@ def write_publication_registry_workspace(
             relocate_publication_network_workspace_summary(copied_publication_network_dir)
             copied_release_catalog_index_dir = copied_publication_network_dir / "release_catalog_index"
         else:
-            copied_release_catalog_index_dir = _copy_workspace_directory(
+            copied_release_catalog_index_dir = _relocate_release_catalog_index_publication_dependencies(
                 resolved_release_catalog_index_dir,
                 root_output_dir / "release_catalog_index",
-                label="release catalog index publication",
             )
 
     source_publication_catalog_workspace_dir: Optional[Path] = None
