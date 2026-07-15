@@ -5742,6 +5742,57 @@ def test_cli_export_publication_stack_preset_with_generated_catalog_presets(tmp_
     assert machine_catalog["symbol_overrides"]["SATROOT-MACHINE-1"] == "PSTMCH1"
 
 
+def test_cli_bootstrap_publication_stack_from_exported_preset_round_trip(tmp_path, capsys):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+    preset_path = tmp_path / "exported_stack.json"
+    catalog_preset_dir = tmp_path / "exported_catalog_presets"
+
+    assert (
+        main(
+            [
+                "export-publication-stack-preset",
+                str(stack_dir),
+                "--catalog-preset-dir",
+                str(catalog_preset_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    roundtrip_dir = tmp_path / "publication_stack_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-stack",
+            "--stack-preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Publication Stack",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication stack to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["stack_preset_path"] == str(preset_path.resolve())
+    assert summary["release_catalog"]["catalog"]["label"] == "Roundtrip Publication Stack"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stable_catalog", "machine_catalog"}
+    assert main(["publication-stack-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_machine_publication_stack_preset_with_generated_catalog_presets(tmp_path):
     stack_dir = tmp_path / "machine_publication_stack"
     assert main(
@@ -5787,6 +5838,78 @@ def test_cli_export_machine_publication_stack_preset_with_generated_catalog_pres
     assert machine_catalog["symbol_overrides"]["SATROOT-MACHINE-1"] == "AICOREM1"
 
 
+def test_cli_bootstrap_machine_publication_stack_from_exported_preset_round_trip(tmp_path, capsys):
+    stack_dir = tmp_path / "machine_publication_stack"
+    assert main(
+        [
+            "bootstrap-machine-publication-stack",
+            "--stack-preset-json",
+            str(ROOT / "examples" / "stack_presets" / "machine_compute_publication_stack.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_dir),
+            "--label",
+            "Machine Export Stack Override",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_machine_stack.json"
+    catalog_preset_dir = tmp_path / "exported_machine_catalog_presets"
+    assert (
+        main(
+            [
+                "export-machine-publication-stack-preset",
+                str(stack_dir),
+                "--catalog-preset-dir",
+                str(catalog_preset_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    roundtrip_dir = tmp_path / "machine_publication_stack_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-stack",
+            "--stack-preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Machine Publication Stack",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication stack to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["stack_preset_path"] == str(preset_path.resolve())
+    assert summary["release_catalog"]["catalog"]["label"] == "Roundtrip Machine Publication Stack"
+    nested_summary = json.loads(
+        (roundtrip_dir / "catalog_workspaces" / "machine_compute_catalog" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert {entry["symbol"] for entry in nested_summary["bundles"]} == {"AICOREM1"}
+    assert main(["publication-stack-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     preset_path = tmp_path / "exported_network.json"
@@ -5819,6 +5942,62 @@ def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp
     assert stack_b["release_catalog"]["label"] == "Publication Network Stack Beta"
     assert (catalog_preset_dir / "stack_a" / "stable_catalog.json").is_file()
     assert (catalog_preset_dir / "stack_b" / "machine_catalog.json").is_file()
+
+
+def test_cli_bootstrap_publication_network_from_exported_preset_round_trip(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    preset_path = tmp_path / "exported_network.json"
+    stack_preset_dir = tmp_path / "exported_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_catalog_presets"
+
+    assert (
+        main(
+            [
+                "export-publication-network-preset",
+                str(network_dir),
+                "--stack-preset-dir",
+                str(stack_preset_dir),
+                "--catalog-preset-dir",
+                str(catalog_preset_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    roundtrip_dir = tmp_path / "publication_network_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-network",
+            "--network-preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Publication Network",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication network to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["network_preset_path"] == str(preset_path.resolve())
+    assert summary["release_catalog_index"]["index"]["label"] == "Roundtrip Publication Network"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stack_a", "stack_b"}
+    assert main(["publication-network-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_export_machine_publication_network_preset_with_generated_nested_presets(tmp_path):
@@ -5869,6 +6048,98 @@ def test_cli_export_machine_publication_network_preset_with_generated_nested_pre
     stack_preset = json.loads((stack_preset_dir / "machine_compute_publication_stack.json").read_text(encoding="utf-8"))
     assert stack_preset["release_catalog"]["label"] == "SATROOT Machine Compute Publication Stack"
     assert (catalog_preset_dir / "machine_compute_publication_stack" / "machine_compute_catalog.json").is_file()
+
+
+def test_cli_bootstrap_machine_publication_network_from_exported_preset_round_trip(tmp_path, capsys):
+    network_dir = tmp_path / "machine_publication_network"
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "machine_compute_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--label",
+            "Machine Export Network Override",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_machine_network.json"
+    stack_preset_dir = tmp_path / "exported_machine_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_machine_catalog_presets"
+    assert (
+        main(
+            [
+                "export-machine-publication-network-preset",
+                str(network_dir),
+                "--stack-preset-dir",
+                str(stack_preset_dir),
+                "--catalog-preset-dir",
+                str(catalog_preset_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    roundtrip_dir = tmp_path / "machine_publication_network_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Machine Publication Network",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication network to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["network_preset_path"] == str(preset_path.resolve())
+    assert summary["release_catalog_index"]["index"]["label"] == "Roundtrip Machine Publication Network"
+    nested_summary = json.loads(
+        (roundtrip_dir / "stack_workspaces" / "machine_compute_publication_stack" / "summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    catalog_summary = json.loads(
+        (
+            roundtrip_dir
+            / "stack_workspaces"
+            / "machine_compute_publication_stack"
+            / "catalog_workspaces"
+            / "machine_compute_catalog"
+            / "summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert nested_summary["workspace_count"] == 1
+    assert {entry["symbol"] for entry in catalog_summary["bundles"]} == {"AICOREM1"}
+    assert main(["publication-network-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_export_publication_catalog_workspace_preset(tmp_path):
