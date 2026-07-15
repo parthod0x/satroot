@@ -5927,6 +5927,79 @@ def test_cli_export_machine_publication_catalog_workspace_preset(tmp_path):
     assert preset["publication_metadata_catalog"]["label"] == "Machine Export Metadata Catalog"
 
 
+def test_cli_bootstrap_machine_publication_catalog_workspace_from_exported_preset_round_trip(tmp_path, capsys):
+    workspace_dir = tmp_path / "machine_publication_catalog_workspace"
+    assert main(
+        [
+            "bootstrap-machine-publication-catalog-workspace",
+            "--symbol",
+            "APIMEXPRT1",
+            "--name",
+            "Machine Export Roundtrip Source",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--descriptor-index-label",
+            "Machine Export Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Export Metadata Catalog",
+            "--output-dir",
+            str(workspace_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_machine_catalog_workspace.json"
+    assert main(["export-machine-publication-catalog-workspace-preset", str(workspace_dir), "--output", str(preset_path)]) == 0
+
+    roundtrip_dir = tmp_path / "machine_publication_catalog_workspace_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--symbol",
+            "APIMRTRIP1",
+            "--name",
+            "Machine Roundtrip Catalog Workspace",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-metadata-catalog-label",
+            "Roundtrip Machine Metadata Catalog",
+            "--output-dir",
+            str(roundtrip_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication catalog workspace to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_machine_catalog_workspace_dir"] == str((roundtrip_dir / "machine_catalog_workspace").resolve())
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Machine Export Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Roundtrip Machine Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_machine_publication_catalog_workspace_preset_rejects_generic_workspace(tmp_path):
     workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
 
@@ -6001,6 +6074,109 @@ def test_cli_export_machine_publication_registry_workspace_preset(tmp_path):
     assert Path(loaded["publication_network_dir"]).name == "publication_network"
     assert Path(loaded["publication_catalog_workspace_dir"]).name == "machine_publication_catalog_workspace"
     assert preset["publication_registry"]["label"] == "Machine Export Registry"
+
+
+def test_cli_bootstrap_machine_publication_registry_workspace_from_exported_presets_round_trip(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    workspace_dir = tmp_path / "machine_publication_registry_workspace"
+    assert main(
+        [
+            "bootstrap-machine-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--symbol",
+            "APIMEXPREG2",
+            "--name",
+            "Machine Export Registry Roundtrip Source",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--descriptor-index-label",
+            "Machine Export Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Export Metadata Catalog",
+            "--publication-registry-label",
+            "Machine Export Registry",
+            "--output-dir",
+            str(workspace_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    catalog_preset_path = tmp_path / "exported_machine_catalog_workspace.json"
+    registry_preset_path = tmp_path / "exported_machine_registry_workspace.json"
+    assert (
+        main(
+            [
+                "export-machine-publication-catalog-workspace-preset",
+                str(workspace_dir / "machine_publication_catalog_workspace"),
+                "--output",
+                str(catalog_preset_path),
+            ]
+        )
+        == 0
+    )
+    assert main(["export-machine-publication-registry-workspace-preset", str(workspace_dir), "--output", str(registry_preset_path)]) == 0
+
+    roundtrip_dir = tmp_path / "machine_publication_registry_workspace_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-registry-workspace",
+            "--publication-catalog-workspace-preset-json",
+            str(catalog_preset_path),
+            "--preset-json",
+            str(registry_preset_path),
+            "--symbol",
+            "APIMRTRIPREG1",
+            "--name",
+            "Machine Roundtrip Registry Workspace",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--publication-registry-label",
+            "Roundtrip Machine Registry",
+            "--output-dir",
+            str(roundtrip_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication registry workspace to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_machine_publication_catalog_workspace_dir"] == str(
+        (roundtrip_dir / "machine_publication_catalog_workspace").resolve()
+    )
+    assert summary["source_machine_catalog_workspace_dir"] == str(
+        (roundtrip_dir / "machine_publication_catalog_workspace" / "machine_catalog_workspace").resolve()
+    )
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Machine Export Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Machine Export Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Roundtrip Machine Registry"
+    assert main(["publication-registry-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_export_machine_publication_registry_workspace_preset_rejects_generic_workspace(tmp_path):
