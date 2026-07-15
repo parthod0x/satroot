@@ -172,6 +172,7 @@ The v0.1 kernel defines:
 - publication-descriptor-index inspection via `publication-descriptor-index-summary` and structural linting via `publication-descriptor-index-lint`,
 - preset export commands for deriving reusable publication-descriptor-index presets back from generated descriptor index publications,
 - signed publication-metadata-manifest generation for authenticating one artifact's rendered report plus normalized descriptor,
+- publication-metadata-bundle inspection via `publication-metadata-bundle-summary` and structural linting via `publication-metadata-bundle-lint`,
 - `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
 - signed publication-metadata-catalog-manifest generation for authenticating publication metadata catalogs,
 - one-shot `bootstrap-publication-metadata-catalog-publication` orchestration for metadata catalogs plus signing material,
@@ -1210,6 +1211,18 @@ Those publication metadata catalog inspection commands also accept the generated
 
 ```bash
 satroot1 publication-metadata-catalog-summary publication_metadata_catalog_publication/publication_metadata_catalog_manifest.json
+```
+
+Inspect a bootstrapped publication metadata bundle without signature verification:
+
+```bash
+satroot1 publication-metadata-bundle-summary publication_metadata_bundle
+```
+
+Lint a publication metadata bundle, its stored report/descriptor files, and the currently referenced packaged SATROOT artifact:
+
+```bash
+satroot1 publication-metadata-bundle-lint publication_metadata_bundle
 ```
 
 Inspect a release catalog publication without signature verification:

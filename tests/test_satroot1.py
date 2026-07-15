@@ -10004,6 +10004,67 @@ def test_cli_publication_descriptor_index_lint_reports_findings(tmp_path, capsys
     assert '"missing_artifact_paths":[' in captured.out
 
 
+def test_cli_publication_metadata_bundle_summary_reads_manifest_and_payloads(tmp_path, capsys):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+
+    exit_code = main(["publication-metadata-bundle-summary", str(release_bundle_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"signature_key_id":"metadata-key"' in captured.out
+    assert '"packaged_artifact_kind":"release"' in captured.out
+    assert '"publication_report_path":' in captured.out
+
+
+def test_cli_publication_metadata_bundle_summary_accepts_manifest_json(tmp_path, capsys):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+
+    exit_code = main(
+        [
+            "publication-metadata-bundle-summary",
+            str(release_bundle_dir / "publication_metadata_manifest.json"),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"signature_scheme":"hmac-sha256"' in captured.out
+    assert '"packaged_artifact_kind":"release"' in captured.out
+
+
+def test_cli_publication_metadata_bundle_lint_accepts_clean_bundle(tmp_path, capsys):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+
+    exit_code = main(["publication-metadata-bundle-lint", str(release_bundle_dir)])
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert '"ok":true' in captured.out
+    assert '"publication_report_hash_matches":true' in captured.out
+    assert '"publication_descriptor_hash_matches":true' in captured.out
+    assert '"packaged_artifact_descriptor_mismatches":[]' in captured.out
+
+
+def test_cli_publication_metadata_bundle_lint_reports_packaged_artifact_drift(tmp_path, capsys):
+    release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+
+    descriptor = json.loads((release_bundle_dir / "publication_descriptor.json").read_text(encoding="utf-8"))
+    release_dir = Path(str(descriptor["artifact_path"]))
+    bundle_index_path = release_dir / "bundle_index.json"
+    bundle_index = json.loads(bundle_index_path.read_text(encoding="utf-8"))
+    bundle_index["release"]["label"] = "Tampered Release Label"
+    write_json(bundle_index_path, bundle_index)
+
+    exit_code = main(["publication-metadata-bundle-lint", str(release_bundle_dir / "publication_metadata_manifest.json")])
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert '"ok":false' in captured.out
+    assert '"packaged_artifact_report_mismatch":true' in captured.out
+    assert '"packaged_artifact_descriptor_mismatches":[' in captured.out
+
+
 def test_cli_publication_metadata_catalog_summary_reads_manifest_and_catalog(tmp_path, capsys):
     metadata_catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
 

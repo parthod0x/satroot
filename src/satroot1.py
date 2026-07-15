@@ -11395,9 +11395,20 @@ def resolve_machine_publication_metadata_bundle_inputs(
 def _load_publication_metadata_bundle_publication(
     publication_metadata_bundle_dir: str | Path,
 ) -> tuple[Path, Path, Path, Dict[str, Any], Dict[str, Any]]:
-    bundle_path = Path(publication_metadata_bundle_dir).resolve()
-    if not bundle_path.is_dir():
-        raise SatRootError(f"publication metadata bundle directory not found: {publication_metadata_bundle_dir}")
+    candidate_path = Path(publication_metadata_bundle_dir).resolve()
+    if candidate_path.is_dir():
+        bundle_path = candidate_path
+    else:
+        bundle_path = candidate_path.parent
+        if candidate_path.name not in {
+            "publication_metadata_manifest.json",
+            "publication_report.md",
+            "publication_descriptor.json",
+        }:
+            raise SatRootError(
+                "publication metadata bundle operations require a publication metadata bundle directory or "
+                "publication_metadata_manifest.json/publication_report.md/publication_descriptor.json"
+            )
 
     manifest_path = bundle_path / "publication_metadata_manifest.json"
     if not manifest_path.is_file():
@@ -11454,6 +11465,66 @@ def summarize_publication_metadata_bundle_publication(
         "publication_descriptor_path": str(descriptor_path),
         "publication_descriptor_hash": manifest.get("publication_descriptor_hash"),
         "published_descriptor": copy.deepcopy(descriptor),
+    }
+
+
+def lint_publication_metadata_bundle_publication(
+    publication_metadata_bundle_dir: str | Path,
+) -> Dict[str, Any]:
+    manifest_path, report_path, descriptor_path, manifest, descriptor = _load_publication_metadata_bundle_publication(
+        publication_metadata_bundle_dir
+    )
+    artifact_path_ref = manifest.get("artifact_path")
+    resolved_artifact_path = Path(artifact_path_ref).resolve() if isinstance(artifact_path_ref, str) and artifact_path_ref.strip() else None
+
+    current_report = None
+    current_descriptor = None
+    missing_packaged_artifact = False
+    packaged_artifact_descriptor_mismatches: list[str] = []
+    packaged_artifact_report_mismatch = False
+
+    if resolved_artifact_path is None or not resolved_artifact_path.exists():
+        missing_packaged_artifact = True
+    else:
+        current_descriptor = build_satroot_artifact_descriptor(resolved_artifact_path)
+        current_report = render_satroot_artifact_report(resolved_artifact_path)
+        packaged_artifact_descriptor_mismismatched_fields = [
+            key
+            for key in set(descriptor.keys()) | set(current_descriptor.keys())
+            if descriptor.get(key) != current_descriptor.get(key)
+        ]
+        packaged_artifact_descriptor_mismatches = sorted(packaged_artifact_descriptor_mismismatched_fields)
+        packaged_artifact_report_mismatch = report_path.read_text(encoding="utf-8") != current_report
+
+    publication_report_hash_matches = manifest.get("publication_report_hash") == ("sha256:" + sha256_hex_bytes(report_path.read_bytes()))
+    publication_descriptor_hash_matches = manifest.get("publication_descriptor_hash") == ("sha256:" + sha256_hex_bytes(descriptor_path.read_bytes()))
+    artifact_kind_matches_descriptor = manifest.get("artifact_kind") == descriptor.get("artifact_kind")
+    artifact_path_matches_descriptor = manifest.get("artifact_path") == descriptor.get("artifact_path")
+
+    return {
+        "ok": not any(
+            [
+                not publication_report_hash_matches,
+                not publication_descriptor_hash_matches,
+                not artifact_kind_matches_descriptor,
+                not artifact_path_matches_descriptor,
+                missing_packaged_artifact,
+                packaged_artifact_report_mismatch,
+                packaged_artifact_descriptor_mismatches,
+            ]
+        ),
+        "signature_scheme": manifest.get("signature_scheme"),
+        "signature_key_id": manifest.get("signature_key_id"),
+        "packaged_artifact_kind": manifest.get("artifact_kind"),
+        "packaged_artifact_path": manifest.get("artifact_path"),
+        "publication_metadata_manifest_path": str(manifest_path),
+        "publication_report_hash_matches": publication_report_hash_matches,
+        "publication_descriptor_hash_matches": publication_descriptor_hash_matches,
+        "artifact_kind_matches_descriptor": artifact_kind_matches_descriptor,
+        "artifact_path_matches_descriptor": artifact_path_matches_descriptor,
+        "missing_packaged_artifact": missing_packaged_artifact,
+        "packaged_artifact_report_mismatch": packaged_artifact_report_mismatch,
+        "packaged_artifact_descriptor_mismatches": packaged_artifact_descriptor_mismatches,
     }
 
 
@@ -13750,6 +13821,12 @@ def build_cli_parser() -> Any:
 
     publication_descriptor_index_lint_parser = subparsers.add_parser("publication-descriptor-index-lint", help="Check publication_descriptor_index_manifest.json, publication_descriptor_index.json, and referenced SATROOT artifacts without signature verification")
     publication_descriptor_index_lint_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory or publication_descriptor_index_manifest.json/publication_descriptor_index.json file")
+
+    publication_metadata_bundle_summary_parser = subparsers.add_parser("publication-metadata-bundle-summary", help="Read publication_metadata_manifest.json plus publication_report.md/publication_descriptor.json and print a metadata-bundle summary without signature verification")
+    publication_metadata_bundle_summary_parser.add_argument("publication_metadata_bundle_dir", help="Path to a SATROOT publication metadata bundle directory or publication_metadata_manifest.json/publication_report.md/publication_descriptor.json file")
+
+    publication_metadata_bundle_lint_parser = subparsers.add_parser("publication-metadata-bundle-lint", help="Check publication_metadata_manifest.json, publication_report.md, publication_descriptor.json, and the referenced packaged SATROOT artifact without signature verification")
+    publication_metadata_bundle_lint_parser.add_argument("publication_metadata_bundle_dir", help="Path to a SATROOT publication metadata bundle directory or publication_metadata_manifest.json/publication_report.md/publication_descriptor.json file")
 
     publication_metadata_catalog_summary_parser = subparsers.add_parser("publication-metadata-catalog-summary", help="Read publication_metadata_catalog_manifest.json plus publication_metadata_catalog.json and print a metadata-catalog summary without signature verification")
     publication_metadata_catalog_summary_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory or publication_metadata_catalog_manifest.json/publication_metadata_catalog.json file")
@@ -16650,6 +16727,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publication-descriptor-index-lint":
         report = lint_publication_descriptor_index_publication(args.publication_descriptor_index_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-metadata-bundle-summary":
+        summary = summarize_publication_metadata_bundle_publication(args.publication_metadata_bundle_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-metadata-bundle-lint":
+        report = lint_publication_metadata_bundle_publication(args.publication_metadata_bundle_dir)
         print(canonical_json(report))
         return 0 if report["ok"] else 1
 
