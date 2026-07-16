@@ -4957,6 +4957,41 @@ def test_cli_publish_publication_catalog_workspace_from_existing_publications(tm
     capsys.readouterr()
 
 
+def test_cli_publish_publication_catalog_workspace_from_standalone_publications(tmp_path, capsys):
+    _release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "published_catalog_workspace"
+
+    source_catalog = json.loads((metadata_catalog_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    bundle_refs = [entry["publication_metadata_bundle_path"] for entry in source_catalog["bundles"]]
+    assert any(not bundle_ref.startswith("../publication_metadata_bundles/") for bundle_ref in bundle_refs)
+
+    exit_code = main(
+        [
+            "publish-publication-catalog-workspace",
+            str(descriptor_index_dir),
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication catalog workspace from existing publications to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_descriptor_index_dir"] == str(descriptor_index_dir.resolve())
+    assert summary["source_publication_metadata_catalog_dir"] == str(metadata_catalog_dir.resolve())
+    assert summary["publication_metadata_bundle_count"] == 2
+    assert len(summary["publication_metadata_bundles"]) == 2
+    assert all(
+        (output_dir / "publication_metadata_bundles" / str(entry["bundle_name"])).is_dir()
+        for entry in summary["publication_metadata_bundles"]
+    )
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_publish_machine_publication_catalog_workspace_from_existing_publications(tmp_path, capsys):
     source_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
     output_dir = tmp_path / "published_machine_catalog_workspace"

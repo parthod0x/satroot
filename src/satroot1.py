@@ -9135,18 +9135,21 @@ def publish_publication_catalog_workspace(
 ) -> Dict[str, Any]:
     root_output_dir = Path(output_dir).resolve()
     root_output_dir.mkdir(parents=True, exist_ok=True)
+    copied_dirs: Dict[str, str] = {}
 
     source_publication_descriptor_index_dir = Path(publication_descriptor_index_dir).resolve()
     source_publication_metadata_catalog_dir = Path(publication_metadata_catalog_dir).resolve()
-    copied_publication_descriptor_index_dir = _copy_workspace_directory(
+    copied_publication_descriptor_index_dir = _copy_workspace_directory_once(
         source_publication_descriptor_index_dir,
         root_output_dir / "publication_descriptor_index",
         label="publication descriptor index publication",
+        copied_dirs=copied_dirs,
     )
-    copied_publication_metadata_catalog_dir = _copy_workspace_directory(
+    copied_publication_metadata_catalog_dir = _copy_workspace_directory_once(
         source_publication_metadata_catalog_dir,
         root_output_dir / "publication_metadata_catalog",
         label="publication metadata catalog publication",
+        copied_dirs=copied_dirs,
     )
 
     _descriptor_manifest_path, _descriptor_index_path, descriptor_manifest, publication_descriptor_index = _load_publication_descriptor_index_publication(
@@ -9164,6 +9167,7 @@ def publish_publication_catalog_workspace(
     copied_publication_metadata_bundles_dir = (root_output_dir / "publication_metadata_bundles").resolve()
     copied_publication_metadata_bundles_dir.mkdir(parents=True, exist_ok=True)
     bundle_sources: Dict[str, Path] = {}
+    bundle_summary_targets: Dict[str, Path] = {}
     for entry in bundles:
         if not isinstance(entry, Mapping):
             raise SatRootError("publication metadata catalog bundles must contain objects")
@@ -9179,12 +9183,6 @@ def publish_publication_catalog_workspace(
             raise SatRootError("publication metadata bundle directory name must be non-empty")
 
         expected_target_bundle_dir = (copied_publication_metadata_bundles_dir / bundle_name).resolve()
-        copied_bundle_dir_from_catalog_ref = (copied_publication_metadata_catalog_dir / bundle_ref).resolve()
-        if copied_bundle_dir_from_catalog_ref != expected_target_bundle_dir:
-            raise SatRootError(
-                "publish-publication-catalog-workspace requires publication metadata bundle paths to resolve under "
-                "../publication_metadata_bundles/<bundle_name>"
-            )
 
         existing_source_bundle_dir = bundle_sources.get(bundle_name)
         if existing_source_bundle_dir is not None and existing_source_bundle_dir != source_bundle_dir:
@@ -9192,15 +9190,33 @@ def publish_publication_catalog_workspace(
                 f"publish-publication-catalog-workspace found conflicting source bundle directories for bundle name: {bundle_name}"
             )
         bundle_sources[bundle_name] = source_bundle_dir
+        bundle_summary_targets[bundle_name] = expected_target_bundle_dir
+
+        try:
+            preserved_bundle_target_dir = (copied_publication_metadata_catalog_dir / bundle_ref).resolve()
+            preserved_bundle_target_dir.relative_to(root_output_dir)
+        except ValueError as exc:
+            raise SatRootError(
+                "publish-publication-catalog-workspace requires publication metadata bundle paths to stay within the copied workspace root"
+            ) from exc
+
+        _copy_workspace_directory_once(
+            source_bundle_dir,
+            preserved_bundle_target_dir,
+            label="publication metadata bundle",
+            copied_dirs=copied_dirs,
+        )
+        _copy_workspace_directory_once(
+            source_bundle_dir,
+            expected_target_bundle_dir,
+            label="publication metadata bundle",
+            copied_dirs=copied_dirs,
+        )
 
     publication_metadata_bundles: list[Dict[str, Any]] = []
     bundle_manifests: list[Mapping[str, Any]] = []
     for bundle_name, source_bundle_dir in sorted(bundle_sources.items()):
-        copied_bundle_dir = _copy_workspace_directory(
-            source_bundle_dir,
-            copied_publication_metadata_bundles_dir / bundle_name,
-            label="publication metadata bundle",
-        )
+        copied_bundle_dir = bundle_summary_targets[bundle_name]
         manifest_path, report_path, descriptor_path, manifest, descriptor = _load_publication_metadata_bundle_publication(
             copied_bundle_dir
         )
