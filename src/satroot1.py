@@ -2828,6 +2828,113 @@ def load_inventory_release_catalog_dirs(inventory_json: str | Path) -> list[str]
     )
 
 
+def load_inventory_satroot_artifact_paths(inventory_json: str | Path) -> list[str]:
+    resolved: list[str] = []
+    seen: set[str] = set()
+    for entry_key, path_key in [
+        ("bundles", "bundle_dir"),
+        ("bundle_indexes", "bundle_index_dir"),
+        ("publication_metadata_bundles", "publication_metadata_bundle_dir"),
+        ("releases", "release_dir"),
+        ("release_catalogs", "release_catalog_dir"),
+        ("release_catalog_indexes", "release_catalog_index_dir"),
+        ("publication_descriptor_indexes", "publication_descriptor_index_dir"),
+        ("publication_metadata_catalogs", "publication_metadata_catalog_dir"),
+        ("publication_registries", "publication_registry_dir"),
+        ("demo_catalog_workspaces", "workspace_dir"),
+        ("publication_stacks", "workspace_dir"),
+        ("publication_networks", "workspace_dir"),
+        ("publication_catalog_workspaces", "workspace_dir"),
+        ("publication_registry_workspaces", "workspace_dir"),
+    ]:
+        for path in _inventory_entry_paths(
+            inventory_json,
+            entry_key=entry_key,
+            path_key=path_key,
+            label="SATROOT artifact",
+        ):
+            if path not in seen:
+                resolved.append(path)
+                seen.add(path)
+    return resolved
+
+
+def load_inventory_publication_metadata_bundle_dirs(inventory_json: str | Path) -> list[str]:
+    return _inventory_entry_paths(
+        inventory_json,
+        entry_key="publication_metadata_bundles",
+        path_key="publication_metadata_bundle_dir",
+        label="publication metadata bundle source",
+    )
+
+
+def _load_inventory_optional_unique_path(
+    inventory_json: str | Path,
+    *,
+    entry_key: str,
+    path_key: str,
+    label: str,
+) -> Optional[str]:
+    paths = _inventory_entry_paths(
+        inventory_json,
+        entry_key=entry_key,
+        path_key=path_key,
+        label=label,
+    )
+    if not paths:
+        return None
+    if len(paths) > 1:
+        raise SatRootError(
+            f"{label} inventory must contain exactly one {entry_key} entry or an explicit CLI/preset path override"
+        )
+    return paths[0]
+
+
+def load_inventory_release_catalog_index_dir(inventory_json: str | Path) -> Optional[str]:
+    return _load_inventory_optional_unique_path(
+        inventory_json,
+        entry_key="release_catalog_indexes",
+        path_key="release_catalog_index_dir",
+        label="release catalog index source",
+    )
+
+
+def load_inventory_publication_descriptor_index_dir(inventory_json: str | Path) -> Optional[str]:
+    return _load_inventory_optional_unique_path(
+        inventory_json,
+        entry_key="publication_descriptor_indexes",
+        path_key="publication_descriptor_index_dir",
+        label="publication descriptor index source",
+    )
+
+
+def load_inventory_publication_metadata_catalog_dir(inventory_json: str | Path) -> Optional[str]:
+    return _load_inventory_optional_unique_path(
+        inventory_json,
+        entry_key="publication_metadata_catalogs",
+        path_key="publication_metadata_catalog_dir",
+        label="publication metadata catalog source",
+    )
+
+
+def load_inventory_publication_catalog_workspace_dir(inventory_json: str | Path) -> Optional[str]:
+    return _load_inventory_optional_unique_path(
+        inventory_json,
+        entry_key="publication_catalog_workspaces",
+        path_key="workspace_dir",
+        label="publication catalog workspace source",
+    )
+
+
+def load_inventory_publication_network_dir(inventory_json: str | Path) -> Optional[str]:
+    return _load_inventory_optional_unique_path(
+        inventory_json,
+        entry_key="publication_networks",
+        path_key="workspace_dir",
+        label="publication network source",
+    )
+
+
 def resolve_bundle_directory_inputs(
     bundle_dirs: Sequence[str | Path],
     *,
@@ -13381,6 +13488,7 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-machine-publication-catalog-workspace", help="Generate a SATROOT-MACHINE-1 machine demo catalog workspace and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested machine catalog; it must resolve to SATROOT-MACHINE-1 only")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for descriptor and metadata defaults")
+    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added to the generated publication catalog workspace sources")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine demo bundle and generated publication manifests")
@@ -13425,6 +13533,7 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested machine catalog; it must resolve to SATROOT-MACHINE-1 only")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for the nested publication catalog workspace defaults")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file for registry defaults")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered artifact paths and unique publication component directories will be added to the registry workspace inputs")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-dir", help="Optional existing SATROOT-MACHINE-1 publication catalog workspace directory to copy instead of generating a nested machine publication catalog workspace")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
@@ -13574,6 +13683,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-publication-catalog-workspace", help="Generate descriptor and metadata publication lanes for one or more SATROOT artifacts in a reusable catalog workspace")
     bootstrap_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication catalog workspace preset JSON file with artifact paths, discovery roots, and metadata defaults")
+    bootstrap_publication_catalog_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added to the catalog workspace sources")
     bootstrap_publication_catalog_workspace_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory to include in the descriptor and metadata lanes")
     bootstrap_publication_catalog_workspace_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
     bootstrap_publication_catalog_workspace_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each discovery root")
@@ -13591,6 +13701,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-publication-registry-workspace", help="Copy a release-catalog-index publication, derive descriptor and metadata publication lanes, and emit a full signed SATROOT publication registry workspace")
     bootstrap_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file with artifact paths, discovery roots, source publication references, and metadata defaults")
+    bootstrap_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered artifact paths and unique publication component directories will be added to the registry workspace inputs")
     bootstrap_publication_registry_workspace_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory to include in the descriptor and metadata lanes")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-dir", help="Optional publication catalog workspace directory to copy instead of regenerating descriptor and metadata publication lanes")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to use as a default discovery root and release-catalog-index source")
@@ -13802,6 +13913,7 @@ def build_cli_parser() -> Any:
 
     build_publication_descriptor_index_parser = subparsers.add_parser("build-publication-descriptor-index", help="Build a machine-readable SATROOT publication descriptor index from explicit artifact paths and/or discovery roots")
     build_publication_descriptor_index_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with artifact paths, discovery roots, and index metadata defaults")
+    build_publication_descriptor_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as descriptor-index sources")
     build_publication_descriptor_index_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
     build_publication_descriptor_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
     build_publication_descriptor_index_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
@@ -13812,6 +13924,7 @@ def build_cli_parser() -> Any:
 
     build_machine_publication_descriptor_index_parser = subparsers.add_parser("build-machine-publication-descriptor-index", help="Build a machine-only SATROOT publication descriptor index from explicit machine artifact paths and/or discovery roots")
     build_machine_publication_descriptor_index_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with machine artifact paths, discovery roots, and index metadata defaults")
+    build_machine_publication_descriptor_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as machine descriptor-index sources")
     build_machine_publication_descriptor_index_parser.add_argument("path", nargs="*", help="Path to a machine-only SATROOT artifact file or directory")
     build_machine_publication_descriptor_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine-only SATROOT artifacts; may be repeated")
     build_machine_publication_descriptor_index_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
@@ -13864,6 +13977,7 @@ def build_cli_parser() -> Any:
 
     build_publication_metadata_catalog_parser = subparsers.add_parser("build-publication-metadata-catalog", help="Build a SATROOT publication metadata catalog from one or more publication metadata bundle directories")
     build_publication_metadata_catalog_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with bundle paths, discovery roots, and catalog metadata defaults")
+    build_publication_metadata_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_metadata_bundle_dir entries will be added as catalog sources")
     build_publication_metadata_catalog_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a publication metadata bundle directory")
     build_publication_metadata_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication_metadata_manifest.json files; may be repeated")
     build_publication_metadata_catalog_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
@@ -13874,6 +13988,7 @@ def build_cli_parser() -> Any:
 
     build_machine_publication_metadata_catalog_parser = subparsers.add_parser("build-machine-publication-metadata-catalog", help="Build a machine-only SATROOT publication metadata catalog from one or more machine publication metadata bundle directories")
     build_machine_publication_metadata_catalog_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with machine publication metadata bundle paths, discovery roots, and catalog metadata defaults")
+    build_machine_publication_metadata_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_metadata_bundle_dir entries will be added as machine catalog sources")
     build_machine_publication_metadata_catalog_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a machine-only publication metadata bundle directory")
     build_machine_publication_metadata_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine publication metadata manifests; may be repeated")
     build_machine_publication_metadata_catalog_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
@@ -13904,6 +14019,7 @@ def build_cli_parser() -> Any:
 
     build_publication_registry_parser = subparsers.add_parser("build-publication-registry", help="Build a top-level SATROOT publication registry from existing published component directories")
     build_publication_registry_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with component paths and registry metadata defaults")
+    build_publication_registry_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication component directories will be used as registry sources when explicit paths are omitted")
     build_publication_registry_parser.add_argument("--release-catalog-index-dir", help="Path to a release catalog index publication directory")
     build_publication_registry_parser.add_argument("--publication-descriptor-index-dir", help="Path to a publication descriptor index publication directory")
     build_publication_registry_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a publication metadata catalog publication directory")
@@ -13914,6 +14030,7 @@ def build_cli_parser() -> Any:
 
     build_machine_publication_registry_parser = subparsers.add_parser("build-machine-publication-registry", help="Build a machine-only SATROOT publication registry from existing machine publication component directories")
     build_machine_publication_registry_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with machine publication component paths and registry metadata defaults")
+    build_machine_publication_registry_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication component directories will be used as machine registry sources when explicit paths are omitted")
     build_machine_publication_registry_parser.add_argument("--release-catalog-index-dir", help="Path to a machine release catalog index publication directory")
     build_machine_publication_registry_parser.add_argument("--publication-descriptor-index-dir", help="Path to a machine publication descriptor index publication directory")
     build_machine_publication_registry_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a machine publication metadata catalog publication directory")
@@ -13944,6 +14061,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_publication_descriptor_index_publication_parser = subparsers.add_parser("bootstrap-publication-descriptor-index-publication", help="Generate signing material and write a ready-to-verify SATROOT publication descriptor index directory")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with artifact paths, discovery roots, and index metadata defaults")
+    bootstrap_publication_descriptor_index_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as descriptor-index sources")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
@@ -13956,6 +14074,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_machine_publication_descriptor_index_publication_parser = subparsers.add_parser("bootstrap-machine-publication-descriptor-index-publication", help="Generate signing material and write a ready-to-verify machine-only SATROOT publication descriptor index directory")
     bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with machine artifact paths, discovery roots, and index metadata defaults")
+    bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as machine descriptor-index sources")
     bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("path", nargs="*", help="Path to a machine-only SATROOT artifact file or directory")
     bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine-only SATROOT artifacts; may be repeated")
     bootstrap_machine_publication_descriptor_index_publication_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
@@ -13980,6 +14099,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_publication_metadata_catalog_publication_parser = subparsers.add_parser("bootstrap-publication-metadata-catalog-publication", help="Generate signing material and write a ready-to-verify SATROOT publication metadata catalog directory")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with bundle paths, discovery roots, and catalog metadata defaults")
+    bootstrap_publication_metadata_catalog_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_metadata_bundle_dir entries will be added as catalog sources")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a publication metadata bundle directory")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication_metadata_manifest.json files; may be repeated")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
@@ -13992,6 +14112,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_machine_publication_metadata_catalog_publication_parser = subparsers.add_parser("bootstrap-machine-publication-metadata-catalog-publication", help="Generate signing material and write a ready-to-verify machine-only SATROOT publication metadata catalog directory")
     bootstrap_machine_publication_metadata_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with machine publication metadata bundle paths, discovery roots, and catalog metadata defaults")
+    bootstrap_machine_publication_metadata_catalog_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_metadata_bundle_dir entries will be added as machine catalog sources")
     bootstrap_machine_publication_metadata_catalog_publication_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a machine-only publication metadata bundle directory")
     bootstrap_machine_publication_metadata_catalog_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine publication metadata manifests; may be repeated")
     bootstrap_machine_publication_metadata_catalog_publication_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
@@ -15438,6 +15559,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         machine_preset = load_machine_demo_catalog_preset(catalog_preset_path) if catalog_preset_path is not None else None
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         machine_inputs = resolve_machine_demo_bootstrap_inputs(
             command_name="bootstrap-machine-publication-catalog-workspace",
             preset_option_name="--catalog-preset-json",
@@ -15513,7 +15635,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_metadata=release_metadata,
             descriptor_index_metadata=descriptor_index_metadata,
             publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
-            artifact_paths=(preset or {}).get("artifact_paths"),
+            artifact_paths=[*((preset or {}).get("artifact_paths", [])), *inventory_artifact_paths],
             discover_under=(preset or {}).get("discover_under"),
             recursive=(preset or {}).get("recursive", True),
         )
@@ -15533,6 +15655,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        inventory_publication_catalog_workspace_dir = (
+            load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_network_dir = load_inventory_publication_network_dir(args.inventory_json) if args.inventory_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
         publication_catalog_workspace_dir = (
             Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
             if (preset or {}).get("publication_catalog_workspace_dir")
@@ -15540,14 +15670,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         if args.publication_catalog_workspace_dir:
             publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
+        elif inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
         publication_network_dir = (
             Path(args.publication_network_dir).resolve()
             if args.publication_network_dir
-            else (Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None)
+            else (
+                Path((preset or {}).get("publication_network_dir")).resolve()
+                if (preset or {}).get("publication_network_dir")
+                else (Path(inventory_publication_network_dir).resolve() if inventory_publication_network_dir is not None else None)
+            )
         )
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
             release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+        if release_catalog_index_dir is None:
+            release_catalog_index_dir = inventory_release_catalog_index_dir
         if release_catalog_index_dir is None:
             raise SatRootError("bootstrap-machine-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
 
@@ -15659,6 +15797,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             artifact_paths=[
                 *((publication_catalog_workspace_preset or {}).get("artifact_paths", [])),
                 *((preset or {}).get("artifact_paths", [])),
+                *inventory_artifact_paths,
             ],
             discover_under=[
                 *((publication_catalog_workspace_preset or {}).get("discover_under", [])),
@@ -15928,6 +16067,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-publication-catalog-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         descriptor_index_metadata = dict((preset or {}).get("descriptor_index_metadata", {}))
         for key, value in {
             "channel": args.descriptor_index_channel,
@@ -15945,7 +16085,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 publication_metadata_catalog_metadata[key] = value
         write_publication_catalog_workspace(
-            artifact_paths=[*((preset or {}).get("artifact_paths", [])), *((args.path or []))],
+            artifact_paths=[*((preset or {}).get("artifact_paths", [])), *inventory_artifact_paths, *((args.path or []))],
             discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             output_dir=args.output_dir,
@@ -15962,6 +16102,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-publication-registry-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        inventory_publication_catalog_workspace_dir = (
+            load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_network_dir = load_inventory_publication_network_dir(args.inventory_json) if args.inventory_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
         publication_catalog_workspace_dir = (
             Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
             if (preset or {}).get("publication_catalog_workspace_dir")
@@ -15969,15 +16117,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         if args.publication_catalog_workspace_dir:
             publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
+        elif inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
         publication_network_dir = Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None
         if args.publication_network_dir:
             publication_network_dir = Path(args.publication_network_dir).resolve()
+        elif publication_network_dir is None and inventory_publication_network_dir is not None:
+            publication_network_dir = Path(inventory_publication_network_dir).resolve()
         discover_under = [*((preset or {}).get("discover_under", [])), *((args.discover_under or []))]
         if publication_network_dir is not None:
             discover_under.append(str(publication_network_dir))
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
             release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+        if release_catalog_index_dir is None:
+            release_catalog_index_dir = inventory_release_catalog_index_dir
         if release_catalog_index_dir is None:
             raise SatRootError("bootstrap-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
 
@@ -16006,7 +16160,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 publication_registry_metadata[key] = value
         write_publication_registry_workspace(
-            artifact_paths=[*((preset or {}).get("artifact_paths", [])), *((args.path or []))],
+            artifact_paths=[*((preset or {}).get("artifact_paths", [])), *inventory_artifact_paths, *((args.path or []))],
             discover_under=discover_under,
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             release_catalog_index_dir=release_catalog_index_dir,
@@ -16426,6 +16580,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "build-publication-descriptor-index":
         preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
         }
@@ -16437,7 +16592,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         index = build_satroot_publication_descriptor_index(
-            [*(preset or {}).get("artifact_paths", []), *args.path],
+            [*(preset or {}).get("artifact_paths", []), *inventory_artifact_paths, *args.path],
             discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
             recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
             index_metadata=index_metadata,
@@ -16447,6 +16602,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "build-machine-publication-descriptor-index":
         preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
         }
@@ -16458,7 +16614,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         artifact_paths = resolve_satroot_artifact_inputs(
-            [*(preset or {}).get("artifact_paths", []), *args.path],
+            [*(preset or {}).get("artifact_paths", []), *inventory_artifact_paths, *args.path],
             discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
             recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
         )
@@ -16545,6 +16701,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "build-publication-metadata-catalog":
         preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
         }
@@ -16558,7 +16715,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         catalog = build_publication_metadata_catalog(
-            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *args.publication_metadata_bundle_dir],
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *inventory_bundle_dirs, *args.publication_metadata_bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
             recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
             base_dir=base_dir,
@@ -16569,6 +16726,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "build-machine-publication-metadata-catalog":
         preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
         }
@@ -16582,7 +16740,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         bundle_dirs = resolve_machine_publication_metadata_bundle_inputs(
-            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *args.publication_metadata_bundle_dir],
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *inventory_bundle_dirs, *args.publication_metadata_bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
             recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
             label="machine publication metadata catalog source bundle",
@@ -16631,6 +16789,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "build-publication-registry":
         preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
         registry_metadata = {
             **dict((preset or {}).get("registry_metadata", {})),
         }
@@ -16644,9 +16811,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         registry = build_publication_registry(
-            release_catalog_index_dir=args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir"),
-            publication_descriptor_index_dir=args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir"),
-            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir"),
+            release_catalog_index_dir=args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir") or inventory_release_catalog_index_dir,
+            publication_descriptor_index_dir=args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir") or inventory_publication_descriptor_index_dir,
+            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir") or inventory_publication_metadata_catalog_dir,
             base_dir=base_dir,
             registry_metadata=registry_metadata,
         )
@@ -16655,6 +16822,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "build-machine-publication-registry":
         preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
         registry_metadata = {
             **dict((preset or {}).get("registry_metadata", {})),
         }
@@ -16667,9 +16843,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 registry_metadata[key] = value
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
-        publication_descriptor_index_dir = args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir")
-        publication_metadata_catalog_dir = args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir")
+        release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir") or inventory_release_catalog_index_dir
+        publication_descriptor_index_dir = args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir") or inventory_publication_descriptor_index_dir
+        publication_metadata_catalog_dir = args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir") or inventory_publication_metadata_catalog_dir
         if release_catalog_index_dir is not None:
             _require_machine_release_catalog_index_publication(
                 release_catalog_index_dir,
@@ -16729,6 +16905,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-publication-descriptor-index-publication":
         preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
         }
@@ -16740,7 +16917,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         output = bootstrap_publication_descriptor_index_publication(
-            [*(preset or {}).get("artifact_paths", []), *args.path],
+            [*(preset or {}).get("artifact_paths", []), *inventory_artifact_paths, *args.path],
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
@@ -16753,6 +16930,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-machine-publication-descriptor-index-publication":
         preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
         }
@@ -16764,7 +16942,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         artifact_paths = resolve_satroot_artifact_inputs(
-            [*(preset or {}).get("artifact_paths", []), *args.path],
+            [*(preset or {}).get("artifact_paths", []), *inventory_artifact_paths, *args.path],
             discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
             recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
         )
@@ -16811,6 +16989,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-publication-metadata-catalog-publication":
         preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
         }
@@ -16822,7 +17001,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 catalog_metadata[key] = value
         output = bootstrap_publication_metadata_catalog_publication(
-            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *args.publication_metadata_bundle_dir],
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *inventory_bundle_dirs, *args.publication_metadata_bundle_dir],
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
@@ -16835,6 +17014,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-machine-publication-metadata-catalog-publication":
         preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
         }
@@ -16846,7 +17026,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 catalog_metadata[key] = value
         bundle_dirs = resolve_machine_publication_metadata_bundle_inputs(
-            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *args.publication_metadata_bundle_dir],
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *inventory_bundle_dirs, *args.publication_metadata_bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
             recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
             label="machine publication metadata catalog source bundle",

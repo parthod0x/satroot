@@ -943,7 +943,7 @@ If you only want to report artifacts rooted directly at the given path and skip 
 satroot1 inventory-artifacts publication_network --non-recursive
 ```
 
-Those saved inventory reports can be reused directly by `build-bundle-index`, `publish-release`, `bootstrap-release-publication`, `build-release-catalog`, `publish-release-catalog`, `bootstrap-release-catalog-publication`, `build-release-catalog-index`, `publish-release-catalog-index`, and `bootstrap-release-catalog-index-publication` via `--inventory-json`.
+Those saved inventory reports can be reused directly by `build-bundle-index`, `publish-release`, `bootstrap-release-publication`, `build-release-catalog`, `publish-release-catalog`, `bootstrap-release-catalog-publication`, `build-release-catalog-index`, `publish-release-catalog-index`, `bootstrap-release-catalog-index-publication`, `build-publication-descriptor-index`, `bootstrap-publication-descriptor-index-publication`, `build-publication-metadata-catalog`, `bootstrap-publication-metadata-catalog-publication`, `build-publication-registry`, `bootstrap-publication-catalog-workspace`, and `bootstrap-publication-registry-workspace` via `--inventory-json`.
 
 To derive a reusable preset back from a generated demo catalog workspace:
 
@@ -1049,6 +1049,12 @@ If those discovered artifacts must stay fully inside the SATROOT-MACHINE-1 lane,
 satroot1 build-machine-publication-descriptor-index machine_publication_catalog_workspace machine_release_catalog_alpha --channel machine --label "Machine Descriptor Index" --published-at 2026-07-14T04:00:00Z --output machine_publication_descriptor_index.json
 ```
 
+If you already captured a deterministic artifact scan, that same descriptor-index build can replay it directly:
+
+```bash
+satroot1 build-publication-descriptor-index --inventory-json artifact_inventory.json --channel network --label "Inventory Descriptor Index" --published-at 2026-07-08T02:30:00Z --output publication_descriptor_index.json
+```
+
 To bootstrap signing material plus a ready-to-verify signed publication descriptor index:
 
 ```bash
@@ -1075,6 +1081,12 @@ satroot1 bootstrap-publication-descriptor-index-publication --preset-json exampl
 satroot1 bootstrap-machine-publication-descriptor-index-publication --preset-json examples/publication_descriptor_index_presets/ai_compute_publication_descriptor_index.json --output-dir machine_publication_descriptor_index_publication --label "SATROOT Machine Descriptor Publication Override" --scheme hmac-sha256 --key-id descriptor-key
 ```
 
+Saved inventory reports can also drive the signed descriptor-index bootstrap directly:
+
+```bash
+satroot1 bootstrap-publication-descriptor-index-publication --inventory-json artifact_inventory.json --output-dir publication_descriptor_index_publication --channel network --label "Inventory Descriptor Publication" --published-at 2026-07-08T02:45:00Z --scheme hmac-sha256 --key-id descriptor-key
+```
+
 To bootstrap a signed publication report plus descriptor bundle for one artifact:
 
 ```bash
@@ -1099,6 +1111,10 @@ satroot1 bootstrap-publication-metadata-catalog-publication --discover-under pub
 
 ```bash
 satroot1 build-publication-metadata-catalog publication_metadata_bundle_alpha publication_metadata_bundle_beta --channel network --label "SATROOT Metadata Catalog" --published-at 2026-07-08T04:00:00Z --output publication_metadata_catalog.json
+```
+
+```bash
+satroot1 build-publication-metadata-catalog --inventory-json artifact_inventory.json --channel network --label "Inventory Metadata Catalog" --published-at 2026-07-08T03:30:00Z --output publication_metadata_catalog.json
 ```
 
 ```bash
@@ -1137,6 +1153,12 @@ satroot1 bootstrap-publication-metadata-catalog-publication --preset-json exampl
 satroot1 bootstrap-machine-publication-metadata-catalog-publication --preset-json examples/publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json --output-dir machine_publication_metadata_catalog_publication --label "SATROOT Machine Metadata Catalog Override" --scheme hmac-sha256 --key-id catalog-key
 ```
 
+If the publication metadata bundle set was already captured by `inventory-artifacts`, the signed bootstrap can consume that saved inventory directly:
+
+```bash
+satroot1 bootstrap-publication-metadata-catalog-publication --inventory-json artifact_inventory.json --output-dir publication_metadata_catalog_publication --channel network --label "Inventory Metadata Catalog Publication" --published-at 2026-07-08T04:15:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
 To verify that catalog later:
 
 ```bash
@@ -1151,6 +1173,10 @@ satroot1 bootstrap-publication-registry-publication --release-catalog-index-dir 
 
 ```bash
 satroot1 build-publication-registry --release-catalog-index-dir publication_network/release_catalog_index --publication-descriptor-index-dir publication_descriptor_index_publication --publication-metadata-catalog-dir publication_metadata_catalog_publication --channel network --label "SATROOT Publication Registry" --published-at 2026-07-08T05:00:00Z --output publication_registry.json
+```
+
+```bash
+satroot1 build-publication-registry --inventory-json artifact_inventory.json --channel network --label "Inventory Publication Registry" --published-at 2026-07-09T02:30:00Z --output publication_registry.json
 ```
 
 ```bash
@@ -1177,6 +1203,10 @@ To generate that whole registry workspace from an existing publication network i
 satroot1 bootstrap-publication-registry-workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --descriptor-index-label "Workspace Descriptor Index" --publication-metadata-catalog-label "Workspace Metadata Catalog" --publication-registry-label "Workspace Publication Registry"
 ```
 
+```bash
+satroot1 bootstrap-publication-registry-workspace --inventory-json artifact_inventory.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --descriptor-index-label "Inventory Workspace Descriptor Index" --publication-metadata-catalog-label "Inventory Workspace Metadata Catalog" --publication-registry-label "Inventory Workspace Publication Registry"
+```
+
 If you already have a reusable publication catalog workspace, the registry workspace bootstrap can copy that lane instead of regenerating descriptor and metadata publications:
 
 ```bash
@@ -1187,6 +1217,10 @@ To generate just the reusable descriptor-index plus metadata-catalog workspace w
 
 ```bash
 satroot1 bootstrap-publication-catalog-workspace --discover-under publication_network --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --output-dir publication_catalog_workspace --descriptor-index-label "Workspace Descriptor Index" --publication-metadata-catalog-label "Workspace Metadata Catalog"
+```
+
+```bash
+satroot1 bootstrap-publication-catalog-workspace --inventory-json artifact_inventory.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --output-dir publication_catalog_workspace --descriptor-index-label "Inventory Workspace Descriptor Index" --publication-metadata-catalog-label "Inventory Workspace Metadata Catalog"
 ```
 
 For a checked-in repeatable publication-catalog-workspace composition, the same command can also load a preset:

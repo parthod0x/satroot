@@ -6143,6 +6143,53 @@ def test_cli_bootstrap_publication_registry_workspace_from_publication_network(t
     capsys.readouterr()
 
 
+def test_cli_bootstrap_publication_registry_workspace_with_inventory_json(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    inventory_path = tmp_path / "publication_registry_workspace_inventory.json"
+    output_dir = tmp_path / "publication_registry_workspace_inventory"
+
+    write_inventory_json_from_cli(inventory_path, network_dir, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--inventory-json",
+            str(inventory_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--descriptor-index-channel",
+            "network",
+            "--descriptor-index-label",
+            "Inventory Workspace Descriptor Index",
+            "--publication-metadata-catalog-channel",
+            "network",
+            "--publication-metadata-catalog-label",
+            "Inventory Workspace Metadata Catalog",
+            "--publication-registry-channel",
+            "network",
+            "--publication-registry-label",
+            "Inventory Workspace Publication Registry",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["artifact_count"] == 12
+    assert summary["publication_registry"]["index"]["label"] == "Inventory Workspace Publication Registry"
+    assert main(["publication-registry-lint", str(output_dir / "publication_registry")]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_machine_publication_registry_workspace_hmac(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "machine_publication_registry_workspace"
@@ -6445,6 +6492,48 @@ def test_cli_bootstrap_publication_catalog_workspace(tmp_path, capsys):
     )
     assert verified["bundle_count"] == 12
     assert verified["index"]["label"] == "Workspace Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_publication_catalog_workspace_with_inventory_json(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    inventory_path = tmp_path / "publication_catalog_inventory.json"
+    output_dir = tmp_path / "publication_catalog_workspace_inventory"
+
+    write_inventory_json_from_cli(inventory_path, network_dir, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            "--inventory-json",
+            str(inventory_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--descriptor-index-channel",
+            "network",
+            "--descriptor-index-label",
+            "Inventory Workspace Descriptor Index",
+            "--publication-metadata-catalog-channel",
+            "network",
+            "--publication-metadata-catalog-label",
+            "Inventory Workspace Metadata Catalog",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 12
+    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Inventory Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Inventory Workspace Metadata Catalog"
     assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
@@ -9205,6 +9294,35 @@ def test_cli_build_publication_descriptor_index_recursive(tmp_path):
     assert index["index"]["label"] == "SATROOT Descriptor Index"
 
 
+def test_cli_build_publication_descriptor_index_with_inventory_json(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    inventory_path = tmp_path / "artifact_inventory.json"
+    output_path = tmp_path / "descriptor_index_inventory.json"
+
+    write_inventory_json_from_cli(inventory_path, network_dir, capsys=capsys)
+
+    assert main(
+        [
+            "build-publication-descriptor-index",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "network",
+            "--label",
+            "Inventory Descriptor Index",
+            "--published-at",
+            "2026-07-08T02:30:00Z",
+            "--output",
+            str(output_path),
+        ]
+    ) == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 12
+    assert index["artifact_kind_counts"]["publication-network"] == 1
+    assert index["index"]["label"] == "Inventory Descriptor Index"
+
+
 def test_cli_build_publication_descriptor_index_discovers_standalone_bundle_index(tmp_path):
     bundle_index_dir = make_standalone_bundle_index_dir(tmp_path)
     output_path = tmp_path / "bundle_index_descriptor_index.json"
@@ -9490,6 +9608,39 @@ def test_cli_bootstrap_publication_descriptor_index_publication(tmp_path, capsys
     assert verified["index"] == index["index"]
 
 
+def test_cli_bootstrap_publication_descriptor_index_publication_with_inventory_json(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    inventory_path = tmp_path / "publication_descriptor_inventory.json"
+    output_dir = tmp_path / "publication_descriptor_index_publication_inventory"
+
+    write_inventory_json_from_cli(inventory_path, network_dir, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Inventory Descriptor Publication",
+            "--published-at",
+            "2026-07-08T02:15:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 12
+    assert index["artifact_kind_counts"]["publication-network"] == 1
+    assert index["index"]["label"] == "Inventory Descriptor Publication"
+
+
 def test_cli_bootstrap_machine_publication_descriptor_index_publication(tmp_path, capsys):
     machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
     output_dir = tmp_path / "machine_publication_descriptor_index_publication"
@@ -9532,6 +9683,44 @@ def test_cli_bootstrap_machine_publication_descriptor_index_publication(tmp_path
     )
     assert verified["artifact_count"] == 1
     assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_machine_publication_descriptor_index_publication_with_inventory_json(tmp_path, capsys):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    inventory_path = tmp_path / "machine_publication_descriptor_inventory.json"
+    output_dir = tmp_path / "machine_publication_descriptor_index_publication_inventory"
+
+    write_inventory_json_from_cli(inventory_path, machine_catalog_workspace_dir, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-machine-publication-descriptor-index-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Inventory Machine Descriptor Publication",
+            "--published-at",
+            "2026-07-14T04:35:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 9
+    assert index["artifact_kind_counts"]["bundle"] == 1
+    assert index["artifact_kind_counts"]["publication-metadata-bundle"] == 3
+    assert index["artifact_kind_counts"]["publication-descriptor-index"] == 1
+    assert index["artifact_kind_counts"]["publication-metadata-catalog"] == 1
+    assert index["artifact_kind_counts"]["demo-catalog"] == 1
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert index["index"]["label"] == "Inventory Machine Descriptor Publication"
 
 
 def test_cli_bootstrap_publication_descriptor_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
@@ -9956,6 +10145,36 @@ def test_cli_build_publication_metadata_catalog_recursive(tmp_path):
     assert catalog["index"]["label"] == "SATROOT Metadata Catalog"
 
 
+def test_cli_build_publication_metadata_catalog_with_inventory_json(tmp_path, capsys):
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    inventory_path = tmp_path / "publication_metadata_inventory.json"
+    catalog_path = tmp_path / "publication_metadata_catalog_inventory.json"
+
+    write_inventory_json_from_cli(inventory_path, tmp_path, capsys=capsys)
+
+    assert main(
+        [
+            "build-publication-metadata-catalog",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "network",
+            "--label",
+            "Inventory Metadata Catalog",
+            "--published-at",
+            "2026-07-08T03:30:00Z",
+            "--output",
+            str(catalog_path),
+        ]
+    ) == 0
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["release"] == 1
+    assert catalog["artifact_kind_counts"]["publication-network"] == 1
+    assert catalog["index"]["label"] == "Inventory Metadata Catalog"
+
+
 def test_cli_build_publication_metadata_catalog_accepts_bundle_index_bundles(tmp_path):
     bundle_index_dir = make_standalone_bundle_index_dir(tmp_path)
     metadata_bundle_dir = tmp_path / "bundle_index_metadata_bundle"
@@ -10243,6 +10462,40 @@ def test_cli_bootstrap_publication_metadata_catalog_publication(tmp_path, capsys
     assert verified["index"] == catalog["index"]
 
 
+def test_cli_bootstrap_publication_metadata_catalog_publication_with_inventory_json(tmp_path, capsys):
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    inventory_path = tmp_path / "publication_metadata_catalog_publication_inventory.json"
+    output_dir = tmp_path / "publication_metadata_catalog_publication_inventory"
+
+    write_inventory_json_from_cli(inventory_path, tmp_path, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Inventory Metadata Catalog Publication",
+            "--published-at",
+            "2026-07-08T04:15:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["release"] == 1
+    assert catalog["artifact_kind_counts"]["publication-network"] == 1
+    assert catalog["index"]["label"] == "Inventory Metadata Catalog Publication"
+
+
 def test_cli_bootstrap_machine_publication_metadata_catalog_publication(tmp_path, capsys):
     workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(tmp_path)
     output_dir = tmp_path / "machine_publication_metadata_catalog_publication"
@@ -10287,6 +10540,40 @@ def test_cli_bootstrap_machine_publication_metadata_catalog_publication(tmp_path
     )
     assert verified["bundle_count"] == 2
     assert verified["index"] == catalog["index"]
+
+
+def test_cli_bootstrap_machine_publication_metadata_catalog_publication_with_inventory_json(tmp_path, capsys):
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(tmp_path)
+    inventory_path = tmp_path / "machine_publication_metadata_catalog_publication_inventory.json"
+    output_dir = tmp_path / "machine_publication_metadata_catalog_publication_inventory"
+
+    write_inventory_json_from_cli(inventory_path, workspace_bundle_dir, catalog_bundle_dir, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-machine-publication-metadata-catalog-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Inventory Machine Metadata Catalog Publication",
+            "--published-at",
+            "2026-07-14T05:35:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert catalog["artifact_kind_counts"]["release-catalog"] == 1
+    assert catalog["index"]["label"] == "Inventory Machine Metadata Catalog Publication"
 
 
 def test_cli_bootstrap_machine_publication_metadata_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
@@ -10467,6 +10754,42 @@ def test_cli_build_machine_publication_registry(tmp_path):
     assert registry["index"]["label"] == "Machine Publication Registry"
 
 
+def test_cli_build_machine_publication_registry_with_inventory_json(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    inventory_path = tmp_path / "machine_publication_registry_inventory.json"
+    registry_path = tmp_path / "machine_publication_registry_inventory.json.out"
+
+    write_inventory_json_from_cli(
+        inventory_path,
+        release_catalog_index_dir,
+        descriptor_index_dir,
+        metadata_catalog_dir,
+        capsys=capsys,
+    )
+
+    assert main(
+        [
+            "build-machine-publication-registry",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "machine",
+            "--label",
+            "Inventory Machine Publication Registry",
+            "--published-at",
+            "2026-07-14T07:30:00Z",
+            "--output",
+            str(registry_path),
+        ]
+    ) == 0
+
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert registry["index"]["label"] == "Inventory Machine Publication Registry"
+    assert registry["release_catalog_index_publication"]["publication_directory_path"] == Path(release_catalog_index_dir).relative_to(tmp_path).as_posix()
+    assert registry["publication_descriptor_index_publication"]["publication_directory_path"] == Path(descriptor_index_dir).relative_to(tmp_path).as_posix()
+    assert registry["publication_metadata_catalog_publication"]["publication_directory_path"] == Path(metadata_catalog_dir).relative_to(tmp_path).as_posix()
+
+
 def test_cli_build_machine_publication_registry_rejects_generic_component(tmp_path):
     release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
     registry_path = tmp_path / "machine_publication_registry.json"
@@ -10549,6 +10872,42 @@ def test_cli_build_publication_registry(tmp_path):
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
     assert registry["component_count"] == 3
     assert registry["index"]["label"] == "SATROOT Publication Registry"
+
+
+def test_cli_build_publication_registry_with_inventory_json(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    inventory_path = tmp_path / "publication_registry_inventory.json"
+    registry_path = tmp_path / "publication_registry_inventory.json.out"
+
+    write_inventory_json_from_cli(
+        inventory_path,
+        release_catalog_index_dir.parent,
+        descriptor_index_dir,
+        metadata_catalog_dir,
+        capsys=capsys,
+    )
+
+    assert main(
+        [
+            "build-publication-registry",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "network",
+            "--label",
+            "Inventory Publication Registry",
+            "--published-at",
+            "2026-07-09T02:30:00Z",
+            "--output",
+            str(registry_path),
+        ]
+    ) == 0
+
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert registry["index"]["label"] == "Inventory Publication Registry"
+    assert registry["release_catalog_index_publication"]["publication_directory_path"] == Path(release_catalog_index_dir).relative_to(tmp_path).as_posix()
+    assert registry["publication_descriptor_index_publication"]["publication_directory_path"] == Path(descriptor_index_dir).relative_to(tmp_path).as_posix()
+    assert registry["publication_metadata_catalog_publication"]["publication_directory_path"] == Path(metadata_catalog_dir).relative_to(tmp_path).as_posix()
 
 
 def test_cli_build_publication_registry_manifest(tmp_path):

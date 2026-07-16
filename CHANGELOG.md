@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Lets bundle, release, release-catalog, and release-catalog-index build/publish commands reuse saved `inventory-artifacts` reports via `--inventory-json`.
+- Extends that same `--inventory-json` reuse pattern across publication descriptor index, publication metadata catalog, publication registry, publication catalog workspace, and publication registry workspace build/bootstrap flows.
 - Adds preset support to `publish-publication-stack`, `publish-machine-publication-stack`, `publish-publication-network`, and `publish-machine-publication-network`.
 - Adds preset support to `publish-publication-catalog-workspace`, `publish-machine-publication-catalog-workspace`, `publish-publication-registry-workspace`, and `publish-machine-publication-registry-workspace`.
 - Extends exported publication-stack presets with source `catalog_workspace_dirs` so they can drive publish flows as well as bootstrap flows.
