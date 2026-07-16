@@ -1,0 +1,13 @@
+{
+  "type": "SATROOT-PUBLICATION-STACK-PRESET",
+  "version": "0.1",
+  "catalog_workspace_dirs": [
+    "../../generated_machine_catalogs/catalog_alpha",
+    "../../generated_machine_catalogs/catalog_beta"
+  ],
+  "release_catalog": {
+    "channel": "machine",
+    "label": "SATROOT Machine Published Stack",
+    "published_at": "2026-07-06T05:00:00Z"
+  }
+}

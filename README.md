@@ -842,6 +842,8 @@ That same publish lane can now also load a stack preset that preserves source `c
 satroot1 publish-publication-stack --preset-json exported_stack.json --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_preset --label "Published Stack From Preset"
 ```
 
+A checked-in example of that publish-oriented preset shape lives at `examples/stack_presets/ai_compute_publication_stack_publish.json`.
+
 For existing machine-only catalog workspaces, `publish-machine-publication-stack` applies the same publish flow but rejects any nested bundle set that is not purely `SATROOT-MACHINE-1`:
 
 ```bash
@@ -859,6 +861,8 @@ And because exported network presets now preserve source `publication_stack_dirs
 ```bash
 satroot1 publish-publication-network --preset-json exported_network.json --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_preset --label "Published Network From Preset"
 ```
+
+There is a matching checked-in example at `examples/network_presets/ai_compute_publication_network_publish.json`.
 
 For existing machine-only stack workspaces, `publish-machine-publication-network` enforces the same SATROOT-MACHINE-1-only constraint across every nested catalog workspace:
 

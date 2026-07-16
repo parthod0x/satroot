@@ -1492,24 +1492,48 @@ def test_load_publication_descriptor_index_preset_example():
 def test_load_publication_stack_preset_example():
     preset = load_publication_stack_preset(ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack.json")
     assert preset["catalog_preset_paths"] == [str((ROOT / "examples" / "catalog_presets" / "ai_compute_catalog.json").resolve())]
+    assert preset["catalog_workspace_dirs"] == []
     assert preset["release_catalog_metadata"]["label"] == "SATROOT AI Compute Publication Stack"
+
+
+def test_load_publication_stack_publish_preset_example():
+    preset = load_publication_stack_preset(ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack_publish.json")
+    assert preset["catalog_preset_paths"] == []
+    assert preset["catalog_workspace_dirs"] == [
+        str((ROOT / "generated_catalogs" / "stable_workspace").resolve()),
+        str((ROOT / "generated_catalogs" / "machine_workspace").resolve()),
+    ]
+    assert preset["release_catalog_metadata"]["label"] == "SATROOT AI Compute Published Stack"
 
 
 def test_load_machine_publication_stack_preset_example():
     preset = load_machine_publication_stack_preset(ROOT / "examples" / "stack_presets" / "machine_compute_publication_stack.json")
     assert preset["catalog_preset_paths"] == [str((ROOT / "examples" / "catalog_presets" / "machine_compute_catalog.json").resolve())]
+    assert preset["catalog_workspace_dirs"] == []
     assert preset["release_catalog_metadata"]["label"] == "SATROOT Machine Compute Publication Stack"
 
 
 def test_load_publication_network_preset_example():
     preset = load_publication_network_preset(ROOT / "examples" / "network_presets" / "ai_compute_publication_network.json")
     assert preset["stack_preset_paths"] == [str((ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack.json").resolve())]
+    assert preset["publication_stack_dirs"] == []
     assert preset["release_catalog_index_metadata"]["label"] == "SATROOT AI Compute Publication Network"
+
+
+def test_load_publication_network_publish_preset_example():
+    preset = load_publication_network_preset(ROOT / "examples" / "network_presets" / "ai_compute_publication_network_publish.json")
+    assert preset["stack_preset_paths"] == []
+    assert preset["publication_stack_dirs"] == [
+        str((ROOT / "generated_stacks" / "stack_alpha").resolve()),
+        str((ROOT / "generated_stacks" / "stack_beta").resolve()),
+    ]
+    assert preset["release_catalog_index_metadata"]["label"] == "SATROOT AI Compute Published Network"
 
 
 def test_load_machine_publication_network_preset_example():
     preset = load_machine_publication_network_preset(ROOT / "examples" / "network_presets" / "machine_compute_publication_network.json")
     assert preset["stack_preset_paths"] == [str((ROOT / "examples" / "stack_presets" / "machine_compute_publication_stack.json").resolve())]
+    assert preset["publication_stack_dirs"] == []
     assert preset["release_catalog_index_metadata"]["label"] == "SATROOT Machine Compute Publication Network"
 
 

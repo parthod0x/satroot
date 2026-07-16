@@ -1,0 +1,13 @@
+{
+  "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
+  "version": "0.1",
+  "publication_stack_dirs": [
+    "../../generated_stacks/stack_alpha",
+    "../../generated_stacks/stack_beta"
+  ],
+  "release_catalog_index": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Published Network",
+    "published_at": "2026-07-06T04:00:00Z"
+  }
+}
