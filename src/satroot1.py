@@ -5635,7 +5635,7 @@ def _find_machine_demo_catalog_workspace_dirs_from_publication_metadata_catalog(
     for entry in bundles:
         if not isinstance(entry, Mapping):
             raise SatRootError(f"{label} publication metadata catalog bundles must contain objects")
-        if entry.get("artifact_kind") != "demo-catalog":
+        if entry.get("artifact_kind") not in {"demo-catalog", "publication-catalog-workspace"}:
             continue
 
         bundle_ref = entry.get("publication_metadata_bundle_path")
@@ -5643,25 +5643,32 @@ def _find_machine_demo_catalog_workspace_dirs_from_publication_metadata_catalog(
             raise SatRootError(f"{label} publication metadata catalog bundles.publication_metadata_bundle_path must be a non-empty string")
         bundle_dir = (catalog_path.parent / bundle_ref).resolve()
         _manifest_path, _report_path, _descriptor_path, _manifest, descriptor = _load_publication_metadata_bundle_publication(bundle_dir)
-        if descriptor.get("artifact_kind") != "demo-catalog":
-            raise SatRootError(f"{label} expected demo-catalog descriptor metadata for bundle: {bundle_ref}")
-
-        bundle_profiles = descriptor.get("bundle_profiles")
-        if not isinstance(bundle_profiles, list) or not bundle_profiles:
-            continue
-        unexpected_profiles = sorted(
-            {
-                str(value)
-                for value in bundle_profiles
-                if not isinstance(value, str) or value != MACHINE_DEMO_CATALOG_PROFILE
-            }
-        )
-        if unexpected_profiles:
-            continue
-
         artifact_path = descriptor.get("artifact_path")
-        assert isinstance(artifact_path, str)
+        if not isinstance(artifact_path, str) or not artifact_path.strip():
+            raise SatRootError(f"{label} expected artifact_path metadata for bundle: {bundle_ref}")
         resolved_workspace_dir = str(Path(artifact_path).resolve())
+
+        if descriptor.get("artifact_kind") == "demo-catalog":
+            bundle_profiles = descriptor.get("bundle_profiles")
+            if not isinstance(bundle_profiles, list) or not bundle_profiles:
+                continue
+            unexpected_profiles = sorted(
+                {
+                    str(value)
+                    for value in bundle_profiles
+                    if not isinstance(value, str) or value != MACHINE_DEMO_CATALOG_PROFILE
+                }
+            )
+            if unexpected_profiles:
+                continue
+        elif descriptor.get("artifact_kind") == "publication-catalog-workspace":
+            _require_machine_publication_catalog_workspace(
+                resolved_workspace_dir,
+                label=f"{label} machine publication catalog workspace bundle",
+            )
+        else:
+            raise SatRootError(f"{label} expected demo-catalog or publication-catalog-workspace descriptor metadata for bundle: {bundle_ref}")
+
         if resolved_workspace_dir not in seen_workspace_dirs:
             machine_workspace_dirs.append(Path(resolved_workspace_dir))
             seen_workspace_dirs.add(resolved_workspace_dir)

@@ -5020,6 +5020,41 @@ def test_cli_publish_machine_publication_catalog_workspace_from_existing_publica
     capsys.readouterr()
 
 
+def test_cli_publish_machine_publication_catalog_workspace_from_standalone_publications(tmp_path, capsys):
+    _release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "published_machine_catalog_workspace"
+
+    source_catalog = json.loads((metadata_catalog_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    machine_workspace_entries = [
+        entry for entry in source_catalog["bundles"] if entry["artifact_kind"] == "publication-catalog-workspace"
+    ]
+    assert len(machine_workspace_entries) == 1
+    source_machine_catalog_workspace_dir = Path(machine_workspace_entries[0]["artifact_path"]).resolve()
+
+    exit_code = main(
+        [
+            "publish-machine-publication-catalog-workspace",
+            str(descriptor_index_dir),
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication catalog workspace from existing publications to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_descriptor_index_dir"] == str(descriptor_index_dir.resolve())
+    assert summary["source_publication_metadata_catalog_dir"] == str(metadata_catalog_dir.resolve())
+    assert summary["source_machine_catalog_workspace_dir"] == str(source_machine_catalog_workspace_dir)
+    assert summary["publication_metadata_bundle_count"] == 2
+    assert len(summary["publication_metadata_bundles"]) == 2
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_publish_machine_publication_catalog_workspace_rejects_generic_publications(tmp_path):
     demo_catalog_dir = make_demo_catalog_workspace_dir(tmp_path)
     catalog_workspace_dir = tmp_path / "stable_only_publication_catalog_workspace"
