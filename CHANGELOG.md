@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Adds preset support to `publish-publication-stack`, `publish-machine-publication-stack`, `publish-publication-network`, and `publish-machine-publication-network`.
+- Adds preset support to `publish-publication-catalog-workspace`, `publish-machine-publication-catalog-workspace`, `publish-publication-registry-workspace`, and `publish-machine-publication-registry-workspace`.
+- Extends exported publication-stack presets with source `catalog_workspace_dirs` so they can drive publish flows as well as bootstrap flows.
+- Extends exported publication-network presets with source `publication_stack_dirs` so they can drive publish flows as well as bootstrap flows.
+- Makes machine publication-registry-workspace preset export fall back to `release_catalog_index_dir` when the original source network is not machine-valid, preserving machine-only preset reusability.
+- Lets machine publication-registry bootstrap consume an existing machine publication catalog workspace via direct CLI path or preset reference.
 - Hardens the SATROOT-1 replay engine with root ID, profile, and account-name validation.
 - Adds optional `event_id` and `state_hash` verification during replay.
 - Adds an explicit profile compatibility registry in `protocol/satroot1.profile-registry.json`.

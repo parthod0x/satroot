@@ -836,6 +836,12 @@ If you already have generated demo catalog workspaces and just want to consolida
 satroot1 publish-publication-stack generated_catalogs/stable_workspace generated_catalogs/machine_workspace --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_existing --label "Published Existing Stack"
 ```
 
+That same publish lane can now also load a stack preset that preserves source `catalog_workspace_dirs`, which makes exported stack presets reusable for both bootstrap and publish workflows:
+
+```bash
+satroot1 publish-publication-stack --preset-json exported_stack.json --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_preset --label "Published Stack From Preset"
+```
+
 For existing machine-only catalog workspaces, `publish-machine-publication-stack` applies the same publish flow but rejects any nested bundle set that is not purely `SATROOT-MACHINE-1`:
 
 ```bash
@@ -846,6 +852,12 @@ If you already have generated publication stack workspaces and want a top-level 
 
 ```bash
 satroot1 publish-publication-network generated_stacks/stack_alpha generated_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Published Existing Network"
+```
+
+And because exported network presets now preserve source `publication_stack_dirs`, the same checked-in preset can also drive a publish-only consolidation flow:
+
+```bash
+satroot1 publish-publication-network --preset-json exported_network.json --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_preset --label "Published Network From Preset"
 ```
 
 For existing machine-only stack workspaces, `publish-machine-publication-network` enforces the same SATROOT-MACHINE-1-only constraint across every nested catalog workspace:
@@ -860,6 +872,12 @@ If you already have a publication descriptor index and matching publication meta
 satroot1 publish-publication-catalog-workspace publication_descriptor_index publication_metadata_catalog --output-dir publication_catalog_workspace_from_existing
 ```
 
+If those source publication directories already live in an exported publication-registry preset, the same command can load them directly:
+
+```bash
+satroot1 publish-publication-catalog-workspace --preset-json exported_registry.json --output-dir publication_catalog_workspace_from_preset
+```
+
 For a machine-only publication lane, `publish-machine-publication-catalog-workspace` looks for at least one nested demo-catalog descriptor whose `bundle_profiles` are entirely `SATROOT-MACHINE-1` and preserves that source machine workspace provenance in the published summary:
 
 ```bash
@@ -870,6 +888,12 @@ If you already have a publication catalog workspace and just want to bind it to 
 
 ```bash
 satroot1 publish-publication-registry-workspace publication_catalog_workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir publication_registry_workspace_from_existing --label "Published Existing Registry Workspace"
+```
+
+That publish wrapper can also load an exported registry-workspace preset for the source catalog workspace, optional network/index source, and publication-registry metadata defaults:
+
+```bash
+satroot1 publish-publication-registry-workspace --preset-json exported_registry_workspace.json --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir publication_registry_workspace_from_preset --label "Published Registry Workspace From Preset"
 ```
 
 If that source catalog workspace is machine-validated, `publish-machine-publication-registry-workspace` carries forward the machine publication catalog provenance as well:
@@ -930,6 +954,8 @@ To derive a publication stack preset and also emit nested demo catalog preset fi
 satroot1 export-publication-stack-preset publication_stack --catalog-preset-dir exported_catalog_presets --output exported_stack.json
 ```
 
+Exported stack presets now also preserve source `catalog_workspace_dirs`, so the same preset can be fed back into `publish-publication-stack` without needing the nested demo-catalog preset files at runtime.
+
 For a machine-only stack, there is a matching export wrapper that validates nested exported catalog presets stay on `SATROOT-MACHINE-1`:
 
 ```bash
@@ -941,6 +967,8 @@ To derive a publication network preset and recursively emit nested stack and cat
 ```bash
 satroot1 export-publication-network-preset publication_network --stack-preset-dir exported_stack_presets --catalog-preset-dir exported_catalog_presets --output exported_network.json
 ```
+
+Those exported network presets also preserve source `publication_stack_dirs`, which makes them reusable for `publish-publication-network` in addition to the bootstrap lane.
 
 And the machine-only network lane can be exported the same way while validating nested stack and catalog presets remain machine-only:
 
@@ -1187,6 +1215,8 @@ To derive a reusable preset back from a generated registry workspace:
 ```bash
 satroot1 export-publication-registry-workspace-preset publication_registry_workspace --output exported_registry_workspace.json
 ```
+
+Published machine registry-workspace exports are a little stricter: when the original source network is not SATROOT-MACHINE-1-only, the exported machine preset falls back to `release_catalog_index_dir` instead of preserving a generic `publication_network_dir`, so the preset stays reusable by machine-only publish/bootstrap flows.
 
 For the machine-only registry lane, the matching export wrapper validates that the workspace still carries machine provenance:
 
