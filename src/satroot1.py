@@ -5097,6 +5097,37 @@ def _require_machine_demo_catalog_workspace(demo_catalog_dir: str | Path, *, lab
         )
 
 
+def _require_machine_catalog_provenance_source(
+    machine_catalog_source_dir: str | Path,
+    *,
+    label: str,
+    seen_dirs: Optional[set[str]] = None,
+) -> None:
+    resolved_source_dir = Path(machine_catalog_source_dir).resolve()
+    seen = set() if seen_dirs is None else set(seen_dirs)
+    source_key = str(resolved_source_dir)
+    if source_key in seen:
+        raise SatRootError(f"{label} detected recursive machine catalog provenance: {resolved_source_dir}")
+    seen.add(source_key)
+
+    try:
+        _require_machine_demo_catalog_workspace(resolved_source_dir, label=label)
+        return
+    except SatRootError:
+        pass
+
+    _, summary = _load_workspace_summary(resolved_source_dir, label=label)
+    validate_publication_catalog_workspace_summary_consistency(summary)
+    nested_source_dir = summary.get("source_machine_catalog_workspace_dir")
+    if not isinstance(nested_source_dir, str) or not nested_source_dir.strip():
+        raise SatRootError(f"{label} requires source_machine_catalog_workspace_dir provenance")
+    _require_machine_catalog_provenance_source(
+        Path(nested_source_dir).resolve(),
+        label=f"{label} source machine catalog workspace",
+        seen_dirs=seen,
+    )
+
+
 def _require_machine_release_publication(release_dir: str | Path, *, label: str) -> None:
     _, bundle_index_path, _manifest, index = _load_release_publication(release_dir)
     bundles = index.get("bundles")
@@ -5612,7 +5643,7 @@ def _require_machine_publication_catalog_workspace(publication_catalog_workspace
     source_machine_catalog_workspace_dir = summary.get("source_machine_catalog_workspace_dir")
     if not isinstance(source_machine_catalog_workspace_dir, str) or not source_machine_catalog_workspace_dir.strip():
         raise SatRootError(f"{label} requires source_machine_catalog_workspace_dir provenance")
-    _require_machine_demo_catalog_workspace(
+    _require_machine_catalog_provenance_source(
         Path(source_machine_catalog_workspace_dir).resolve(),
         label=f"{label} source machine catalog workspace",
     )
