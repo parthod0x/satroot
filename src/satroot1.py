@@ -10626,6 +10626,7 @@ def export_machine_publication_registry_workspace_preset_from_workspace(
 ) -> Dict[str, Any]:
     _, summary = _load_workspace_summary(publication_registry_workspace_dir, label="publication registry workspace")
     validate_publication_registry_workspace_summary_consistency(summary)
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
 
     source_machine_publication_catalog_workspace_dir = summary.get("source_machine_publication_catalog_workspace_dir")
     if isinstance(source_machine_publication_catalog_workspace_dir, str) and source_machine_publication_catalog_workspace_dir.strip():
@@ -10644,10 +10645,41 @@ def export_machine_publication_registry_workspace_preset_from_workspace(
             label="machine publication registry workspace preset export source machine catalog workspace",
         )
 
-    return export_publication_registry_workspace_preset_from_workspace(
+    release_catalog_index_source_dir = summary.get("release_catalog_index_source_dir")
+    machine_release_catalog_index_valid = False
+    if isinstance(release_catalog_index_source_dir, str) and release_catalog_index_source_dir.strip():
+        try:
+            _require_machine_release_catalog_index_publication(
+                Path(release_catalog_index_source_dir).resolve(),
+                label="machine publication registry workspace preset export source release catalog index",
+            )
+            machine_release_catalog_index_valid = True
+        except SatRootError:
+            machine_release_catalog_index_valid = False
+
+    preset = export_publication_registry_workspace_preset_from_workspace(
         publication_registry_workspace_dir,
         output_path=output_path,
     )
+    if not machine_release_catalog_index_valid:
+        preset.pop("publication_catalog_workspace_dir", None)
+
+    source_publication_network_dir = summary.get("source_publication_network_dir")
+    if isinstance(source_publication_network_dir, str) and source_publication_network_dir.strip():
+        try:
+            _require_machine_publication_network_workspace(
+                Path(source_publication_network_dir).resolve(),
+                label="machine publication registry workspace preset export source publication network",
+            )
+        except SatRootError:
+            preset.pop("publication_network_dir", None)
+            if isinstance(release_catalog_index_source_dir, str) and release_catalog_index_source_dir.strip():
+                preset["release_catalog_index_dir"] = _relative_output_path(
+                    Path(release_catalog_index_source_dir).resolve(),
+                    base_dir=base_dir,
+                )
+
+    return preset
 
 
 def _detect_satroot_artifact_kind(path: str | Path) -> tuple[str, Path]:
@@ -13295,6 +13327,7 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested machine catalog; it must resolve to SATROOT-MACHINE-1 only")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for the nested publication catalog workspace defaults")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file for registry defaults")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-dir", help="Optional existing SATROOT-MACHINE-1 publication catalog workspace directory to copy instead of generating a nested machine publication catalog workspace")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine demo bundle and generated publication manifests")
@@ -15376,6 +15409,42 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        publication_catalog_workspace_dir = (
+            Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
+            if (preset or {}).get("publication_catalog_workspace_dir")
+            else None
+        )
+        if args.publication_catalog_workspace_dir:
+            publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
+        publication_network_dir = (
+            Path(args.publication_network_dir).resolve()
+            if args.publication_network_dir
+            else (Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None)
+        )
+        release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
+        if release_catalog_index_dir is None and publication_network_dir is not None:
+            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+        if release_catalog_index_dir is None:
+            raise SatRootError("bootstrap-machine-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
+
+        publication_registry_metadata = _merge_release_metadata_defaults((preset or {}).get("publication_registry_metadata"), {
+            "channel": args.publication_registry_channel,
+            "label": args.publication_registry_label,
+            "published_at": args.publication_registry_published_at,
+        })
+        if publication_catalog_workspace_dir is not None:
+            publish_machine_publication_registry_workspace(
+                publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                release_catalog_index_dir=release_catalog_index_dir,
+                publication_network_dir=publication_network_dir,
+                output_dir=args.output_dir,
+                signature_scheme=args.scheme,
+                key_id=args.publication_registry_key_id,
+                publication_registry_metadata=publication_registry_metadata,
+            )
+            print(f"wrote SATROOT-MACHINE-1 publication registry workspace to {Path(args.output_dir).resolve()}")
+            return 0
+
         machine_inputs = resolve_machine_demo_bootstrap_inputs(
             command_name="bootstrap-machine-publication-registry-workspace",
             preset_option_name="--catalog-preset-json",
@@ -15399,17 +15468,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             rules_hash=args.rules_hash,
             nonce=args.nonce,
         )
-        publication_network_dir = (
-            Path(args.publication_network_dir).resolve()
-            if args.publication_network_dir
-            else (Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None)
-        )
-        release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
-        if release_catalog_index_dir is None and publication_network_dir is not None:
-            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
-        if release_catalog_index_dir is None:
-            raise SatRootError("bootstrap-machine-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
-
         release_metadata = _merge_release_metadata_defaults((machine_preset or {}).get("release_metadata"), {
             "channel": args.channel,
             "label": args.label,
@@ -15436,11 +15494,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "published_at": args.publication_metadata_catalog_published_at,
             },
         )
-        publication_registry_metadata = _merge_release_metadata_defaults((preset or {}).get("publication_registry_metadata"), {
-            "channel": args.publication_registry_channel,
-            "label": args.publication_registry_label,
-            "published_at": args.publication_registry_published_at,
-        })
         workspace = bootstrap_machine_credit_publication_registry_workspace(
             symbol=machine_inputs["symbol"],
             name=machine_inputs["name"],
