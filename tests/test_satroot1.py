@@ -4574,6 +4574,50 @@ def test_cli_publish_publication_stack_from_existing_catalog_workspaces(tmp_path
     capsys.readouterr()
 
 
+def test_cli_publish_publication_stack_with_preset(tmp_path, capsys):
+    stack_dir = make_demo_publication_stack_dir(tmp_path)
+    preset_path = tmp_path / "exported_stack.json"
+    catalog_preset_dir = tmp_path / "exported_catalog_presets"
+    output_dir = tmp_path / "published_stack_preset"
+
+    assert main(
+        [
+            "export-publication-stack-preset",
+            str(stack_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    exit_code = main(
+        [
+            "publish-publication-stack",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Preset Published Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication stack from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["catalog"]["label"] == "Preset Published Stack Override"
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_publish_publication_network_from_existing_stack_workspaces(tmp_path, capsys):
     stack_alpha = tmp_path / "stack_alpha_root" / "publication_stack"
     stack_beta = tmp_path / "stack_beta_root" / "publication_stack"
@@ -4625,6 +4669,53 @@ def test_cli_publish_publication_network_from_existing_stack_workspaces(tmp_path
     )
     assert verified["release_catalog_count"] == 2
     assert verified["index"]["label"] == "Published Existing Network"
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_publication_network_with_preset(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    preset_path = tmp_path / "exported_network.json"
+    stack_preset_dir = tmp_path / "exported_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_catalog_presets"
+    output_dir = tmp_path / "published_network_preset"
+
+    assert main(
+        [
+            "export-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    exit_code = main(
+        [
+            "publish-publication-network",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Preset Published Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication network from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["release_catalog_index"]["index"]["label"] == "Preset Published Network Override"
     assert main(["publication-network-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
@@ -4719,6 +4810,66 @@ def test_cli_publish_machine_publication_stack_from_existing_catalog_workspaces(
     )
     assert verified["release_count"] == 2
     assert verified["catalog"]["label"] == "Published Machine Stack"
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_stack_with_preset(tmp_path, capsys):
+    stack_dir = tmp_path / "machine_publication_stack"
+    preset_path = tmp_path / "exported_machine_stack.json"
+    catalog_preset_dir = tmp_path / "exported_machine_catalog_presets"
+    output_dir = tmp_path / "published_machine_stack_preset"
+    assert main(
+        [
+            "bootstrap-machine-publication-stack",
+            "--stack-preset-json",
+            str(ROOT / "examples" / "stack_presets" / "machine_compute_publication_stack.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_dir),
+            "--label",
+            "Machine Export Stack Override",
+        ]
+    ) == 0
+    assert main(
+        [
+            "export-machine-publication-stack-preset",
+            str(stack_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    exit_code = main(
+        [
+            "publish-machine-publication-stack",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Preset Published Machine Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication stack from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["release_catalog"]["catalog"]["label"] == "Preset Published Machine Stack Override"
     assert main(["publication-stack-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
@@ -4855,6 +5006,71 @@ def test_cli_publish_machine_publication_network_from_existing_stack_workspaces(
     )
     assert verified["release_catalog_count"] == 2
     assert verified["index"]["label"] == "Published Machine Network"
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_network_with_preset(tmp_path, capsys):
+    network_dir = tmp_path / "machine_publication_network"
+    preset_path = tmp_path / "exported_machine_network.json"
+    stack_preset_dir = tmp_path / "exported_machine_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_machine_catalog_presets"
+    output_dir = tmp_path / "published_machine_network_preset"
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "machine_compute_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--label",
+            "Machine Export Network Override",
+        ]
+    ) == 0
+    assert main(
+        [
+            "export-machine-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    exit_code = main(
+        [
+            "publish-machine-publication-network",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Preset Published Machine Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication network from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["release_catalog_index"]["index"]["label"] == "Preset Published Machine Network Override"
     assert main(["publication-network-lint", str(output_dir)]) == 0
     capsys.readouterr()
 

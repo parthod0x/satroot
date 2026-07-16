@@ -858,6 +858,7 @@ def load_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
         "type",
         "version",
         "catalog_presets",
+        "catalog_workspace_dirs",
         "release_catalog",
     }
     unexpected = set(preset) - allowed_keys
@@ -868,11 +869,19 @@ def load_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(preset.get("catalog_presets"), label="publication stack preset catalog_presets")
     ]
-    if not catalog_preset_paths:
-        raise SatRootError("publication stack preset must contain at least one catalog_preset")
+    catalog_workspace_dirs = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("catalog_workspace_dirs"),
+            label="publication stack preset catalog_workspace_dirs",
+        )
+    ]
+    if not catalog_preset_paths and not catalog_workspace_dirs:
+        raise SatRootError("publication stack preset must contain at least one catalog_preset or catalog_workspace_dir")
 
     return {
         "catalog_preset_paths": catalog_preset_paths,
+        "catalog_workspace_dirs": catalog_workspace_dirs,
         "release_catalog_metadata": validate_release_metadata_mapping(preset.get("release_catalog")),
     }
 
@@ -881,6 +890,11 @@ def load_machine_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
     preset = load_publication_stack_preset(path)
     for catalog_preset_path in preset.get("catalog_preset_paths", []):
         load_machine_demo_catalog_preset(catalog_preset_path)
+    for catalog_workspace_dir in preset.get("catalog_workspace_dirs", []):
+        _require_machine_demo_catalog_workspace(
+            catalog_workspace_dir,
+            label="machine publication stack preset catalog workspace",
+        )
     return preset
 
 
@@ -896,6 +910,7 @@ def load_publication_network_preset(path: str | Path) -> Dict[str, Any]:
         "type",
         "version",
         "stack_presets",
+        "publication_stack_dirs",
         "release_catalog_index",
     }
     unexpected = set(preset) - allowed_keys
@@ -906,11 +921,19 @@ def load_publication_network_preset(path: str | Path) -> Dict[str, Any]:
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(preset.get("stack_presets"), label="publication network preset stack_presets")
     ]
-    if not stack_preset_paths:
-        raise SatRootError("publication network preset must contain at least one stack_preset")
+    publication_stack_dirs = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("publication_stack_dirs"),
+            label="publication network preset publication_stack_dirs",
+        )
+    ]
+    if not stack_preset_paths and not publication_stack_dirs:
+        raise SatRootError("publication network preset must contain at least one stack_preset or publication_stack_dir")
 
     return {
         "stack_preset_paths": stack_preset_paths,
+        "publication_stack_dirs": publication_stack_dirs,
         "release_catalog_index_metadata": validate_release_metadata_mapping(preset.get("release_catalog_index")),
     }
 
@@ -919,6 +942,11 @@ def load_machine_publication_network_preset(path: str | Path) -> Dict[str, Any]:
     preset = load_publication_network_preset(path)
     for stack_preset_path in preset.get("stack_preset_paths", []):
         load_machine_publication_stack_preset(stack_preset_path)
+    for publication_stack_dir in preset.get("publication_stack_dirs", []):
+        _require_machine_publication_stack_workspace(
+            publication_stack_dir,
+            label="machine publication network preset publication stack workspace",
+        )
     return preset
 
 
@@ -10014,6 +10042,7 @@ def export_publication_stack_preset_from_workspace(
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
     export_catalog_dir = None if catalog_preset_dir is None else Path(catalog_preset_dir).resolve()
     catalog_preset_paths: list[str] = []
+    catalog_workspace_dirs: list[str] = []
 
     for entry in workspaces:
         if not isinstance(entry, Mapping):
@@ -10023,6 +10052,8 @@ def export_publication_stack_preset_from_workspace(
         preset_path = entry.get("preset_path")
         if not isinstance(workspace_name, str) or not workspace_name.strip():
             continue
+        if isinstance(workspace_dir, str) and workspace_dir.strip():
+            catalog_workspace_dirs.append(_relative_output_path(Path(workspace_dir).resolve(), base_dir=base_dir))
 
         if export_catalog_dir is not None:
             if not isinstance(workspace_dir, str) or not workspace_dir.strip():
@@ -10048,8 +10079,11 @@ def export_publication_stack_preset_from_workspace(
     preset = {
         "type": "SATROOT-PUBLICATION-STACK-PRESET",
         "version": "0.1",
-        "catalog_presets": catalog_preset_paths,
     }
+    if catalog_preset_paths:
+        preset["catalog_presets"] = catalog_preset_paths
+    if catalog_workspace_dirs:
+        preset["catalog_workspace_dirs"] = catalog_workspace_dirs
     if release_catalog_metadata:
         preset["release_catalog"] = release_catalog_metadata
     return preset
@@ -10090,6 +10124,7 @@ def export_publication_network_preset_from_workspace(
     export_stack_dir = None if stack_preset_dir is None else Path(stack_preset_dir).resolve()
     export_catalog_dir = None if catalog_preset_dir is None else Path(catalog_preset_dir).resolve()
     stack_preset_paths: list[str] = []
+    publication_stack_dirs: list[str] = []
 
     for entry in workspaces:
         if not isinstance(entry, Mapping):
@@ -10099,6 +10134,8 @@ def export_publication_network_preset_from_workspace(
         preset_path = entry.get("preset_path")
         if not isinstance(workspace_name, str) or not workspace_name.strip():
             continue
+        if isinstance(workspace_dir, str) and workspace_dir.strip():
+            publication_stack_dirs.append(_relative_output_path(Path(workspace_dir).resolve(), base_dir=base_dir))
 
         if export_stack_dir is not None:
             if not isinstance(workspace_dir, str) or not workspace_dir.strip():
@@ -10131,8 +10168,11 @@ def export_publication_network_preset_from_workspace(
     preset = {
         "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
         "version": "0.1",
-        "stack_presets": stack_preset_paths,
     }
+    if stack_preset_paths:
+        preset["stack_presets"] = stack_preset_paths
+    if publication_stack_dirs:
+        preset["publication_stack_dirs"] = publication_stack_dirs
     if release_catalog_index_metadata:
         preset["release_catalog_index"] = release_catalog_index_metadata
     return preset
@@ -13516,6 +13556,7 @@ def build_cli_parser() -> Any:
     bootstrap_publication_registry_workspace_parser.add_argument("--output-dir", required=True, help="Directory where a copied publication_network/ or release_catalog_index/ plus publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, publication_registry/, and summary.json will be written")
 
     publish_publication_stack_parser = subparsers.add_parser("publish-publication-stack", help="Copy existing demo catalog workspaces into one SATROOT publication stack and publish a signed release catalog")
+    publish_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs and release-catalog metadata defaults")
     publish_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT demo catalog workspace directory")
     publish_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested demo catalog workspaces; may be repeated")
     publish_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -13527,6 +13568,7 @@ def build_cli_parser() -> Any:
     publish_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
     publish_machine_publication_stack_parser = subparsers.add_parser("publish-machine-publication-stack", help="Copy existing SATROOT-MACHINE-1 demo catalog workspaces into one machine-only publication stack and publish a signed release catalog")
+    publish_machine_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs and release-catalog metadata defaults")
     publish_machine_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT-MACHINE-1 demo catalog workspace directory")
     publish_machine_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 demo catalog workspaces; may be repeated")
     publish_machine_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -13538,6 +13580,7 @@ def build_cli_parser() -> Any:
     publish_machine_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
     publish_publication_network_parser = subparsers.add_parser("publish-publication-network", help="Copy existing publication stack workspaces into one SATROOT publication network and publish a signed release-catalog index")
+    publish_publication_network_parser.add_argument("--preset-json", help="Optional SATROOT publication network preset JSON file supplying source publication_stack_dirs and release-catalog-index metadata defaults")
     publish_publication_network_parser.add_argument("publication_stack_dir", nargs="*", help="Path to an existing SATROOT publication stack workspace directory")
     publish_publication_network_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication stack workspaces; may be repeated")
     publish_publication_network_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -13549,6 +13592,7 @@ def build_cli_parser() -> Any:
     publish_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
     publish_machine_publication_network_parser = subparsers.add_parser("publish-machine-publication-network", help="Copy existing machine-only publication stack workspaces into one SATROOT-MACHINE-1 publication network and publish a signed release-catalog index")
+    publish_machine_publication_network_parser.add_argument("--preset-json", help="Optional SATROOT publication network preset JSON file supplying source publication_stack_dirs and release-catalog-index metadata defaults")
     publish_machine_publication_network_parser.add_argument("publication_stack_dir", nargs="*", help="Path to an existing SATROOT-MACHINE-1 publication stack workspace directory")
     publish_machine_publication_network_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 publication stack workspaces; may be repeated")
     publish_machine_publication_network_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -15906,13 +15950,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-publication-stack":
-        catalog_metadata = {
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        preset = load_publication_stack_preset(preset_path) if preset_path is not None else None
+        catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
-            args.catalog_workspace_dir,
+            [*((preset or {}).get("catalog_workspace_dirs", [])), *args.catalog_workspace_dir],
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -15927,13 +15973,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-machine-publication-stack":
-        catalog_metadata = {
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        preset = load_machine_publication_stack_preset(preset_path) if preset_path is not None else None
+        catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
-            args.catalog_workspace_dir,
+            [*((preset or {}).get("catalog_workspace_dirs", [])), *args.catalog_workspace_dir],
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -15948,13 +15996,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-publication-network":
-        index_metadata = {
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        preset = load_publication_network_preset(preset_path) if preset_path is not None else None
+        index_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_index_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        })
         workspace_dirs = resolve_publication_stack_workspace_inputs(
-            args.publication_stack_dir,
+            [*((preset or {}).get("publication_stack_dirs", [])), *args.publication_stack_dir],
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -15969,13 +16019,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-machine-publication-network":
-        index_metadata = {
+        preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
+        preset = load_machine_publication_network_preset(preset_path) if preset_path is not None else None
+        index_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_index_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
-        }
+        })
         workspace_dirs = resolve_publication_stack_workspace_inputs(
-            args.publication_stack_dir,
+            [*((preset or {}).get("publication_stack_dirs", [])), *args.publication_stack_dir],
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
