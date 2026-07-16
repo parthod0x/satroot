@@ -663,6 +663,13 @@ Or discover bundle directories recursively under a parent artifacts folder:
 satroot1 build-bundle-index --discover-under generated_artifacts --output bundle_index.json
 ```
 
+If you want to scan first and then reuse the discovered bundle set deterministically, `inventory-artifacts` output can also feed that same build step:
+
+```bash
+satroot1 inventory-artifacts generated_artifacts > artifact_inventory.json
+satroot1 build-bundle-index --inventory-json artifact_inventory.json --output bundle_index.json
+```
+
 Attach lightweight release metadata to a bundle index:
 
 ```bash
@@ -727,6 +734,12 @@ That same release flow can also discover multiple bundle directories under a par
 satroot1 publish-release --discover-under generated_artifacts --output-dir catalog_release --channel stable --label "SATROOT Multi Bundle Demo" --published-at 2026-06-28T18:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
 ```
 
+Or reuse a previously saved inventory report instead of repeating the directory scan:
+
+```bash
+satroot1 publish-release --inventory-json artifact_inventory.json --output-dir catalog_release --channel stable --label "SATROOT Multi Bundle Demo" --published-at 2026-06-28T18:00:00Z --scheme hmac-sha256 --key-id release-key --secrets-json release_hmac/release_secrets.json
+```
+
 And that same bundle discovery plus release metadata can come from the bundle-index preset:
 
 ```bash
@@ -755,6 +768,12 @@ Build a higher-level release catalog from multiple signed release directories:
 
 ```bash
 satroot1 build-release-catalog stable_release machine_release --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --output release_catalog.json
+```
+
+That catalog build can also harvest the `release_dir` entries from a saved inventory report:
+
+```bash
+satroot1 build-release-catalog --inventory-json artifact_inventory.json --channel stable --label "SATROOT Release Catalog" --published-at 2026-06-30T05:00:00Z --output release_catalog.json
 ```
 
 Those release-catalog flows also accept the generated release files directly, so you can mix `release_manifest.json` and `bundle_index.json` inputs when that is what you already have on hand:
@@ -786,6 +805,12 @@ For a higher-level network of signed release catalogs, you can build and publish
 ```bash
 satroot1 build-release-catalog-index release_catalog_bootstrap another_release_catalog --channel network --label "SATROOT Catalog Network" --published-at 2026-07-02T05:00:00Z --output release_catalog_index.json
 satroot1 bootstrap-release-catalog-index-publication --preset-json examples/release_catalog_index_presets/ai_compute_catalog_network.json --output-dir release_catalog_index_bootstrap --label "SATROOT AI Compute Catalog Network Override" --scheme hmac-sha256 --key-id index-key
+```
+
+Saved inventory reports work at that layer too, using the discovered `release_catalog_dir` entries:
+
+```bash
+satroot1 build-release-catalog-index --inventory-json artifact_inventory.json --channel network --label "SATROOT Catalog Network" --published-at 2026-07-02T05:00:00Z --output release_catalog_index.json
 ```
 
 That higher-level index lane likewise accepts either the signed catalog directory or the generated `release_catalog.json` / `release_catalog_manifest.json` files:
@@ -917,6 +942,8 @@ If you only want to report artifacts rooted directly at the given path and skip 
 ```bash
 satroot1 inventory-artifacts publication_network --non-recursive
 ```
+
+Those saved inventory reports can be reused directly by `build-bundle-index`, `publish-release`, `bootstrap-release-publication`, `build-release-catalog`, `publish-release-catalog`, `bootstrap-release-catalog-publication`, `build-release-catalog-index`, `publish-release-catalog-index`, and `bootstrap-release-catalog-index-publication` via `--inventory-json`.
 
 To derive a reusable preset back from a generated demo catalog workspace:
 

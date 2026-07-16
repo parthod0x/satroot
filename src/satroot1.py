@@ -2770,6 +2770,64 @@ def discover_signed_ledger_bundle_dirs(
     return sorted(discovered.values())
 
 
+def _load_inventory_artifact_summary(inventory_json: str | Path) -> Dict[str, Any]:
+    return _load_json_object_file(inventory_json, label="inventory-json")
+
+
+def _inventory_entry_paths(
+    inventory_json: str | Path,
+    *,
+    entry_key: str,
+    path_key: str,
+    label: str,
+) -> list[str]:
+    inventory = _load_inventory_artifact_summary(inventory_json)
+    entries = inventory.get(entry_key)
+    if not isinstance(entries, list):
+        raise SatRootError(f"{label} inventory {entry_key} must be an array")
+
+    resolved: list[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            raise SatRootError(f"{label} inventory {entry_key} entries must be objects")
+        path_ref = entry.get(path_key)
+        if not isinstance(path_ref, str) or not path_ref.strip():
+            raise SatRootError(f"{label} inventory {entry_key} entries must contain {path_key}")
+        resolved_path = str(Path(path_ref).resolve())
+        if resolved_path not in seen:
+            resolved.append(resolved_path)
+            seen.add(resolved_path)
+    return resolved
+
+
+def load_inventory_bundle_dirs(inventory_json: str | Path) -> list[str]:
+    return _inventory_entry_paths(
+        inventory_json,
+        entry_key="bundles",
+        path_key="bundle_dir",
+        label="bundle source",
+    )
+
+
+def load_inventory_release_dirs(inventory_json: str | Path) -> list[str]:
+    return _inventory_entry_paths(
+        inventory_json,
+        entry_key="releases",
+        path_key="release_dir",
+        label="release source",
+    )
+
+
+def load_inventory_release_catalog_dirs(inventory_json: str | Path) -> list[str]:
+    return _inventory_entry_paths(
+        inventory_json,
+        entry_key="release_catalogs",
+        path_key="release_catalog_dir",
+        label="release catalog source",
+    )
+
+
 def resolve_bundle_directory_inputs(
     bundle_dirs: Sequence[str | Path],
     *,
@@ -14197,6 +14255,7 @@ def build_cli_parser() -> Any:
     bundle_index_parser = subparsers.add_parser("build-bundle-index", help="Build a SATROOT-1 bundle index from one or more bundle directories")
     bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     bundle_index_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with bundle roots and release metadata defaults")
+    bundle_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered bundle_dir entries will be added as bundle sources")
     bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
     bundle_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bundle_index_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
@@ -14207,6 +14266,7 @@ def build_cli_parser() -> Any:
     machine_bundle_index_parser = subparsers.add_parser("build-machine-bundle-index", help="Build a machine-only SATROOT-MACHINE-1 bundle index from one or more signed machine bundle directories")
     machine_bundle_index_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 bundle directory")
     machine_bundle_index_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with machine bundle roots and release metadata defaults")
+    machine_bundle_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered bundle_dir entries will be added as machine bundle sources")
     machine_bundle_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 bundle_manifest.json files; may be repeated")
     machine_bundle_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     machine_bundle_index_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
@@ -14237,6 +14297,7 @@ def build_cli_parser() -> Any:
     publish_release_parser = subparsers.add_parser("publish-release", help="Build bundle_index.json plus release_manifest.json in one SATROOT-1 release directory")
     publish_release_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     publish_release_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with bundle roots and release metadata defaults")
+    publish_release_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered bundle_dir entries will be added as bundle sources")
     publish_release_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
     publish_release_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_release_parser.add_argument("--output-dir", required=True, help="Directory where bundle_index.json and release_manifest.json will be written")
@@ -14253,6 +14314,7 @@ def build_cli_parser() -> Any:
     publish_machine_release_parser = subparsers.add_parser("publish-machine-release", help="Build bundle_index.json plus release_manifest.json in one machine-only SATROOT-MACHINE-1 release directory")
     publish_machine_release_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 bundle directory")
     publish_machine_release_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with machine bundle roots and release metadata defaults")
+    publish_machine_release_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered bundle_dir entries will be added as machine bundle sources")
     publish_machine_release_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 bundle_manifest.json files; may be repeated")
     publish_machine_release_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_machine_release_parser.add_argument("--output-dir", required=True, help="Directory where bundle_index.json and release_manifest.json will be written")
@@ -14269,6 +14331,7 @@ def build_cli_parser() -> Any:
     bootstrap_release_publication_parser = subparsers.add_parser("bootstrap-release-publication", help="Generate release signing material and write a ready-to-verify SATROOT-1 release directory")
     bootstrap_release_publication_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-1 bundle directory")
     bootstrap_release_publication_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with bundle roots and release metadata defaults")
+    bootstrap_release_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered bundle_dir entries will be added as bundle sources")
     bootstrap_release_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested bundle_manifest.json files; may be repeated")
     bootstrap_release_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bootstrap_release_publication_parser.add_argument("--output-dir", required=True, help="Directory where release material plus bundle_index.json and release_manifest.json will be written")
@@ -14281,6 +14344,7 @@ def build_cli_parser() -> Any:
     bootstrap_machine_release_publication_parser = subparsers.add_parser("bootstrap-machine-release-publication", help="Generate release signing material and write a ready-to-verify machine-only SATROOT-MACHINE-1 release directory")
     bootstrap_machine_release_publication_parser.add_argument("bundle_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 bundle directory")
     bootstrap_machine_release_publication_parser.add_argument("--preset-json", help="Optional SATROOT bundle index preset JSON file with machine bundle roots and release metadata defaults")
+    bootstrap_machine_release_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered bundle_dir entries will be added as machine bundle sources")
     bootstrap_machine_release_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 bundle_manifest.json files; may be repeated")
     bootstrap_machine_release_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bootstrap_machine_release_publication_parser.add_argument("--output-dir", required=True, help="Directory where release material plus bundle_index.json and release_manifest.json will be written")
@@ -14293,6 +14357,7 @@ def build_cli_parser() -> Any:
     release_catalog_parser = subparsers.add_parser("build-release-catalog", help="Build a SATROOT-1 release catalog from one or more signed release directories")
     release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory or release_manifest.json/bundle_index.json file")
     release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
+    release_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_dir entries will be added as release sources")
     release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     release_catalog_parser.add_argument("--channel", help="Optional catalog channel metadata")
@@ -14303,6 +14368,7 @@ def build_cli_parser() -> Any:
     machine_release_catalog_parser = subparsers.add_parser("build-machine-release-catalog", help="Build a machine-only SATROOT-MACHINE-1 release catalog from one or more signed machine release directories")
     machine_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release directory or release_manifest.json/bundle_index.json file")
     machine_release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with machine release roots and catalog metadata defaults")
+    machine_release_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_dir entries will be added as machine release sources")
     machine_release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_manifest.json files; may be repeated")
     machine_release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     machine_release_catalog_parser.add_argument("--channel", help="Optional catalog channel metadata")
@@ -14333,6 +14399,7 @@ def build_cli_parser() -> Any:
     release_catalog_index_parser = subparsers.add_parser("build-release-catalog-index", help="Build a SATROOT-1 release catalog index from one or more signed release catalog directories")
     release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
+    release_catalog_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_catalog_dir entries will be added as release catalog sources")
     release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
     release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     release_catalog_index_parser.add_argument("--channel", help="Optional index channel metadata")
@@ -14343,6 +14410,7 @@ def build_cli_parser() -> Any:
     machine_release_catalog_index_parser = subparsers.add_parser("build-machine-release-catalog-index", help="Build a machine-only SATROOT-MACHINE-1 release catalog index from one or more signed machine release catalog directories")
     machine_release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     machine_release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with machine release catalog roots and index metadata defaults")
+    machine_release_catalog_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_catalog_dir entries will be added as machine release catalog sources")
     machine_release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_catalog_manifest.json files; may be repeated")
     machine_release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     machine_release_catalog_index_parser.add_argument("--channel", help="Optional index channel metadata")
@@ -14373,6 +14441,7 @@ def build_cli_parser() -> Any:
     publish_release_catalog_parser = subparsers.add_parser("publish-release-catalog", help="Build release_catalog.json plus release_catalog_manifest.json in one SATROOT-1 catalog directory")
     publish_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory or release_manifest.json/bundle_index.json file")
     publish_release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
+    publish_release_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_dir entries will be added as release sources")
     publish_release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     publish_release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_release_catalog_parser.add_argument("--output-dir", required=True, help="Directory where release_catalog.json and release_catalog_manifest.json will be written")
@@ -14389,6 +14458,7 @@ def build_cli_parser() -> Any:
     publish_machine_release_catalog_parser = subparsers.add_parser("publish-machine-release-catalog", help="Build release_catalog.json plus release_catalog_manifest.json in one machine-only SATROOT-MACHINE-1 catalog directory")
     publish_machine_release_catalog_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release directory or release_manifest.json/bundle_index.json file")
     publish_machine_release_catalog_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with machine release roots and catalog metadata defaults")
+    publish_machine_release_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_dir entries will be added as machine release sources")
     publish_machine_release_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_manifest.json files; may be repeated")
     publish_machine_release_catalog_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_machine_release_catalog_parser.add_argument("--output-dir", required=True, help="Directory where release_catalog.json and release_catalog_manifest.json will be written")
@@ -14405,6 +14475,7 @@ def build_cli_parser() -> Any:
     publish_release_catalog_index_parser = subparsers.add_parser("publish-release-catalog-index", help="Build release_catalog_index.json plus release_catalog_index_manifest.json in one SATROOT-1 index directory")
     publish_release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     publish_release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
+    publish_release_catalog_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_catalog_dir entries will be added as release catalog sources")
     publish_release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
     publish_release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_release_catalog_index_parser.add_argument("--output-dir", required=True, help="Directory where release_catalog_index.json and release_catalog_index_manifest.json will be written")
@@ -14421,6 +14492,7 @@ def build_cli_parser() -> Any:
     bootstrap_release_catalog_publication_parser = subparsers.add_parser("bootstrap-release-catalog-publication", help="Generate signing material and write a ready-to-verify SATROOT-1 release catalog directory")
     bootstrap_release_catalog_publication_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-1 release directory or release_manifest.json/bundle_index.json file")
     bootstrap_release_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with release roots and catalog metadata defaults")
+    bootstrap_release_catalog_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_dir entries will be added as release sources")
     bootstrap_release_catalog_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_manifest.json files; may be repeated")
     bootstrap_release_catalog_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bootstrap_release_catalog_publication_parser.add_argument("--output-dir", required=True, help="Directory where catalog material plus release_catalog.json and release_catalog_manifest.json will be written")
@@ -14433,6 +14505,7 @@ def build_cli_parser() -> Any:
     bootstrap_machine_release_catalog_publication_parser = subparsers.add_parser("bootstrap-machine-release-catalog-publication", help="Generate signing material and write a ready-to-verify machine-only SATROOT-MACHINE-1 release catalog directory")
     bootstrap_machine_release_catalog_publication_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release directory or release_manifest.json/bundle_index.json file")
     bootstrap_machine_release_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with machine release roots and catalog metadata defaults")
+    bootstrap_machine_release_catalog_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_dir entries will be added as machine release sources")
     bootstrap_machine_release_catalog_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_manifest.json files; may be repeated")
     bootstrap_machine_release_catalog_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     bootstrap_machine_release_catalog_publication_parser.add_argument("--output-dir", required=True, help="Directory where catalog material plus release_catalog.json and release_catalog_manifest.json will be written")
@@ -14445,6 +14518,7 @@ def build_cli_parser() -> Any:
     publish_machine_release_catalog_index_parser = subparsers.add_parser("publish-machine-release-catalog-index", help="Build release_catalog_index.json plus release_catalog_index_manifest.json in one machine-only SATROOT-MACHINE-1 index directory")
     publish_machine_release_catalog_index_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
     publish_machine_release_catalog_index_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with machine release catalog roots and index metadata defaults")
+    publish_machine_release_catalog_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_catalog_dir entries will be added as machine release catalog sources")
     publish_machine_release_catalog_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_catalog_manifest.json files; may be repeated")
     publish_machine_release_catalog_index_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_machine_release_catalog_index_parser.add_argument("--output-dir", required=True, help="Directory where release_catalog_index.json and release_catalog_index_manifest.json will be written")
@@ -14460,6 +14534,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-release-catalog-index-publication", help="Generate signing material and write a ready-to-verify SATROOT-1 release catalog index directory")
     bootstrap_release_catalog_index_publication_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
+    bootstrap_release_catalog_index_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_catalog_dir entries will be added as release catalog sources")
     bootstrap_release_catalog_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with release catalog roots and index metadata defaults")
     bootstrap_release_catalog_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested release_catalog_manifest.json files; may be repeated")
     bootstrap_release_catalog_index_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -14472,6 +14547,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_machine_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-machine-release-catalog-index-publication", help="Generate signing material and write a ready-to-verify machine-only SATROOT-MACHINE-1 release catalog index directory")
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("release_catalog_dir", nargs="*", help="Path to a signed SATROOT-MACHINE-1 release catalog directory or release_catalog_manifest.json/release_catalog.json file")
+    bootstrap_machine_release_catalog_index_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered release_catalog_dir entries will be added as machine release catalog sources")
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog index preset JSON file with machine release catalog roots and index metadata defaults")
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 release_catalog_manifest.json files; may be repeated")
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -17250,6 +17326,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17259,7 +17336,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 release_metadata[key] = value
         bundle_dirs = resolve_bundle_directory_inputs(
-            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            [*(preset or {}).get("bundle_dirs", []), *inventory_bundle_dirs, *args.bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17271,6 +17348,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17280,7 +17358,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 release_metadata[key] = value
         bundle_dirs = resolve_machine_bundle_directory_inputs(
-            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            [*(preset or {}).get("bundle_dirs", []), *inventory_bundle_dirs, *args.bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine bundle index build source bundle",
@@ -17325,6 +17403,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17334,7 +17413,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 catalog_metadata[key] = value
         release_dirs = resolve_release_directory_inputs(
-            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            [*(preset or {}).get("release_dirs", []), *inventory_release_dirs, *args.release_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17346,6 +17425,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17355,7 +17435,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 catalog_metadata[key] = value
         release_dirs = resolve_machine_release_directory_inputs(
-            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            [*(preset or {}).get("release_dirs", []), *inventory_release_dirs, *args.release_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine release catalog build source release",
@@ -17400,6 +17480,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17409,7 +17490,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         release_catalog_dirs = resolve_release_catalog_directory_inputs(
-            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            [*(preset or {}).get("release_catalog_dirs", []), *inventory_release_catalog_dirs, *args.release_catalog_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17425,6 +17506,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17434,7 +17516,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         release_catalog_dirs = resolve_machine_release_catalog_directory_inputs(
-            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            [*(preset or {}).get("release_catalog_dirs", []), *inventory_release_catalog_dirs, *args.release_catalog_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine release catalog index build source catalog",
@@ -17482,6 +17564,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-release":
         signer = _release_manifest_signer_from_args(args)
         preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17491,7 +17574,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 release_metadata[key] = value
         bundle_dirs = resolve_bundle_directory_inputs(
-            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            [*(preset or {}).get("bundle_dirs", []), *inventory_bundle_dirs, *args.bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17509,6 +17592,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-machine-release":
         signer = _release_manifest_signer_from_args(args)
         preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17518,7 +17602,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 release_metadata[key] = value
         bundle_dirs = resolve_machine_bundle_directory_inputs(
-            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            [*(preset or {}).get("bundle_dirs", []), *inventory_bundle_dirs, *args.bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine release publishing source bundle",
@@ -17537,6 +17621,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-release-catalog":
         signer = _release_manifest_signer_from_args(args)
         preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17546,7 +17631,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 catalog_metadata[key] = value
         release_dirs = resolve_release_directory_inputs(
-            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            [*(preset or {}).get("release_dirs", []), *inventory_release_dirs, *args.release_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17564,6 +17649,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-machine-release-catalog":
         signer = _release_manifest_signer_from_args(args)
         preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17573,7 +17659,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 catalog_metadata[key] = value
         release_dirs = resolve_machine_release_directory_inputs(
-            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            [*(preset or {}).get("release_dirs", []), *inventory_release_dirs, *args.release_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine release catalog publishing source release",
@@ -17592,6 +17678,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-release-catalog-index":
         signer = _release_manifest_signer_from_args(args)
         preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17601,7 +17688,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         release_catalog_dirs = resolve_release_catalog_directory_inputs(
-            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            [*(preset or {}).get("release_catalog_dirs", []), *inventory_release_catalog_dirs, *args.release_catalog_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17619,6 +17706,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-machine-release-catalog-index":
         signer = _release_manifest_signer_from_args(args)
         preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17628,7 +17716,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         release_catalog_dirs = resolve_machine_release_catalog_directory_inputs(
-            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            [*(preset or {}).get("release_catalog_dirs", []), *inventory_release_catalog_dirs, *args.release_catalog_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine release catalog index publishing source catalog",
@@ -17646,6 +17734,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-release-publication":
         preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17655,7 +17744,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 release_metadata[key] = value
         bundle_dirs = resolve_bundle_directory_inputs(
-            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            [*(preset or {}).get("bundle_dirs", []), *inventory_bundle_dirs, *args.bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17671,6 +17760,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-machine-release-publication":
         preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17680,7 +17770,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 release_metadata[key] = value
         bundle_dirs = resolve_machine_bundle_directory_inputs(
-            [*(preset or {}).get("bundle_dirs", []), *args.bundle_dir],
+            [*(preset or {}).get("bundle_dirs", []), *inventory_bundle_dirs, *args.bundle_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine release publishing source bundle",
@@ -17697,6 +17787,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-release-catalog-publication":
         preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17706,7 +17797,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 catalog_metadata[key] = value
         release_dirs = resolve_release_directory_inputs(
-            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            [*(preset or {}).get("release_dirs", []), *inventory_release_dirs, *args.release_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17722,6 +17813,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-machine-release-catalog-publication":
         preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17731,7 +17823,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 catalog_metadata[key] = value
         release_dirs = resolve_machine_release_directory_inputs(
-            [*(preset or {}).get("release_dirs", []), *args.release_dir],
+            [*(preset or {}).get("release_dirs", []), *inventory_release_dirs, *args.release_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine release catalog publishing source release",
@@ -17748,6 +17840,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-release-catalog-index-publication":
         preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17757,7 +17850,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         release_catalog_dirs = resolve_release_catalog_directory_inputs(
-            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            [*(preset or {}).get("release_catalog_dirs", []), *inventory_release_catalog_dirs, *args.release_catalog_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
         )
@@ -17773,6 +17866,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-machine-release-catalog-index-publication":
         preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -17782,7 +17876,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 index_metadata[key] = value
         release_catalog_dirs = resolve_machine_release_catalog_directory_inputs(
-            [*(preset or {}).get("release_catalog_dirs", []), *args.release_catalog_dir],
+            [*(preset or {}).get("release_catalog_dirs", []), *inventory_release_catalog_dirs, *args.release_catalog_dir],
             discover_under=[*((preset or {}).get("discover_under", [])), *(args.discover_under or [])],
             recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
             label="machine release catalog index publishing source catalog",

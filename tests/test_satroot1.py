@@ -136,6 +136,15 @@ def write_json(path: Path, data):
         f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
+def write_inventory_json_from_cli(path: Path, *roots: str | Path, capsys, non_recursive: bool = False):
+    capsys.readouterr()
+    args = ["inventory-artifacts", *(str(root) for root in roots)]
+    if non_recursive:
+        args.append("--non-recursive")
+    assert main(args) == 0
+    path.write_text(capsys.readouterr().out, encoding="utf-8")
+
+
 def make_demo_release_dirs(tmp_path: Path) -> tuple[str, str]:
     stable = bootstrap_stable_reference_demo_release(
         symbol="RELSTB1",
@@ -3225,6 +3234,35 @@ def test_cli_publish_machine_release_catalog_rejects_non_machine_release(tmp_pat
         )
 
 
+def test_cli_build_release_catalog_with_inventory_json(tmp_path, capsys):
+    make_demo_release_dirs(tmp_path)
+    inventory_path = tmp_path / "release_inventory.json"
+    output_path = tmp_path / "release_catalog.json"
+
+    write_inventory_json_from_cli(inventory_path, tmp_path, capsys=capsys)
+
+    assert main(
+        [
+            "build-release-catalog",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Release Catalog",
+            "--published-at",
+            "2026-07-04T03:15:00Z",
+            "--output",
+            str(output_path),
+        ]
+    ) == 0
+
+    catalog = json.loads(output_path.read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Inventory Release Catalog"
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"RELSTB1", "RELMCH1"}
+
+
 def test_cli_build_machine_release_catalog(tmp_path):
     machine_release_alpha_dir, machine_release_beta_dir = make_machine_release_dirs(tmp_path)
     output_path = tmp_path / "machine_release_catalog.json"
@@ -3700,6 +3738,38 @@ def test_cli_publish_machine_release_catalog_index_rejects_non_machine_catalog(t
                 "index-secret",
             ]
         )
+
+
+def test_cli_build_release_catalog_index_with_inventory_json(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    inventory_path = tmp_path / "catalog_inventory.json"
+    output_path = tmp_path / "release_catalog_index.json"
+
+    write_inventory_json_from_cli(inventory_path, network_dir, capsys=capsys)
+
+    assert main(
+        [
+            "build-release-catalog-index",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "network",
+            "--label",
+            "Inventory Catalog Network",
+            "--published-at",
+            "2026-07-04T06:15:00Z",
+            "--output",
+            str(output_path),
+        ]
+    ) == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Inventory Catalog Network"
+    assert sorted(entry["catalog"]["label"] for entry in index["release_catalogs"]) == [
+        "Publication Network Stack Alpha",
+        "Publication Network Stack Beta",
+    ]
 
 
 def test_cli_build_machine_release_catalog_index(tmp_path):
@@ -13299,6 +13369,29 @@ def test_cli_build_bundle_index_with_discovery_root(tmp_path):
     assert {entry["bundle_path"] for entry in index["bundles"]} == {"bundles/floor_bundle", "bundles/machine_bundle"}
 
 
+def test_cli_build_bundle_index_with_inventory_json(tmp_path, capsys):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    bundle_root = tmp_path / "bundles"
+    floor_bundle_dir = bundle_root / "floor_bundle"
+    machine_bundle_dir = bundle_root / "machine_bundle"
+    inventory_path = tmp_path / "artifact_inventory.json"
+    index_path = tmp_path / "bundle_index.json"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+
+    write_inventory_json_from_cli(inventory_path, bundle_root, capsys=capsys)
+
+    assert main(["build-bundle-index", "--inventory-json", str(inventory_path), "--output", str(index_path)]) == 0
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 2
+    assert {entry["symbol"] for entry in index["bundles"]} == {"FLOOR1", "APICREDIT1"}
+
+
 def test_cli_build_bundle_index_with_preset_json(tmp_path):
     floor_events_path = tmp_path / "floor_events.json"
     machine_events_path = tmp_path / "machine_events.json"
@@ -13366,6 +13459,38 @@ def test_cli_build_machine_bundle_index(tmp_path):
     assert index["bundle_count"] == 2
     assert index["release"]["label"] == "Machine Bundle Index"
     assert {entry["symbol"] for entry in index["bundles"]} == {"APICREDIT1"}
+
+
+def test_cli_build_machine_bundle_index_with_inventory_json(tmp_path, capsys):
+    bundle_root = tmp_path / "machine_bundles"
+    machine_bundle_alpha_dir = bundle_root / "machine_alpha_bundle"
+    machine_bundle_beta_dir = bundle_root / "machine_beta_bundle"
+    inventory_path = tmp_path / "machine_inventory.json"
+    index_path = tmp_path / "machine_bundle_index.json"
+
+    assert main(["bootstrap-machine-demo-bundle", "--symbol", "MINV1", "--name", "Machine Inventory Alpha", "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_alpha_dir)]) == 0
+    assert main(["bootstrap-machine-demo-bundle", "--symbol", "MINV2", "--name", "Machine Inventory Beta", "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_beta_dir)]) == 0
+
+    write_inventory_json_from_cli(inventory_path, bundle_root, capsys=capsys)
+
+    assert main(
+        [
+            "build-machine-bundle-index",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Inventory Bundle Index",
+            "--output",
+            str(index_path),
+        ]
+    ) == 0
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 2
+    assert index["release"]["label"] == "Machine Inventory Bundle Index"
+    assert {entry["symbol"] for entry in index["bundles"]} == {"MINV1", "MINV2"}
 
 
 def test_cli_validate_bundle_index(tmp_path, capsys):
@@ -13694,6 +13819,56 @@ def test_cli_publish_release_with_discovery_root(tmp_path):
     assert bundle_index["bundle_count"] == 2
     assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"FLOOR1", "APICREDIT1"}
     assert bundle_index["release"]["label"] == "SATROOT Multi Bundle Demo"
+    assert release_manifest["bundle_count"] == 2
+
+
+def test_cli_publish_release_with_inventory_json(tmp_path, capsys):
+    floor_events_path = tmp_path / "floor_events.json"
+    machine_events_path = tmp_path / "machine_events.json"
+    bundle_root = tmp_path / "bundles"
+    floor_bundle_dir = bundle_root / "floor_bundle"
+    machine_bundle_dir = bundle_root / "machine_bundle"
+    inventory_path = tmp_path / "artifact_inventory.json"
+    release_material_dir = tmp_path / "release_hmac"
+    release_dir = tmp_path / "release"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+    machine_events_path.write_text(json.dumps(load_events("events_apicredit1.json")), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-signed-ledger", str(machine_events_path), "--scheme", "hmac-sha256", "--output-dir", str(machine_bundle_dir)]) == 0
+    assert main(["bootstrap-release-hmac", "--key-id", "release-key", "--output-dir", str(release_material_dir)]) == 0
+
+    write_inventory_json_from_cli(inventory_path, bundle_root, capsys=capsys)
+
+    assert (
+        main(
+            [
+                "publish-release",
+                "--inventory-json",
+                str(inventory_path),
+                "--output-dir",
+                str(release_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "SATROOT Inventory Bundle Demo",
+                "--published-at",
+                "2026-06-28T20:00:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secrets-json",
+                str(release_material_dir / "release_secrets.json"),
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 2
+    assert bundle_index["release"]["label"] == "SATROOT Inventory Bundle Demo"
     assert release_manifest["bundle_count"] == 2
 
 
