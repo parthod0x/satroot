@@ -4992,6 +4992,36 @@ def test_cli_publish_publication_catalog_workspace_from_standalone_publications(
     capsys.readouterr()
 
 
+def test_cli_publish_publication_catalog_workspace_with_registry_preset(tmp_path, capsys):
+    registry_dir = make_publication_registry_dir(tmp_path)
+    preset_path = tmp_path / "exported_registry.json"
+    output_dir = tmp_path / "published_catalog_workspace_preset"
+
+    assert main(["export-publication-registry-preset", str(registry_dir), "--output", str(preset_path)]) == 0
+
+    exit_code = main(
+        [
+            "publish-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication catalog workspace from existing publications to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert Path(summary["source_publication_descriptor_index_dir"]).name == "publication_descriptor_index_publication"
+    assert Path(summary["source_publication_metadata_catalog_dir"]).name == "publication_metadata_catalog_publication"
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Registry Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Registry Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_publish_machine_publication_catalog_workspace_from_existing_publications(tmp_path, capsys):
     source_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
     output_dir = tmp_path / "published_machine_catalog_workspace"
@@ -5051,6 +5081,57 @@ def test_cli_publish_machine_publication_catalog_workspace_from_standalone_publi
     assert summary["source_machine_catalog_workspace_dir"] == str(source_machine_catalog_workspace_dir)
     assert summary["publication_metadata_bundle_count"] == 2
     assert len(summary["publication_metadata_bundles"]) == 2
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_catalog_workspace_with_registry_preset(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    registry_dir = tmp_path / "machine_publication_registry_publication"
+    preset_path = tmp_path / "exported_machine_registry.json"
+    output_dir = tmp_path / "published_machine_catalog_workspace_preset"
+
+    assert main(
+        [
+            "bootstrap-machine-publication-registry-publication",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(registry_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Machine Publication Registry",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    ) == 0
+    assert main(["export-machine-publication-registry-preset", str(registry_dir), "--output", str(preset_path)]) == 0
+
+    exit_code = main(
+        [
+            "publish-machine-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication catalog workspace from existing publications to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert Path(summary["source_publication_descriptor_index_dir"]).name == "machine_publication_descriptor_index_publication"
+    assert Path(summary["source_publication_metadata_catalog_dir"]).name == "machine_publication_metadata_catalog_publication"
+    assert summary["source_machine_catalog_workspace_dir"]
     assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
@@ -5259,6 +5340,54 @@ def test_cli_publish_publication_registry_workspace_from_published_standalone_ca
     capsys.readouterr()
 
 
+def test_cli_publish_publication_registry_workspace_with_preset(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "publication_registry_workspace_preset.json"
+    output_dir = tmp_path / "published_registry_workspace_preset"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+            "version": "0.1",
+            "publication_catalog_workspace_dir": str(Path(catalog_workspace_dir).relative_to(tmp_path)),
+            "publication_network_dir": str(Path(network_dir).relative_to(tmp_path)),
+            "publication_registry": {
+                "channel": "network",
+                "label": "Preset Published Registry Workspace",
+                "published_at": "2026-07-16T05:00:00Z",
+            },
+        },
+    )
+
+    exit_code = main(
+        [
+            "publish-publication-registry-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Override Published Registry Workspace",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication registry workspace from existing publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["publication_registry"]["index"]["label"] == "Override Published Registry Workspace"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_publish_machine_publication_registry_workspace_from_existing_catalog_workspace(tmp_path, capsys):
     machine_catalog_preset = tmp_path / "machine_registry_catalog.json"
     write_json(
@@ -5342,6 +5471,55 @@ def test_cli_publish_machine_publication_registry_workspace_from_existing_catalo
     assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
     assert summary["source_publication_network_dir"] == str(network_dir.resolve())
     assert summary["publication_registry"]["index"]["label"] == "Published Machine Registry Workspace"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_registry_workspace_with_preset(tmp_path, capsys):
+    release_catalog_index_dir, _descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "machine_publication_registry_workspace_preset.json"
+    output_dir = tmp_path / "published_machine_registry_workspace_preset"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+            "version": "0.1",
+            "publication_catalog_workspace_dir": str(Path(catalog_workspace_dir).relative_to(tmp_path)),
+            "release_catalog_index_dir": str(Path(release_catalog_index_dir).relative_to(tmp_path)),
+            "publication_registry": {
+                "channel": "machine",
+                "label": "Preset Machine Published Registry Workspace",
+                "published_at": "2026-07-16T05:10:00Z",
+            },
+        },
+    )
+
+    exit_code = main(
+        [
+            "publish-machine-publication-registry-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Override Machine Published Registry Workspace",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication registry workspace from existing publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_machine_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_machine_catalog_workspace_dir"] == str((catalog_workspace_dir / "machine_catalog_workspace").resolve())
+    assert summary["source_publication_network_dir"] is None
+    assert summary["publication_registry"]["index"]["label"] == "Override Machine Published Registry Workspace"
     assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
