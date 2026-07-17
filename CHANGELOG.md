@@ -6,6 +6,7 @@
 - Extends that same `--inventory-json` reuse pattern across publication descriptor index, publication metadata catalog, publication registry, publication catalog workspace, and publication registry workspace build/bootstrap flows.
 - Extends `--inventory-json` reuse into top-level publication-registry publication bootstraps, including the machine-only wrapper.
 - Extends `--inventory-json` reuse into publication stack and publication network publish flows, including the machine-only wrappers.
+- Extends `--inventory-json` reuse into publication catalog workspace and publication registry workspace publish flows, including the machine-only wrappers.
 - Adds preset support to `publish-publication-stack`, `publish-machine-publication-stack`, `publish-publication-network`, and `publish-machine-publication-network`.
 - Adds preset support to `publish-publication-catalog-workspace`, `publish-machine-publication-catalog-workspace`, `publish-publication-registry-workspace`, and `publish-machine-publication-registry-workspace`.
 - Extends exported publication-stack presets with source `catalog_workspace_dirs` so they can drive publish flows as well as bootstrap flows.

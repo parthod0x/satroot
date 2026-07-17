@@ -13796,18 +13796,21 @@ def build_cli_parser() -> Any:
 
     publish_publication_catalog_workspace_parser = subparsers.add_parser("publish-publication-catalog-workspace", help="Copy an existing publication descriptor index plus publication metadata catalog into one SATROOT publication catalog workspace without regenerating nested publications")
     publish_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file supplying publication_descriptor_index_dir and publication_metadata_catalog_dir defaults")
+    publish_publication_catalog_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication descriptor index and publication metadata catalog directories will be used when explicit paths are omitted")
     publish_publication_catalog_workspace_parser.add_argument("publication_descriptor_index_dir", nargs="?", help="Path to an existing SATROOT publication descriptor index publication directory")
     publish_publication_catalog_workspace_parser.add_argument("publication_metadata_catalog_dir", nargs="?", help="Path to an existing SATROOT publication metadata catalog publication directory")
     publish_publication_catalog_workspace_parser.add_argument("--output-dir", required=True, help="Directory where copied publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, and summary.json will be written")
 
     publish_machine_publication_catalog_workspace_parser = subparsers.add_parser("publish-machine-publication-catalog-workspace", help="Copy an existing machine-validated publication descriptor index plus publication metadata catalog into one SATROOT-MACHINE-1 publication catalog workspace without regenerating nested publications")
     publish_machine_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file supplying publication_descriptor_index_dir and publication_metadata_catalog_dir defaults")
+    publish_machine_publication_catalog_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered machine publication descriptor index and publication metadata catalog directories will be used when explicit paths are omitted")
     publish_machine_publication_catalog_workspace_parser.add_argument("publication_descriptor_index_dir", nargs="?", help="Path to an existing SATROOT publication descriptor index publication directory")
     publish_machine_publication_catalog_workspace_parser.add_argument("publication_metadata_catalog_dir", nargs="?", help="Path to an existing SATROOT publication metadata catalog publication directory that includes at least one SATROOT-MACHINE-1 demo-catalog descriptor")
     publish_machine_publication_catalog_workspace_parser.add_argument("--output-dir", required=True, help="Directory where copied publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, and summary.json will be written")
 
     publish_publication_registry_workspace_parser = subparsers.add_parser("publish-publication-registry-workspace", help="Copy an existing publication catalog workspace plus release-catalog-index source into one SATROOT publication registry workspace and sign only the top-level registry")
     publish_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file supplying publication_catalog_workspace_dir, publication_network_dir, release_catalog_index_dir, and publication_registry metadata defaults")
+    publish_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication catalog workspace, publication network, and release catalog index directories will be used when explicit paths are omitted")
     publish_publication_registry_workspace_parser.add_argument("publication_catalog_workspace_dir", nargs="?", help="Path to an existing SATROOT publication catalog workspace directory")
     publish_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
     publish_publication_registry_workspace_parser.add_argument("--release-catalog-index-dir", help="Optional release catalog index publication directory; defaults to <publication-network-dir>/release_catalog_index when --publication-network-dir is provided")
@@ -13820,6 +13823,7 @@ def build_cli_parser() -> Any:
 
     publish_machine_publication_registry_workspace_parser = subparsers.add_parser("publish-machine-publication-registry-workspace", help="Copy an existing SATROOT-MACHINE-1 publication catalog workspace plus release-catalog-index source into one machine-validated publication registry workspace and sign only the top-level registry")
     publish_machine_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file supplying publication_catalog_workspace_dir, publication_network_dir, release_catalog_index_dir, and publication_registry metadata defaults")
+    publish_machine_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered machine publication catalog workspace, publication network, and release catalog index directories will be used when explicit paths are omitted")
     publish_machine_publication_registry_workspace_parser.add_argument("publication_catalog_workspace_dir", nargs="?", help="Path to an existing SATROOT-MACHINE-1 publication catalog workspace directory")
     publish_machine_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
     publish_machine_publication_registry_workspace_parser.add_argument("--release-catalog-index-dir", help="Optional release catalog index publication directory; defaults to <publication-network-dir>/release_catalog_index when --publication-network-dir is provided")
@@ -16302,11 +16306,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-publication-catalog-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_preset(preset_path) if preset_path is not None else None
-        publication_descriptor_index_dir = args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir")
-        publication_metadata_catalog_dir = args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir")
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
+        publication_descriptor_index_dir = (
+            args.publication_descriptor_index_dir
+            or (preset or {}).get("publication_descriptor_index_dir")
+            or inventory_publication_descriptor_index_dir
+        )
+        publication_metadata_catalog_dir = (
+            args.publication_metadata_catalog_dir
+            or (preset or {}).get("publication_metadata_catalog_dir")
+            or inventory_publication_metadata_catalog_dir
+        )
         if publication_descriptor_index_dir is None or publication_metadata_catalog_dir is None:
             raise SatRootError(
-                "publish-publication-catalog-workspace requires publication_descriptor_index_dir and publication_metadata_catalog_dir or a --preset-json providing both"
+                "publish-publication-catalog-workspace requires publication_descriptor_index_dir and publication_metadata_catalog_dir, a --preset-json providing both, or an --inventory-json containing unique entries"
             )
         publish_publication_catalog_workspace(
             publication_descriptor_index_dir=publication_descriptor_index_dir,
@@ -16319,11 +16337,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-machine-publication-catalog-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_preset(preset_path) if preset_path is not None else None
-        publication_descriptor_index_dir = args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir")
-        publication_metadata_catalog_dir = args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir")
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
+        publication_descriptor_index_dir = (
+            args.publication_descriptor_index_dir
+            or (preset or {}).get("publication_descriptor_index_dir")
+            or inventory_publication_descriptor_index_dir
+        )
+        publication_metadata_catalog_dir = (
+            args.publication_metadata_catalog_dir
+            or (preset or {}).get("publication_metadata_catalog_dir")
+            or inventory_publication_metadata_catalog_dir
+        )
         if publication_descriptor_index_dir is None or publication_metadata_catalog_dir is None:
             raise SatRootError(
-                "publish-machine-publication-catalog-workspace requires publication_descriptor_index_dir and publication_metadata_catalog_dir or a --preset-json providing both"
+                "publish-machine-publication-catalog-workspace requires publication_descriptor_index_dir and publication_metadata_catalog_dir, a --preset-json providing both, or an --inventory-json containing unique entries"
             )
         publish_machine_publication_catalog_workspace(
             publication_descriptor_index_dir=publication_descriptor_index_dir,
@@ -16336,6 +16368,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-publication-registry-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        inventory_publication_catalog_workspace_dir = (
+            load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_network_dir = load_inventory_publication_network_dir(args.inventory_json) if args.inventory_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
         publication_catalog_workspace_dir = (
             Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
             if (preset or {}).get("publication_catalog_workspace_dir")
@@ -16343,20 +16382,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         if args.publication_catalog_workspace_dir:
             publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
+        elif inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
         if publication_catalog_workspace_dir is None:
             raise SatRootError(
-                "publish-publication-registry-workspace requires publication_catalog_workspace_dir or a --preset-json providing it"
+                "publish-publication-registry-workspace requires publication_catalog_workspace_dir, a --preset-json providing it, or an --inventory-json containing a unique entry"
             )
         publication_network_dir = (
             Path(args.publication_network_dir).resolve()
             if args.publication_network_dir
-            else (Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None)
+            else (
+                Path((preset or {}).get("publication_network_dir")).resolve()
+                if (preset or {}).get("publication_network_dir")
+                else (Path(inventory_publication_network_dir).resolve() if inventory_publication_network_dir is not None else None)
+            )
         )
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
             release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
         if release_catalog_index_dir is None:
-            raise SatRootError("publish-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
+            release_catalog_index_dir = inventory_release_catalog_index_dir
+        if release_catalog_index_dir is None:
+            raise SatRootError("publish-publication-registry-workspace requires --release-catalog-index-dir, --publication-network-dir, or an --inventory-json containing a unique release catalog index")
 
         publication_registry_metadata = _merge_release_metadata_defaults((preset or {}).get("publication_registry_metadata"), {
             "channel": args.channel,
@@ -16378,6 +16425,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-machine-publication-registry-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        inventory_publication_catalog_workspace_dir = (
+            load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_network_dir = load_inventory_publication_network_dir(args.inventory_json) if args.inventory_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
         publication_catalog_workspace_dir = (
             Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
             if (preset or {}).get("publication_catalog_workspace_dir")
@@ -16385,20 +16439,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         if args.publication_catalog_workspace_dir:
             publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
+        elif inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
         if publication_catalog_workspace_dir is None:
             raise SatRootError(
-                "publish-machine-publication-registry-workspace requires publication_catalog_workspace_dir or a --preset-json providing it"
+                "publish-machine-publication-registry-workspace requires publication_catalog_workspace_dir, a --preset-json providing it, or an --inventory-json containing a unique entry"
             )
         publication_network_dir = (
             Path(args.publication_network_dir).resolve()
             if args.publication_network_dir
-            else (Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None)
+            else (
+                Path((preset or {}).get("publication_network_dir")).resolve()
+                if (preset or {}).get("publication_network_dir")
+                else (Path(inventory_publication_network_dir).resolve() if inventory_publication_network_dir is not None else None)
+            )
         )
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
             release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
         if release_catalog_index_dir is None:
-            raise SatRootError("publish-machine-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
+            release_catalog_index_dir = inventory_release_catalog_index_dir
+        if release_catalog_index_dir is None:
+            raise SatRootError("publish-machine-publication-registry-workspace requires --release-catalog-index-dir, --publication-network-dir, or an --inventory-json containing a unique release catalog index")
 
         publication_registry_metadata = _merge_release_metadata_defaults((preset or {}).get("publication_registry_metadata"), {
             "channel": args.channel,
