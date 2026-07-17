@@ -2868,6 +2868,24 @@ def load_inventory_publication_metadata_bundle_dirs(inventory_json: str | Path) 
     )
 
 
+def load_inventory_demo_catalog_workspace_dirs(inventory_json: str | Path) -> list[str]:
+    return _inventory_entry_paths(
+        inventory_json,
+        entry_key="demo_catalog_workspaces",
+        path_key="workspace_dir",
+        label="demo catalog workspace source",
+    )
+
+
+def load_inventory_publication_stack_dirs(inventory_json: str | Path) -> list[str]:
+    return _inventory_entry_paths(
+        inventory_json,
+        entry_key="publication_stacks",
+        path_key="workspace_dir",
+        label="publication stack workspace source",
+    )
+
+
 def _load_inventory_optional_unique_path(
     inventory_json: str | Path,
     *,
@@ -13726,6 +13744,7 @@ def build_cli_parser() -> Any:
 
     publish_publication_stack_parser = subparsers.add_parser("publish-publication-stack", help="Copy existing demo catalog workspaces into one SATROOT publication stack and publish a signed release catalog")
     publish_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs and release-catalog metadata defaults")
+    publish_publication_stack_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo catalog workspace directories will be added as publication stack sources")
     publish_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT demo catalog workspace directory")
     publish_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested demo catalog workspaces; may be repeated")
     publish_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -13738,6 +13757,7 @@ def build_cli_parser() -> Any:
 
     publish_machine_publication_stack_parser = subparsers.add_parser("publish-machine-publication-stack", help="Copy existing SATROOT-MACHINE-1 demo catalog workspaces into one machine-only publication stack and publish a signed release catalog")
     publish_machine_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs and release-catalog metadata defaults")
+    publish_machine_publication_stack_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo catalog workspace directories will be added as machine publication stack sources")
     publish_machine_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT-MACHINE-1 demo catalog workspace directory")
     publish_machine_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 demo catalog workspaces; may be repeated")
     publish_machine_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -13750,6 +13770,7 @@ def build_cli_parser() -> Any:
 
     publish_publication_network_parser = subparsers.add_parser("publish-publication-network", help="Copy existing publication stack workspaces into one SATROOT publication network and publish a signed release-catalog index")
     publish_publication_network_parser.add_argument("--preset-json", help="Optional SATROOT publication network preset JSON file supplying source publication_stack_dirs and release-catalog-index metadata defaults")
+    publish_publication_network_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication stack workspace directories will be added as publication network sources")
     publish_publication_network_parser.add_argument("publication_stack_dir", nargs="*", help="Path to an existing SATROOT publication stack workspace directory")
     publish_publication_network_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication stack workspaces; may be repeated")
     publish_publication_network_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -13762,6 +13783,7 @@ def build_cli_parser() -> Any:
 
     publish_machine_publication_network_parser = subparsers.add_parser("publish-machine-publication-network", help="Copy existing machine-only publication stack workspaces into one SATROOT-MACHINE-1 publication network and publish a signed release-catalog index")
     publish_machine_publication_network_parser.add_argument("--preset-json", help="Optional SATROOT publication network preset JSON file supplying source publication_stack_dirs and release-catalog-index metadata defaults")
+    publish_machine_publication_network_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication stack workspace directories will be added as machine publication network sources")
     publish_machine_publication_network_parser.add_argument("publication_stack_dir", nargs="*", help="Path to an existing SATROOT-MACHINE-1 publication stack workspace directory")
     publish_machine_publication_network_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 publication stack workspaces; may be repeated")
     publish_machine_publication_network_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
@@ -16184,13 +16206,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-publication-stack":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_stack_preset(preset_path) if preset_path is not None else None
+        inventory_workspace_dirs = load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
-            [*((preset or {}).get("catalog_workspace_dirs", [])), *args.catalog_workspace_dir],
+            [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir],
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -16207,13 +16230,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-machine-publication-stack":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_machine_publication_stack_preset(preset_path) if preset_path is not None else None
+        inventory_workspace_dirs = load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
-            [*((preset or {}).get("catalog_workspace_dirs", [])), *args.catalog_workspace_dir],
+            [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir],
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -16230,13 +16254,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-publication-network":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_network_preset(preset_path) if preset_path is not None else None
+        inventory_workspace_dirs = load_inventory_publication_stack_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_index_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_publication_stack_workspace_inputs(
-            [*((preset or {}).get("publication_stack_dirs", [])), *args.publication_stack_dir],
+            [*((preset or {}).get("publication_stack_dirs", [])), *inventory_workspace_dirs, *args.publication_stack_dir],
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -16253,13 +16278,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-machine-publication-network":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_machine_publication_network_preset(preset_path) if preset_path is not None else None
+        inventory_workspace_dirs = load_inventory_publication_stack_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_index_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_publication_stack_workspace_inputs(
-            [*((preset or {}).get("publication_stack_dirs", [])), *args.publication_stack_dir],
+            [*((preset or {}).get("publication_stack_dirs", [])), *inventory_workspace_dirs, *args.publication_stack_dir],
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )

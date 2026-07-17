@@ -861,6 +861,10 @@ If you already have generated demo catalog workspaces and just want to consolida
 satroot1 publish-publication-stack generated_catalogs/stable_workspace generated_catalogs/machine_workspace --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_existing --label "Published Existing Stack"
 ```
 
+```bash
+satroot1 publish-publication-stack --inventory-json artifact_inventory.json --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_existing --label "Inventory Published Stack"
+```
+
 That same publish lane can now also load a stack preset that preserves source `catalog_workspace_dirs`, which makes exported stack presets reusable for both bootstrap and publish workflows:
 
 ```bash
@@ -879,6 +883,10 @@ If you already have generated publication stack workspaces and want a top-level 
 
 ```bash
 satroot1 publish-publication-network generated_stacks/stack_alpha generated_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Published Existing Network"
+```
+
+```bash
+satroot1 publish-publication-network --inventory-json artifact_inventory.json --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_existing --label "Inventory Published Network"
 ```
 
 And because exported network presets now preserve source `publication_stack_dirs`, the same checked-in preset can also drive a publish-only consolidation flow:
@@ -943,7 +951,7 @@ If you only want to report artifacts rooted directly at the given path and skip 
 satroot1 inventory-artifacts publication_network --non-recursive
 ```
 
-Those saved inventory reports can be reused directly by `build-bundle-index`, `publish-release`, `bootstrap-release-publication`, `build-release-catalog`, `publish-release-catalog`, `bootstrap-release-catalog-publication`, `build-release-catalog-index`, `publish-release-catalog-index`, `bootstrap-release-catalog-index-publication`, `build-publication-descriptor-index`, `bootstrap-publication-descriptor-index-publication`, `build-publication-metadata-catalog`, `bootstrap-publication-metadata-catalog-publication`, `build-publication-registry`, `bootstrap-publication-registry-publication`, `bootstrap-publication-catalog-workspace`, and `bootstrap-publication-registry-workspace` via `--inventory-json`.
+Those saved inventory reports can be reused directly by `build-bundle-index`, `publish-release`, `bootstrap-release-publication`, `build-release-catalog`, `publish-release-catalog`, `bootstrap-release-catalog-publication`, `build-release-catalog-index`, `publish-release-catalog-index`, `bootstrap-release-catalog-index-publication`, `publish-publication-stack`, `publish-publication-network`, `build-publication-descriptor-index`, `bootstrap-publication-descriptor-index-publication`, `build-publication-metadata-catalog`, `bootstrap-publication-metadata-catalog-publication`, `build-publication-registry`, `bootstrap-publication-registry-publication`, `bootstrap-publication-catalog-workspace`, and `bootstrap-publication-registry-workspace` via `--inventory-json`.
 
 To derive a reusable preset back from a generated demo catalog workspace:
 

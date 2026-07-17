@@ -4668,6 +4668,84 @@ def test_cli_publish_publication_stack_from_existing_catalog_workspaces(tmp_path
     capsys.readouterr()
 
 
+def test_cli_publish_publication_stack_with_inventory_json(tmp_path, capsys):
+    stable_dir = tmp_path / "stable_inventory_workspace"
+    machine_dir = tmp_path / "machine_inventory_workspace"
+    inventory_path = tmp_path / "publication_stack_inventory.json"
+
+    assert main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(stable_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Inventory Workspace",
+            "--published-at",
+            "2026-07-06T01:15:00Z",
+        ]
+    ) == 0
+    capsys.readouterr()
+    assert main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-MACHINE-1",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(machine_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Machine Inventory Workspace",
+            "--published-at",
+            "2026-07-06T02:15:00Z",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_inventory_json_from_cli(inventory_path, stable_dir.parent, machine_dir.parent, capsys=capsys)
+
+    output_dir = tmp_path / "published_stack_inventory"
+    assert main(
+        [
+            "publish-publication-stack",
+            "--inventory-json",
+            str(inventory_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Published Stack",
+            "--published-at",
+            "2026-07-06T03:15:00Z",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["catalog"]["label"] == "Inventory Published Stack"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {
+        "stable_inventory_workspace",
+        "machine_inventory_workspace",
+    }
+
+
 def test_cli_publish_publication_stack_with_preset(tmp_path, capsys):
     stack_dir = make_demo_publication_stack_dir(tmp_path)
     preset_path = tmp_path / "exported_stack.json"
@@ -4765,6 +4843,45 @@ def test_cli_publish_publication_network_from_existing_stack_workspaces(tmp_path
     assert verified["index"]["label"] == "Published Existing Network"
     assert main(["publication-network-lint", str(output_dir)]) == 0
     capsys.readouterr()
+
+
+def test_cli_publish_publication_network_with_inventory_json(tmp_path, capsys):
+    stack_alpha_dir = tmp_path / "inventory_stack_alpha" / "publication_stack"
+    stack_beta_dir = tmp_path / "inventory_stack_beta" / "publication_stack"
+    inventory_path = tmp_path / "publication_network_inventory.json"
+    (tmp_path / "inventory_stack_alpha").mkdir()
+    (tmp_path / "inventory_stack_beta").mkdir()
+    assert make_demo_publication_stack_dir(tmp_path / "inventory_stack_alpha") == stack_alpha_dir
+    assert make_demo_publication_stack_dir(tmp_path / "inventory_stack_beta") == stack_beta_dir
+    capsys.readouterr()
+
+    write_inventory_json_from_cli(inventory_path, tmp_path / "inventory_stack_alpha", tmp_path / "inventory_stack_beta", capsys=capsys)
+
+    output_dir = tmp_path / "published_network_inventory"
+    assert main(
+        [
+            "publish-publication-network",
+            "--inventory-json",
+            str(inventory_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Inventory Published Network",
+            "--published-at",
+            "2026-07-06T04:15:00Z",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["release_catalog_index"]["index"]["label"] == "Inventory Published Network"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"publication_stack", "publication_stack-2"}
 
 
 def test_cli_publish_publication_network_with_preset(tmp_path, capsys):
@@ -4906,6 +5023,87 @@ def test_cli_publish_machine_publication_stack_from_existing_catalog_workspaces(
     assert verified["catalog"]["label"] == "Published Machine Stack"
     assert main(["publication-stack-lint", str(output_dir)]) == 0
     capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_stack_with_inventory_json(tmp_path, capsys):
+    machine_alpha_dir = tmp_path / "machine_inventory_alpha_workspace"
+    machine_beta_dir = tmp_path / "machine_inventory_beta_workspace"
+    inventory_path = tmp_path / "machine_publication_stack_inventory.json"
+
+    assert main(
+        [
+            "bootstrap-machine-demo-catalog",
+            "--symbol",
+            "MIVSTA1",
+            "--name",
+            "Machine Inventory Stack Alpha",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "batch-inference",
+            "--billing-unit",
+            "job",
+            "--label",
+            "Machine Inventory Stack Alpha Release",
+            "--output-dir",
+            str(machine_alpha_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-machine-demo-catalog",
+            "--symbol",
+            "MIVSTB1",
+            "--name",
+            "Machine Inventory Stack Beta",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--service-scope",
+            "gpu-inference",
+            "--billing-unit",
+            "minute",
+            "--label",
+            "Machine Inventory Stack Beta Release",
+            "--output-dir",
+            str(machine_beta_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_inventory_json_from_cli(inventory_path, machine_alpha_dir.parent, machine_beta_dir.parent, capsys=capsys)
+
+    output_dir = tmp_path / "published_machine_stack_inventory"
+    assert main(
+        [
+            "publish-machine-publication-stack",
+            "--inventory-json",
+            str(inventory_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Inventory Published Machine Stack",
+            "--published-at",
+            "2026-07-06T05:15:00Z",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["catalog"]["label"] == "Inventory Published Machine Stack"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {
+        "machine_inventory_alpha_workspace",
+        "machine_inventory_beta_workspace",
+    }
 
 
 def test_cli_publish_machine_publication_stack_with_preset(tmp_path, capsys):
@@ -5102,6 +5300,111 @@ def test_cli_publish_machine_publication_network_from_existing_stack_workspaces(
     assert verified["index"]["label"] == "Published Machine Network"
     assert main(["publication-network-lint", str(output_dir)]) == 0
     capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_network_with_inventory_json(tmp_path, capsys):
+    machine_catalog_preset_a = tmp_path / "machine_inventory_network_a.json"
+    write_json(
+        machine_catalog_preset_a,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MINWA1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Inventory Network Alpha"},
+            "release": {
+                "channel": "machine",
+                "label": "Machine Inventory Network Alpha Release",
+                "published_at": "2026-07-06T05:40:00Z",
+            },
+        },
+    )
+    machine_catalog_preset_b = tmp_path / "machine_inventory_network_b.json"
+    write_json(
+        machine_catalog_preset_b,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MINWB1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Inventory Network Beta"},
+            "release": {
+                "channel": "machine",
+                "label": "Machine Inventory Network Beta Release",
+                "published_at": "2026-07-06T05:50:00Z",
+            },
+        },
+    )
+
+    stack_alpha_dir = tmp_path / "machine_inventory_stack_alpha"
+    stack_beta_dir = tmp_path / "machine_inventory_stack_beta"
+    inventory_path = tmp_path / "machine_publication_network_inventory.json"
+    assert main(
+        [
+            "bootstrap-machine-publication-stack",
+            "--catalog-preset-json",
+            str(machine_catalog_preset_a),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_alpha_dir),
+            "--label",
+            "Machine Inventory Network Stack Alpha",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-machine-publication-stack",
+            "--catalog-preset-json",
+            str(machine_catalog_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_beta_dir),
+            "--label",
+            "Machine Inventory Network Stack Beta",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_inventory_json_from_cli(inventory_path, stack_alpha_dir.parent, stack_beta_dir.parent, capsys=capsys)
+
+    output_dir = tmp_path / "published_machine_network_inventory"
+    assert main(
+        [
+            "publish-machine-publication-network",
+            "--inventory-json",
+            str(inventory_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine-network",
+            "--label",
+            "Inventory Published Machine Network",
+            "--published-at",
+            "2026-07-06T06:00:00Z",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["release_catalog_index"]["index"]["label"] == "Inventory Published Machine Network"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {
+        "machine_inventory_stack_alpha",
+        "machine_inventory_stack_beta",
+    }
 
 
 def test_cli_publish_machine_publication_network_with_preset(tmp_path, capsys):
