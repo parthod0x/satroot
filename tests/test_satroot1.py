@@ -11079,6 +11079,53 @@ def test_cli_bootstrap_publication_registry_publication(tmp_path, capsys):
     assert verified["index"] == registry["index"]
 
 
+def test_cli_bootstrap_publication_registry_publication_with_inventory_json(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    inventory_path = tmp_path / "publication_registry_publication_inventory.json"
+    output_dir = tmp_path / "publication_registry_publication_inventory"
+
+    write_inventory_json_from_cli(
+        inventory_path,
+        release_catalog_index_dir.parent,
+        descriptor_index_dir,
+        metadata_catalog_dir,
+        capsys=capsys,
+    )
+
+    assert main(
+        [
+            "bootstrap-publication-registry-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Inventory Publication Registry",
+            "--published-at",
+            "2026-07-09T03:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    ) == 0
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Inventory Publication Registry"
+    assert registry["release_catalog_index_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(release_catalog_index_dir).relative_to(tmp_path)).as_posix()
+    assert registry["publication_descriptor_index_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(descriptor_index_dir).relative_to(tmp_path)).as_posix()
+    assert registry["publication_metadata_catalog_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(metadata_catalog_dir).relative_to(tmp_path)).as_posix()
+
+
 def test_cli_bootstrap_machine_publication_registry_publication(tmp_path, capsys):
     release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
     output_dir = tmp_path / "machine_publication_registry_publication"
@@ -11125,6 +11172,53 @@ def test_cli_bootstrap_machine_publication_registry_publication(tmp_path, capsys
     )
     assert verified["component_count"] == 3
     assert verified["index"] == registry["index"]
+
+
+def test_cli_bootstrap_machine_publication_registry_publication_with_inventory_json(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    inventory_path = tmp_path / "machine_publication_registry_publication_inventory.json"
+    output_dir = tmp_path / "machine_publication_registry_publication_inventory"
+
+    write_inventory_json_from_cli(
+        inventory_path,
+        release_catalog_index_dir,
+        descriptor_index_dir,
+        metadata_catalog_dir,
+        capsys=capsys,
+    )
+
+    assert main(
+        [
+            "bootstrap-machine-publication-registry-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Inventory Machine Publication Registry",
+            "--published-at",
+            "2026-07-14T07:45:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    ) == 0
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Inventory Machine Publication Registry"
+    assert registry["release_catalog_index_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(release_catalog_index_dir).relative_to(tmp_path)).as_posix()
+    assert registry["publication_descriptor_index_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(descriptor_index_dir).relative_to(tmp_path)).as_posix()
+    assert registry["publication_metadata_catalog_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(metadata_catalog_dir).relative_to(tmp_path)).as_posix()
 
 
 def test_cli_bootstrap_publication_registry_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):

@@ -943,7 +943,7 @@ If you only want to report artifacts rooted directly at the given path and skip 
 satroot1 inventory-artifacts publication_network --non-recursive
 ```
 
-Those saved inventory reports can be reused directly by `build-bundle-index`, `publish-release`, `bootstrap-release-publication`, `build-release-catalog`, `publish-release-catalog`, `bootstrap-release-catalog-publication`, `build-release-catalog-index`, `publish-release-catalog-index`, `bootstrap-release-catalog-index-publication`, `build-publication-descriptor-index`, `bootstrap-publication-descriptor-index-publication`, `build-publication-metadata-catalog`, `bootstrap-publication-metadata-catalog-publication`, `build-publication-registry`, `bootstrap-publication-catalog-workspace`, and `bootstrap-publication-registry-workspace` via `--inventory-json`.
+Those saved inventory reports can be reused directly by `build-bundle-index`, `publish-release`, `bootstrap-release-publication`, `build-release-catalog`, `publish-release-catalog`, `bootstrap-release-catalog-publication`, `build-release-catalog-index`, `publish-release-catalog-index`, `bootstrap-release-catalog-index-publication`, `build-publication-descriptor-index`, `bootstrap-publication-descriptor-index-publication`, `build-publication-metadata-catalog`, `bootstrap-publication-metadata-catalog-publication`, `build-publication-registry`, `bootstrap-publication-registry-publication`, `bootstrap-publication-catalog-workspace`, and `bootstrap-publication-registry-workspace` via `--inventory-json`.
 
 To derive a reusable preset back from a generated demo catalog workspace:
 
@@ -1195,6 +1195,10 @@ satroot1 build-machine-publication-registry-manifest machine_publication_registr
 
 ```bash
 satroot1 bootstrap-machine-publication-registry-publication --release-catalog-index-dir machine_release_catalog_index_publication --publication-descriptor-index-dir machine_publication_descriptor_index_publication --publication-metadata-catalog-dir machine_publication_metadata_catalog_publication --output-dir machine_publication_registry_publication --channel machine --label "Machine Publication Registry" --published-at 2026-07-14T06:30:00Z --scheme hmac-sha256 --key-id registry-key
+```
+
+```bash
+satroot1 bootstrap-publication-registry-publication --inventory-json artifact_inventory.json --output-dir publication_registry_publication --channel network --label "Inventory Publication Registry" --published-at 2026-07-09T03:00:00Z --scheme hmac-sha256 --key-id registry-key
 ```
 
 To generate that whole registry workspace from an existing publication network in one shot:

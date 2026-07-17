@@ -14125,6 +14125,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_publication_registry_publication_parser = subparsers.add_parser("bootstrap-publication-registry-publication", help="Generate signing material and write a ready-to-verify SATROOT publication registry directory")
     bootstrap_publication_registry_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with component paths and registry metadata defaults")
+    bootstrap_publication_registry_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication component directories will be used as registry publication sources when explicit paths are omitted")
     bootstrap_publication_registry_publication_parser.add_argument("--release-catalog-index-dir", help="Path to a release catalog index publication directory")
     bootstrap_publication_registry_publication_parser.add_argument("--publication-descriptor-index-dir", help="Path to a publication descriptor index publication directory")
     bootstrap_publication_registry_publication_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a publication metadata catalog publication directory")
@@ -14137,6 +14138,7 @@ def build_cli_parser() -> Any:
 
     bootstrap_machine_publication_registry_publication_parser = subparsers.add_parser("bootstrap-machine-publication-registry-publication", help="Generate signing material and write a ready-to-verify machine-only SATROOT publication registry directory")
     bootstrap_machine_publication_registry_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with machine publication component paths and registry metadata defaults")
+    bootstrap_machine_publication_registry_publication_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered machine publication component directories will be used as registry publication sources when explicit paths are omitted")
     bootstrap_machine_publication_registry_publication_parser.add_argument("--release-catalog-index-dir", help="Path to a machine release catalog index publication directory")
     bootstrap_machine_publication_registry_publication_parser.add_argument("--publication-descriptor-index-dir", help="Path to a machine publication descriptor index publication directory")
     bootstrap_machine_publication_registry_publication_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a machine publication metadata catalog publication directory")
@@ -17045,6 +17047,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-publication-registry-publication":
         preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
         registry_metadata = {
             **dict((preset or {}).get("registry_metadata", {})),
         }
@@ -17059,9 +17070,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
-            release_catalog_index_dir=args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir"),
-            publication_descriptor_index_dir=args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir"),
-            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir"),
+            release_catalog_index_dir=(
+                args.release_catalog_index_dir
+                or (preset or {}).get("release_catalog_index_dir")
+                or inventory_release_catalog_index_dir
+            ),
+            publication_descriptor_index_dir=(
+                args.publication_descriptor_index_dir
+                or (preset or {}).get("publication_descriptor_index_dir")
+                or inventory_publication_descriptor_index_dir
+            ),
+            publication_metadata_catalog_dir=(
+                args.publication_metadata_catalog_dir
+                or (preset or {}).get("publication_metadata_catalog_dir")
+                or inventory_publication_metadata_catalog_dir
+            ),
             registry_metadata=registry_metadata,
         )
         print(f"wrote bootstrapped SATROOT publication registry to {Path(args.output_dir).resolve()}")
@@ -17069,6 +17092,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "bootstrap-machine-publication-registry-publication":
         preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
         registry_metadata = {
             **dict((preset or {}).get("registry_metadata", {})),
         }
@@ -17079,9 +17111,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         }.items():
             if value is not None:
                 registry_metadata[key] = value
-        release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
-        publication_descriptor_index_dir = args.publication_descriptor_index_dir or (preset or {}).get("publication_descriptor_index_dir")
-        publication_metadata_catalog_dir = args.publication_metadata_catalog_dir or (preset or {}).get("publication_metadata_catalog_dir")
+        release_catalog_index_dir = (
+            args.release_catalog_index_dir
+            or (preset or {}).get("release_catalog_index_dir")
+            or inventory_release_catalog_index_dir
+        )
+        publication_descriptor_index_dir = (
+            args.publication_descriptor_index_dir
+            or (preset or {}).get("publication_descriptor_index_dir")
+            or inventory_publication_descriptor_index_dir
+        )
+        publication_metadata_catalog_dir = (
+            args.publication_metadata_catalog_dir
+            or (preset or {}).get("publication_metadata_catalog_dir")
+            or inventory_publication_metadata_catalog_dir
+        )
         if release_catalog_index_dir is not None:
             _require_machine_release_catalog_index_publication(
                 release_catalog_index_dir,
