@@ -1,0 +1,12 @@
+{
+  "type": "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET",
+  "version": "0.1",
+  "discover_under": [
+    "../generated_stable_publication_metadata_root"
+  ],
+  "catalog": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Publication Metadata Catalog",
+    "published_at": "2026-07-15T05:00:00Z"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "type": "SATROOT-BUNDLE-INDEX-PRESET",
+  "version": "0.1",
+  "discover_under": [
+    "../../generated_stable_bundle_collection"
+  ],
+  "recursive": true,
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Bundle Index",
+    "published_at": "2026-07-15T02:00:00Z"
+  }
+}

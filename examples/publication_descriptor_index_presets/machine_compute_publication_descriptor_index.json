@@ -1,0 +1,12 @@
+{
+  "type": "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET",
+  "version": "0.1",
+  "discover_under": [
+    "../generated_machine_publication_network"
+  ],
+  "index": {
+    "channel": "machine",
+    "label": "SATROOT Machine Compute Publication Descriptor Index",
+    "published_at": "2026-07-14T04:30:00Z"
+  }
+}

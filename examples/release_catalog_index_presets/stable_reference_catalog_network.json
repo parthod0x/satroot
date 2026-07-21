@@ -1,0 +1,13 @@
+{
+  "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
+  "version": "0.1",
+  "discover_under": [
+    "../../generated_stable_release_catalogs"
+  ],
+  "recursive": true,
+  "index": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Catalog Network",
+    "published_at": "2026-07-15T04:00:00Z"
+  }
+}

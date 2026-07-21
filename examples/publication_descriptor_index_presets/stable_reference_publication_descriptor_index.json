@@ -1,0 +1,12 @@
+{
+  "type": "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET",
+  "version": "0.1",
+  "discover_under": [
+    "../generated_stable_publication_network"
+  ],
+  "index": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Publication Descriptor Index",
+    "published_at": "2026-07-15T04:30:00Z"
+  }
+}
