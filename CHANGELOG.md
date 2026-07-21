@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Adds stable-only `SATROOT-DEMO-CATALOG-PRESET` support to `bootstrap-stable-demo`, `bootstrap-stable-demo-bundle`, and `bootstrap-stable-demo-release`.
+- Adds `bootstrap-stable-demo-catalog` for generating single-profile SATROOT-STABLE-1 catalog workspaces, including stable-only preset and release-metadata defaults.
+- Adds `bootstrap-stable-publication-stack` and `bootstrap-stable-publication-network` for stable-only higher-level catalog packaging from validated `SATROOT-STABLE-1` preset trees.
+- Adds `publish-stable-publication-stack`, `publish-stable-publication-network`, `export-stable-publication-stack-preset`, and `export-stable-publication-network-preset` for stable-only higher-level workspace reuse and preset round-trips.
+- Adds `bootstrap-stable-publication-catalog-workspace` and `bootstrap-stable-publication-registry-workspace` for stable-only publication descriptor, metadata, and registry lanes, including preset-driven stable wrapper coverage.
+- Adds `publish-stable-publication-catalog-workspace`, `publish-stable-publication-registry-workspace`, `export-stable-publication-catalog-workspace-preset`, and `export-stable-publication-registry-workspace-preset` for stable-only workspace reuse and round-trip preset export.
+- Adds `export-stable-publication-descriptor-index-preset`, `export-stable-publication-metadata-catalog-preset`, and `export-stable-publication-registry-preset` for stable-only component publication preset export.
+- Adds `export-stable-release-catalog-preset` and `export-stable-release-catalog-index-preset` for stable-only release catalog preset export parity with the machine lane.
+- Adds `export-stable-bundle-index-preset` for stable-only bundle-index preset export parity with the machine lane.
+- Adds `bootstrap-stable-publication-descriptor-index-publication`, `bootstrap-stable-publication-metadata-bundle`, `bootstrap-stable-publication-metadata-catalog-publication`, and `bootstrap-stable-publication-registry-publication` for stable-only component publication generation.
+- Adds `build-stable-release-catalog`, `build-stable-release-catalog-manifest`, `publish-stable-release-catalog`, `bootstrap-stable-release-catalog-publication`, `build-stable-release-catalog-index`, `build-stable-release-catalog-index-manifest`, `publish-stable-release-catalog-index`, and `bootstrap-stable-release-catalog-index-publication` for stable-only release catalog packaging parity with the machine lane.
+- Adds `build-stable-bundle-index`, `build-stable-release-manifest`, `publish-stable-release`, and `bootstrap-stable-release-publication` for stable-only release packaging parity beneath the catalog layer.
+- Adds `build-stable-publication-descriptor-index`, `build-stable-publication-descriptor-index-manifest`, `build-stable-publication-metadata-manifest`, `build-stable-publication-metadata-catalog`, `build-stable-publication-metadata-catalog-manifest`, `build-stable-publication-registry`, and `build-stable-publication-registry-manifest` for stable-only component build/sign parity with the machine lane.
 - Lets bundle, release, release-catalog, and release-catalog-index build/publish commands reuse saved `inventory-artifacts` reports via `--inventory-json`.
 - Extends that same `--inventory-json` reuse pattern across publication descriptor index, publication metadata catalog, publication registry, publication catalog workspace, and publication registry workspace build/bootstrap flows.
 - Extends `--inventory-json` reuse into top-level publication-registry publication bootstraps, including the machine-only wrapper.

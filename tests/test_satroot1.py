@@ -73,6 +73,8 @@ from satroot1 import (
     load_publication_metadata_manifest_schema,
     load_publication_network_summary_schema,
     load_publication_stack_preset,
+    load_stable_publication_network_preset,
+    load_stable_publication_stack_preset,
     load_publication_stack_summary_schema,
     load_release_catalog_index_manifest_schema,
     load_release_catalog_index_preset,
@@ -205,6 +207,36 @@ def make_machine_release_dirs(tmp_path: Path) -> tuple[str, str]:
     return alpha["release_dir"], beta["release_dir"]
 
 
+def make_stable_release_dirs(tmp_path: Path) -> tuple[str, str]:
+    alpha = bootstrap_stable_reference_demo_release(
+        symbol="SRELA1",
+        name="Stable Release Alpha",
+        bundle_scheme="hmac-sha256",
+        output_dir=tmp_path / "stable_alpha_workspace",
+        release_key_id="release-key",
+        reference_unit="USD",
+        release_metadata={
+            "channel": "stable",
+            "label": "Stable Release Alpha",
+            "published_at": "2026-07-15T01:00:00Z",
+        },
+    )
+    beta = bootstrap_stable_reference_demo_release(
+        symbol="SRELB1",
+        name="Stable Release Beta",
+        bundle_scheme="hmac-sha256",
+        output_dir=tmp_path / "stable_beta_workspace",
+        release_key_id="release-key",
+        reference_unit="EUR",
+        release_metadata={
+            "channel": "stable",
+            "label": "Stable Release Beta",
+            "published_at": "2026-07-15T02:00:00Z",
+        },
+    )
+    return alpha["release_dir"], beta["release_dir"]
+
+
 def make_standalone_bundle_index_dir(tmp_path: Path) -> Path:
     bundle_root = tmp_path / "bundle_index_workspace"
     bundle_dir = bundle_root / "bundle"
@@ -326,6 +358,52 @@ def make_machine_release_catalog_dirs(tmp_path: Path) -> tuple[Path, Path]:
             "published_at": "2026-07-04T05:00:00Z",
         },
     )
+    return catalog_alpha_dir, catalog_beta_dir
+
+
+def make_stable_release_catalog_dirs(tmp_path: Path) -> tuple[Path, Path]:
+    alpha_release_dirs = make_stable_release_dirs(tmp_path / "stable_catalog_alpha_root")
+    beta_release_dirs = make_stable_release_dirs(tmp_path / "stable_catalog_beta_root")
+
+    catalog_alpha_dir = tmp_path / "stable_catalog_alpha"
+    assert main(
+        [
+            "bootstrap-stable-release-catalog-publication",
+            *map(str, alpha_release_dirs),
+            "--output-dir",
+            str(catalog_alpha_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Catalog Alpha",
+            "--published-at",
+            "2026-07-15T04:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "stable-catalog-alpha-key",
+        ]
+    ) == 0
+
+    catalog_beta_dir = tmp_path / "stable_catalog_beta"
+    assert main(
+        [
+            "bootstrap-stable-release-catalog-publication",
+            *map(str, beta_release_dirs),
+            "--output-dir",
+            str(catalog_beta_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Catalog Beta",
+            "--published-at",
+            "2026-07-15T05:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "stable-catalog-beta-key",
+        ]
+    ) == 0
     return catalog_alpha_dir, catalog_beta_dir
 
 
@@ -530,6 +608,75 @@ def make_demo_publication_network_dir(tmp_path: Path) -> Path:
     return output_dir
 
 
+def make_stable_publication_network_dir(tmp_path: Path) -> Path:
+    stable_catalog_preset = tmp_path / "stable_only_catalog.json"
+    write_json(
+        stable_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPNWSTB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Only Publication Network Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Only Publication Network Release",
+                "published_at": "2026-07-05T12:00:00Z",
+            },
+        },
+    )
+    stack_preset = tmp_path / "stable_only_stack.json"
+    write_json(
+        stack_preset,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(stable_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "stable",
+                "label": "Stable Only Publication Stack",
+                "published_at": "2026-07-05T12:10:00Z",
+            },
+        },
+    )
+    index_preset = tmp_path / "stable_only_network_index.json"
+    write_json(
+        index_preset,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
+            "version": "0.1",
+            "index": {
+                "channel": "stable",
+                "label": "Stable Only Publication Network",
+                "published_at": "2026-07-05T12:20:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_only_publication_network"
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--stack-preset-json",
+            str(stack_preset),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-preset-json",
+            str(index_preset),
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Stable Only Publication Network Override",
+        ]
+    ) == 0
+    return output_dir
+
+
 def make_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path, Path]:
     release_dir, _ = make_demo_release_dirs(tmp_path)
     network_dir = make_demo_publication_network_dir(tmp_path)
@@ -585,6 +732,38 @@ def make_machine_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path,
         [
             "bootstrap-publication-metadata-bundle",
             str(catalog_alpha_dir),
+            "--output-dir",
+            str(catalog_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    return workspace_bundle_dir, catalog_bundle_dir
+
+
+def make_stable_publication_metadata_bundle_dirs(tmp_path: Path) -> tuple[Path, Path]:
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    workspace_bundle_dir = tmp_path / "stable_publication_metadata_workspace"
+    catalog_bundle_dir = tmp_path / "stable_publication_metadata_catalog"
+
+    assert main(
+        [
+            "bootstrap-stable-publication-metadata-bundle",
+            str(stable_catalog_workspace_dir),
+            "--output-dir",
+            str(workspace_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-stable-publication-metadata-bundle",
+            str(stable_catalog_workspace_dir / "stable_catalog_workspace"),
             "--output-dir",
             str(catalog_bundle_dir),
             "--scheme",
@@ -846,6 +1025,47 @@ def make_publication_registry_dir(tmp_path: Path) -> Path:
     return output_dir
 
 
+def make_stable_publication_registry_component_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
+    network_root = tmp_path / "stable_registry_network_root"
+    network_root.mkdir(parents=True, exist_ok=True)
+    network_dir = make_stable_publication_network_dir(network_root)
+    release_catalog_index_dir = network_dir / "release_catalog_index"
+
+    catalog_workspace_root = tmp_path / "stable_registry_catalog_root"
+    catalog_workspace_root.mkdir(parents=True, exist_ok=True)
+    catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(catalog_workspace_root)
+    descriptor_index_dir = catalog_workspace_dir / "publication_descriptor_index"
+    metadata_catalog_dir = catalog_workspace_dir / "publication_metadata_catalog"
+    return release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir
+
+
+def make_stable_publication_registry_dir(tmp_path: Path) -> Path:
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_stable_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "stable_publication_registry_publication"
+    assert main(
+        [
+            "bootstrap-publication-registry-publication",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Publication Registry",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    ) == 0
+    return output_dir
+
+
 def make_publication_registry_workspace_dir(tmp_path: Path) -> Path:
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_registry_workspace"
@@ -883,6 +1103,49 @@ def make_publication_registry_workspace_dir(tmp_path: Path) -> Path:
     return output_dir
 
 
+def make_stable_publication_registry_workspace_dir(tmp_path: Path) -> Path:
+    network_dir = make_stable_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "stable_publication_registry_workspace"
+    assert main(
+        [
+            "bootstrap-stable-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--symbol",
+            "STBREGWS1",
+            "--name",
+            "Stable Registry Workspace",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--descriptor-index-channel",
+            "stable",
+            "--descriptor-index-label",
+            "Stable Workspace Descriptor Index",
+            "--publication-metadata-catalog-channel",
+            "stable",
+            "--publication-metadata-catalog-label",
+            "Stable Workspace Metadata Catalog",
+            "--publication-registry-channel",
+            "stable",
+            "--publication-registry-label",
+            "Stable Workspace Publication Registry",
+        ]
+    ) == 0
+    return output_dir
+
+
 def make_publication_catalog_workspace_dir(tmp_path: Path) -> Path:
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_catalog_workspace"
@@ -909,6 +1172,40 @@ def make_publication_catalog_workspace_dir(tmp_path: Path) -> Path:
             "network",
             "--publication-metadata-catalog-label",
             "Workspace Metadata Catalog",
+        ]
+    ) == 0
+    return output_dir
+
+
+def make_stable_publication_catalog_workspace_dir(tmp_path: Path) -> Path:
+    output_dir = tmp_path / "stable_publication_catalog_workspace"
+    assert main(
+        [
+            "bootstrap-stable-publication-catalog-workspace",
+            "--symbol",
+            "STBCATWS1",
+            "--name",
+            "Stable Catalog Workspace",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--descriptor-index-channel",
+            "stable",
+            "--descriptor-index-label",
+            "Stable Workspace Descriptor Index",
+            "--publication-metadata-catalog-channel",
+            "stable",
+            "--publication-metadata-catalog-label",
+            "Stable Workspace Metadata Catalog",
         ]
     ) == 0
     return output_dir
@@ -1522,6 +1819,13 @@ def test_load_machine_publication_stack_preset_example():
     assert preset["release_catalog_metadata"]["label"] == "SATROOT Machine Compute Publication Stack"
 
 
+def test_load_stable_publication_stack_preset_example():
+    preset = load_stable_publication_stack_preset(ROOT / "examples" / "stack_presets" / "stable_reference_publication_stack.json")
+    assert preset["catalog_preset_paths"] == [str((ROOT / "examples" / "catalog_presets" / "stable_reference_catalog.json").resolve())]
+    assert preset["catalog_workspace_dirs"] == []
+    assert preset["release_catalog_metadata"]["label"] == "SATROOT Stable Reference Publication Stack"
+
+
 def test_load_publication_network_preset_example():
     preset = load_publication_network_preset(ROOT / "examples" / "network_presets" / "ai_compute_publication_network.json")
     assert preset["stack_preset_paths"] == [str((ROOT / "examples" / "stack_presets" / "ai_compute_publication_stack.json").resolve())]
@@ -1544,6 +1848,13 @@ def test_load_machine_publication_network_preset_example():
     assert preset["stack_preset_paths"] == [str((ROOT / "examples" / "stack_presets" / "machine_compute_publication_stack.json").resolve())]
     assert preset["publication_stack_dirs"] == []
     assert preset["release_catalog_index_metadata"]["label"] == "SATROOT Machine Compute Publication Network"
+
+
+def test_load_stable_publication_network_preset_example():
+    preset = load_stable_publication_network_preset(ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json")
+    assert preset["stack_preset_paths"] == [str((ROOT / "examples" / "stack_presets" / "stable_reference_publication_stack.json").resolve())]
+    assert preset["publication_stack_dirs"] == []
+    assert preset["release_catalog_index_metadata"]["label"] == "SATROOT Stable Reference Publication Network"
 
 
 def test_load_publication_registry_preset_example():
@@ -3159,6 +3470,132 @@ def test_cli_bootstrap_machine_release_catalog_publication_from_release_json_inp
     assert catalog["catalog"]["label"] == "SATROOT Machine Release Catalog via JSON"
 
 
+def test_cli_bootstrap_stable_release_catalog_publication(tmp_path, capsys):
+    stable_release_alpha_dir, stable_release_beta_dir = make_stable_release_dirs(tmp_path)
+    output_dir = tmp_path / "stable_release_catalog_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-release-catalog-publication",
+            stable_release_alpha_dir,
+            stable_release_beta_dir,
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Release Catalog",
+            "--published-at",
+            "2026-07-15T03:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "SATROOT Stable Release Catalog"
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"SRELA1", "SRELB1"}
+    assert manifest["signature_key_id"] == "catalog-key"
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"] == catalog["catalog"]
+
+
+def test_cli_bootstrap_stable_release_catalog_publication_from_release_json_inputs(tmp_path, capsys):
+    stable_release_alpha_dir, stable_release_beta_dir = make_stable_release_dirs(tmp_path)
+    output_dir = tmp_path / "stable_release_catalog_publication_json_inputs"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-release-catalog-publication",
+            str(Path(stable_release_alpha_dir) / "bundle_index.json"),
+            str(Path(stable_release_beta_dir) / "release_manifest.json"),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Release Catalog via JSON",
+            "--published-at",
+            "2026-07-15T03:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "SATROOT Stable Release Catalog via JSON"
+
+
+def test_cli_bootstrap_stable_release_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    stable_release_alpha_dir, stable_release_beta_dir = make_stable_release_dirs(tmp_path)
+    preset_path = tmp_path / "stable_release_catalog_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-PRESET",
+            "version": "0.1",
+            "release_dirs": [
+                str(Path(stable_release_alpha_dir).relative_to(tmp_path)),
+                str(Path(stable_release_beta_dir).relative_to(tmp_path)),
+            ],
+            "recursive": True,
+            "catalog": {
+                "channel": "stable",
+                "label": "SATROOT Preset Stable Release Stack",
+                "published_at": "2026-07-15T03:40:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_release_catalog_preset_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-release-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Stable Preset Override Stack",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["channel"] == "stable"
+    assert catalog["catalog"]["label"] == "SATROOT Stable Preset Override Stack"
+    assert catalog["catalog"]["published_at"] == "2026-07-15T03:40:00Z"
+
+
 def test_cli_publish_machine_release_catalog_from_exported_preset_round_trip(tmp_path):
     catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
     output_dir = tmp_path / "machine_release_catalog_roundtrip"
@@ -3234,6 +3671,81 @@ def test_cli_publish_machine_release_catalog_rejects_non_machine_release(tmp_pat
         )
 
 
+def test_cli_publish_stable_release_catalog_from_exported_preset_round_trip(tmp_path):
+    stable_catalog_dir, _stable_catalog_dir_two = make_stable_release_catalog_dirs(tmp_path)
+    output_dir = tmp_path / "stable_release_catalog_roundtrip"
+    preset_path = tmp_path / "exported_stable_release_catalog.json"
+
+    assert (
+        main(
+            [
+                "export-release-catalog-preset",
+                str(stable_catalog_dir / "release_catalog.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        main(
+            [
+                "publish-stable-release-catalog",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Roundtrip Stable Release Catalog Publication",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_manifest.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Roundtrip Stable Release Catalog Publication"
+    assert manifest["release_count"] == 2
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert verified["release_count"] == 2
+
+
+def test_cli_publish_stable_release_catalog_rejects_non_stable_release(tmp_path):
+    stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+    output_dir = tmp_path / "mixed_stable_release_catalog"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "publish-stable-release-catalog",
+                stable_release_dir,
+                machine_release_dir,
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+
+
 def test_cli_build_release_catalog_with_inventory_json(tmp_path, capsys):
     make_demo_release_dirs(tmp_path)
     inventory_path = tmp_path / "release_inventory.json"
@@ -3261,6 +3773,62 @@ def test_cli_build_release_catalog_with_inventory_json(tmp_path, capsys):
     assert catalog["release_count"] == 2
     assert catalog["catalog"]["label"] == "Inventory Release Catalog"
     assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"RELSTB1", "RELMCH1"}
+
+
+def test_cli_build_stable_release_catalog_with_inventory_json(tmp_path, capsys):
+    make_stable_release_dirs(tmp_path)
+    inventory_path = tmp_path / "stable_release_inventory.json"
+    output_path = tmp_path / "stable_release_catalog.json"
+
+    write_inventory_json_from_cli(inventory_path, tmp_path, capsys=capsys)
+
+    assert main(
+        [
+            "build-stable-release-catalog",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Stable Release Catalog",
+            "--published-at",
+            "2026-07-15T03:15:00Z",
+            "--output",
+            str(output_path),
+        ]
+    ) == 0
+
+    catalog = json.loads(output_path.read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Inventory Stable Release Catalog"
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"SRELA1", "SRELB1"}
+
+
+def test_cli_build_stable_release_catalog(tmp_path):
+    stable_release_alpha_dir, stable_release_beta_dir = make_stable_release_dirs(tmp_path)
+    output_path = tmp_path / "stable_release_catalog.json"
+
+    exit_code = main(
+        [
+            "build-stable-release-catalog",
+            stable_release_alpha_dir,
+            str(Path(stable_release_beta_dir) / "release_manifest.json"),
+            "--channel",
+            "stable",
+            "--label",
+            "Built Stable Release Catalog",
+            "--published-at",
+            "2026-07-15T03:45:00Z",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    catalog = json.loads(output_path.read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Built Stable Release Catalog"
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"SRELA1", "SRELB1"}
 
 
 def test_cli_build_machine_release_catalog(tmp_path):
@@ -3316,6 +3884,52 @@ def test_cli_build_machine_release_catalog_manifest(tmp_path):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["manifest_type"] == "release-catalog-manifest"
     assert manifest["signature_key_id"] == "catalog-key"
+
+
+def test_cli_build_stable_release_catalog_manifest(tmp_path):
+    stable_release_alpha_dir, stable_release_beta_dir = make_stable_release_dirs(tmp_path)
+    catalog_path = tmp_path / "stable_release_catalog.json"
+    manifest_path = tmp_path / "stable_release_catalog_manifest.json"
+
+    assert main(["build-stable-release-catalog", stable_release_alpha_dir, stable_release_beta_dir, "--output", str(catalog_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-stable-release-catalog-manifest",
+            str(catalog_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--secret",
+            "catalog-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "release-catalog-manifest"
+    assert manifest["signature_key_id"] == "catalog-key"
+
+
+def test_cli_build_stable_release_catalog_manifest_rejects_non_stable_catalog(tmp_path):
+    catalog_dir = make_demo_release_catalog_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-release-catalog-manifest",
+                str(catalog_dir / "release_catalog.json"),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
 
 
 def test_cli_build_machine_release_catalog_manifest_rejects_non_machine_catalog(tmp_path):
@@ -3664,6 +4278,132 @@ def test_cli_bootstrap_machine_release_catalog_index_publication_from_catalog_js
     assert index["index"]["label"] == "SATROOT Machine Catalog Network via JSON"
 
 
+def test_cli_bootstrap_stable_release_catalog_index_publication(tmp_path, capsys):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    output_dir = tmp_path / "stable_release_catalog_index_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-release-catalog-index-publication",
+            str(catalog_alpha_dir),
+            str(catalog_beta_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Catalog Network",
+            "--published-at",
+            "2026-07-15T06:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_index_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "release_catalog_index_secrets.json").read_text(encoding="utf-8"))
+
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "SATROOT Stable Catalog Network"
+    assert manifest["signature_key_id"] == "index-key"
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 2
+    assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_stable_release_catalog_index_publication_from_catalog_json_inputs(tmp_path, capsys):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    output_dir = tmp_path / "stable_release_catalog_index_publication_json_inputs"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-release-catalog-index-publication",
+            str(Path(catalog_alpha_dir) / "release_catalog.json"),
+            str(Path(catalog_beta_dir) / "release_catalog_manifest.json"),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Catalog Network via JSON",
+            "--published-at",
+            "2026-07-15T06:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "SATROOT Stable Catalog Network via JSON"
+
+
+def test_cli_bootstrap_stable_release_catalog_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    preset_path = tmp_path / "stable_release_catalog_index_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
+            "version": "0.1",
+            "release_catalog_dirs": [
+                str(Path(catalog_alpha_dir).relative_to(tmp_path)),
+                str(Path(catalog_beta_dir).relative_to(tmp_path)),
+            ],
+            "recursive": True,
+            "index": {
+                "channel": "stable",
+                "label": "SATROOT Preset Stable Catalog Network",
+                "published_at": "2026-07-15T06:40:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_release_catalog_index_preset_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-release-catalog-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Stable Preset Override Network",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["channel"] == "stable"
+    assert index["index"]["label"] == "SATROOT Stable Preset Override Network"
+    assert index["index"]["published_at"] == "2026-07-15T06:40:00Z"
+
+
 def test_cli_publish_machine_release_catalog_index_from_exported_preset_round_trip(tmp_path):
     release_catalog_index_dir, _descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
     output_dir = tmp_path / "machine_release_catalog_index_roundtrip"
@@ -3740,6 +4480,104 @@ def test_cli_publish_machine_release_catalog_index_rejects_non_machine_catalog(t
         )
 
 
+def test_cli_publish_stable_release_catalog_index_from_exported_preset_round_trip(tmp_path):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    stable_release_catalog_index_dir = tmp_path / "stable_release_catalog_index_source"
+    output_dir = tmp_path / "stable_release_catalog_index_roundtrip"
+    preset_path = tmp_path / "exported_stable_release_catalog_index.json"
+
+    assert (
+        main(
+            [
+                "bootstrap-stable-release-catalog-index-publication",
+                str(catalog_alpha_dir),
+                str(catalog_beta_dir),
+                "--output-dir",
+                str(stable_release_catalog_index_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Stable Release Catalog Index Source",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        main(
+            [
+                "export-release-catalog-index-preset",
+                str(stable_release_catalog_index_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        main(
+            [
+                "publish-stable-release-catalog-index",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Roundtrip Stable Release Catalog Index Publication",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_index_manifest.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Roundtrip Stable Release Catalog Index Publication"
+    assert manifest["release_catalog_count"] == 2
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"index-key": "index-secret"}),
+    )
+    assert verified["release_catalog_count"] == 2
+
+
+def test_cli_publish_stable_release_catalog_index_rejects_non_stable_catalog(tmp_path):
+    stable_catalog_dir, _stable_catalog_dir_two = make_stable_release_catalog_dirs(tmp_path / "stable_root")
+    generic_catalog_dir = make_demo_release_catalog_dir(tmp_path / "generic_root")
+    output_dir = tmp_path / "mixed_stable_release_catalog_index"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "publish-stable-release-catalog-index",
+                str(stable_catalog_dir),
+                str(generic_catalog_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+            ]
+        )
+
+
 def test_cli_build_release_catalog_index_with_inventory_json(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     inventory_path = tmp_path / "catalog_inventory.json"
@@ -3770,6 +4608,64 @@ def test_cli_build_release_catalog_index_with_inventory_json(tmp_path, capsys):
         "Publication Network Stack Alpha",
         "Publication Network Stack Beta",
     ]
+
+
+def test_cli_build_stable_release_catalog_index_with_inventory_json(tmp_path, capsys):
+    make_stable_release_catalog_dirs(tmp_path)
+    inventory_path = tmp_path / "stable_catalog_inventory.json"
+    output_path = tmp_path / "stable_release_catalog_index.json"
+
+    write_inventory_json_from_cli(inventory_path, tmp_path, capsys=capsys)
+
+    assert main(
+        [
+            "build-stable-release-catalog-index",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Stable Catalog Network",
+            "--published-at",
+            "2026-07-15T06:15:00Z",
+            "--output",
+            str(output_path),
+        ]
+    ) == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Inventory Stable Catalog Network"
+    assert sorted(entry["catalog"]["label"] for entry in index["release_catalogs"]) == [
+        "SATROOT Stable Catalog Alpha",
+        "SATROOT Stable Catalog Beta",
+    ]
+
+
+def test_cli_build_stable_release_catalog_index(tmp_path):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    output_path = tmp_path / "stable_release_catalog_index.json"
+
+    exit_code = main(
+        [
+            "build-stable-release-catalog-index",
+            str(catalog_alpha_dir),
+            str(Path(catalog_beta_dir) / "release_catalog_manifest.json"),
+            "--channel",
+            "stable",
+            "--label",
+            "Built Stable Catalog Network",
+            "--published-at",
+            "2026-07-15T06:45:00Z",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Built Stable Catalog Network"
 
 
 def test_cli_build_machine_release_catalog_index(tmp_path):
@@ -3829,6 +4725,57 @@ def test_cli_build_machine_release_catalog_index_manifest(tmp_path):
         "SATROOT Machine Catalog Alpha",
         "SATROOT Machine Catalog Beta",
     ]
+
+
+def test_cli_build_stable_release_catalog_index_manifest(tmp_path):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    index_path = tmp_path / "stable_release_catalog_index.json"
+    manifest_path = tmp_path / "stable_release_catalog_index_manifest.json"
+
+    assert main(["build-stable-release-catalog-index", str(catalog_alpha_dir), str(catalog_beta_dir), "--output", str(index_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-stable-release-catalog-index-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+            "--secret",
+            "index-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "release-catalog-index-manifest"
+    assert manifest["signature_key_id"] == "index-key"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert sorted(entry["catalog"]["label"] for entry in index["release_catalogs"]) == [
+        "SATROOT Stable Catalog Alpha",
+        "SATROOT Stable Catalog Beta",
+    ]
+
+
+def test_cli_build_stable_release_catalog_index_manifest_rejects_non_stable_index(tmp_path):
+    index_dir = make_demo_release_catalog_index_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-release-catalog-index-manifest",
+                str(index_dir / "release_catalog_index.json"),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+            ]
+        )
 
 
 def test_cli_build_machine_release_catalog_index_manifest_rejects_non_machine_index(tmp_path):
@@ -4166,6 +5113,163 @@ def test_cli_bootstrap_machine_publication_stack_with_stack_preset_json(tmp_path
     assert summary["release_catalog"]["catalog"]["label"] == "Embedded Machine Stack Override"
     nested_summary = json.loads((output_dir / "catalog_workspaces" / "machine_catalog" / "summary.json").read_text(encoding="utf-8"))
     assert {entry["symbol"] for entry in nested_summary["bundles"]} == {"MSTKP1"}
+
+
+def test_cli_bootstrap_stable_publication_stack_from_presets(tmp_path, capsys):
+    catalog_preset_a = tmp_path / "stable_catalog_a.json"
+    write_json(
+        catalog_preset_a,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SSTKA1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Stack Alpha"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Stack Alpha Release",
+                "published_at": "2026-07-05T09:30:00Z",
+            },
+        },
+    )
+    catalog_preset_b = tmp_path / "stable_catalog_b.json"
+    write_json(
+        catalog_preset_b,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SSTKB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Stack Beta"},
+            "release": {
+                "channel": "beta",
+                "label": "Stable Stack Beta Release",
+                "published_at": "2026-07-05T09:40:00Z",
+            },
+        },
+    )
+    release_catalog_preset = tmp_path / "stable_release_stack.json"
+    write_json(
+        release_catalog_preset,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-PRESET",
+            "version": "0.1",
+            "catalog": {
+                "channel": "stable",
+                "label": "Stable Publication Stack",
+                "published_at": "2026-07-05T09:50:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_publication_stack"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--catalog-preset-json",
+            str(catalog_preset_a),
+            "--catalog-preset-json",
+            str(catalog_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-preset-json",
+            str(release_catalog_preset),
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Stable Publication Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication stack to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["release_count"] == 2
+    assert summary["release_catalog"]["catalog"]["label"] == "Stable Publication Stack Override"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stable_catalog_a", "stable_catalog_b"}
+
+    alpha_summary = json.loads((output_dir / "catalog_workspaces" / "stable_catalog_a" / "summary.json").read_text(encoding="utf-8"))
+    beta_summary = json.loads((output_dir / "catalog_workspaces" / "stable_catalog_b" / "summary.json").read_text(encoding="utf-8"))
+    assert {entry["symbol"] for entry in alpha_summary["bundles"]} == {"SSTKA1"}
+    assert {entry["symbol"] for entry in beta_summary["bundles"]} == {"SSTKB1"}
+
+    secrets = json.loads((output_dir / "release_catalog" / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog" / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"]["label"] == "Stable Publication Stack Override"
+
+
+def test_cli_bootstrap_stable_publication_stack_with_stack_preset_json(tmp_path, capsys):
+    catalog_preset = tmp_path / "stable_catalog.json"
+    write_json(
+        catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SSTKP1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Preset Stack Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Preset Stack Release",
+                "published_at": "2026-07-05T10:00:00Z",
+            },
+        },
+    )
+    stack_preset = tmp_path / "stable_publication_stack.json"
+    write_json(
+        stack_preset,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "stable",
+                "label": "Embedded Stable Stack",
+                "published_at": "2026-07-05T10:10:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_publication_stack_single"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--stack-preset-json",
+            str(stack_preset),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Embedded Stable Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication stack to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["stack_preset_path"] == str(stack_preset.resolve())
+    assert summary["release_catalog"]["catalog"]["label"] == "Embedded Stable Stack Override"
+    nested_summary = json.loads((output_dir / "catalog_workspaces" / "stable_catalog" / "summary.json").read_text(encoding="utf-8"))
+    assert {entry["symbol"] for entry in nested_summary["bundles"]} == {"SSTKP1"}
 
 
 def test_cli_bootstrap_publication_network_from_presets(tmp_path, capsys):
@@ -4578,6 +5682,208 @@ def test_cli_bootstrap_machine_publication_network_with_network_preset_json(tmp_
     assert summary["release_catalog_index"]["index"]["label"] == "Embedded Machine Network Override"
     assert summary["workspaces"][0]["workspace_name"] == "machine_stack_single"
 
+
+def test_cli_bootstrap_stable_publication_network_from_presets(tmp_path, capsys):
+    stable_catalog_preset_a = tmp_path / "stable_catalog_a.json"
+    write_json(
+        stable_catalog_preset_a,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SNETA1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Network Alpha"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Network Alpha Release",
+                "published_at": "2026-07-05T10:20:00Z",
+            },
+        },
+    )
+    stable_catalog_preset_b = tmp_path / "stable_catalog_b.json"
+    write_json(
+        stable_catalog_preset_b,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SNETB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Network Beta"},
+            "release": {
+                "channel": "beta",
+                "label": "Stable Network Beta Release",
+                "published_at": "2026-07-05T10:30:00Z",
+            },
+        },
+    )
+    stack_preset_a = tmp_path / "stable_stack_a.json"
+    write_json(
+        stack_preset_a,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(stable_catalog_preset_a).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "stable",
+                "label": "Stable Network Stack Alpha",
+                "published_at": "2026-07-05T10:40:00Z",
+            },
+        },
+    )
+    stack_preset_b = tmp_path / "stable_stack_b.json"
+    write_json(
+        stack_preset_b,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(stable_catalog_preset_b).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "beta",
+                "label": "Stable Network Stack Beta",
+                "published_at": "2026-07-05T10:50:00Z",
+            },
+        },
+    )
+    index_preset = tmp_path / "stable_network_index.json"
+    write_json(
+        index_preset,
+        {
+            "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
+            "version": "0.1",
+            "index": {
+                "channel": "stable",
+                "label": "Stable Publication Network",
+                "published_at": "2026-07-05T11:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_publication_network"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-network",
+            "--stack-preset-json",
+            str(stack_preset_a),
+            "--stack-preset-json",
+            str(stack_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-preset-json",
+            str(index_preset),
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Stable Publication Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication network to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["release_catalog_index"]["release_catalog_count"] == 2
+    assert summary["release_catalog_index"]["index"]["label"] == "Stable Publication Network Override"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stable_stack_a", "stable_stack_b"}
+
+    alpha_summary = json.loads((output_dir / "stack_workspaces" / "stable_stack_a" / "summary.json").read_text(encoding="utf-8"))
+    beta_summary = json.loads((output_dir / "stack_workspaces" / "stable_stack_b" / "summary.json").read_text(encoding="utf-8"))
+    assert alpha_summary["release_catalog"]["catalog"]["label"] == "Stable Network Stack Alpha"
+    assert beta_summary["release_catalog"]["catalog"]["label"] == "Stable Network Stack Beta"
+
+    secrets = json.loads((output_dir / "release_catalog_index" / "release_catalog_index_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 2
+    assert verified["index"]["label"] == "Stable Publication Network Override"
+
+
+def test_cli_bootstrap_stable_publication_network_with_network_preset_json(tmp_path, capsys):
+    stable_catalog_preset = tmp_path / "stable_catalog.json"
+    write_json(
+        stable_catalog_preset,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SNETP1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Preset Network Catalog"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Preset Network Release",
+                "published_at": "2026-07-05T11:10:00Z",
+            },
+        },
+    )
+    stack_preset = tmp_path / "stable_stack_single.json"
+    write_json(
+        stack_preset,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_presets": [str(Path(stable_catalog_preset).relative_to(tmp_path))],
+            "release_catalog": {
+                "channel": "stable",
+                "label": "Embedded Stable Network Stack",
+                "published_at": "2026-07-05T11:20:00Z",
+            },
+        },
+    )
+    network_preset = tmp_path / "stable_publication_network.json"
+    write_json(
+        network_preset,
+        {
+            "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
+            "version": "0.1",
+            "stack_presets": [str(Path(stack_preset).relative_to(tmp_path))],
+            "release_catalog_index": {
+                "channel": "mesh",
+                "label": "Embedded Stable Network",
+                "published_at": "2026-07-05T11:30:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_publication_network_single"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(network_preset),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Embedded Stable Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication network to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["network_preset_path"] == str(network_preset.resolve())
+    assert summary["release_catalog_index"]["index"]["channel"] == "mesh"
+    assert summary["release_catalog_index"]["index"]["label"] == "Embedded Stable Network Override"
+    assert summary["workspaces"][0]["workspace_name"] == "stable_stack_single"
 
 def test_cli_publish_publication_stack_from_existing_catalog_workspaces(tmp_path, capsys):
     stable_dir = tmp_path / "stable_workspace"
@@ -5184,6 +6490,251 @@ def test_cli_publish_machine_publication_stack_rejects_non_machine_workspace(tmp
         )
 
 
+def test_cli_publish_stable_publication_stack_from_existing_catalog_workspaces(tmp_path, capsys):
+    stable_alpha_dir = tmp_path / "stable_alpha_workspace"
+    stable_beta_dir = tmp_path / "stable_beta_workspace"
+
+    assert main(
+        [
+            "bootstrap-stable-demo-catalog",
+            "--symbol",
+            "SPSTKA1",
+            "--name",
+            "Stable Publish Stack Alpha",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--reference-unit",
+            "USD",
+            "--label",
+            "Stable Publish Stack Alpha Release",
+            "--output-dir",
+            str(stable_alpha_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-stable-demo-catalog",
+            "--symbol",
+            "SPSTKB1",
+            "--name",
+            "Stable Publish Stack Beta",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--reference-unit",
+            "EUR",
+            "--label",
+            "Stable Publish Stack Beta Release",
+            "--output-dir",
+            str(stable_beta_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    output_dir = tmp_path / "published_stable_stack"
+    exit_code = main(
+        [
+            "publish-stable-publication-stack",
+            str(stable_alpha_dir),
+            str(stable_beta_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Published Stable Stack",
+            "--published-at",
+            "2026-07-15T05:00:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication stack from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["catalog"]["label"] == "Published Stable Stack"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stable_alpha_workspace", "stable_beta_workspace"}
+
+    alpha_summary = json.loads((output_dir / "catalog_workspaces" / "stable_alpha_workspace" / "summary.json").read_text(encoding="utf-8"))
+    beta_summary = json.loads((output_dir / "catalog_workspaces" / "stable_beta_workspace" / "summary.json").read_text(encoding="utf-8"))
+    assert {entry["profile"] for entry in alpha_summary["bundles"]} == {"SATROOT-STABLE-1"}
+    assert {entry["profile"] for entry in beta_summary["bundles"]} == {"SATROOT-STABLE-1"}
+
+    secrets = json.loads((output_dir / "release_catalog" / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog" / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"]["label"] == "Published Stable Stack"
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_stack_with_inventory_json(tmp_path, capsys):
+    stable_alpha_dir = tmp_path / "stable_inventory_alpha_workspace"
+    stable_beta_dir = tmp_path / "stable_inventory_beta_workspace"
+    inventory_path = tmp_path / "stable_publication_stack_inventory.json"
+
+    assert main(
+        [
+            "bootstrap-stable-demo-catalog",
+            "--symbol",
+            "SIVSTA1",
+            "--name",
+            "Stable Inventory Stack Alpha",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--reference-unit",
+            "USD",
+            "--label",
+            "Stable Inventory Stack Alpha Release",
+            "--output-dir",
+            str(stable_alpha_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-stable-demo-catalog",
+            "--symbol",
+            "SIVSTB1",
+            "--name",
+            "Stable Inventory Stack Beta",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--reference-unit",
+            "CHF",
+            "--label",
+            "Stable Inventory Stack Beta Release",
+            "--output-dir",
+            str(stable_beta_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_inventory_json_from_cli(inventory_path, stable_alpha_dir.parent, stable_beta_dir.parent, capsys=capsys)
+
+    output_dir = tmp_path / "published_stable_stack_inventory"
+    assert main(
+        [
+            "publish-stable-publication-stack",
+            "--inventory-json",
+            str(inventory_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Published Stable Stack",
+            "--published-at",
+            "2026-07-15T05:15:00Z",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["catalog"]["label"] == "Inventory Published Stable Stack"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {
+        "stable_inventory_alpha_workspace",
+        "stable_inventory_beta_workspace",
+    }
+
+
+def test_cli_publish_stable_publication_stack_with_preset(tmp_path, capsys):
+    stack_dir = tmp_path / "stable_publication_stack"
+    preset_path = tmp_path / "exported_stable_stack.json"
+    catalog_preset_dir = tmp_path / "exported_stable_catalog_presets"
+    output_dir = tmp_path / "published_stable_stack_preset"
+    assert main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--stack-preset-json",
+            str(ROOT / "examples" / "stack_presets" / "stable_reference_publication_stack.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_dir),
+            "--label",
+            "Stable Export Stack Override",
+        ]
+    ) == 0
+    assert main(
+        [
+            "export-stable-publication-stack-preset",
+            str(stack_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    exit_code = main(
+        [
+            "publish-stable-publication-stack",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Preset Published Stable Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication stack from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["release_catalog"]["catalog"]["label"] == "Preset Published Stable Stack Override"
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_stack_rejects_non_stable_workspace(tmp_path):
+    mixed_workspace_dir = make_demo_catalog_workspace_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1"):
+        main(
+            [
+                "publish-stable-publication-stack",
+                str(mixed_workspace_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--release-catalog-key-id",
+                "catalog-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist"),
+            ]
+        )
+
+
 def test_cli_publish_machine_publication_network_from_existing_stack_workspaces(tmp_path, capsys):
     machine_catalog_preset_a = tmp_path / "machine_publish_network_a.json"
     write_json(
@@ -5479,6 +7030,312 @@ def test_cli_publish_machine_publication_network_rejects_non_machine_stack(tmp_p
         main(
             [
                 "publish-machine-publication-network",
+                str(mixed_stack_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--release-catalog-index-key-id",
+                "index-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist"),
+            ]
+        )
+
+
+def test_cli_publish_stable_publication_network_from_existing_stack_workspaces(tmp_path, capsys):
+    stable_catalog_preset_a = tmp_path / "stable_publish_network_a.json"
+    write_json(
+        stable_catalog_preset_a,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPNWA1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Publish Network Alpha"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Publish Network Alpha Release",
+                "published_at": "2026-07-15T05:10:00Z",
+            },
+        },
+    )
+    stable_catalog_preset_b = tmp_path / "stable_publish_network_b.json"
+    write_json(
+        stable_catalog_preset_b,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPNWB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Publish Network Beta"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Publish Network Beta Release",
+                "published_at": "2026-07-15T05:20:00Z",
+            },
+        },
+    )
+
+    stack_alpha_dir = tmp_path / "stable_publish_stack_alpha"
+    stack_beta_dir = tmp_path / "stable_publish_stack_beta"
+    assert main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--catalog-preset-json",
+            str(stable_catalog_preset_a),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_alpha_dir),
+            "--label",
+            "Stable Publish Network Stack Alpha",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--catalog-preset-json",
+            str(stable_catalog_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_beta_dir),
+            "--label",
+            "Stable Publish Network Stack Beta",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    output_dir = tmp_path / "published_stable_network"
+    exit_code = main(
+        [
+            "publish-stable-publication-network",
+            str(stack_alpha_dir),
+            str(stack_beta_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable-network",
+            "--label",
+            "Published Stable Network",
+            "--published-at",
+            "2026-07-15T05:30:00Z",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication network from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["release_catalog_index"]["index"]["label"] == "Published Stable Network"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stable_publish_stack_alpha", "stable_publish_stack_beta"}
+
+    alpha_summary = json.loads((output_dir / "stack_workspaces" / "stable_publish_stack_alpha" / "summary.json").read_text(encoding="utf-8"))
+    beta_summary = json.loads((output_dir / "stack_workspaces" / "stable_publish_stack_beta" / "summary.json").read_text(encoding="utf-8"))
+    assert alpha_summary["release_catalog"]["catalog"]["label"] == "Stable Publish Network Stack Alpha"
+    assert beta_summary["release_catalog"]["catalog"]["label"] == "Stable Publish Network Stack Beta"
+
+    secrets = json.loads((output_dir / "release_catalog_index" / "release_catalog_index_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 2
+    assert verified["index"]["label"] == "Published Stable Network"
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_network_with_inventory_json(tmp_path, capsys):
+    stable_catalog_preset_a = tmp_path / "stable_inventory_network_a.json"
+    write_json(
+        stable_catalog_preset_a,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SINWA1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Inventory Network Alpha"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Inventory Network Alpha Release",
+                "published_at": "2026-07-15T05:40:00Z",
+            },
+        },
+    )
+    stable_catalog_preset_b = tmp_path / "stable_inventory_network_b.json"
+    write_json(
+        stable_catalog_preset_b,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SINWB1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Inventory Network Beta"},
+            "release": {
+                "channel": "stable",
+                "label": "Stable Inventory Network Beta Release",
+                "published_at": "2026-07-15T05:50:00Z",
+            },
+        },
+    )
+
+    stack_alpha_dir = tmp_path / "stable_inventory_stack_alpha"
+    stack_beta_dir = tmp_path / "stable_inventory_stack_beta"
+    inventory_path = tmp_path / "stable_publication_network_inventory.json"
+    assert main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--catalog-preset-json",
+            str(stable_catalog_preset_a),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_alpha_dir),
+            "--label",
+            "Stable Inventory Network Stack Alpha",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--catalog-preset-json",
+            str(stable_catalog_preset_b),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_beta_dir),
+            "--label",
+            "Stable Inventory Network Stack Beta",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_inventory_json_from_cli(inventory_path, stack_alpha_dir.parent, stack_beta_dir.parent, capsys=capsys)
+
+    output_dir = tmp_path / "published_stable_network_inventory"
+    assert main(
+        [
+            "publish-stable-publication-network",
+            "--inventory-json",
+            str(inventory_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable-network",
+            "--label",
+            "Inventory Published Stable Network",
+            "--published-at",
+            "2026-07-15T06:00:00Z",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["release_catalog_index"]["index"]["label"] == "Inventory Published Stable Network"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {
+        "stable_inventory_stack_alpha",
+        "stable_inventory_stack_beta",
+    }
+
+
+def test_cli_publish_stable_publication_network_with_preset(tmp_path, capsys):
+    network_dir = tmp_path / "stable_publication_network"
+    preset_path = tmp_path / "exported_stable_network.json"
+    stack_preset_dir = tmp_path / "exported_stable_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_stable_catalog_presets"
+    output_dir = tmp_path / "published_stable_network_preset"
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--label",
+            "Stable Export Network Override",
+        ]
+    ) == 0
+    assert main(
+        [
+            "export-stable-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    exit_code = main(
+        [
+            "publish-stable-publication-network",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Preset Published Stable Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication network from existing workspaces to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["release_catalog_index"]["index"]["label"] == "Preset Published Stable Network Override"
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_network_rejects_non_stable_stack(tmp_path):
+    mixed_stack_dir = make_demo_publication_stack_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1"):
+        main(
+            [
+                "publish-stable-publication-network",
                 str(mixed_stack_dir),
                 "--scheme",
                 "hmac-sha256",
@@ -5869,6 +7726,49 @@ def test_cli_publish_machine_publication_catalog_workspace_rejects_generic_descr
                 str(machine_workspace_dir / "publication_metadata_catalog"),
                 "--output-dir",
                 str(tmp_path / "should_not_exist_mixed_descriptor"),
+            ]
+        )
+
+
+def test_cli_publish_stable_publication_catalog_workspace_from_existing_publications(tmp_path, capsys):
+    source_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "published_stable_catalog_workspace"
+
+    exit_code = main(
+        [
+            "publish-stable-publication-catalog-workspace",
+            str(source_workspace_dir / "publication_descriptor_index"),
+            str(source_workspace_dir / "publication_metadata_catalog"),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication catalog workspace from existing publications to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_descriptor_index_dir"] == str((source_workspace_dir / "publication_descriptor_index").resolve())
+    assert summary["source_publication_metadata_catalog_dir"] == str((source_workspace_dir / "publication_metadata_catalog").resolve())
+    assert summary["source_stable_catalog_workspace_dir"] == str((source_workspace_dir / "stable_catalog_workspace").resolve())
+    assert summary["artifact_count"] == 3
+    assert summary["publication_metadata_bundle_count"] == 3
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_catalog_workspace_rejects_generic_publications(tmp_path):
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1"):
+        main(
+            [
+                "publish-stable-publication-catalog-workspace",
+                str(catalog_workspace_dir / "publication_descriptor_index"),
+                str(catalog_workspace_dir / "publication_metadata_catalog"),
+                "--output-dir",
+                str(tmp_path / "should_not_exist_stable_catalog"),
             ]
         )
 
@@ -6576,6 +8476,63 @@ def test_cli_publish_machine_publication_registry_workspace_rejects_generic_cata
         )
 
 
+def test_cli_publish_stable_publication_registry_workspace_from_existing_catalog_workspace(tmp_path, capsys):
+    network_dir = make_stable_publication_network_dir(tmp_path)
+    catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "published_stable_registry_workspace"
+
+    exit_code = main(
+        [
+            "publish-stable-publication-registry-workspace",
+            str(catalog_workspace_dir),
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "Published Stable Registry Workspace",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication registry workspace from existing publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_stable_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_stable_catalog_workspace_dir"] == str((catalog_workspace_dir / "stable_catalog_workspace").resolve())
+    assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["publication_registry"]["index"]["label"] == "Published Stable Registry Workspace"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_registry_workspace_rejects_generic_release_catalog_index(tmp_path):
+    catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    network_dir = make_demo_publication_network_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1"):
+        main(
+            [
+                "publish-stable-publication-registry-workspace",
+                str(catalog_workspace_dir),
+                "--release-catalog-index-dir",
+                str(network_dir / "release_catalog_index"),
+                "--scheme",
+                "hmac-sha256",
+                "--publication-registry-key-id",
+                "registry-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist_stable_index"),
+            ]
+        )
+
+
 def test_cli_bootstrap_publication_registry_workspace_from_publication_network(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_registry_workspace"
@@ -6941,6 +8898,199 @@ def test_cli_bootstrap_machine_publication_registry_workspace_with_preset_catalo
     capsys.readouterr()
 
 
+def test_cli_bootstrap_stable_publication_registry_workspace_hmac(tmp_path, capsys):
+    network_dir = make_stable_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "stable_publication_registry_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--symbol",
+            "STBPUBREG1",
+            "--name",
+            "Stable Publication Registry CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--intended-use",
+            "merchant-clearing",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Catalog",
+            "--descriptor-index-label",
+            "Stable Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Stable Metadata Catalog",
+            "--publication-registry-label",
+            "Stable Publication Registry",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_stable_publication_catalog_workspace_dir"] == str((output_dir / "stable_publication_catalog_workspace").resolve())
+    assert summary["source_stable_catalog_workspace_dir"] == str(
+        (output_dir / "stable_publication_catalog_workspace" / "stable_catalog_workspace").resolve()
+    )
+    assert summary["source_publication_catalog_workspace_dir"] == str((output_dir / "stable_publication_catalog_workspace").resolve())
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["artifact_count"] == 3
+    assert summary["publication_metadata_bundle_count"] == 3
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Stable Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Stable Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Stable Publication Registry"
+    assert (output_dir / "stable_publication_catalog_workspace" / "summary.json").is_file()
+    assert (output_dir / "stable_publication_catalog_workspace" / "stable_catalog_workspace" / "summary.json").is_file()
+
+    secrets = json.loads((output_dir / "publication_registry" / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry" / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"]["label"] == "Stable Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_publication_registry_workspace_with_presets(tmp_path, capsys):
+    network_dir = make_stable_publication_network_dir(tmp_path)
+    catalog_preset_path = tmp_path / "stable_registry_catalog_preset.json"
+    publication_catalog_workspace_preset_path = tmp_path / "stable_publication_catalog_workspace_preset.json"
+    registry_preset_path = tmp_path / "stable_publication_registry_workspace_preset.json"
+    output_dir = tmp_path / "stable_publication_registry_workspace_preset"
+
+    write_json(
+        catalog_preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "STBPUBREGPRE1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Preset Stable Publication Registry"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "USD",
+                    "intended_use": "preset-registry-reference-credit",
+                }
+            },
+            "release": {
+                "channel": "preset",
+                "label": "Preset Stable Registry Catalog",
+                "published_at": "2026-07-03T07:30:00Z",
+            },
+        },
+    )
+    write_json(
+        publication_catalog_workspace_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "discover_under": [str(network_dir)],
+            "recursive": True,
+            "publication_descriptor_index": {
+                "channel": "preset",
+                "label": "Preset Stable Registry Descriptor Index",
+            },
+            "publication_metadata_catalog": {
+                "channel": "preset",
+                "label": "Preset Stable Registry Metadata Catalog",
+            },
+        },
+    )
+    write_json(
+        registry_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+            "version": "0.1",
+            "artifact_paths": [],
+            "discover_under": [],
+            "recursive": True,
+            "publication_network_dir": str(network_dir),
+            "publication_descriptor_index": {
+                "label": "Preset Stable Registry Descriptor Index Override",
+            },
+            "publication_metadata_catalog": {
+                "label": "Preset Stable Registry Metadata Catalog Override",
+            },
+            "publication_registry": {
+                "channel": "preset",
+                "label": "Preset Stable Publication Registry",
+            },
+        },
+    )
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-registry-workspace",
+            "--catalog-preset-json",
+            str(catalog_preset_path),
+            "--publication-catalog-workspace-preset-json",
+            str(publication_catalog_workspace_preset_path),
+            "--preset-json",
+            str(registry_preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--publication-registry-label",
+            "Preset Stable Publication Registry Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    nested_summary = json.loads(
+        (output_dir / "stable_publication_catalog_workspace" / "summary.json").read_text(encoding="utf-8")
+    )
+    stable_summary = json.loads(
+        (output_dir / "stable_publication_catalog_workspace" / "stable_catalog_workspace" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["artifact_count"] == nested_summary["artifact_count"]
+    assert summary["publication_metadata_bundle_count"] == nested_summary["publication_metadata_bundle_count"]
+    assert summary["artifact_count"] > 3
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Preset Stable Registry Descriptor Index Override"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Preset Stable Registry Metadata Catalog Override"
+    assert summary["publication_registry"]["index"]["channel"] == "preset"
+    assert summary["publication_registry"]["index"]["label"] == "Preset Stable Publication Registry Override"
+    assert nested_summary["publication_metadata_catalog"]["index"]["label"] == "Preset Stable Registry Metadata Catalog Override"
+    assert nested_summary["source_stable_catalog_workspace_dir"] == str(
+        (output_dir / "stable_publication_catalog_workspace" / "stable_catalog_workspace").resolve()
+    )
+    assert stable_summary["release"]["label"] == "Preset Stable Registry Catalog"
+
+
 def test_cli_bootstrap_publication_catalog_workspace(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_catalog_workspace"
@@ -7034,6 +9184,150 @@ def test_cli_bootstrap_publication_catalog_workspace_with_inventory_json(tmp_pat
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Inventory Workspace Metadata Catalog"
     assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_publication_catalog_workspace_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "stable_publication_catalog_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-catalog-workspace",
+            "--symbol",
+            "STBPUBCAT1",
+            "--name",
+            "Stable Publication Catalog CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--intended-use",
+            "merchant-clearing",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Catalog",
+            "--descriptor-index-label",
+            "Stable Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Stable Metadata Catalog",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_stable_catalog_workspace_dir"] == str((output_dir / "stable_catalog_workspace").resolve())
+    assert summary["artifact_count"] == 3
+    assert summary["publication_metadata_bundle_count"] == 3
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Stable Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Stable Metadata Catalog"
+    assert {entry["artifact_kind"] for entry in summary["publication_metadata_bundles"]} == {"bundle", "release", "demo-catalog"}
+    assert (output_dir / "stable_catalog_workspace" / "summary.json").is_file()
+
+    secrets = json.loads((output_dir / "publication_metadata_catalog" / "publication_metadata_catalog_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog" / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["bundle_count"] == 3
+    assert verified["index"]["label"] == "Stable Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_publication_catalog_workspace_with_presets(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    catalog_preset_path = tmp_path / "stable_catalog_preset.json"
+    workspace_preset_path = tmp_path / "stable_publication_catalog_workspace_preset.json"
+    output_dir = tmp_path / "stable_publication_catalog_workspace_preset"
+
+    write_json(
+        catalog_preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "STBPUBPRE1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Preset Stable Publication Catalog"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "USD",
+                    "intended_use": "preset-reference-credit",
+                }
+            },
+            "release": {
+                "channel": "preset",
+                "label": "Preset Stable Catalog",
+                "published_at": "2026-07-03T06:30:00Z",
+            },
+        },
+    )
+    write_json(
+        workspace_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "discover_under": [str(network_dir)],
+            "recursive": True,
+            "publication_descriptor_index": {
+                "channel": "preset",
+                "label": "Preset Stable Descriptor Index",
+            },
+            "publication_metadata_catalog": {
+                "channel": "preset",
+                "label": "Preset Stable Metadata Catalog",
+            },
+        },
+    )
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-catalog-workspace",
+            "--catalog-preset-json",
+            str(catalog_preset_path),
+            "--preset-json",
+            str(workspace_preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-metadata-catalog-label",
+            "Preset Stable Metadata Catalog Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    stable_summary = json.loads((output_dir / "stable_catalog_workspace" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 15
+    assert summary["publication_metadata_bundle_count"] == 15
+    assert summary["publication_descriptor_index"]["index"]["channel"] == "preset"
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Preset Stable Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["channel"] == "preset"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Preset Stable Metadata Catalog Override"
+    assert stable_summary["release"]["label"] == "Preset Stable Catalog"
+    assert stable_summary["bundles"][0]["symbol"] == "STBPUBPRE1"
 
 
 def test_cli_bootstrap_machine_publication_catalog_workspace_hmac(tmp_path, capsys):
@@ -7814,6 +10108,123 @@ def test_cli_bootstrap_machine_publication_stack_from_exported_preset_round_trip
     capsys.readouterr()
 
 
+def test_cli_export_stable_publication_stack_preset_with_generated_catalog_presets(tmp_path):
+    stack_dir = tmp_path / "stable_publication_stack"
+    assert main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--stack-preset-json",
+            str(ROOT / "examples" / "stack_presets" / "stable_reference_publication_stack.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_dir),
+            "--label",
+            "Stable Export Stack Override",
+        ]
+    ) == 0
+
+    preset_path = tmp_path / "exported_stable_stack.json"
+    catalog_preset_dir = tmp_path / "exported_stable_catalog_presets"
+    exit_code = main(
+        [
+            "export-stable-publication-stack-preset",
+            str(stack_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_stable_publication_stack_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-STACK-PRESET"
+    assert preset["release_catalog"]["label"] == "Stable Export Stack Override"
+    assert [Path(value).name for value in loaded["catalog_preset_paths"]] == ["stable_reference_catalog.json"]
+
+    stable_catalog = json.loads((catalog_preset_dir / "stable_reference_catalog.json").read_text(encoding="utf-8"))
+    assert stable_catalog["profiles"] == ["SATROOT-STABLE-1"]
+    assert stable_catalog["symbol_overrides"]["SATROOT-STABLE-1"] == "SETTLEUR1"
+
+
+def test_cli_bootstrap_stable_publication_stack_from_exported_preset_round_trip(tmp_path, capsys):
+    stack_dir = tmp_path / "stable_publication_stack"
+    assert main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--stack-preset-json",
+            str(ROOT / "examples" / "stack_presets" / "stable_reference_publication_stack.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_dir),
+            "--label",
+            "Stable Export Stack Override",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_stable_stack.json"
+    catalog_preset_dir = tmp_path / "exported_stable_catalog_presets"
+    assert (
+        main(
+            [
+                "export-stable-publication-stack-preset",
+                str(stack_dir),
+                "--catalog-preset-dir",
+                str(catalog_preset_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    roundtrip_dir = tmp_path / "stable_publication_stack_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--stack-preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Stable Publication Stack",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication stack to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["stack_preset_path"] == str(preset_path.resolve())
+    assert summary["release_catalog"]["catalog"]["label"] == "Roundtrip Stable Publication Stack"
+    nested_summary = json.loads(
+        (roundtrip_dir / "catalog_workspaces" / "stable_reference_catalog" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert {entry["symbol"] for entry in nested_summary["bundles"]} == {"SETTLEUR1"}
+    assert main(["publication-stack-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     preset_path = tmp_path / "exported_network.json"
@@ -8046,6 +10457,148 @@ def test_cli_bootstrap_machine_publication_network_from_exported_preset_round_tr
     capsys.readouterr()
 
 
+def test_cli_export_stable_publication_network_preset_with_generated_nested_presets(tmp_path):
+    network_dir = tmp_path / "stable_publication_network"
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--label",
+            "Stable Export Network Override",
+        ]
+    ) == 0
+
+    preset_path = tmp_path / "exported_stable_network.json"
+    stack_preset_dir = tmp_path / "exported_stable_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_stable_catalog_presets"
+    exit_code = main(
+        [
+            "export-stable-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_stable_publication_network_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-NETWORK-PRESET"
+    assert preset["release_catalog_index"]["label"] == "Stable Export Network Override"
+    assert [Path(value).name for value in loaded["stack_preset_paths"]] == ["stable_reference_publication_stack.json"]
+
+    stack_preset = json.loads((stack_preset_dir / "stable_reference_publication_stack.json").read_text(encoding="utf-8"))
+    assert stack_preset["release_catalog"]["label"] == "SATROOT Stable Reference Publication Stack"
+    assert (catalog_preset_dir / "stable_reference_publication_stack" / "stable_reference_catalog.json").is_file()
+
+
+def test_cli_bootstrap_stable_publication_network_from_exported_preset_round_trip(tmp_path, capsys):
+    network_dir = tmp_path / "stable_publication_network"
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--label",
+            "Stable Export Network Override",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_stable_network.json"
+    stack_preset_dir = tmp_path / "exported_stable_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_stable_catalog_presets"
+    assert (
+        main(
+            [
+                "export-stable-publication-network-preset",
+                str(network_dir),
+                "--stack-preset-dir",
+                str(stack_preset_dir),
+                "--catalog-preset-dir",
+                str(catalog_preset_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    roundtrip_dir = tmp_path / "stable_publication_network_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Stable Publication Network",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication network to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["network_preset_path"] == str(preset_path.resolve())
+    assert summary["release_catalog_index"]["index"]["label"] == "Roundtrip Stable Publication Network"
+    nested_summary = json.loads(
+        (roundtrip_dir / "stack_workspaces" / "stable_reference_publication_stack" / "summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    catalog_summary = json.loads(
+        (
+            roundtrip_dir
+            / "stack_workspaces"
+            / "stable_reference_publication_stack"
+            / "catalog_workspaces"
+            / "stable_reference_catalog"
+            / "summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert nested_summary["workspace_count"] == 1
+    assert {entry["symbol"] for entry in catalog_summary["bundles"]} == {"SETTLEUR1"}
+    assert main(["publication-network-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_publication_catalog_workspace_preset(tmp_path):
     workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_catalog_workspace.json"
@@ -8220,6 +10773,75 @@ def test_cli_export_machine_publication_catalog_workspace_preset_rejects_generic
 
     with pytest.raises(SatRootError, match="source_machine_catalog_workspace_dir"):
         main(["export-machine-publication-catalog-workspace-preset", str(workspace_dir)])
+
+
+def test_cli_export_stable_publication_catalog_workspace_preset(tmp_path):
+    workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_stable_catalog_workspace.json"
+
+    exit_code = main(["export-stable-publication-catalog-workspace-preset", str(workspace_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_catalog_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET"
+    assert len(loaded["artifact_paths"]) == 3
+    assert preset["publication_metadata_catalog"]["label"] == "Stable Workspace Metadata Catalog"
+
+
+def test_cli_bootstrap_stable_publication_catalog_workspace_from_exported_preset_round_trip(tmp_path, capsys):
+    workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_stable_catalog_workspace.json"
+    assert main(["export-stable-publication-catalog-workspace-preset", str(workspace_dir), "--output", str(preset_path)]) == 0
+
+    roundtrip_dir = tmp_path / "stable_publication_catalog_workspace_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--symbol",
+            "STBRTCAT1",
+            "--name",
+            "Stable Roundtrip Catalog Workspace",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-metadata-catalog-label",
+            "Roundtrip Stable Metadata Catalog",
+            "--output-dir",
+            str(roundtrip_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication catalog workspace to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_stable_catalog_workspace_dir"] == str((roundtrip_dir / "stable_catalog_workspace").resolve())
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Stable Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Roundtrip Stable Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_export_stable_publication_catalog_workspace_preset_rejects_generic_workspace(tmp_path):
+    workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="source_stable_catalog_workspace_dir"):
+        main(["export-stable-publication-catalog-workspace-preset", str(workspace_dir)])
 
 
 def test_cli_export_publication_registry_workspace_preset(tmp_path):
@@ -8447,6 +11069,66 @@ def test_cli_export_machine_publication_registry_workspace_preset_rejects_generi
 
     with pytest.raises(SatRootError, match="source_machine_publication_catalog_workspace_dir or source_machine_catalog_workspace_dir"):
         main(["export-machine-publication-registry-workspace-preset", str(workspace_dir)])
+
+
+def test_cli_export_stable_publication_registry_workspace_preset(tmp_path):
+    workspace_dir = make_stable_publication_registry_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_stable_registry_workspace.json"
+
+    exit_code = main(["export-stable-publication-registry-workspace-preset", str(workspace_dir), "--output", str(preset_path)])
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET"
+    assert Path(loaded["publication_catalog_workspace_dir"]).name == "stable_publication_catalog_workspace"
+    assert Path(loaded["publication_network_dir"]).name == "stable_only_publication_network"
+    assert loaded["release_catalog_index_dir"] is None
+    assert preset["publication_registry"]["label"] == "Stable Workspace Publication Registry"
+
+
+def test_cli_publish_stable_publication_registry_workspace_from_exported_preset_round_trip(tmp_path, capsys):
+    workspace_dir = make_stable_publication_registry_workspace_dir(tmp_path)
+    source_summary = json.loads((workspace_dir / "summary.json").read_text(encoding="utf-8"))
+    preset_path = tmp_path / "exported_stable_registry_workspace.json"
+
+    assert main(["export-stable-publication-registry-workspace-preset", str(workspace_dir), "--output", str(preset_path)]) == 0
+
+    roundtrip_dir = tmp_path / "stable_publication_registry_workspace_roundtrip"
+    exit_code = main(
+        [
+            "publish-stable-publication-registry-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Stable Registry Workspace",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication registry workspace from existing publication catalog workspace to" in captured.out
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_stable_publication_catalog_workspace_dir"] == source_summary["source_stable_publication_catalog_workspace_dir"]
+    assert summary["source_stable_catalog_workspace_dir"] == source_summary["source_stable_catalog_workspace_dir"]
+    assert summary["source_publication_network_dir"] == source_summary["source_publication_network_dir"]
+    assert summary["publication_registry"]["index"]["label"] == "Roundtrip Stable Registry Workspace"
+    assert main(["publication-registry-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_export_stable_publication_registry_workspace_preset_rejects_generic_workspace(tmp_path):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="source_stable_publication_catalog_workspace_dir or source_stable_catalog_workspace_dir"):
+        main(["export-stable-publication-registry-workspace-preset", str(workspace_dir)])
 
 
 def test_cli_export_publication_registry_workspace_preset_preserves_catalog_workspace_reference(tmp_path):
@@ -8688,6 +11370,80 @@ def test_cli_export_machine_publication_registry_preset_rejects_generic_registry
         main(["export-machine-publication-registry-preset", str(registry_dir)])
 
 
+def test_cli_export_stable_publication_registry_preset(tmp_path):
+    registry_dir = make_stable_publication_registry_dir(tmp_path)
+    preset_path = tmp_path / "exported_stable_registry.json"
+
+    exit_code = main(
+        [
+            "export-stable-publication-registry-preset",
+            str(registry_dir / "publication_registry.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-PRESET"
+    assert Path(loaded["release_catalog_index_dir"]).name == "release_catalog_index"
+    assert Path(loaded["publication_descriptor_index_dir"]).name == "publication_descriptor_index"
+    assert Path(loaded["publication_metadata_catalog_dir"]).name == "publication_metadata_catalog"
+    assert preset["registry"]["label"] == "Stable Publication Registry"
+
+
+def test_cli_bootstrap_publication_registry_from_exported_stable_preset_round_trip(tmp_path, capsys):
+    registry_dir = make_stable_publication_registry_dir(tmp_path)
+    preset_path = tmp_path / "exported_stable_registry.json"
+
+    assert (
+        main(
+            [
+                "export-stable-publication-registry-preset",
+                str(registry_dir / "publication_registry.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "stable_publication_registry_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-registry-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+            "--label",
+            "Roundtrip Stable Publication Registry",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Roundtrip Stable Publication Registry"
+    assert main(["publication-registry-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_export_stable_publication_registry_preset_rejects_generic_registry(tmp_path):
+    registry_dir = make_publication_registry_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|provenance"):
+        main(["export-stable-publication-registry-preset", str(registry_dir)])
+
+
 def test_cli_export_bundle_index_preset(tmp_path):
     bundle_dir = tmp_path / "bundle"
     bundle_index_path = tmp_path / "bundle_index.json"
@@ -8898,6 +11654,71 @@ def test_cli_export_machine_bundle_index_preset_rejects_generic_release(tmp_path
         main(["export-machine-bundle-index-preset", str(release_dir)])
 
 
+def test_cli_export_stable_bundle_index_preset(tmp_path):
+    release_dir, _other_release_dir = make_stable_release_dirs(tmp_path)
+    preset_path = tmp_path / "exported_stable_bundle_index.json"
+
+    exit_code = main(
+        [
+            "export-stable-bundle-index-preset",
+            str(Path(release_dir) / "bundle_index.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_bundle_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-BUNDLE-INDEX-PRESET"
+    assert len(loaded["bundle_dirs"]) == 1
+    assert preset["release"]["label"] == "Stable Release Alpha"
+
+
+def test_cli_build_stable_bundle_index_from_exported_preset_round_trip(tmp_path):
+    release_dir, _other_release_dir = make_stable_release_dirs(tmp_path)
+    preset_path = tmp_path / "exported_stable_bundle_index.json"
+
+    assert (
+        main(
+            [
+                "export-stable-bundle-index-preset",
+                str(Path(release_dir) / "bundle_index.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    roundtrip_index_path = tmp_path / "stable_bundle_index_roundtrip.json"
+    exit_code = main(
+        [
+            "build-stable-bundle-index",
+            "--preset-json",
+            str(preset_path),
+            "--channel",
+            "stable",
+            "--label",
+            "Roundtrip Stable Bundle Index",
+            "--output",
+            str(roundtrip_index_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(roundtrip_index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 1
+    assert index["release"]["label"] == "Roundtrip Stable Bundle Index"
+
+
+def test_cli_export_stable_bundle_index_preset_rejects_generic_release(tmp_path):
+    _stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|provenance"):
+        main(["export-stable-bundle-index-preset", str(machine_release_dir)])
+
+
 def test_cli_export_release_catalog_preset(tmp_path):
     release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
     preset_path = tmp_path / "exported_release_catalog.json"
@@ -9016,6 +11837,78 @@ def test_cli_export_machine_release_catalog_preset_rejects_generic_catalog(tmp_p
 
     with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
         main(["export-machine-release-catalog-preset", str(release_catalog_dir)])
+
+
+def test_cli_export_stable_release_catalog_preset(tmp_path):
+    stable_catalog_dir, _stable_catalog_dir_two = make_stable_release_catalog_dirs(tmp_path)
+    preset_path = tmp_path / "exported_stable_release_catalog.json"
+
+    exit_code = main(
+        [
+            "export-stable-release-catalog-preset",
+            str(stable_catalog_dir / "release_catalog.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_release_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
+    assert len(loaded["release_dirs"]) == 2
+    assert preset["catalog"]["label"] == "SATROOT Stable Catalog Alpha"
+
+
+def test_cli_bootstrap_stable_release_catalog_from_exported_preset_round_trip(tmp_path, capsys):
+    stable_catalog_dir, _stable_catalog_dir_two = make_stable_release_catalog_dirs(tmp_path)
+    preset_path = tmp_path / "exported_stable_release_catalog.json"
+
+    assert (
+        main(
+            [
+                "export-stable-release-catalog-preset",
+                str(stable_catalog_dir / "release_catalog.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "stable_release_catalog_roundtrip_bootstrap"
+    exit_code = main(
+        [
+            "bootstrap-stable-release-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--label",
+            "Roundtrip Stable Release Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release catalog publication to" in captured.out
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Roundtrip Stable Release Catalog"
+    assert main(["release-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_export_stable_release_catalog_preset_rejects_generic_catalog(tmp_path):
+    release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|provenance"):
+        main(["export-stable-release-catalog-preset", str(release_catalog_dir)])
 
 
 def test_cli_export_release_catalog_preset_from_json(tmp_path):
@@ -9197,6 +12090,121 @@ def test_cli_export_machine_release_catalog_index_preset_rejects_generic_index(t
         main(["export-machine-release-catalog-index-preset", str(release_catalog_index_dir)])
 
 
+def test_cli_export_stable_release_catalog_index_preset(tmp_path):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    release_catalog_index_dir = tmp_path / "stable_release_catalog_index_export_source"
+    preset_path = tmp_path / "exported_stable_release_catalog_index.json"
+
+    assert (
+        main(
+            [
+                "bootstrap-stable-release-catalog-index-publication",
+                str(catalog_alpha_dir),
+                str(catalog_beta_dir),
+                "--output-dir",
+                str(release_catalog_index_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Stable Release Catalog Index Export Source",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "export-stable-release-catalog-index-preset",
+            str(release_catalog_index_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_release_catalog_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-INDEX-PRESET"
+    assert len(loaded["release_catalog_dirs"]) == 2
+    assert preset["index"]["label"] == "Stable Release Catalog Index Export Source"
+
+
+def test_cli_bootstrap_stable_release_catalog_index_from_exported_preset_round_trip(tmp_path, capsys):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    release_catalog_index_dir = tmp_path / "stable_release_catalog_index_export_source"
+    preset_path = tmp_path / "exported_stable_release_catalog_index.json"
+
+    assert (
+        main(
+            [
+                "bootstrap-stable-release-catalog-index-publication",
+                str(catalog_alpha_dir),
+                str(catalog_beta_dir),
+                "--output-dir",
+                str(release_catalog_index_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Stable Release Catalog Index Export Source",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "export-stable-release-catalog-index-preset",
+                str(release_catalog_index_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "stable_release_catalog_index_roundtrip_bootstrap"
+    exit_code = main(
+        [
+            "bootstrap-stable-release-catalog-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+            "--label",
+            "Roundtrip Stable Release Catalog Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release catalog index publication to" in captured.out
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["label"] == "Roundtrip Stable Release Catalog Index"
+    assert main(["release-catalog-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_export_stable_release_catalog_index_preset_rejects_generic_index(tmp_path):
+    release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|provenance"):
+        main(["export-stable-release-catalog-index-preset", str(release_catalog_index_dir)])
+
+
 def test_cli_export_publication_metadata_catalog_preset(tmp_path):
     catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
     preset_path = tmp_path / "exported_publication_metadata_catalog.json"
@@ -9321,6 +12329,74 @@ def test_cli_export_machine_publication_metadata_catalog_preset_rejects_generic_
 
     with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
         main(["export-machine-publication-metadata-catalog-preset", str(catalog_dir)])
+
+
+def test_cli_export_stable_publication_metadata_catalog_preset(tmp_path):
+    catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    catalog_dir = catalog_workspace_dir / "publication_metadata_catalog"
+    preset_path = tmp_path / "exported_stable_publication_metadata_catalog.json"
+
+    exit_code = main(
+        [
+            "export-stable-publication-metadata-catalog-preset",
+            str(catalog_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_metadata_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET"
+    assert sorted(Path(value).name for value in loaded["publication_metadata_bundle_dirs"]) == [
+        "release",
+        "stable",
+        "stable_catalog_workspace",
+    ]
+    assert preset["catalog"]["label"] == "Stable Workspace Metadata Catalog"
+
+
+def test_cli_bootstrap_publication_metadata_catalog_from_exported_stable_preset_round_trip(tmp_path, capsys):
+    catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    catalog_dir = catalog_workspace_dir / "publication_metadata_catalog"
+    preset_path = tmp_path / "exported_stable_publication_metadata_catalog.json"
+
+    assert main(["export-stable-publication-metadata-catalog-preset", str(catalog_dir), "--output", str(preset_path)]) == 0
+
+    output_dir = tmp_path / "stable_publication_metadata_catalog_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--label",
+            "Roundtrip Stable Publication Metadata Catalog",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 3
+    assert catalog["index"]["label"] == "Roundtrip Stable Publication Metadata Catalog"
+    assert main(["publication-metadata-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_export_stable_publication_metadata_catalog_preset_rejects_generic_catalog(tmp_path):
+    catalog_dir = make_publication_metadata_catalog_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|provenance"):
+        main(["export-stable-publication-metadata-catalog-preset", str(catalog_dir)])
 
 
 def test_cli_export_publication_metadata_catalog_preset_from_json(tmp_path):
@@ -9478,6 +12554,81 @@ def test_cli_export_machine_publication_descriptor_index_preset_rejects_generic_
 
     with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|provenance"):
         main(["export-machine-publication-descriptor-index-preset", str(descriptor_index_dir)])
+
+
+def test_cli_export_stable_publication_descriptor_index_preset(tmp_path):
+    catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    descriptor_index_dir = catalog_workspace_dir / "publication_descriptor_index"
+    preset_path = tmp_path / "exported_stable_publication_descriptor_index.json"
+
+    exit_code = main(
+        [
+            "export-stable-publication-descriptor-index-preset",
+            str(descriptor_index_dir / "publication_descriptor_index.json"),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_descriptor_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET"
+    assert len(loaded["artifact_paths"]) == 3
+    assert {Path(value).name for value in loaded["artifact_paths"]} == {"release", "stable", "stable_catalog_workspace"}
+    assert preset["index"]["label"] == "Stable Workspace Descriptor Index"
+
+
+def test_cli_bootstrap_publication_descriptor_index_from_exported_stable_preset_round_trip(tmp_path, capsys):
+    catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    descriptor_index_dir = catalog_workspace_dir / "publication_descriptor_index"
+    preset_path = tmp_path / "exported_stable_publication_descriptor_index.json"
+
+    assert (
+        main(
+            [
+                "export-stable-publication-descriptor-index-preset",
+                str(descriptor_index_dir / "publication_descriptor_index.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    output_dir = tmp_path / "stable_publication_descriptor_index_roundtrip"
+    exit_code = main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+            "--label",
+            "Roundtrip Stable Publication Descriptor Index",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 3
+    assert index["index"]["label"] == "Roundtrip Stable Publication Descriptor Index"
+    assert main(["publication-descriptor-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_export_stable_publication_descriptor_index_preset_rejects_generic_index(tmp_path):
+    descriptor_index_dir = make_publication_descriptor_index_dir(tmp_path)
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|provenance"):
+        main(["export-stable-publication-descriptor-index-preset", str(descriptor_index_dir)])
 
 
 def test_cli_export_publication_descriptor_index_preset_from_json(tmp_path):
@@ -9967,6 +13118,63 @@ def test_cli_build_machine_publication_descriptor_index_rejects_non_machine_arti
         )
 
 
+def test_cli_build_stable_publication_descriptor_index(tmp_path):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    catalog_alpha_dir, _catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path / "stable_catalogs")
+    output_path = tmp_path / "stable_descriptor_index.json"
+
+    exit_code = main(
+        [
+            "build-stable-publication-descriptor-index",
+            str(stable_catalog_workspace_dir),
+            str(catalog_alpha_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Descriptor Index",
+            "--published-at",
+            "2026-07-15T04:00:00Z",
+            "--output",
+            str(output_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 2
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert index["artifact_kind_counts"]["release-catalog"] == 1
+    assert index["index"]["label"] == "Stable Descriptor Index"
+
+
+def test_cli_build_stable_publication_descriptor_index_accepts_metadata_bundle(tmp_path):
+    workspace_bundle_dir, _catalog_bundle_dir = make_stable_publication_metadata_bundle_dirs(tmp_path)
+    output_path = tmp_path / "stable_metadata_bundle_descriptor_index.json"
+
+    exit_code = main(["build-stable-publication-descriptor-index", str(workspace_bundle_dir), "--output", str(output_path)])
+    assert exit_code == 0
+
+    index = json.loads(output_path.read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-metadata-bundle"] == 1
+    assert index["artifacts"][0]["artifact_kind"] == "publication-metadata-bundle"
+
+
+def test_cli_build_stable_publication_descriptor_index_rejects_non_stable_artifact(tmp_path):
+    workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    output_path = tmp_path / "stable_descriptor_index.json"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-publication-descriptor-index",
+                str(workspace_dir),
+                "--output",
+                str(output_path),
+            ]
+        )
+
+
 def test_validate_publication_descriptor_index_schema_accepts_generated_index(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     index = json.loads((tmp_path / "descriptor_index.json").read_text(encoding="utf-8")) if (tmp_path / "descriptor_index.json").exists() else None
@@ -10051,6 +13259,54 @@ def test_cli_build_machine_publication_descriptor_index_manifest_rejects_non_mac
         main(
             [
                 "build-machine-publication-descriptor-index-manifest",
+                str(index_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "descriptor-key",
+                "--secret",
+                "descriptor-secret",
+            ]
+        )
+
+
+def test_cli_build_stable_publication_descriptor_index_manifest(tmp_path):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    index_path = tmp_path / "stable_descriptor_index.json"
+    manifest_path = tmp_path / "stable_publication_descriptor_index_manifest.json"
+
+    assert main(["build-stable-publication-descriptor-index", str(stable_catalog_workspace_dir), "--output", str(index_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-stable-publication-descriptor-index-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+            "--secret",
+            "descriptor-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-descriptor-index-manifest"
+    assert manifest["signature_key_id"] == "descriptor-key"
+
+
+def test_cli_build_stable_publication_descriptor_index_manifest_rejects_non_stable_index(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    index_path = tmp_path / "descriptor_index.json"
+    assert main(["build-publication-descriptor-index", "--discover-under", str(network_dir), "--output", str(index_path)]) == 0
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-publication-descriptor-index-manifest",
                 str(index_path),
                 "--scheme",
                 "hmac-sha256",
@@ -10219,6 +13475,134 @@ def test_cli_bootstrap_machine_publication_descriptor_index_publication_with_inv
     assert index["artifact_kind_counts"]["demo-catalog"] == 1
     assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
     assert index["index"]["label"] == "Inventory Machine Descriptor Publication"
+
+
+def test_cli_bootstrap_stable_publication_descriptor_index_publication(tmp_path, capsys):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "stable_publication_descriptor_index_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-descriptor-index-publication",
+            str(stable_catalog_workspace_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Descriptor Publication",
+            "--published-at",
+            "2026-07-15T04:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_descriptor_index_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_descriptor_index_secrets.json").read_text(encoding="utf-8"))
+
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert index["index"]["label"] == "Stable Descriptor Publication"
+    assert manifest["signature_key_id"] == "descriptor-key"
+
+    verified = verify_signed_publication_descriptor_index_manifest(
+        output_dir / "publication_descriptor_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["artifact_count"] == 1
+    assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_stable_publication_descriptor_index_publication_with_inventory_json(tmp_path, capsys):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    inventory_path = tmp_path / "stable_publication_descriptor_inventory.json"
+    output_dir = tmp_path / "stable_publication_descriptor_index_publication_inventory"
+
+    write_inventory_json_from_cli(inventory_path, stable_catalog_workspace_dir, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-stable-publication-descriptor-index-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Stable Descriptor Publication",
+            "--published-at",
+            "2026-07-15T04:35:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 9
+    assert index["artifact_kind_counts"]["release"] == 1
+    assert index["artifact_kind_counts"]["bundle"] == 1
+    assert index["artifact_kind_counts"]["publication-metadata-bundle"] == 3
+    assert index["artifact_kind_counts"]["publication-descriptor-index"] == 1
+    assert index["artifact_kind_counts"]["publication-metadata-catalog"] == 1
+    assert index["artifact_kind_counts"]["demo-catalog"] == 1
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert index["index"]["label"] == "Inventory Stable Descriptor Publication"
+
+
+def test_cli_bootstrap_stable_publication_descriptor_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "stable_publication_descriptor_index_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-DESCRIPTOR-INDEX-PRESET",
+            "version": "0.1",
+            "artifact_paths": [str(Path(stable_catalog_workspace_dir).relative_to(tmp_path))],
+            "index": {
+                "channel": "stable",
+                "label": "Preset Stable Descriptor Index",
+                "published_at": "2026-07-15T04:40:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_publication_descriptor_index_preset_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-descriptor-index-publication",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+            "--label",
+            "CLI Stable Descriptor Override",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["index"]["channel"] == "stable"
+    assert index["index"]["label"] == "CLI Stable Descriptor Override"
+    assert index["index"]["published_at"] == "2026-07-15T04:40:00Z"
 
 
 def test_cli_bootstrap_publication_descriptor_index_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
@@ -10430,6 +13814,61 @@ def test_cli_build_machine_publication_metadata_manifest_rejects_non_machine_art
         )
 
 
+def test_cli_build_stable_publication_metadata_manifest(tmp_path):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    report_path = tmp_path / "stable_publication_report.md"
+    descriptor_path = tmp_path / "stable_publication_descriptor.json"
+    manifest_path = tmp_path / "stable_publication_metadata_manifest.json"
+
+    assert main(["render-publication-report", str(stable_catalog_workspace_dir), "--output", str(report_path)]) == 0
+    assert main(["export-publication-descriptor", str(stable_catalog_workspace_dir), "--output", str(descriptor_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-stable-publication-metadata-manifest",
+            str(report_path),
+            str(descriptor_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+            "--secret",
+            "metadata-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-metadata-manifest"
+    assert manifest["signature_key_id"] == "metadata-key"
+
+
+def test_cli_build_stable_publication_metadata_manifest_rejects_non_stable_artifact(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    report_path = tmp_path / "publication_report.md"
+    descriptor_path = tmp_path / "publication_descriptor.json"
+
+    assert main(["render-publication-report", str(network_dir), "--output", str(report_path)]) == 0
+    assert main(["export-publication-descriptor", str(network_dir), "--output", str(descriptor_path)]) == 0
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-publication-metadata-manifest",
+                str(report_path),
+                str(descriptor_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+                "--secret",
+                "metadata-secret",
+            ]
+        )
+
+
 def test_cli_bootstrap_publication_metadata_bundle(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_metadata_bundle"
@@ -10571,6 +14010,57 @@ def test_cli_bootstrap_machine_publication_metadata_bundle_rejects_non_machine_a
         main(
             [
                 "bootstrap-machine-publication-metadata-bundle",
+                str(network_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+            ]
+        )
+
+
+def test_cli_bootstrap_stable_publication_metadata_bundle(tmp_path, capsys):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "stable_publication_metadata_bundle"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-metadata-bundle",
+            str(stable_catalog_workspace_dir),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 publication metadata bundle to" in captured.out
+
+    descriptor = json.loads((output_dir / "publication_descriptor.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_metadata_secrets.json").read_text(encoding="utf-8"))
+    assert descriptor["artifact_kind"] == "publication-catalog-workspace"
+
+    verified = verify_signed_publication_metadata_manifest(
+        output_dir / "publication_metadata_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["artifact_kind"] == "publication-catalog-workspace"
+
+
+def test_cli_bootstrap_stable_publication_metadata_bundle_rejects_non_stable_artifact(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "stable_publication_metadata_bundle"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "bootstrap-stable-publication-metadata-bundle",
                 str(network_dir),
                 "--output-dir",
                 str(output_dir),
@@ -10805,6 +14295,49 @@ def test_cli_build_machine_publication_metadata_catalog_rejects_non_machine_bund
         )
 
 
+def test_cli_build_stable_publication_metadata_catalog(tmp_path):
+    workspace_bundle_dir, catalog_bundle_dir = make_stable_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "stable_publication_metadata_catalog.json"
+
+    exit_code = main(
+        [
+            "build-stable-publication-metadata-catalog",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Metadata Catalog",
+            "--published-at",
+            "2026-07-15T05:00:00Z",
+            "--output",
+            str(catalog_path),
+        ]
+    )
+    assert exit_code == 0
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert catalog["artifact_kind_counts"]["demo-catalog"] == 1
+    assert catalog["index"]["label"] == "Stable Metadata Catalog"
+
+
+def test_cli_build_stable_publication_metadata_catalog_rejects_non_stable_bundle(tmp_path):
+    _release_bundle_dir, network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "stable_publication_metadata_catalog.json"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-publication-metadata-catalog",
+                str(network_bundle_dir),
+                "--output",
+                str(catalog_path),
+            ]
+        )
+
+
 def test_validate_publication_metadata_catalog_schema_accepts_generated_catalog(tmp_path):
     release_bundle_dir, network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
     catalog = build_publication_metadata_catalog([release_bundle_dir, network_bundle_dir], base_dir=tmp_path)
@@ -10905,6 +14438,76 @@ def test_cli_build_machine_publication_metadata_catalog_manifest_rejects_non_mac
         main(
             [
                 "build-machine-publication-metadata-catalog-manifest",
+                str(catalog_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+
+
+def test_cli_build_stable_publication_metadata_catalog_manifest(tmp_path):
+    workspace_bundle_dir, catalog_bundle_dir = make_stable_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "stable_publication_metadata_catalog.json"
+    manifest_path = tmp_path / "stable_publication_metadata_catalog_manifest.json"
+
+    assert (
+        main(
+            [
+                "build-stable-publication-metadata-catalog",
+                str(workspace_bundle_dir),
+                str(catalog_bundle_dir),
+                "--output",
+                str(catalog_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "build-stable-publication-metadata-catalog-manifest",
+            str(catalog_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--secret",
+            "catalog-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-metadata-catalog-manifest"
+    assert manifest["signature_key_id"] == "catalog-key"
+
+
+def test_cli_build_stable_publication_metadata_catalog_manifest_rejects_non_stable_catalog(tmp_path):
+    release_bundle_dir, network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    catalog_path = tmp_path / "publication_metadata_catalog.json"
+    assert (
+        main(
+            [
+                "build-publication-metadata-catalog",
+                str(release_bundle_dir),
+                str(network_bundle_dir),
+                "--output",
+                str(catalog_path),
+            ]
+        )
+        == 0
+    )
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-publication-metadata-catalog-manifest",
                 str(catalog_path),
                 "--scheme",
                 "hmac-sha256",
@@ -11072,6 +14675,86 @@ def test_cli_bootstrap_machine_publication_metadata_catalog_publication_with_inv
     assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
     assert catalog["artifact_kind_counts"]["release-catalog"] == 1
     assert catalog["index"]["label"] == "Inventory Machine Metadata Catalog Publication"
+
+
+def test_cli_bootstrap_stable_publication_metadata_catalog_publication(tmp_path, capsys):
+    workspace_bundle_dir, catalog_bundle_dir = make_stable_publication_metadata_bundle_dirs(tmp_path)
+    output_dir = tmp_path / "stable_publication_metadata_catalog_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-metadata-catalog-publication",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Metadata Catalog Publication",
+            "--published-at",
+            "2026-07-15T05:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_metadata_catalog_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_metadata_catalog_secrets.json").read_text(encoding="utf-8"))
+
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert catalog["artifact_kind_counts"]["demo-catalog"] == 1
+    assert catalog["index"]["label"] == "Stable Metadata Catalog Publication"
+    assert manifest["signature_key_id"] == "catalog-key"
+
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["bundle_count"] == 2
+    assert verified["index"] == catalog["index"]
+
+
+def test_cli_bootstrap_stable_publication_metadata_catalog_publication_with_inventory_json(tmp_path, capsys):
+    workspace_bundle_dir, catalog_bundle_dir = make_stable_publication_metadata_bundle_dirs(tmp_path)
+    inventory_path = tmp_path / "stable_publication_metadata_catalog_publication_inventory.json"
+    output_dir = tmp_path / "stable_publication_metadata_catalog_publication_inventory"
+
+    write_inventory_json_from_cli(inventory_path, workspace_bundle_dir, catalog_bundle_dir, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-stable-publication-metadata-catalog-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Stable Metadata Catalog Publication",
+            "--published-at",
+            "2026-07-15T05:35:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert catalog["artifact_kind_counts"]["demo-catalog"] == 1
+    assert catalog["index"]["label"] == "Inventory Stable Metadata Catalog Publication"
 
 
 def test_cli_bootstrap_machine_publication_metadata_catalog_publication_with_preset_json_and_cli_overrides(tmp_path, capsys):
@@ -11308,6 +14991,92 @@ def test_cli_build_machine_publication_registry_rejects_generic_component(tmp_pa
         )
 
 
+def test_cli_build_stable_publication_registry(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_stable_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "stable_publication_registry.json"
+
+    exit_code = main(
+        [
+            "build-stable-publication-registry",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Publication Registry",
+            "--published-at",
+            "2026-07-15T06:00:00Z",
+            "--output",
+            str(registry_path),
+        ]
+    )
+    assert exit_code == 0
+
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Stable Publication Registry"
+
+
+def test_cli_build_stable_publication_registry_with_inventory_json(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_stable_publication_registry_component_dirs(tmp_path)
+    inventory_path = tmp_path / "stable_publication_registry_inventory.json"
+    registry_path = tmp_path / "stable_publication_registry_inventory.json.out"
+
+    write_inventory_json_from_cli(
+        inventory_path,
+        release_catalog_index_dir,
+        descriptor_index_dir,
+        metadata_catalog_dir,
+        capsys=capsys,
+    )
+
+    assert main(
+        [
+            "build-stable-publication-registry",
+            "--inventory-json",
+            str(inventory_path),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Stable Publication Registry",
+            "--published-at",
+            "2026-07-15T07:30:00Z",
+            "--output",
+            str(registry_path),
+        ]
+    ) == 0
+
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert registry["index"]["label"] == "Inventory Stable Publication Registry"
+    assert registry["release_catalog_index_publication"]["publication_directory_path"] == Path(release_catalog_index_dir).relative_to(tmp_path).as_posix()
+    assert registry["publication_descriptor_index_publication"]["publication_directory_path"] == Path(descriptor_index_dir).relative_to(tmp_path).as_posix()
+    assert registry["publication_metadata_catalog_publication"]["publication_directory_path"] == Path(metadata_catalog_dir).relative_to(tmp_path).as_posix()
+
+
+def test_cli_build_stable_publication_registry_rejects_generic_component(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "stable_publication_registry.json"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output",
+                str(registry_path),
+            ]
+        )
+
+
 def test_build_and_verify_signed_publication_registry_manifest_hmac(tmp_path):
     release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
     registry = build_publication_registry(
@@ -11529,6 +15298,84 @@ def test_cli_build_machine_publication_registry_manifest_rejects_non_machine_reg
         )
 
 
+def test_cli_build_stable_publication_registry_manifest(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_stable_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "stable_publication_registry.json"
+    manifest_path = tmp_path / "stable_publication_registry_manifest.json"
+
+    assert (
+        main(
+            [
+                "build-stable-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output",
+                str(registry_path),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "build-stable-publication-registry-manifest",
+            str(registry_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+            "--secret",
+            "registry-secret",
+            "--output",
+            str(manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_type"] == "publication-registry-manifest"
+    assert manifest["signature_key_id"] == "registry-key"
+
+
+def test_cli_build_stable_publication_registry_manifest_rejects_non_stable_registry(tmp_path):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    registry_path = tmp_path / "publication_registry.json"
+    assert (
+        main(
+            [
+                "build-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output",
+                str(registry_path),
+            ]
+        )
+        == 0
+    )
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "build-stable-publication-registry-manifest",
+                str(registry_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+                "--secret",
+                "registry-secret",
+            ]
+        )
+
+
 def test_cli_bootstrap_publication_registry_publication(tmp_path, capsys):
     release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
     output_dir = tmp_path / "publication_registry_publication"
@@ -11708,6 +15555,101 @@ def test_cli_bootstrap_machine_publication_registry_publication_with_inventory_j
     registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
     assert registry["component_count"] == 3
     assert registry["index"]["label"] == "Inventory Machine Publication Registry"
+    assert registry["release_catalog_index_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(release_catalog_index_dir).relative_to(tmp_path)).as_posix()
+    assert registry["publication_descriptor_index_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(descriptor_index_dir).relative_to(tmp_path)).as_posix()
+    assert registry["publication_metadata_catalog_publication"]["publication_directory_path"] == Path(
+        ".."
+    ).joinpath(Path(metadata_catalog_dir).relative_to(tmp_path)).as_posix()
+
+
+def test_cli_bootstrap_stable_publication_registry_publication(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_stable_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "stable_publication_registry_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-registry-publication",
+            "--release-catalog-index-dir",
+            str(release_catalog_index_dir),
+            "--publication-descriptor-index-dir",
+            str(descriptor_index_dir),
+            "--publication-metadata-catalog-dir",
+            str(metadata_catalog_dir),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Publication Registry",
+            "--published-at",
+            "2026-07-15T06:30:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "publication_registry_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Stable Publication Registry"
+    assert manifest["signature_key_id"] == "registry-key"
+
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"] == registry["index"]
+
+
+def test_cli_bootstrap_stable_publication_registry_publication_with_inventory_json(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_stable_publication_registry_component_dirs(tmp_path)
+    inventory_path = tmp_path / "stable_publication_registry_publication_inventory.json"
+    output_dir = tmp_path / "stable_publication_registry_publication_inventory"
+
+    write_inventory_json_from_cli(
+        inventory_path,
+        release_catalog_index_dir,
+        descriptor_index_dir,
+        metadata_catalog_dir,
+        capsys=capsys,
+    )
+
+    assert main(
+        [
+            "bootstrap-stable-publication-registry-publication",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Inventory Stable Publication Registry",
+            "--published-at",
+            "2026-07-15T07:45:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "registry-key",
+        ]
+    ) == 0
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Inventory Stable Publication Registry"
     assert registry["release_catalog_index_publication"]["publication_directory_path"] == Path(
         ".."
     ).joinpath(Path(release_catalog_index_dir).relative_to(tmp_path)).as_posix()
@@ -14444,6 +18386,72 @@ def test_cli_build_machine_bundle_index_with_inventory_json(tmp_path, capsys):
     assert {entry["symbol"] for entry in index["bundles"]} == {"MINV1", "MINV2"}
 
 
+def test_cli_build_stable_bundle_index(tmp_path):
+    bundle_alpha_dir = tmp_path / "stable_bundle_alpha"
+    bundle_beta_dir = tmp_path / "stable_bundle_beta"
+    index_path = tmp_path / "stable_bundle_index.json"
+
+    assert main(["bootstrap-stable-demo-bundle", "--symbol", "SBIDX1", "--name", "Stable Bundle Index Alpha", "--scheme", "hmac-sha256", "--output-dir", str(bundle_alpha_dir)]) == 0
+    assert main(["bootstrap-stable-demo-bundle", "--symbol", "SBIDX2", "--name", "Stable Bundle Index Beta", "--scheme", "hmac-sha256", "--reference-unit", "EUR", "--output-dir", str(bundle_beta_dir)]) == 0
+
+    exit_code = main(
+        [
+            "build-stable-bundle-index",
+            str(bundle_alpha_dir),
+            str(bundle_beta_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Bundle Index",
+            "--published-at",
+            "2026-07-15T02:00:00Z",
+            "--output",
+            str(index_path),
+        ]
+    )
+    assert exit_code == 0
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 2
+    assert index["release"]["label"] == "Stable Bundle Index"
+    assert {entry["symbol"] for entry in index["bundles"]} == {"SBIDX1", "SBIDX2"}
+
+
+def test_cli_build_stable_bundle_index_with_inventory_json(tmp_path, capsys):
+    bundle_root = tmp_path / "stable_bundles"
+    bundle_alpha_dir = bundle_root / "stable_alpha_bundle"
+    bundle_beta_dir = bundle_root / "stable_beta_bundle"
+    inventory_path = tmp_path / "stable_inventory.json"
+    index_path = tmp_path / "stable_bundle_index.json"
+
+    assert main(["bootstrap-stable-demo-bundle", "--symbol", "SINV1", "--name", "Stable Inventory Alpha", "--scheme", "hmac-sha256", "--output-dir", str(bundle_alpha_dir)]) == 0
+    assert main(["bootstrap-stable-demo-bundle", "--symbol", "SINV2", "--name", "Stable Inventory Beta", "--scheme", "hmac-sha256", "--reference-unit", "CAD", "--output-dir", str(bundle_beta_dir)]) == 0
+
+    write_inventory_json_from_cli(inventory_path, bundle_root, capsys=capsys)
+
+    assert (
+        main(
+            [
+                "build-stable-bundle-index",
+                "--inventory-json",
+                str(inventory_path),
+                "--channel",
+                "stable",
+                "--label",
+                "Stable Inventory Bundle Index",
+                "--output",
+                str(index_path),
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    assert index["bundle_count"] == 2
+    assert index["release"]["label"] == "Stable Inventory Bundle Index"
+    assert {entry["symbol"] for entry in index["bundles"]} == {"SINV1", "SINV2"}
+
+
 def test_cli_validate_bundle_index(tmp_path, capsys):
     events_path = tmp_path / "events.json"
     bundle_dir = tmp_path / "bundle"
@@ -14547,6 +18555,56 @@ def test_cli_build_machine_release_manifest_rejects_non_machine_bundle_index(tmp
         main(
             [
                 "build-machine-release-manifest",
+                str(index_path),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+            ]
+        )
+
+
+def test_cli_build_stable_release_manifest(tmp_path):
+    bundle_alpha_dir = tmp_path / "stable_bundle_alpha"
+    bundle_beta_dir = tmp_path / "stable_bundle_beta"
+    index_path = tmp_path / "stable_bundle_index.json"
+    release_manifest_path = tmp_path / "stable_release_manifest.json"
+
+    assert main(["bootstrap-stable-demo-bundle", "--symbol", "SMANREL1", "--name", "Stable Manifest Release Alpha", "--scheme", "hmac-sha256", "--output-dir", str(bundle_alpha_dir)]) == 0
+    assert main(["bootstrap-stable-demo-bundle", "--symbol", "SMANREL2", "--name", "Stable Manifest Release Beta", "--scheme", "hmac-sha256", "--reference-unit", "GBP", "--output-dir", str(bundle_beta_dir)]) == 0
+    assert main(["build-stable-bundle-index", str(bundle_alpha_dir), str(bundle_beta_dir), "--output", str(index_path)]) == 0
+
+    exit_code = main(
+        [
+            "build-stable-release-manifest",
+            str(index_path),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+            "--secret",
+            "release-secret",
+            "--output",
+            str(release_manifest_path),
+        ]
+    )
+    assert exit_code == 0
+
+    release_manifest = json.loads(release_manifest_path.read_text(encoding="utf-8"))
+    assert release_manifest["manifest_type"] == "release-manifest"
+    assert release_manifest["signature_key_id"] == "release-key"
+
+
+def test_cli_build_stable_release_manifest_rejects_non_stable_bundle_index(tmp_path):
+    release_dir, _other_release_dir = make_machine_release_dirs(tmp_path)
+    index_path = Path(release_dir) / "bundle_index.json"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1"):
+        main(
+            [
+                "build-stable-release-manifest",
                 str(index_path),
                 "--scheme",
                 "hmac-sha256",
@@ -15196,6 +19254,221 @@ def test_cli_publish_machine_release_rejects_non_machine_bundle(tmp_path):
         )
 
 
+def test_cli_bootstrap_stable_release_publication(tmp_path, capsys):
+    bundle_alpha_dir = tmp_path / "stable_bundle_alpha"
+    bundle_beta_dir = tmp_path / "stable_bundle_beta"
+    release_dir = tmp_path / "stable_release"
+
+    assert (
+        main(
+            [
+                "bootstrap-stable-demo-bundle",
+                "--symbol",
+                "SRELCLI1",
+                "--name",
+                "Stable Release CLI Alpha",
+                "--scheme",
+                "hmac-sha256",
+                "--output-dir",
+                str(bundle_alpha_dir),
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "bootstrap-stable-demo-bundle",
+                "--symbol",
+                "SRELCLI2",
+                "--name",
+                "Stable Release CLI Beta",
+                "--scheme",
+                "hmac-sha256",
+                "--reference-unit",
+                "INR",
+                "--output-dir",
+                str(bundle_beta_dir),
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "bootstrap-stable-release-publication",
+            str(bundle_alpha_dir),
+            str(bundle_beta_dir),
+            "--output-dir",
+            str(release_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Release CLI",
+            "--published-at",
+            "2026-07-15T03:00:00Z",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "release-key",
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 release publication to" in captured.out
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_index["release"]["channel"] == "stable"
+    assert release_manifest["signature_key_id"] == "release-key"
+    assert set(secrets) == {"release-key"}
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert summary["bundle_count"] == 2
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_publish_stable_release_from_exported_preset_round_trip(tmp_path):
+    bundle_alpha_dir = tmp_path / "stable_bundle_alpha"
+    bundle_beta_dir = tmp_path / "stable_bundle_beta"
+    source_release_dir = tmp_path / "stable_release_source"
+    release_dir = tmp_path / "stable_release_roundtrip"
+    preset_path = tmp_path / "exported_stable_bundle_index.json"
+
+    assert (
+        main(
+            [
+                "bootstrap-stable-demo-bundle",
+                "--symbol",
+                "SPUBREL1",
+                "--name",
+                "Stable Publish Release Alpha",
+                "--scheme",
+                "hmac-sha256",
+                "--output-dir",
+                str(bundle_alpha_dir),
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "bootstrap-stable-demo-bundle",
+                "--symbol",
+                "SPUBREL2",
+                "--name",
+                "Stable Publish Release Beta",
+                "--scheme",
+                "hmac-sha256",
+                "--reference-unit",
+                "AUD",
+                "--output-dir",
+                str(bundle_beta_dir),
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "bootstrap-stable-release-publication",
+                str(bundle_alpha_dir),
+                str(bundle_beta_dir),
+                "--output-dir",
+                str(source_release_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Stable Publish Release Source",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "export-stable-bundle-index-preset",
+                str(Path(source_release_dir) / "bundle_index.json"),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        main(
+            [
+                "publish-stable-release",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(release_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Roundtrip Stable Release Publication",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 2
+    assert bundle_index["release"]["label"] == "Roundtrip Stable Release Publication"
+    assert release_manifest["bundle_count"] == 2
+
+    summary = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
+    )
+    assert summary["bundle_count"] == 2
+
+
+def test_cli_publish_stable_release_rejects_non_stable_bundle(tmp_path):
+    floor_events_path = tmp_path / "floor_events.json"
+    stable_bundle_dir = tmp_path / "stable_bundle"
+    floor_bundle_dir = tmp_path / "floor_bundle"
+    output_dir = tmp_path / "mixed_stable_release"
+    floor_events_path.write_text(json.dumps(load_events()), encoding="utf-8")
+
+    assert main(["bootstrap-signed-ledger", str(floor_events_path), "--scheme", "hmac-sha256", "--output-dir", str(floor_bundle_dir)]) == 0
+    assert main(["bootstrap-stable-demo-bundle", "--symbol", "SREJ1", "--name", "Stable Reject Bundle", "--scheme", "hmac-sha256", "--output-dir", str(stable_bundle_dir)]) == 0
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1"):
+        main(
+            [
+                "publish-stable-release",
+                str(floor_bundle_dir),
+                str(stable_bundle_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+            ]
+        )
+
+
 def test_cli_bootstrap_release_publication_with_discovery_root(tmp_path, capsys):
     floor_events_path = tmp_path / "floor_events.json"
     machine_events_path = tmp_path / "machine_events.json"
@@ -15688,6 +19961,62 @@ def test_cli_bootstrap_stable_demo(tmp_path, capsys):
     assert state.balances["api_node"] == 250_000
 
 
+def test_cli_bootstrap_stable_demo_with_preset_json(tmp_path, capsys):
+    preset_path = tmp_path / "stable_demo_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "USDPREDEMO1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Preset Stable Demo"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "CHF",
+                    "intended_use": "preset-reference-ledger",
+                }
+            },
+            "profile_structure_overrides": {
+                "SATROOT-STABLE-1": {
+                    "merchant_account": "merchant_demo",
+                    "service_account": "service_demo",
+                    "merchant_burn_amount": "0",
+                }
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_demo_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo",
+            "--preset-json",
+            str(preset_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo ledger to" in captured.out
+
+    events = json.loads((output_dir / "events.json").read_text(encoding="utf-8"))
+    annotated = json.loads((output_dir / "annotated_events.json").read_text(encoding="utf-8"))
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    state = replay(events)
+    assert len(events) == 3
+    assert len(annotated) == 3
+    assert summary["reference_unit"] == "CHF"
+    assert state.symbol == "USDPREDEMO1"
+    assert state.name == "Preset Stable Demo"
+    assert state.genesis_metadata["reference_unit"] == "CHF"
+    assert state.genesis_metadata["intended_use"] == "preset-reference-ledger"
+    assert state.balances["merchant_demo"] == 1_250_000
+    assert state.balances["service_demo"] == 250_000
+
+
 def test_cli_bootstrap_machine_demo(tmp_path, capsys):
     output_dir = tmp_path / "machine_demo"
 
@@ -16071,6 +20400,135 @@ def test_cli_bootstrap_machine_demo_release_with_preset_json(tmp_path, capsys):
     )
     assert summary["bundle_count"] == 1
     assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_stable_demo_catalog_hmac(tmp_path, capsys):
+    output_dir = tmp_path / "stable_catalog_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-catalog",
+            "--symbol",
+            "USDCATST1",
+            "--name",
+            "Stable Catalog CLI",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--reference-unit",
+            "CHF",
+            "--profile-field",
+            "intended_use=treasury-credit",
+            "--channel",
+            "stable",
+            "--label",
+            "SATROOT Stable Catalog",
+            "--published-at",
+            "2026-07-04T04:00:00Z",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    bundle_manifest = json.loads((output_dir / "bundles" / "stable" / "bundle_manifest.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((output_dir / "release" / "release_manifest.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((output_dir / "release" / "release_secrets.json").read_text(encoding="utf-8"))
+
+    assert summary["bundle_count"] == 1
+    assert summary["bundles"][0]["profile"] == "SATROOT-STABLE-1"
+    assert summary["bundles"][0]["profile_fields"]["reference_unit"] == "CHF"
+    assert summary["bundles"][0]["profile_fields"]["intended_use"] == "treasury-credit"
+    assert summary["release"]["label"] == "SATROOT Stable Catalog"
+    assert bundle_manifest["symbol"] == "USDCATST1"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["reference_unit"] == "CHF"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["intended_use"] == "treasury-credit"
+
+    verified = verify_signed_release_manifest(
+        output_dir / "release" / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert verified["bundle_count"] == 1
+    assert verified["release"]["label"] == "SATROOT Stable Catalog"
+    assert release_manifest["signature_key_id"] == "release-key"
+    assert main(["demo-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_demo_catalog_with_preset_json(tmp_path, capsys):
+    preset_path = tmp_path / "stable_catalog_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "USDPRESETST1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Preset Stable Catalog"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "EUR",
+                    "intended_use": "preset-stable-credit",
+                }
+            },
+            "profile_structure_overrides": {
+                "SATROOT-STABLE-1": {
+                    "merchant_account": "merchant_preset",
+                    "service_account": "service_preset",
+                    "merchant_burn_amount": "0",
+                }
+            },
+            "release": {
+                "channel": "preset",
+                "label": "Preset Stable Catalog",
+                "published_at": "2026-07-04T05:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_catalog_workspace_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-catalog",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--profile-field",
+            "intended_use=cli-stable-credit",
+            "--label",
+            "Preset Stable Catalog Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    stable_genesis = json.loads((output_dir / "bundles" / "stable" / "genesis.json").read_text(encoding="utf-8"))
+    stable_summary = summary["bundles"][0]
+
+    assert summary["bundle_count"] == 1
+    assert summary["release"]["channel"] == "preset"
+    assert summary["release"]["label"] == "Preset Stable Catalog Override"
+    assert summary["release"]["published_at"] == "2026-07-04T05:00:00Z"
+    assert stable_summary["symbol"] == "USDPRESETST1"
+    assert stable_summary["name"] == "Preset Stable Catalog"
+    assert stable_summary["structure_overrides"]["merchant_account"] == "merchant_preset"
+    assert stable_summary["structure_overrides"]["service_account"] == "service_preset"
+    assert stable_summary["structure_overrides"]["merchant_burn_amount"] == "0"
+    assert stable_genesis["reference_unit"] == "EUR"
+    assert stable_genesis["intended_use"] == "cli-stable-credit"
 
 
 def test_cli_bootstrap_machine_demo_catalog_hmac(tmp_path, capsys):
@@ -16614,6 +21072,66 @@ def test_cli_bootstrap_stable_demo_bundle_hmac(tmp_path, capsys):
     assert summary["record_count"] == 4
 
 
+def test_cli_bootstrap_stable_demo_bundle_with_preset_json(tmp_path, capsys):
+    preset_path = tmp_path / "stable_bundle_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "USDBUNPRE1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Preset Stable Bundle"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "CAD",
+                    "intended_use": "preset-bundle-ledger",
+                }
+            },
+            "profile_structure_overrides": {
+                "SATROOT-STABLE-1": {
+                    "merchant_account": "merchant_bundle",
+                    "service_account": "service_bundle",
+                    "merchant_amount": "1500000",
+                    "merchant_burn_amount": "0",
+                }
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_bundle_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-bundle",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 hmac-sha256 demo bundle to" in captured.out
+
+    genesis = json.loads((output_dir / "genesis.json").read_text(encoding="utf-8"))
+    signer_key_map = json.loads((output_dir / "signer_key_map.json").read_text(encoding="utf-8"))
+    signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "bundle_manifest.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
+    state = replay(signed_events, verifier=make_hmac_sha256_verifier(secrets))
+    assert genesis["symbol"] == "USDBUNPRE1"
+    assert genesis["name"] == "Preset Stable Bundle"
+    assert genesis["reference_unit"] == "CAD"
+    assert genesis["intended_use"] == "preset-bundle-ledger"
+    assert signer_key_map == {"issuer": "issuer-key"}
+    assert manifest["symbol"] == "USDBUNPRE1"
+    assert state.balances["merchant_bundle"] == 1_500_000
+    assert state.balances["service_bundle"] == 250_000
+
+
 def test_cli_bootstrap_stable_demo_bundle_ed25519_verifier_only(tmp_path):
     output_dir = tmp_path / "stable_bundle_ed25519"
 
@@ -16712,6 +21230,77 @@ def test_cli_bootstrap_stable_demo_release_hmac(tmp_path, capsys):
 
     summary = verify_signed_release_manifest(
         release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier(release_secrets),
+    )
+    assert summary["bundle_count"] == 1
+    assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_stable_demo_release_with_preset_json(tmp_path, capsys):
+    preset_path = tmp_path / "stable_release_preset.json"
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "USDRELPRE1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Preset Stable Release"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "SEK",
+                    "intended_use": "preset-release-ledger",
+                }
+            },
+            "profile_structure_overrides": {
+                "SATROOT-STABLE-1": {
+                    "merchant_account": "merchant_release",
+                    "service_account": "service_release",
+                    "merchant_burn_amount": "0",
+                }
+            },
+            "release": {
+                "channel": "preset",
+                "label": "Preset Stable Release",
+                "published_at": "2026-07-04T09:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_release_preset"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-release",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--label",
+            "Preset Stable Release Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo release to" in captured.out
+
+    bundle_manifest = json.loads((output_dir / "bundle" / "bundle_manifest.json").read_text(encoding="utf-8"))
+    bundle_index = json.loads((output_dir / "release" / "bundle_index.json").read_text(encoding="utf-8"))
+    release_secrets = json.loads((output_dir / "release" / "release_secrets.json").read_text(encoding="utf-8"))
+    assert bundle_manifest["symbol"] == "USDRELPRE1"
+    assert bundle_manifest["final_state_snapshot"]["genesis_metadata"]["reference_unit"] == "SEK"
+    assert bundle_manifest["final_state_snapshot"]["balances"]["merchant_release"] == "1250000"
+    assert bundle_manifest["final_state_snapshot"]["balances"]["service_release"] == "250000"
+    assert bundle_index["release"]["channel"] == "preset"
+    assert bundle_index["release"]["label"] == "Preset Stable Release Override"
+    assert bundle_index["release"]["published_at"] == "2026-07-04T09:00:00Z"
+
+    summary = verify_signed_release_manifest(
+        output_dir / "release" / "release_manifest.json",
         verifier=make_hmac_sha256_verifier(release_secrets),
     )
     assert summary["bundle_count"] == 1

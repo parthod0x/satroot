@@ -168,20 +168,28 @@ The v0.1 kernel defines:
 - `export-publication-descriptor` for emitting normalized JSON descriptors from detected SATROOT artifacts or workspaces,
 - `build-publication-descriptor-index` for aggregating many detected SATROOT descriptors into one machine-readable registry,
 - signed publication-descriptor-index-manifest generation for authenticating descriptor registries,
+- `build-machine-publication-descriptor-index` and `build-stable-publication-descriptor-index` for enforcing machine-only or stable-only validation before descriptor-index generation,
+- `build-machine-publication-descriptor-index-manifest` and `build-stable-publication-descriptor-index-manifest` for signing only machine-validated or stable-validated descriptor indexes,
 - one-shot `bootstrap-publication-descriptor-index-publication` orchestration for descriptor indexes plus signing material,
 - publication-descriptor-index inspection via `publication-descriptor-index-summary` and structural linting via `publication-descriptor-index-lint`,
 - preset export commands for deriving reusable publication-descriptor-index presets back from generated descriptor index publications,
 - signed publication-metadata-manifest generation for authenticating one artifact's rendered report plus normalized descriptor,
 - `build-machine-publication-metadata-manifest` for signing only machine-validated publication report and descriptor pairs,
+- `build-stable-publication-metadata-manifest` for signing only stable-validated publication report and descriptor pairs,
 - publication-metadata-bundle inspection via `publication-metadata-bundle-summary` and structural linting via `publication-metadata-bundle-lint`,
 - `bootstrap-machine-publication-metadata-bundle` for generating machine-only publication metadata bundles with SATROOT-MACHINE-1 artifact validation before signing,
+- `bootstrap-stable-publication-metadata-bundle` for generating stable-only publication metadata bundles with SATROOT-STABLE-1 artifact validation before signing,
 - `build-publication-metadata-catalog` for aggregating many publication metadata bundles into one machine-readable registry,
+- `build-machine-publication-metadata-catalog` and `build-stable-publication-metadata-catalog` for enforcing machine-only or stable-only validation before catalog generation,
 - signed publication-metadata-catalog-manifest generation for authenticating publication metadata catalogs,
+- `build-machine-publication-metadata-catalog-manifest` and `build-stable-publication-metadata-catalog-manifest` for signing only machine-validated or stable-validated publication metadata catalogs,
 - one-shot `bootstrap-publication-metadata-catalog-publication` orchestration for metadata catalogs plus signing material,
 - publication-metadata-catalog inspection via `publication-metadata-catalog-summary` and structural linting via `publication-metadata-catalog-lint`,
 - preset export commands for deriving reusable publication-metadata-catalog presets back from generated metadata catalog publications,
 - `build-publication-registry` for binding descriptor, metadata, and release-catalog-index publications into one top-level signed namespace artifact,
+- `build-machine-publication-registry` and `build-stable-publication-registry` for enforcing machine-only or stable-only validation before registry generation,
 - signed publication-registry-manifest generation for authenticating top-level publication registries,
+- `build-machine-publication-registry-manifest` and `build-stable-publication-registry-manifest` for signing only machine-validated or stable-validated publication registries,
 - one-shot `bootstrap-publication-registry-publication` orchestration for registry publications plus signing material,
 - preset export commands for deriving reusable publication-registry presets back from generated registry publications,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
@@ -225,9 +233,19 @@ This repo now includes the first stable-value profile draft:
 - `SATROOT-STABLE-1` for reference-value accounting units,
 - `examples/genesis_usdroot1.json` for a `USDROOT1` genesis record,
 - `examples/events_usdroot1.json` for a runnable reference-only ledger flow,
-- `satroot1 bootstrap-stable-demo` for generating new reference-only demo ledgers on demand,
-- `satroot1 bootstrap-stable-demo-bundle` for generating signed stable demo bundles directly from profile parameters,
-- `satroot1 bootstrap-stable-demo-release` for generating signed stable demo bundles plus release directories in one step.
+- `satroot1 bootstrap-stable-demo` for generating new reference-only demo ledgers on demand, with optional stable-only preset defaults,
+- `satroot1 bootstrap-stable-demo-bundle` for generating signed stable demo bundles directly from profile parameters or a stable-only preset,
+- `satroot1 bootstrap-stable-demo-release` for generating signed stable demo bundles plus release directories in one step, with optional stable-only preset defaults,
+- `satroot1 bootstrap-stable-demo-catalog` for generating a reusable single-stable demo catalog workspace that can feed the broader catalog and publication flows, with optional stable-only preset support,
+- `satroot1 bootstrap-stable-publication-stack` for generating one or more stable-only demo catalog workspaces and publishing them as a release-catalog stack,
+- `satroot1 bootstrap-stable-publication-network` for generating one or more stable-only publication stacks and publishing them as a release-catalog index,
+- `satroot1 bootstrap-stable-publication-catalog-workspace` for generating a stable demo catalog workspace plus descriptor-index and metadata publication lanes in one step, with optional nested demo-catalog and publication-catalog-workspace presets,
+- `satroot1 publish-stable-publication-catalog-workspace` for re-wrapping existing stable descriptor and metadata lanes back into a stable-validated publication catalog workspace,
+- `satroot1 export-stable-publication-catalog-workspace-preset` for exporting that stable publication catalog workspace shape back into a validated reusable preset,
+- `satroot1 bootstrap-stable-publication-registry-workspace` for generating a stable publication catalog workspace and binding it to a stable release-catalog-index source in one signed registry workspace, with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets,
+- `satroot1 publish-stable-publication-registry-workspace` for binding an existing stable publication catalog workspace to a stable release-catalog-index source while preserving stable provenance,
+- `satroot1 export-stable-publication-registry-workspace-preset` for exporting that stable publication registry workspace shape back into a validated reusable preset,
+- `satroot1 export-stable-publication-descriptor-index-preset`, `satroot1 export-stable-publication-metadata-catalog-preset`, and `satroot1 export-stable-publication-registry-preset` for exporting stable component publications back into validated reusable presets.
 
 This repo also now includes the first machine-credit profile draft:
 
@@ -367,6 +385,12 @@ Generate a runnable SATROOT-STABLE-1 reference-only demo ledger:
 satroot1 bootstrap-stable-demo --symbol USDCLI2 --name "Stable CLI Demo" --reference-unit EUR --output-dir stable_demo
 ```
 
+That stable demo bootstrap can also resolve its symbol, name, and profile defaults from a stable-only preset:
+
+```bash
+satroot1 bootstrap-stable-demo --preset-json examples/catalog_presets/stable_reference_catalog.json --output-dir stable_demo_preset
+```
+
 Generate a runnable SATROOT-MACHINE-1 machine-credit demo ledger:
 
 ```bash
@@ -403,6 +427,12 @@ Generate a signed SATROOT-STABLE-1 reference-only demo bundle:
 satroot1 bootstrap-stable-demo-bundle --symbol USDBUNDLE2 --name "Stable Bundle CLI" --scheme hmac-sha256 --reference-unit CHF --output-dir stable_bundle
 ```
 
+That stable bundle bootstrap can also resolve its stable symbol, name, and profile defaults from a stable-only preset:
+
+```bash
+satroot1 bootstrap-stable-demo-bundle --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --output-dir stable_bundle_preset
+```
+
 For Ed25519 stable bundles, you can also emit a verifier-only variant that excludes `private_keys.json`:
 
 ```bash
@@ -413,6 +443,24 @@ Generate a signed SATROOT-STABLE-1 demo bundle plus release directory:
 
 ```bash
 satroot1 bootstrap-stable-demo-release --symbol USDRELCLI1 --name "Stable Release CLI" --scheme hmac-sha256 --release-key-id release-key --reference-unit JPY --channel stable --label "SATROOT Stable Release" --published-at 2026-06-27T12:00:00Z --output-dir stable_release
+```
+
+That stable release bootstrap can also inherit release metadata defaults from the same stable-only preset:
+
+```bash
+satroot1 bootstrap-stable-demo-release --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir stable_release_preset
+```
+
+Generate a reusable SATROOT-STABLE-1 reference-only demo catalog workspace:
+
+```bash
+satroot1 bootstrap-stable-demo-catalog --symbol USDCATST1 --name "Stable Catalog CLI" --scheme hmac-sha256 --release-key-id release-key --reference-unit CHF --profile-field intended_use=treasury-credit --channel stable --label "SATROOT Stable Catalog" --published-at 2026-07-04T04:00:00Z --output-dir stable_catalog_workspace
+```
+
+That stable catalog bootstrap can also resolve its symbol, name, stable fields, and release metadata from a stable-only SATROOT demo-catalog preset:
+
+```bash
+satroot1 bootstrap-stable-demo-catalog --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir stable_catalog_workspace_preset --label "SATROOT Stable Catalog Override"
 ```
 
 Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle:
@@ -457,10 +505,22 @@ If you already have multiple machine-credit release directories and want a machi
 satroot1 bootstrap-machine-release-catalog-publication machine_release_alpha/release_manifest.json machine_release_beta/bundle_index.json --output-dir machine_release_catalog --channel machine --label "SATROOT Machine Release Catalog" --published-at 2026-07-04T03:00:00Z --scheme hmac-sha256 --key-id catalog-key
 ```
 
+For the stable-only lane, there is now a matching SATROOT-STABLE-1 wrapper:
+
+```bash
+satroot1 bootstrap-stable-release-catalog-publication stable_release_alpha/release_manifest.json stable_release_beta/bundle_index.json --output-dir stable_release_catalog --channel stable --label "SATROOT Stable Release Catalog" --published-at 2026-07-15T03:00:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
 And if you already manage signing material yourself, there is a matching publish wrapper that rejects any non-machine release inputs:
 
 ```bash
 satroot1 publish-machine-release-catalog machine_release_alpha machine_release_beta --output-dir machine_release_catalog --channel machine --label "SATROOT Machine Release Catalog" --published-at 2026-07-04T03:00:00Z --scheme hmac-sha256 --key-id catalog-key --secrets-json release_hmac/release_secrets.json
+```
+
+The stable-only lane now has the same publish wrapper with SATROOT-STABLE-1 validation:
+
+```bash
+satroot1 publish-stable-release-catalog stable_release_alpha stable_release_beta --output-dir stable_release_catalog --channel stable --label "SATROOT Stable Release Catalog" --published-at 2026-07-15T03:00:00Z --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret
 ```
 
 If you only want the unsigned JSON catalog first, there is also a machine-validated build-only variant:
@@ -469,10 +529,18 @@ If you only want the unsigned JSON catalog first, there is also a machine-valida
 satroot1 build-machine-release-catalog machine_release_alpha machine_release_beta/release_manifest.json --channel machine --label "SATROOT Machine Release Catalog" --published-at 2026-07-04T03:00:00Z --output machine_release_catalog.json
 ```
 
+```bash
+satroot1 build-stable-release-catalog stable_release_alpha stable_release_beta/release_manifest.json --channel stable --label "SATROOT Stable Release Catalog" --published-at 2026-07-15T03:45:00Z --output stable_release_catalog.json
+```
+
 And if you want to sign that unsigned machine catalog separately, the manifest step has a matching machine-only guard as well:
 
 ```bash
 satroot1 build-machine-release-catalog-manifest machine_release_catalog.json --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret --output machine_release_catalog_manifest.json
+```
+
+```bash
+satroot1 build-stable-release-catalog-manifest stable_release_catalog.json --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret --output stable_release_catalog_manifest.json
 ```
 
 To publish a higher-level machine-only index across multiple machine release catalogs, there is now a matching machine wrapper at the release-catalog-index layer:
@@ -481,10 +549,20 @@ To publish a higher-level machine-only index across multiple machine release cat
 satroot1 bootstrap-machine-release-catalog-index-publication machine_release_catalog_alpha/release_catalog.json machine_release_catalog_beta/release_catalog_manifest.json --output-dir machine_release_catalog_index --channel machine --label "SATROOT Machine Catalog Network" --published-at 2026-07-04T06:00:00Z --scheme hmac-sha256 --key-id index-key
 ```
 
+The stable-only lane has the same convenience wrapper for SATROOT-STABLE-1 release catalogs:
+
+```bash
+satroot1 bootstrap-stable-release-catalog-index-publication stable_release_catalog_alpha/release_catalog.json stable_release_catalog_beta/release_catalog_manifest.json --output-dir stable_release_catalog_index --channel stable --label "SATROOT Stable Catalog Network" --published-at 2026-07-15T06:00:00Z --scheme hmac-sha256 --key-id index-key
+```
+
 And the publish variant likewise rejects any non-machine release catalog inputs:
 
 ```bash
 satroot1 publish-machine-release-catalog-index machine_release_catalog_alpha machine_release_catalog_beta --output-dir machine_release_catalog_index --channel machine --label "SATROOT Machine Catalog Network" --published-at 2026-07-04T06:00:00Z --scheme hmac-sha256 --key-id index-key --secrets-json release_hmac/release_secrets.json
+```
+
+```bash
+satroot1 publish-stable-release-catalog-index stable_release_catalog_alpha stable_release_catalog_beta --output-dir stable_release_catalog_index --channel stable --label "SATROOT Stable Catalog Network" --published-at 2026-07-15T06:00:00Z --scheme hmac-sha256 --key-id index-key --secret index-secret
 ```
 
 There is also a matching unsigned machine-only builder for the index JSON:
@@ -493,10 +571,42 @@ There is also a matching unsigned machine-only builder for the index JSON:
 satroot1 build-machine-release-catalog-index machine_release_catalog_alpha machine_release_catalog_beta/release_catalog_manifest.json --channel machine --label "SATROOT Machine Catalog Network" --published-at 2026-07-04T06:00:00Z --output machine_release_catalog_index.json
 ```
 
+```bash
+satroot1 build-stable-release-catalog-index stable_release_catalog_alpha stable_release_catalog_beta/release_catalog_manifest.json --channel stable --label "SATROOT Stable Catalog Network" --published-at 2026-07-15T06:45:00Z --output stable_release_catalog_index.json
+```
+
 And the top-level machine catalog index can be signed the same way with machine-only validation preserved:
 
 ```bash
 satroot1 build-machine-release-catalog-index-manifest machine_release_catalog_index.json --scheme hmac-sha256 --key-id index-key --secret index-secret --output machine_release_catalog_index_manifest.json
+```
+
+```bash
+satroot1 build-stable-release-catalog-index-manifest stable_release_catalog_index.json --scheme hmac-sha256 --key-id index-key --secret index-secret --output stable_release_catalog_index_manifest.json
+```
+
+Generate a reusable SATROOT-STABLE-1 publication catalog workspace directly from stable-profile inputs:
+
+```bash
+satroot1 bootstrap-stable-publication-catalog-workspace --symbol STBPUBCAT1 --name "Stable Publication Catalog CLI" --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --intended-use merchant-clearing --channel stable --label "SATROOT Stable Catalog" --descriptor-index-label "Stable Descriptor Index" --publication-metadata-catalog-label "Stable Metadata Catalog" --output-dir stable_publication_catalog_workspace
+```
+
+The same wrapper can also layer a stable-only demo-catalog preset with a generic publication-catalog-workspace preset:
+
+```bash
+satroot1 bootstrap-stable-publication-catalog-workspace --catalog-preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --output-dir stable_publication_catalog_workspace_preset --publication-metadata-catalog-label "SATROOT Stable Metadata Catalog Override"
+```
+
+Generate a reusable SATROOT-STABLE-1 publication registry workspace directly from stable-profile inputs plus a stable publication network source:
+
+```bash
+satroot1 bootstrap-stable-publication-registry-workspace --publication-network-dir stable_publication_network --symbol STBPUBREG1 --name "Stable Publication Registry CLI" --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --intended-use merchant-clearing --channel stable --label "SATROOT Stable Catalog" --descriptor-index-label "Stable Descriptor Index" --publication-metadata-catalog-label "Stable Metadata Catalog" --publication-registry-label "Stable Publication Registry" --output-dir stable_publication_registry_workspace
+```
+
+That registry wrapper can also compose the stable catalog preset, a publication-catalog-workspace preset, and a publication-registry-workspace preset:
+
+```bash
+satroot1 bootstrap-stable-publication-registry-workspace --catalog-preset-json examples/catalog_presets/stable_reference_catalog.json --publication-catalog-workspace-preset-json examples/publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json --preset-json examples/registry_workspace_presets/stable_reference_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir stable_publication_registry_workspace_preset --publication-registry-label "SATROOT Stable Registry Override"
 ```
 
 Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly from machine-profile inputs:
@@ -651,6 +761,12 @@ If the source bundles should remain strictly inside the SATROOT-MACHINE-1 lane, 
 satroot1 build-machine-bundle-index machine_bundle_alpha machine_bundle_beta --channel machine --label "SATROOT Machine Bundle Index" --published-at 2026-07-14T02:00:00Z --output machine_bundle_index.json
 ```
 
+The stable-only lane now has the same guard for SATROOT-STABLE-1 bundle collections:
+
+```bash
+satroot1 build-stable-bundle-index stable_bundle_alpha stable_bundle_beta --channel stable --label "SATROOT Stable Bundle Index" --published-at 2026-07-15T02:00:00Z --output stable_bundle_index.json
+```
+
 Or drive the same bundle discovery and release metadata defaults from a preset:
 
 ```bash
@@ -700,6 +816,12 @@ If that unsigned bundle index should remain machine-only, the matching manifest 
 satroot1 build-machine-release-manifest machine_bundle_index.json --scheme hmac-sha256 --key-id release-key --secret release-secret --output machine_release_manifest.json
 ```
 
+The stable-only lane now has a matching manifest wrapper that rejects any non-stable nested bundle:
+
+```bash
+satroot1 build-stable-release-manifest stable_bundle_index.json --scheme hmac-sha256 --key-id release-key --secret release-secret --output stable_release_manifest.json
+```
+
 Bootstrap reusable HMAC release-signing material:
 
 ```bash
@@ -726,6 +848,16 @@ satroot1 publish-machine-release machine_bundle_alpha machine_bundle_beta --outp
 
 ```bash
 satroot1 bootstrap-machine-release-publication machine_bundle_alpha machine_bundle_beta --output-dir machine_release_bootstrap --channel machine --label "SATROOT Machine Release" --published-at 2026-07-14T03:00:00Z --scheme hmac-sha256 --key-id release-key
+```
+
+The stable-only lane now has matching release wrappers with SATROOT-STABLE-1 bundle validation preserved:
+
+```bash
+satroot1 publish-stable-release stable_bundle_alpha stable_bundle_beta --output-dir stable_release --channel stable --label "SATROOT Stable Release" --published-at 2026-07-15T03:00:00Z --scheme hmac-sha256 --key-id release-key --secret release-secret
+```
+
+```bash
+satroot1 bootstrap-stable-release-publication stable_bundle_alpha stable_bundle_beta --output-dir stable_release_bootstrap --channel stable --label "SATROOT Stable Release" --published-at 2026-07-15T03:00:00Z --scheme hmac-sha256 --key-id release-key
 ```
 
 That same release flow can also discover multiple bundle directories under a parent workspace:
@@ -837,6 +969,12 @@ For a machine-only lane on the same preset format, `bootstrap-machine-publicatio
 satroot1 bootstrap-machine-publication-stack --stack-preset-json examples/stack_presets/machine_compute_publication_stack.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir machine_publication_stack --label "Machine Stack Override"
 ```
 
+There is now a matching stable-only lane that validates every nested catalog preset resolves to `SATROOT-STABLE-1` only:
+
+```bash
+satroot1 bootstrap-stable-publication-stack --stack-preset-json examples/stack_presets/stable_reference_publication_stack.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir stable_publication_stack --label "Stable Stack Override"
+```
+
 To generate multiple stack workspaces and a top-level signed release-catalog index in one pass, use `bootstrap-publication-network` with one or more stack presets:
 
 ```bash
@@ -853,6 +991,12 @@ There is also a machine-only convenience wrapper that validates every nested sta
 
 ```bash
 satroot1 bootstrap-machine-publication-network --network-preset-json examples/network_presets/machine_compute_publication_network.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --output-dir machine_publication_network --label "Machine Network Override"
+```
+
+And there is a stable-only wrapper that does the same for `SATROOT-STABLE-1` stack presets:
+
+```bash
+satroot1 bootstrap-stable-publication-network --network-preset-json examples/network_presets/stable_reference_publication_network.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --output-dir stable_publication_network --label "Stable Network Override"
 ```
 
 If you already have generated demo catalog workspaces and just want to consolidate them into one signed publication stack, use `publish-publication-stack`:
@@ -879,6 +1023,12 @@ For existing machine-only catalog workspaces, `publish-machine-publication-stack
 satroot1 publish-machine-publication-stack generated_machine_catalogs/catalog_alpha generated_machine_catalogs/catalog_beta --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir machine_publication_stack_from_existing --label "Published Machine Stack"
 ```
 
+There is now a matching stable-only wrapper for existing `SATROOT-STABLE-1` catalog workspaces:
+
+```bash
+satroot1 publish-stable-publication-stack generated_stable_catalogs/catalog_alpha generated_stable_catalogs/catalog_beta --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir stable_publication_stack_from_existing --label "Published Stable Stack"
+```
+
 If you already have generated publication stack workspaces and want a top-level signed network without regenerating the nested stacks, use `publish-publication-network`:
 
 ```bash
@@ -903,6 +1053,12 @@ For existing machine-only stack workspaces, `publish-machine-publication-network
 satroot1 publish-machine-publication-network generated_machine_stacks/stack_alpha generated_machine_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir machine_publication_network_from_existing --label "Published Machine Network"
 ```
 
+And there is now a stable-only wrapper for existing `SATROOT-STABLE-1` publication stack workspaces:
+
+```bash
+satroot1 publish-stable-publication-network generated_stable_stacks/stack_alpha generated_stable_stacks/stack_beta --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir stable_publication_network_from_existing --label "Published Stable Network"
+```
+
 If you already have a publication descriptor index and matching publication metadata catalog publication, you can wrap them back into a reusable catalog workspace with `publish-publication-catalog-workspace`:
 
 ```bash
@@ -925,6 +1081,12 @@ For a machine-only publication lane, `publish-machine-publication-catalog-worksp
 satroot1 publish-machine-publication-catalog-workspace machine_publication_descriptor_index machine_publication_metadata_catalog --output-dir machine_publication_catalog_workspace_from_existing
 ```
 
+There is now a matching stable-only catalog wrapper that requires the descriptor and metadata lanes to resolve back to `SATROOT-STABLE-1` sources:
+
+```bash
+satroot1 publish-stable-publication-catalog-workspace stable_publication_descriptor_index stable_publication_metadata_catalog --output-dir stable_publication_catalog_workspace_from_existing
+```
+
 If you already have a publication catalog workspace and just want to bind it to a release-catalog-index source without regenerating the descriptor or metadata lanes, use `publish-publication-registry-workspace`:
 
 ```bash
@@ -945,6 +1107,12 @@ If that source catalog workspace is machine-validated, `publish-machine-publicat
 
 ```bash
 satroot1 publish-machine-publication-registry-workspace machine_publication_catalog_workspace --publication-network-dir publication_network --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir machine_publication_registry_workspace_from_existing --label "Published Machine Registry Workspace"
+```
+
+And there is a stable-only companion that enforces stable catalog and release-catalog-index provenance before signing the top-level registry:
+
+```bash
+satroot1 publish-stable-publication-registry-workspace stable_publication_catalog_workspace --publication-network-dir stable_publication_network --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir stable_publication_registry_workspace_from_existing --label "Published Stable Registry Workspace"
 ```
 
 To scan a generated tree and see which SATROOT bundles, releases, catalogs, indexes, registries, and workspaces are present, use `inventory-artifacts`:
@@ -987,6 +1155,14 @@ satroot1 export-machine-bundle-index-preset machine_release_bootstrap --output e
 satroot1 export-machine-release-catalog-preset machine_release_catalog_alpha/release_catalog.json --output exported_machine_release_catalog.json
 ```
 
+The stable-only release lanes now have matching preset-export wrappers too:
+
+```bash
+satroot1 export-stable-bundle-index-preset stable_release_bootstrap --output exported_stable_bundle_index.json
+satroot1 export-stable-release-catalog-preset stable_release_catalog_alpha/release_catalog.json --output exported_stable_release_catalog.json
+satroot1 export-stable-release-catalog-index-preset stable_release_catalog_index_publication --output exported_stable_release_catalog_index.json
+```
+
 The publication-registry and publication-index exports follow the same pattern, so you can point them at either the publication directory or the generated JSON payload:
 
 ```bash
@@ -1009,6 +1185,12 @@ For a machine-only stack, there is a matching export wrapper that validates nest
 satroot1 export-machine-publication-stack-preset machine_publication_stack --catalog-preset-dir exported_machine_catalog_presets --output exported_machine_stack.json
 ```
 
+The stable-only stack lane now has the same export wrapper with `SATROOT-STABLE-1` validation:
+
+```bash
+satroot1 export-stable-publication-stack-preset stable_publication_stack --catalog-preset-dir exported_stable_catalog_presets --output exported_stable_stack.json
+```
+
 To derive a publication network preset and recursively emit nested stack and catalog preset files:
 
 ```bash
@@ -1021,6 +1203,12 @@ And the machine-only network lane can be exported the same way while validating 
 
 ```bash
 satroot1 export-machine-publication-network-preset machine_publication_network --stack-preset-dir exported_machine_stack_presets --catalog-preset-dir exported_machine_catalog_presets --output exported_machine_network.json
+```
+
+The stable-only network lane now has the same export wrapper for nested stable stack and catalog presets:
+
+```bash
+satroot1 export-stable-publication-network-preset stable_publication_network --stack-preset-dir exported_stable_stack_presets --catalog-preset-dir exported_stable_catalog_presets --output exported_stable_network.json
 ```
 
 To render a human-readable markdown report for a generated SATROOT artifact or workspace:
@@ -1065,6 +1253,10 @@ If those discovered artifacts must stay fully inside the SATROOT-MACHINE-1 lane,
 satroot1 build-machine-publication-descriptor-index machine_publication_catalog_workspace machine_release_catalog_alpha --channel machine --label "Machine Descriptor Index" --published-at 2026-07-14T04:00:00Z --output machine_publication_descriptor_index.json
 ```
 
+```bash
+satroot1 build-stable-publication-descriptor-index stable_publication_catalog_workspace stable_release_catalog_alpha --channel stable --label "Stable Descriptor Index" --published-at 2026-07-15T04:00:00Z --output stable_publication_descriptor_index.json
+```
+
 If you already captured a deterministic artifact scan, that same descriptor-index build can replay it directly:
 
 ```bash
@@ -1084,7 +1276,15 @@ satroot1 build-machine-publication-descriptor-index-manifest machine_publication
 ```
 
 ```bash
+satroot1 build-stable-publication-descriptor-index-manifest stable_publication_descriptor_index.json --scheme hmac-sha256 --key-id descriptor-key --secret descriptor-secret --output stable_publication_descriptor_index_manifest.json
+```
+
+```bash
 satroot1 bootstrap-machine-publication-descriptor-index-publication machine_publication_catalog_workspace --output-dir machine_publication_descriptor_index_publication --channel machine --label "Machine Descriptor Publication" --published-at 2026-07-14T04:30:00Z --scheme hmac-sha256 --key-id descriptor-key
+```
+
+```bash
+satroot1 bootstrap-stable-publication-descriptor-index-publication stable_publication_catalog_workspace --output-dir stable_publication_descriptor_index_publication --channel stable --label "Stable Descriptor Publication" --published-at 2026-07-15T04:30:00Z --scheme hmac-sha256 --key-id descriptor-key
 ```
 
 For repeatable descriptor-index packaging, that same command can also load a preset:
@@ -1144,7 +1344,15 @@ satroot1 bootstrap-machine-publication-metadata-bundle machine_publication_catal
 ```
 
 ```bash
+satroot1 bootstrap-stable-publication-metadata-bundle stable_publication_catalog_workspace --output-dir stable_publication_metadata_bundle --scheme hmac-sha256 --key-id metadata-key
+```
+
+```bash
 satroot1 build-machine-publication-metadata-manifest machine_publication_metadata_bundle/publication_report.md machine_publication_metadata_bundle/publication_descriptor.json --scheme hmac-sha256 --key-id metadata-key --secret metadata-secret --output machine_publication_metadata_manifest.json
+```
+
+```bash
+satroot1 build-stable-publication-metadata-manifest stable_publication_metadata_bundle/publication_report.md stable_publication_metadata_bundle/publication_descriptor.json --scheme hmac-sha256 --key-id metadata-key --secret metadata-secret --output stable_publication_metadata_manifest.json
 ```
 
 ```bash
@@ -1152,11 +1360,23 @@ satroot1 build-machine-publication-metadata-catalog machine_publication_metadata
 ```
 
 ```bash
+satroot1 build-stable-publication-metadata-catalog stable_publication_metadata_workspace stable_publication_metadata_catalog --channel stable --label "Stable Metadata Catalog" --published-at 2026-07-15T05:00:00Z --output stable_publication_metadata_catalog.json
+```
+
+```bash
 satroot1 build-machine-publication-metadata-catalog-manifest machine_publication_metadata_catalog.json --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret --output machine_publication_metadata_catalog_manifest.json
 ```
 
 ```bash
+satroot1 build-stable-publication-metadata-catalog-manifest stable_publication_metadata_catalog.json --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret --output stable_publication_metadata_catalog_manifest.json
+```
+
+```bash
 satroot1 bootstrap-machine-publication-metadata-catalog-publication machine_publication_metadata_workspace machine_publication_metadata_catalog --output-dir machine_publication_metadata_catalog_publication --channel machine --label "Machine Metadata Catalog Publication" --published-at 2026-07-14T05:30:00Z --scheme hmac-sha256 --key-id catalog-key
+```
+
+```bash
+satroot1 bootstrap-stable-publication-metadata-catalog-publication stable_publication_metadata_workspace stable_publication_metadata_catalog --output-dir stable_publication_metadata_catalog_publication --channel stable --label "Stable Metadata Catalog Publication" --published-at 2026-07-15T05:30:00Z --scheme hmac-sha256 --key-id catalog-key
 ```
 
 For repeatable metadata-catalog packaging, that same command can also load a preset:
@@ -1206,11 +1426,23 @@ satroot1 build-machine-publication-registry --release-catalog-index-dir machine_
 ```
 
 ```bash
+satroot1 build-stable-publication-registry --release-catalog-index-dir stable_release_catalog_index_publication --publication-descriptor-index-dir stable_publication_descriptor_index_publication --publication-metadata-catalog-dir stable_publication_metadata_catalog_publication --channel stable --label "Stable Publication Registry" --published-at 2026-07-15T06:00:00Z --output stable_publication_registry.json
+```
+
+```bash
 satroot1 build-machine-publication-registry-manifest machine_publication_registry.json --scheme hmac-sha256 --key-id registry-key --secret registry-secret --output machine_publication_registry_manifest.json
 ```
 
 ```bash
+satroot1 build-stable-publication-registry-manifest stable_publication_registry.json --scheme hmac-sha256 --key-id registry-key --secret registry-secret --output stable_publication_registry_manifest.json
+```
+
+```bash
 satroot1 bootstrap-machine-publication-registry-publication --release-catalog-index-dir machine_release_catalog_index_publication --publication-descriptor-index-dir machine_publication_descriptor_index_publication --publication-metadata-catalog-dir machine_publication_metadata_catalog_publication --output-dir machine_publication_registry_publication --channel machine --label "Machine Publication Registry" --published-at 2026-07-14T06:30:00Z --scheme hmac-sha256 --key-id registry-key
+```
+
+```bash
+satroot1 bootstrap-stable-publication-registry-publication --release-catalog-index-dir stable_release_catalog_index_publication --publication-descriptor-index-dir stable_publication_descriptor_index_publication --publication-metadata-catalog-dir stable_publication_metadata_catalog_publication --output-dir stable_publication_registry_publication --channel stable --label "Stable Publication Registry" --published-at 2026-07-15T06:30:00Z --scheme hmac-sha256 --key-id registry-key
 ```
 
 ```bash
@@ -1295,6 +1527,20 @@ satroot1 export-machine-publication-metadata-catalog-preset machine_publication_
 satroot1 export-machine-publication-registry-preset machine_publication_registry_publication --output exported_machine_registry.json
 ```
 
+The stable-only publication component lane now has matching validated export wrappers too:
+
+```bash
+satroot1 export-stable-publication-descriptor-index-preset stable_publication_descriptor_index_publication --output exported_stable_publication_descriptor_index.json
+```
+
+```bash
+satroot1 export-stable-publication-metadata-catalog-preset stable_publication_metadata_catalog_publication --output exported_stable_publication_metadata_catalog.json
+```
+
+```bash
+satroot1 export-stable-publication-registry-preset stable_publication_registry_publication --output exported_stable_registry.json
+```
+
 To derive a reusable preset back from a generated registry workspace:
 
 ```bash
@@ -1309,6 +1555,12 @@ For the machine-only registry lane, the matching export wrapper validates that t
 satroot1 export-machine-publication-registry-workspace-preset machine_publication_registry_workspace --output exported_machine_registry_workspace.json
 ```
 
+The stable-only registry lane has the same provenance guard, but validates `SATROOT-STABLE-1` sources instead:
+
+```bash
+satroot1 export-stable-publication-registry-workspace-preset stable_publication_registry_workspace --output exported_stable_registry_workspace.json
+```
+
 To derive a reusable preset back from a generated publication catalog workspace:
 
 ```bash
@@ -1319,6 +1571,12 @@ And the machine-only publication catalog lane can be exported with the same vali
 
 ```bash
 satroot1 export-machine-publication-catalog-workspace-preset machine_publication_catalog_workspace --output exported_machine_catalog_workspace.json
+```
+
+There is a matching stable-only catalog export wrapper for `SATROOT-STABLE-1` publication catalog workspaces:
+
+```bash
+satroot1 export-stable-publication-catalog-workspace-preset stable_publication_catalog_workspace --output exported_stable_catalog_workspace.json
 ```
 
 To derive a reusable preset back from a generated metadata catalog publication:
