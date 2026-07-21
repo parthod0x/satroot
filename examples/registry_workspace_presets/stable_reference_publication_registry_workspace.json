@@ -1,0 +1,20 @@
+{
+  "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+  "version": "0.1",
+  "publication_network_dir": "../generated_stable_publication_network",
+  "publication_descriptor_index": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Workspace Descriptor Index",
+    "published_at": "2026-07-08T08:00:00Z"
+  },
+  "publication_metadata_catalog": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Workspace Metadata Catalog",
+    "published_at": "2026-07-08T08:05:00Z"
+  },
+  "publication_registry": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Workspace Publication Registry",
+    "published_at": "2026-07-08T08:10:00Z"
+  }
+}

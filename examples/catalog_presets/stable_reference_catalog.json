@@ -1,0 +1,32 @@
+{
+  "type": "SATROOT-DEMO-CATALOG-PRESET",
+  "version": "0.1",
+  "profiles": [
+    "SATROOT-STABLE-1"
+  ],
+  "symbol_overrides": {
+    "SATROOT-STABLE-1": "SETTLEUR1"
+  },
+  "name_overrides": {
+    "SATROOT-STABLE-1": "SATROOT Stable Settlement Ledger"
+  },
+  "profile_field_overrides": {
+    "SATROOT-STABLE-1": {
+      "reference_unit": "EUR",
+      "intended_use": "settlement-ledger"
+    }
+  },
+  "profile_structure_overrides": {
+    "SATROOT-STABLE-1": {
+      "merchant_account": "merchant_ops",
+      "service_account": "settlement_node",
+      "merchant_amount": "1500000",
+      "merchant_burn_amount": "0"
+    }
+  },
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT Stable Settlement Catalog",
+    "published_at": "2026-07-04T00:00:00Z"
+  }
+}

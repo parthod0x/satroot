@@ -1,0 +1,12 @@
+{
+  "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
+  "version": "0.1",
+  "stack_presets": [
+    "../stack_presets/stable_reference_publication_stack.json"
+  ],
+  "release_catalog_index": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Publication Network",
+    "published_at": "2026-07-05T10:00:00Z"
+  }
+}
