@@ -13182,6 +13182,113 @@ def _load_publication_descriptor_index_publication(
     return manifest_path, descriptor_index_path, manifest, index
 
 
+def publish_publication_descriptor_index(
+    artifact_paths: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    descriptor_index = build_satroot_publication_descriptor_index(
+        artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
+        index_metadata=index_metadata,
+    )
+    descriptor_index_path = output_path / "publication_descriptor_index.json"
+    _write_json_file(descriptor_index_path, descriptor_index)
+
+    descriptor_index_manifest = build_signed_publication_descriptor_index_manifest(
+        descriptor_index_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        base_dir=output_path,
+    )
+    descriptor_index_manifest_path = output_path / "publication_descriptor_index_manifest.json"
+    _write_json_file(descriptor_index_manifest_path, descriptor_index_manifest)
+
+    return {
+        "publication_descriptor_index": descriptor_index,
+        "publication_descriptor_index_path": str(descriptor_index_path),
+        "publication_descriptor_index_manifest": descriptor_index_manifest,
+        "publication_descriptor_index_manifest_path": str(descriptor_index_manifest_path),
+    }
+
+
+def publish_machine_publication_descriptor_index(
+    artifact_paths: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_artifact_paths = resolve_satroot_artifact_inputs(
+        artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    for artifact_path in resolved_artifact_paths:
+        _require_machine_satroot_artifact_path(
+            artifact_path,
+            label="machine publication descriptor index source artifact",
+        )
+    return publish_publication_descriptor_index(
+        resolved_artifact_paths,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        discover_under=None,
+        recursive=True,
+        index_metadata=index_metadata,
+    )
+
+
+def publish_stable_publication_descriptor_index(
+    artifact_paths: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_artifact_paths = resolve_satroot_artifact_inputs(
+        artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    for artifact_path in resolved_artifact_paths:
+        _require_stable_satroot_artifact_path(
+            artifact_path,
+            label="stable publication descriptor index source artifact",
+        )
+    return publish_publication_descriptor_index(
+        resolved_artifact_paths,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        discover_under=None,
+        recursive=True,
+        index_metadata=index_metadata,
+    )
+
+
 def bootstrap_publication_descriptor_index_publication(
     artifact_paths: Sequence[str | Path],
     *,
@@ -13437,6 +13544,85 @@ def bootstrap_publication_metadata_bundle(
         "publication_metadata_manifest_path": str(manifest_path),
         "publication_metadata_material": material,
     }
+
+
+def publish_publication_metadata_bundle(
+    artifact_path: str | Path,
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    report = render_satroot_artifact_report(artifact_path)
+    descriptor = build_satroot_artifact_descriptor(artifact_path)
+    report_path = output_path / "publication_report.md"
+    descriptor_path = output_path / "publication_descriptor.json"
+    _write_text_output(report, str(report_path))
+    _write_json_file(descriptor_path, descriptor)
+
+    manifest = build_signed_publication_metadata_manifest(
+        report_path,
+        descriptor_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        base_dir=output_path,
+    )
+    manifest_path = output_path / "publication_metadata_manifest.json"
+    _write_json_file(manifest_path, manifest)
+
+    return {
+        "publication_report_path": str(report_path),
+        "publication_descriptor_path": str(descriptor_path),
+        "publication_metadata_manifest": manifest,
+        "publication_metadata_manifest_path": str(manifest_path),
+    }
+
+
+def publish_machine_publication_metadata_bundle(
+    artifact_path: str | Path,
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+) -> Dict[str, Any]:
+    _require_machine_satroot_artifact_path(
+        artifact_path,
+        label="machine publication metadata bundle source artifact",
+    )
+    return publish_publication_metadata_bundle(
+        artifact_path,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+    )
+
+
+def publish_stable_publication_metadata_bundle(
+    artifact_path: str | Path,
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+) -> Dict[str, Any]:
+    _require_stable_satroot_artifact_path(
+        artifact_path,
+        label="stable publication metadata bundle source artifact",
+    )
+    return publish_publication_metadata_bundle(
+        artifact_path,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+    )
 
 
 def bootstrap_publication_metadata_bundle_collection(
@@ -14043,6 +14229,106 @@ def bootstrap_publication_metadata_catalog_publication(
     }
 
 
+def publish_publication_metadata_catalog(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    catalog = build_publication_metadata_catalog(
+        bundle_dirs,
+        discover_under=discover_under,
+        recursive=recursive,
+        base_dir=output_path,
+        catalog_metadata=catalog_metadata,
+    )
+    catalog_path = output_path / "publication_metadata_catalog.json"
+    _write_json_file(catalog_path, catalog)
+
+    catalog_manifest = build_signed_publication_metadata_catalog_manifest(
+        catalog_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        base_dir=output_path,
+    )
+    catalog_manifest_path = output_path / "publication_metadata_catalog_manifest.json"
+    _write_json_file(catalog_manifest_path, catalog_manifest)
+
+    return {
+        "publication_metadata_catalog": catalog,
+        "publication_metadata_catalog_path": str(catalog_path),
+        "publication_metadata_catalog_manifest": catalog_manifest,
+        "publication_metadata_catalog_manifest_path": str(catalog_manifest_path),
+    }
+
+
+def publish_machine_publication_metadata_catalog(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_bundle_dirs = resolve_machine_publication_metadata_bundle_inputs(
+        bundle_dirs,
+        discover_under=discover_under,
+        recursive=recursive,
+        label="machine publication metadata catalog source bundle",
+    )
+    return publish_publication_metadata_catalog(
+        resolved_bundle_dirs,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        discover_under=None,
+        recursive=True,
+        catalog_metadata=catalog_metadata,
+    )
+
+
+def publish_stable_publication_metadata_catalog(
+    bundle_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_bundle_dirs = resolve_stable_publication_metadata_bundle_inputs(
+        bundle_dirs,
+        discover_under=discover_under,
+        recursive=recursive,
+        label="stable publication metadata catalog source bundle",
+    )
+    return publish_publication_metadata_catalog(
+        resolved_bundle_dirs,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        discover_under=None,
+        recursive=True,
+        catalog_metadata=catalog_metadata,
+    )
+
+
 def _load_publication_metadata_catalog_publication(
     publication_metadata_catalog_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
@@ -14355,6 +14641,124 @@ def verify_signed_publication_registry_manifest(
         "component_count": registry.get("component_count"),
         "index": copy.deepcopy(registry.get("index")),
     }
+
+
+def publish_publication_registry(
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    release_catalog_index_dir: Optional[str | Path] = None,
+    publication_descriptor_index_dir: Optional[str | Path] = None,
+    publication_metadata_catalog_dir: Optional[str | Path] = None,
+    registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    registry = build_publication_registry(
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_descriptor_index_dir=publication_descriptor_index_dir,
+        publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        base_dir=output_path,
+        registry_metadata=registry_metadata,
+    )
+    registry_path = output_path / "publication_registry.json"
+    _write_json_file(registry_path, registry)
+
+    registry_manifest = build_signed_publication_registry_manifest(
+        registry_path,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        base_dir=output_path,
+    )
+    registry_manifest_path = output_path / "publication_registry_manifest.json"
+    _write_json_file(registry_manifest_path, registry_manifest)
+
+    return {
+        "publication_registry": registry,
+        "publication_registry_path": str(registry_path),
+        "publication_registry_manifest": registry_manifest,
+        "publication_registry_manifest_path": str(registry_manifest_path),
+    }
+
+
+def publish_machine_publication_registry(
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    release_catalog_index_dir: Optional[str | Path] = None,
+    publication_descriptor_index_dir: Optional[str | Path] = None,
+    publication_metadata_catalog_dir: Optional[str | Path] = None,
+    registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    if release_catalog_index_dir is not None:
+        _require_machine_release_catalog_index_publication(
+            release_catalog_index_dir,
+            label="machine publication registry source release catalog index",
+        )
+    if publication_descriptor_index_dir is not None:
+        _require_machine_publication_descriptor_index_publication(
+            publication_descriptor_index_dir,
+            label="machine publication registry source publication descriptor index",
+        )
+    if publication_metadata_catalog_dir is not None:
+        _require_machine_publication_metadata_catalog_publication(
+            publication_metadata_catalog_dir,
+            label="machine publication registry source publication metadata catalog",
+        )
+    return publish_publication_registry(
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_descriptor_index_dir=publication_descriptor_index_dir,
+        publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        registry_metadata=registry_metadata,
+    )
+
+
+def publish_stable_publication_registry(
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    signer: SignerFunction,
+    release_catalog_index_dir: Optional[str | Path] = None,
+    publication_descriptor_index_dir: Optional[str | Path] = None,
+    publication_metadata_catalog_dir: Optional[str | Path] = None,
+    registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    if release_catalog_index_dir is not None:
+        _require_stable_release_catalog_index_publication(
+            release_catalog_index_dir,
+            label="stable publication registry source release catalog index",
+        )
+    if publication_descriptor_index_dir is not None:
+        _require_stable_publication_descriptor_index_publication(
+            publication_descriptor_index_dir,
+            label="stable publication registry source publication descriptor index",
+        )
+    if publication_metadata_catalog_dir is not None:
+        _require_stable_publication_metadata_catalog_publication(
+            publication_metadata_catalog_dir,
+            label="stable publication registry source publication metadata catalog",
+        )
+    return publish_publication_registry(
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        signer=signer,
+        release_catalog_index_dir=release_catalog_index_dir,
+        publication_descriptor_index_dir=publication_descriptor_index_dir,
+        publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        registry_metadata=registry_metadata,
+    )
 
 
 def bootstrap_publication_registry_publication(
@@ -16105,6 +16509,189 @@ def build_cli_parser() -> Any:
     build_stable_publication_registry_manifest_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
     build_stable_publication_registry_manifest_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-registry-manifest signing")
     build_stable_publication_registry_manifest_parser.add_argument("--output", help="Optional output path")
+
+    publish_publication_descriptor_index_parser = subparsers.add_parser("publish-publication-descriptor-index", help="Build publication_descriptor_index.json plus publication_descriptor_index_manifest.json in one SATROOT publication directory")
+    publish_publication_descriptor_index_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with artifact paths, discovery roots, and index metadata defaults")
+    publish_publication_descriptor_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as descriptor-index sources")
+    publish_publication_descriptor_index_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
+    publish_publication_descriptor_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
+    publish_publication_descriptor_index_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    publish_publication_descriptor_index_parser.add_argument("--output-dir", required=True, help="Directory where publication_descriptor_index.json and publication_descriptor_index_manifest.json will be written")
+    publish_publication_descriptor_index_parser.add_argument("--channel", help="Optional descriptor-index channel metadata")
+    publish_publication_descriptor_index_parser.add_argument("--label", help="Optional human-readable descriptor-index label")
+    publish_publication_descriptor_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the descriptor index")
+    publish_publication_descriptor_index_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_publication_descriptor_index_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication descriptor index manifest")
+    publish_publication_descriptor_index_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_publication_descriptor_index_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-descriptor-index-manifest signing")
+    publish_publication_descriptor_index_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_publication_descriptor_index_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-descriptor-index-manifest signing")
+
+    publish_machine_publication_descriptor_index_parser = subparsers.add_parser("publish-machine-publication-descriptor-index", help="Build publication_descriptor_index.json plus publication_descriptor_index_manifest.json in one machine-only SATROOT publication directory")
+    publish_machine_publication_descriptor_index_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with machine artifact paths, discovery roots, and index metadata defaults")
+    publish_machine_publication_descriptor_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as machine descriptor-index sources")
+    publish_machine_publication_descriptor_index_parser.add_argument("path", nargs="*", help="Path to a machine-only SATROOT artifact file or directory")
+    publish_machine_publication_descriptor_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine-only SATROOT artifacts; may be repeated")
+    publish_machine_publication_descriptor_index_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    publish_machine_publication_descriptor_index_parser.add_argument("--output-dir", required=True, help="Directory where publication_descriptor_index.json and publication_descriptor_index_manifest.json will be written")
+    publish_machine_publication_descriptor_index_parser.add_argument("--channel", help="Optional descriptor-index channel metadata")
+    publish_machine_publication_descriptor_index_parser.add_argument("--label", help="Optional human-readable descriptor-index label")
+    publish_machine_publication_descriptor_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the descriptor index")
+    publish_machine_publication_descriptor_index_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_machine_publication_descriptor_index_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication descriptor index manifest")
+    publish_machine_publication_descriptor_index_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_machine_publication_descriptor_index_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-descriptor-index-manifest signing")
+    publish_machine_publication_descriptor_index_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_machine_publication_descriptor_index_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-descriptor-index-manifest signing")
+
+    publish_stable_publication_descriptor_index_parser = subparsers.add_parser("publish-stable-publication-descriptor-index", help="Build publication_descriptor_index.json plus publication_descriptor_index_manifest.json in one stable-only SATROOT publication directory")
+    publish_stable_publication_descriptor_index_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with stable artifact paths, discovery roots, and index metadata defaults")
+    publish_stable_publication_descriptor_index_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as stable descriptor-index sources")
+    publish_stable_publication_descriptor_index_parser.add_argument("path", nargs="*", help="Path to a stable-only SATROOT artifact file or directory")
+    publish_stable_publication_descriptor_index_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested stable-only SATROOT artifacts; may be repeated")
+    publish_stable_publication_descriptor_index_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    publish_stable_publication_descriptor_index_parser.add_argument("--output-dir", required=True, help="Directory where publication_descriptor_index.json and publication_descriptor_index_manifest.json will be written")
+    publish_stable_publication_descriptor_index_parser.add_argument("--channel", help="Optional descriptor-index channel metadata")
+    publish_stable_publication_descriptor_index_parser.add_argument("--label", help="Optional human-readable descriptor-index label")
+    publish_stable_publication_descriptor_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the descriptor index")
+    publish_stable_publication_descriptor_index_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_stable_publication_descriptor_index_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication descriptor index manifest")
+    publish_stable_publication_descriptor_index_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_stable_publication_descriptor_index_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-descriptor-index-manifest signing")
+    publish_stable_publication_descriptor_index_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_stable_publication_descriptor_index_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-descriptor-index-manifest signing")
+
+    publish_publication_metadata_bundle_parser = subparsers.add_parser("publish-publication-metadata-bundle", help="Build publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json in one SATROOT publication metadata bundle directory")
+    publish_publication_metadata_bundle_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
+    publish_publication_metadata_bundle_parser.add_argument("--output-dir", required=True, help="Directory where publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json will be written")
+    publish_publication_metadata_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_publication_metadata_bundle_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication metadata manifest")
+    publish_publication_metadata_bundle_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_publication_metadata_bundle_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-metadata-manifest signing")
+    publish_publication_metadata_bundle_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_publication_metadata_bundle_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-manifest signing")
+
+    publish_machine_publication_metadata_bundle_parser = subparsers.add_parser("publish-machine-publication-metadata-bundle", help="Build publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json in one machine-only SATROOT publication metadata bundle directory")
+    publish_machine_publication_metadata_bundle_parser.add_argument("path", help="Path to a machine-only SATROOT artifact file or directory")
+    publish_machine_publication_metadata_bundle_parser.add_argument("--output-dir", required=True, help="Directory where publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json will be written")
+    publish_machine_publication_metadata_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_machine_publication_metadata_bundle_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication metadata manifest")
+    publish_machine_publication_metadata_bundle_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_machine_publication_metadata_bundle_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-metadata-manifest signing")
+    publish_machine_publication_metadata_bundle_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_machine_publication_metadata_bundle_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-manifest signing")
+
+    publish_stable_publication_metadata_bundle_parser = subparsers.add_parser("publish-stable-publication-metadata-bundle", help="Build publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json in one stable-only SATROOT publication metadata bundle directory")
+    publish_stable_publication_metadata_bundle_parser.add_argument("path", help="Path to a stable-only SATROOT artifact file or directory")
+    publish_stable_publication_metadata_bundle_parser.add_argument("--output-dir", required=True, help="Directory where publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json will be written")
+    publish_stable_publication_metadata_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_stable_publication_metadata_bundle_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication metadata manifest")
+    publish_stable_publication_metadata_bundle_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_stable_publication_metadata_bundle_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-metadata-manifest signing")
+    publish_stable_publication_metadata_bundle_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_stable_publication_metadata_bundle_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-manifest signing")
+
+    publish_publication_metadata_catalog_parser = subparsers.add_parser("publish-publication-metadata-catalog", help="Build publication_metadata_catalog.json plus publication_metadata_catalog_manifest.json in one SATROOT publication directory")
+    publish_publication_metadata_catalog_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with bundle paths, discovery roots, and catalog metadata defaults")
+    publish_publication_metadata_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_metadata_bundle_dir entries will be added as catalog sources")
+    publish_publication_metadata_catalog_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a publication metadata bundle directory")
+    publish_publication_metadata_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication_metadata_manifest.json files; may be repeated")
+    publish_publication_metadata_catalog_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
+    publish_publication_metadata_catalog_parser.add_argument("--output-dir", required=True, help="Directory where publication_metadata_catalog.json and publication_metadata_catalog_manifest.json will be written")
+    publish_publication_metadata_catalog_parser.add_argument("--channel", help="Optional publication-metadata-catalog channel metadata")
+    publish_publication_metadata_catalog_parser.add_argument("--label", help="Optional human-readable publication metadata catalog label")
+    publish_publication_metadata_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication metadata catalog")
+    publish_publication_metadata_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_publication_metadata_catalog_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication metadata catalog manifest")
+    publish_publication_metadata_catalog_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_publication_metadata_catalog_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-metadata-catalog-manifest signing")
+    publish_publication_metadata_catalog_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_publication_metadata_catalog_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-catalog-manifest signing")
+
+    publish_machine_publication_metadata_catalog_parser = subparsers.add_parser("publish-machine-publication-metadata-catalog", help="Build publication_metadata_catalog.json plus publication_metadata_catalog_manifest.json in one machine-only SATROOT publication directory")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with machine bundle paths, discovery roots, and catalog metadata defaults")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_metadata_bundle_dir entries will be added as machine catalog sources")
+    publish_machine_publication_metadata_catalog_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a machine-only publication metadata bundle directory")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine-only publication_metadata_manifest.json files; may be repeated")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--output-dir", required=True, help="Directory where publication_metadata_catalog.json and publication_metadata_catalog_manifest.json will be written")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--channel", help="Optional publication-metadata-catalog channel metadata")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--label", help="Optional human-readable publication metadata catalog label")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication metadata catalog")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_machine_publication_metadata_catalog_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication metadata catalog manifest")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-metadata-catalog-manifest signing")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_machine_publication_metadata_catalog_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-catalog-manifest signing")
+
+    publish_stable_publication_metadata_catalog_parser = subparsers.add_parser("publish-stable-publication-metadata-catalog", help="Build publication_metadata_catalog.json plus publication_metadata_catalog_manifest.json in one stable-only SATROOT publication directory")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with stable bundle paths, discovery roots, and catalog metadata defaults")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_metadata_bundle_dir entries will be added as stable catalog sources")
+    publish_stable_publication_metadata_catalog_parser.add_argument("publication_metadata_bundle_dir", nargs="*", help="Path to a stable-only publication metadata bundle directory")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested stable-only publication_metadata_manifest.json files; may be repeated")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication metadata bundles")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--output-dir", required=True, help="Directory where publication_metadata_catalog.json and publication_metadata_catalog_manifest.json will be written")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--channel", help="Optional publication-metadata-catalog channel metadata")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--label", help="Optional human-readable publication metadata catalog label")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication metadata catalog")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_stable_publication_metadata_catalog_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication metadata catalog manifest")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-metadata-catalog-manifest signing")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_stable_publication_metadata_catalog_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-metadata-catalog-manifest signing")
+
+    publish_publication_registry_parser = subparsers.add_parser("publish-publication-registry", help="Build publication_registry.json plus publication_registry_manifest.json in one SATROOT publication directory")
+    publish_publication_registry_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with component paths and registry metadata defaults")
+    publish_publication_registry_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication component directories will be used as registry sources when explicit paths are omitted")
+    publish_publication_registry_parser.add_argument("--release-catalog-index-dir", help="Path to a release catalog index publication directory")
+    publish_publication_registry_parser.add_argument("--publication-descriptor-index-dir", help="Path to a publication descriptor index publication directory")
+    publish_publication_registry_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a publication metadata catalog publication directory")
+    publish_publication_registry_parser.add_argument("--output-dir", required=True, help="Directory where publication_registry.json and publication_registry_manifest.json will be written")
+    publish_publication_registry_parser.add_argument("--channel", help="Optional publication-registry channel metadata")
+    publish_publication_registry_parser.add_argument("--label", help="Optional human-readable publication registry label")
+    publish_publication_registry_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication registry")
+    publish_publication_registry_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_publication_registry_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication registry manifest")
+    publish_publication_registry_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_publication_registry_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-registry-manifest signing")
+    publish_publication_registry_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_publication_registry_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-registry-manifest signing")
+
+    publish_machine_publication_registry_parser = subparsers.add_parser("publish-machine-publication-registry", help="Build publication_registry.json plus publication_registry_manifest.json in one machine-only SATROOT publication directory")
+    publish_machine_publication_registry_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with machine component paths and registry metadata defaults")
+    publish_machine_publication_registry_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication component directories will be used as machine registry sources when explicit paths are omitted")
+    publish_machine_publication_registry_parser.add_argument("--release-catalog-index-dir", help="Path to a machine-only release catalog index publication directory")
+    publish_machine_publication_registry_parser.add_argument("--publication-descriptor-index-dir", help="Path to a machine-only publication descriptor index publication directory")
+    publish_machine_publication_registry_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a machine-only publication metadata catalog publication directory")
+    publish_machine_publication_registry_parser.add_argument("--output-dir", required=True, help="Directory where publication_registry.json and publication_registry_manifest.json will be written")
+    publish_machine_publication_registry_parser.add_argument("--channel", help="Optional publication-registry channel metadata")
+    publish_machine_publication_registry_parser.add_argument("--label", help="Optional human-readable publication registry label")
+    publish_machine_publication_registry_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication registry")
+    publish_machine_publication_registry_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_machine_publication_registry_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication registry manifest")
+    publish_machine_publication_registry_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_machine_publication_registry_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-registry-manifest signing")
+    publish_machine_publication_registry_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_machine_publication_registry_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-registry-manifest signing")
+
+    publish_stable_publication_registry_parser = subparsers.add_parser("publish-stable-publication-registry", help="Build publication_registry.json plus publication_registry_manifest.json in one stable-only SATROOT publication directory")
+    publish_stable_publication_registry_parser.add_argument("--preset-json", help="Optional SATROOT publication registry preset JSON file with stable component paths and registry metadata defaults")
+    publish_stable_publication_registry_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication component directories will be used as stable registry sources when explicit paths are omitted")
+    publish_stable_publication_registry_parser.add_argument("--release-catalog-index-dir", help="Path to a stable-only release catalog index publication directory")
+    publish_stable_publication_registry_parser.add_argument("--publication-descriptor-index-dir", help="Path to a stable-only publication descriptor index publication directory")
+    publish_stable_publication_registry_parser.add_argument("--publication-metadata-catalog-dir", help="Path to a stable-only publication metadata catalog publication directory")
+    publish_stable_publication_registry_parser.add_argument("--output-dir", required=True, help="Directory where publication_registry.json and publication_registry_manifest.json will be written")
+    publish_stable_publication_registry_parser.add_argument("--channel", help="Optional publication-registry channel metadata")
+    publish_stable_publication_registry_parser.add_argument("--label", help="Optional human-readable publication registry label")
+    publish_stable_publication_registry_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the publication registry")
+    publish_stable_publication_registry_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    publish_stable_publication_registry_parser.add_argument("--key-id", required=True, help="Signature key identifier for the publication registry manifest")
+    publish_stable_publication_registry_parser.add_argument("--secret", help="Shared secret for hmac-sha256 signing")
+    publish_stable_publication_registry_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret for hmac-sha256 publication-registry-manifest signing")
+    publish_stable_publication_registry_parser.add_argument("--private-key-hex", help="Hex-encoded Ed25519 private key")
+    publish_stable_publication_registry_parser.add_argument("--private-keys-json", help="Path to JSON mapping key_id -> private key hex for ed25519 publication-registry-manifest signing")
 
     bootstrap_publication_descriptor_index_publication_parser = subparsers.add_parser("bootstrap-publication-descriptor-index-publication", help="Generate signing material and write a ready-to-verify SATROOT publication descriptor index directory")
     bootstrap_publication_descriptor_index_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication descriptor index preset JSON file with artifact paths, discovery roots, and index metadata defaults")
@@ -20086,6 +20673,345 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             base_dir=base_dir,
         )
         _write_output(manifest, output_path)
+        return 0
+
+    if args.command == "publish-publication-descriptor-index":
+        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        index_metadata = {
+            **dict((preset or {}).get("index_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_publication_descriptor_index(
+            [*(preset or {}).get("artifact_paths", []), *inventory_artifact_paths, *args.path],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
+            index_metadata=index_metadata,
+        )
+        print(f"wrote SATROOT publication descriptor index to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-machine-publication-descriptor-index":
+        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        index_metadata = {
+            **dict((preset or {}).get("index_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_machine_publication_descriptor_index(
+            [*(preset or {}).get("artifact_paths", []), *inventory_artifact_paths, *args.path],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
+            index_metadata=index_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication descriptor index to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-stable-publication-descriptor-index":
+        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        index_metadata = {
+            **dict((preset or {}).get("index_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                index_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_stable_publication_descriptor_index(
+            [*(preset or {}).get("artifact_paths", []), *inventory_artifact_paths, *args.path],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
+            index_metadata=index_metadata,
+        )
+        print(f"wrote SATROOT-STABLE-1 publication descriptor index to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-publication-metadata-bundle":
+        signer = _release_manifest_signer_from_args(args)
+        publish_publication_metadata_bundle(
+            args.path,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+        )
+        print(f"wrote SATROOT publication metadata bundle to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-machine-publication-metadata-bundle":
+        signer = _release_manifest_signer_from_args(args)
+        publish_machine_publication_metadata_bundle(
+            args.path,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication metadata bundle to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-stable-publication-metadata-bundle":
+        signer = _release_manifest_signer_from_args(args)
+        publish_stable_publication_metadata_bundle(
+            args.path,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+        )
+        print(f"wrote SATROOT-STABLE-1 publication metadata bundle to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-publication-metadata-catalog":
+        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
+        catalog_metadata = {
+            **dict((preset or {}).get("catalog_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_publication_metadata_catalog(
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *inventory_bundle_dirs, *args.publication_metadata_bundle_dir],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
+            catalog_metadata=catalog_metadata,
+        )
+        print(f"wrote SATROOT publication metadata catalog to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-machine-publication-metadata-catalog":
+        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
+        catalog_metadata = {
+            **dict((preset or {}).get("catalog_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_machine_publication_metadata_catalog(
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *inventory_bundle_dirs, *args.publication_metadata_bundle_dir],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
+            catalog_metadata=catalog_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication metadata catalog to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-stable-publication-metadata-catalog":
+        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
+        catalog_metadata = {
+            **dict((preset or {}).get("catalog_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_stable_publication_metadata_catalog(
+            [*(preset or {}).get("publication_metadata_bundle_dirs", []), *inventory_bundle_dirs, *args.publication_metadata_bundle_dir],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            discover_under=[*((preset or {}).get("discover_under", [])), *((args.discover_under or []))],
+            recursive=(preset or {}).get("recursive", True) and not args.non_recursive,
+            catalog_metadata=catalog_metadata,
+        )
+        print(f"wrote SATROOT-STABLE-1 publication metadata catalog to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-publication-registry":
+        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
+        registry_metadata = {
+            **dict((preset or {}).get("registry_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                registry_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_publication_registry(
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            release_catalog_index_dir=(
+                args.release_catalog_index_dir
+                or (preset or {}).get("release_catalog_index_dir")
+                or inventory_release_catalog_index_dir
+            ),
+            publication_descriptor_index_dir=(
+                args.publication_descriptor_index_dir
+                or (preset or {}).get("publication_descriptor_index_dir")
+                or inventory_publication_descriptor_index_dir
+            ),
+            publication_metadata_catalog_dir=(
+                args.publication_metadata_catalog_dir
+                or (preset or {}).get("publication_metadata_catalog_dir")
+                or inventory_publication_metadata_catalog_dir
+            ),
+            registry_metadata=registry_metadata,
+        )
+        print(f"wrote SATROOT publication registry to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-machine-publication-registry":
+        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
+        registry_metadata = {
+            **dict((preset or {}).get("registry_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                registry_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_machine_publication_registry(
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            release_catalog_index_dir=(
+                args.release_catalog_index_dir
+                or (preset or {}).get("release_catalog_index_dir")
+                or inventory_release_catalog_index_dir
+            ),
+            publication_descriptor_index_dir=(
+                args.publication_descriptor_index_dir
+                or (preset or {}).get("publication_descriptor_index_dir")
+                or inventory_publication_descriptor_index_dir
+            ),
+            publication_metadata_catalog_dir=(
+                args.publication_metadata_catalog_dir
+                or (preset or {}).get("publication_metadata_catalog_dir")
+                or inventory_publication_metadata_catalog_dir
+            ),
+            registry_metadata=registry_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication registry to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "publish-stable-publication-registry":
+        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        inventory_release_catalog_index_dir = (
+            load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_descriptor_index_dir = (
+            load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
+        )
+        inventory_publication_metadata_catalog_dir = (
+            load_inventory_publication_metadata_catalog_dir(args.inventory_json) if args.inventory_json else None
+        )
+        registry_metadata = {
+            **dict((preset or {}).get("registry_metadata", {})),
+        }
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                registry_metadata[key] = value
+        signer = _release_manifest_signer_from_args(args)
+        publish_stable_publication_registry(
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            signer=signer,
+            release_catalog_index_dir=(
+                args.release_catalog_index_dir
+                or (preset or {}).get("release_catalog_index_dir")
+                or inventory_release_catalog_index_dir
+            ),
+            publication_descriptor_index_dir=(
+                args.publication_descriptor_index_dir
+                or (preset or {}).get("publication_descriptor_index_dir")
+                or inventory_publication_descriptor_index_dir
+            ),
+            publication_metadata_catalog_dir=(
+                args.publication_metadata_catalog_dir
+                or (preset or {}).get("publication_metadata_catalog_dir")
+                or inventory_publication_metadata_catalog_dir
+            ),
+            registry_metadata=registry_metadata,
+        )
+        print(f"wrote SATROOT-STABLE-1 publication registry to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-publication-descriptor-index-publication":

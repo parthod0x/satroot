@@ -170,12 +170,14 @@ The v0.1 kernel defines:
 - signed publication-descriptor-index-manifest generation for authenticating descriptor registries,
 - `build-machine-publication-descriptor-index` and `build-stable-publication-descriptor-index` for enforcing machine-only or stable-only validation before descriptor-index generation,
 - `build-machine-publication-descriptor-index-manifest` and `build-stable-publication-descriptor-index-manifest` for signing only machine-validated or stable-validated descriptor indexes,
+- `publish-publication-descriptor-index`, `publish-machine-publication-descriptor-index`, and `publish-stable-publication-descriptor-index` for writing signed descriptor-index publication directories from existing signer material,
 - one-shot `bootstrap-publication-descriptor-index-publication` orchestration for descriptor indexes plus signing material,
 - publication-descriptor-index inspection via `publication-descriptor-index-summary` and structural linting via `publication-descriptor-index-lint`,
 - preset export commands for deriving reusable publication-descriptor-index presets back from generated descriptor index publications,
 - signed publication-metadata-manifest generation for authenticating one artifact's rendered report plus normalized descriptor,
 - `build-machine-publication-metadata-manifest` for signing only machine-validated publication report and descriptor pairs,
 - `build-stable-publication-metadata-manifest` for signing only stable-validated publication report and descriptor pairs,
+- `publish-publication-metadata-bundle`, `publish-machine-publication-metadata-bundle`, and `publish-stable-publication-metadata-bundle` for writing signed publication metadata bundles from existing signer material,
 - publication-metadata-bundle inspection via `publication-metadata-bundle-summary` and structural linting via `publication-metadata-bundle-lint`,
 - `bootstrap-machine-publication-metadata-bundle` for generating machine-only publication metadata bundles with SATROOT-MACHINE-1 artifact validation before signing,
 - `bootstrap-stable-publication-metadata-bundle` for generating stable-only publication metadata bundles with SATROOT-STABLE-1 artifact validation before signing,
@@ -183,6 +185,7 @@ The v0.1 kernel defines:
 - `build-machine-publication-metadata-catalog` and `build-stable-publication-metadata-catalog` for enforcing machine-only or stable-only validation before catalog generation,
 - signed publication-metadata-catalog-manifest generation for authenticating publication metadata catalogs,
 - `build-machine-publication-metadata-catalog-manifest` and `build-stable-publication-metadata-catalog-manifest` for signing only machine-validated or stable-validated publication metadata catalogs,
+- `publish-publication-metadata-catalog`, `publish-machine-publication-metadata-catalog`, and `publish-stable-publication-metadata-catalog` for writing signed metadata-catalog publication directories from existing signer material,
 - one-shot `bootstrap-publication-metadata-catalog-publication` orchestration for metadata catalogs plus signing material,
 - publication-metadata-catalog inspection via `publication-metadata-catalog-summary` and structural linting via `publication-metadata-catalog-lint`,
 - preset export commands for deriving reusable publication-metadata-catalog presets back from generated metadata catalog publications,
@@ -190,6 +193,7 @@ The v0.1 kernel defines:
 - `build-machine-publication-registry` and `build-stable-publication-registry` for enforcing machine-only or stable-only validation before registry generation,
 - signed publication-registry-manifest generation for authenticating top-level publication registries,
 - `build-machine-publication-registry-manifest` and `build-stable-publication-registry-manifest` for signing only machine-validated or stable-validated publication registries,
+- `publish-publication-registry`, `publish-machine-publication-registry`, and `publish-stable-publication-registry` for writing signed registry publication directories from existing signer material,
 - one-shot `bootstrap-publication-registry-publication` orchestration for registry publications plus signing material,
 - preset export commands for deriving reusable publication-registry presets back from generated registry publications,
 - demo-catalog, publication-stack, and publication-network summary schema validation for exported workspace summaries,
@@ -1269,6 +1273,12 @@ To bootstrap signing material plus a ready-to-verify signed publication descript
 satroot1 bootstrap-publication-descriptor-index-publication --discover-under publication_network --output-dir publication_descriptor_index_publication --channel network --label "SATROOT Descriptor Publication" --scheme hmac-sha256 --key-id descriptor-key
 ```
 
+If you already have signer material and just want the signed publication directory, the publish convenience path writes the same `publication_descriptor_index.json` plus `publication_descriptor_index_manifest.json` layout without generating fresh secrets or keys:
+
+```bash
+satroot1 publish-publication-descriptor-index --discover-under publication_network --output-dir publication_descriptor_index_publication --channel network --label "SATROOT Descriptor Publication" --published-at 2026-07-09T02:00:00Z --scheme hmac-sha256 --key-id descriptor-key --secret descriptor-secret
+```
+
 That descriptor-index lane now also has matching machine-only manifest and bootstrap wrappers:
 
 ```bash
@@ -1310,6 +1320,10 @@ satroot1 bootstrap-publication-metadata-bundle publication_network --output-dir 
 ```
 
 ```bash
+satroot1 publish-publication-metadata-bundle publication_network --output-dir publication_metadata_bundle --scheme hmac-sha256 --key-id metadata-key --secret metadata-secret
+```
+
+```bash
 satroot1 build-publication-metadata-manifest publication_metadata_bundle/publication_report.md publication_metadata_bundle/publication_descriptor.json --scheme hmac-sha256 --key-id metadata-key --secret metadata-secret --output publication_metadata_manifest.json
 ```
 
@@ -1335,6 +1349,10 @@ satroot1 build-publication-metadata-catalog --inventory-json artifact_inventory.
 
 ```bash
 satroot1 build-publication-metadata-catalog-manifest publication_metadata_catalog.json --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret --output publication_metadata_catalog_manifest.json
+```
+
+```bash
+satroot1 publish-publication-metadata-catalog publication_metadata_bundle_alpha publication_metadata_bundle_beta --output-dir publication_metadata_catalog_publication --channel network --label "SATROOT Metadata Catalog" --published-at 2026-07-09T04:00:00Z --scheme hmac-sha256 --key-id catalog-key --secret catalog-secret
 ```
 
 If those publication metadata bundles must stay entirely inside the SATROOT-MACHINE-1 lane, the machine-only wrappers validate each nested artifact before building, signing, or bootstrapping the catalog:
@@ -1417,6 +1435,10 @@ satroot1 build-publication-registry --inventory-json artifact_inventory.json --c
 
 ```bash
 satroot1 build-publication-registry-manifest publication_registry.json --scheme hmac-sha256 --key-id registry-key --secret registry-secret --output publication_registry_manifest.json
+```
+
+```bash
+satroot1 publish-publication-registry --release-catalog-index-dir publication_network/release_catalog_index --publication-descriptor-index-dir publication_descriptor_index_publication --publication-metadata-catalog-dir publication_metadata_catalog_publication --output-dir publication_registry_publication --channel network --label "SATROOT Publication Registry" --published-at 2026-07-09T05:00:00Z --scheme hmac-sha256 --key-id registry-key --secret registry-secret
 ```
 
 If all three component lanes must remain SATROOT-MACHINE-1 validated, the machine-only wrappers enforce that before building, signing, or bootstrapping the top-level registry:

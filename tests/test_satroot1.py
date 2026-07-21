@@ -13318,6 +13318,134 @@ def test_cli_build_stable_publication_descriptor_index_manifest_rejects_non_stab
         )
 
 
+def test_cli_publish_publication_descriptor_index(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "publication_descriptor_index_publication"
+
+    assert (
+        main(
+            [
+                "publish-publication-descriptor-index",
+                "--discover-under",
+                str(network_dir),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "network",
+                "--label",
+                "Published Descriptor Index",
+                "--published-at",
+                "2026-07-09T02:00:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "descriptor-key",
+                "--secret",
+                "descriptor-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 12
+    assert index["index"]["label"] == "Published Descriptor Index"
+
+    verified = verify_signed_publication_descriptor_index_manifest(
+        output_dir / "publication_descriptor_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"descriptor-key": "descriptor-secret"}),
+    )
+    assert verified["artifact_count"] == 12
+    assert verified["index"] == index["index"]
+
+
+def test_cli_publish_machine_publication_descriptor_index(tmp_path, capsys):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "machine_publication_descriptor_index_publication"
+
+    assert (
+        main(
+            [
+                "publish-machine-publication-descriptor-index",
+                str(machine_catalog_workspace_dir),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Published Machine Descriptor Index",
+                "--published-at",
+                "2026-07-14T04:10:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "descriptor-key",
+                "--secret",
+                "descriptor-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+
+    verified = verify_signed_publication_descriptor_index_manifest(
+        output_dir / "publication_descriptor_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"descriptor-key": "descriptor-secret"}),
+    )
+    assert verified["artifact_count"] == 1
+
+
+def test_cli_publish_stable_publication_descriptor_index(tmp_path, capsys):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "stable_publication_descriptor_index_publication"
+
+    assert (
+        main(
+            [
+                "publish-stable-publication-descriptor-index",
+                str(stable_catalog_workspace_dir),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Published Stable Descriptor Index",
+                "--published-at",
+                "2026-07-15T04:10:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "descriptor-key",
+                "--secret",
+                "descriptor-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication descriptor index to" in captured.out
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 1
+    assert index["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+
+    verified = verify_signed_publication_descriptor_index_manifest(
+        output_dir / "publication_descriptor_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"descriptor-key": "descriptor-secret"}),
+    )
+    assert verified["artifact_count"] == 1
+
+
 def test_cli_bootstrap_publication_descriptor_index_publication(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_descriptor_index_publication"
@@ -13867,6 +13995,105 @@ def test_cli_build_stable_publication_metadata_manifest_rejects_non_stable_artif
                 "metadata-secret",
             ]
         )
+
+
+def test_cli_publish_publication_metadata_bundle(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "publication_metadata_bundle"
+
+    assert (
+        main(
+            [
+                "publish-publication-metadata-bundle",
+                str(network_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+                "--secret",
+                "metadata-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication metadata bundle to" in captured.out
+
+    descriptor = json.loads((output_dir / "publication_descriptor.json").read_text(encoding="utf-8"))
+    assert descriptor["artifact_kind"] == "publication-network"
+
+    verified = verify_signed_publication_metadata_manifest(
+        output_dir / "publication_metadata_manifest.json",
+        verifier=make_hmac_sha256_verifier({"metadata-key": "metadata-secret"}),
+    )
+    assert verified["artifact_kind"] == "publication-network"
+
+
+def test_cli_publish_machine_publication_metadata_bundle(tmp_path, capsys):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "machine_publication_metadata_bundle"
+
+    assert (
+        main(
+            [
+                "publish-machine-publication-metadata-bundle",
+                str(machine_catalog_workspace_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+                "--secret",
+                "metadata-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication metadata bundle to" in captured.out
+
+    verified = verify_signed_publication_metadata_manifest(
+        output_dir / "publication_metadata_manifest.json",
+        verifier=make_hmac_sha256_verifier({"metadata-key": "metadata-secret"}),
+    )
+    assert verified["artifact_kind"] == "publication-catalog-workspace"
+
+
+def test_cli_publish_stable_publication_metadata_bundle(tmp_path, capsys):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    output_dir = tmp_path / "stable_publication_metadata_bundle"
+
+    assert (
+        main(
+            [
+                "publish-stable-publication-metadata-bundle",
+                str(stable_catalog_workspace_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+                "--secret",
+                "metadata-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication metadata bundle to" in captured.out
+
+    verified = verify_signed_publication_metadata_manifest(
+        output_dir / "publication_metadata_manifest.json",
+        verifier=make_hmac_sha256_verifier({"metadata-key": "metadata-secret"}),
+    )
+    assert verified["artifact_kind"] == "publication-catalog-workspace"
 
 
 def test_cli_bootstrap_publication_metadata_bundle(tmp_path, capsys):
@@ -14517,6 +14744,134 @@ def test_cli_build_stable_publication_metadata_catalog_manifest_rejects_non_stab
                 "catalog-secret",
             ]
         )
+
+
+def test_cli_publish_publication_metadata_catalog(tmp_path, capsys):
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    output_dir = tmp_path / "publication_metadata_catalog_publication"
+
+    assert (
+        main(
+            [
+                "publish-publication-metadata-catalog",
+                "--discover-under",
+                str(tmp_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "network",
+                "--label",
+                "Published Metadata Catalog",
+                "--published-at",
+                "2026-07-09T04:00:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["index"]["label"] == "Published Metadata Catalog"
+
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert verified["bundle_count"] == 2
+    assert verified["index"] == catalog["index"]
+
+
+def test_cli_publish_machine_publication_metadata_catalog(tmp_path, capsys):
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(tmp_path)
+    output_dir = tmp_path / "machine_publication_metadata_catalog_publication"
+
+    assert (
+        main(
+            [
+                "publish-machine-publication-metadata-catalog",
+                str(workspace_bundle_dir),
+                str(catalog_bundle_dir),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Published Machine Metadata Catalog",
+                "--published-at",
+                "2026-07-14T05:10:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert verified["bundle_count"] == 2
+
+
+def test_cli_publish_stable_publication_metadata_catalog(tmp_path, capsys):
+    workspace_bundle_dir, catalog_bundle_dir = make_stable_publication_metadata_bundle_dirs(tmp_path)
+    output_dir = tmp_path / "stable_publication_metadata_catalog_publication"
+
+    assert (
+        main(
+            [
+                "publish-stable-publication-metadata-catalog",
+                str(workspace_bundle_dir),
+                str(catalog_bundle_dir),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Published Stable Metadata Catalog",
+                "--published-at",
+                "2026-07-15T05:10:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication metadata catalog to" in captured.out
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert verified["bundle_count"] == 2
 
 
 def test_cli_bootstrap_publication_metadata_catalog_publication(tmp_path, capsys):
@@ -15374,6 +15729,146 @@ def test_cli_build_stable_publication_registry_manifest_rejects_non_stable_regis
                 "registry-secret",
             ]
         )
+
+
+def test_cli_publish_publication_registry(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "publication_registry_publication"
+
+    assert (
+        main(
+            [
+                "publish-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "network",
+                "--label",
+                "Published Publication Registry",
+                "--published-at",
+                "2026-07-09T05:00:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+                "--secret",
+                "registry-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Published Publication Registry"
+
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier({"registry-key": "registry-secret"}),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"] == registry["index"]
+
+
+def test_cli_publish_machine_publication_registry(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "machine_publication_registry_publication"
+
+    assert (
+        main(
+            [
+                "publish-machine-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Published Machine Publication Registry",
+                "--published-at",
+                "2026-07-14T06:10:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+                "--secret",
+                "registry-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier({"registry-key": "registry-secret"}),
+    )
+    assert verified["component_count"] == 3
+
+
+def test_cli_publish_stable_publication_registry(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_stable_publication_registry_component_dirs(tmp_path)
+    output_dir = tmp_path / "stable_publication_registry_publication"
+
+    assert (
+        main(
+            [
+                "publish-stable-publication-registry",
+                "--release-catalog-index-dir",
+                str(release_catalog_index_dir),
+                "--publication-descriptor-index-dir",
+                str(descriptor_index_dir),
+                "--publication-metadata-catalog-dir",
+                str(metadata_catalog_dir),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Published Stable Publication Registry",
+                "--published-at",
+                "2026-07-15T06:10:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+                "--secret",
+                "registry-secret",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 publication registry to" in captured.out
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier({"registry-key": "registry-secret"}),
+    )
+    assert verified["component_count"] == 3
 
 
 def test_cli_bootstrap_publication_registry_publication(tmp_path, capsys):
