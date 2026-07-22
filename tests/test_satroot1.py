@@ -12147,6 +12147,80 @@ def test_cli_bootstrap_publication_catalog_workspace_from_exported_preset_round_
     capsys.readouterr()
 
 
+def test_cli_export_publication_catalog_workspace_preset_preserves_collection_source(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    collection_dir = tmp_path / "publication_metadata_bundle_collection"
+    workspace_dir = tmp_path / "publication_catalog_workspace_from_collection"
+    preset_path = tmp_path / "exported_collection_backed_catalog_workspace.json"
+    roundtrip_dir = tmp_path / "publication_catalog_workspace_from_exported_collection_preset"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            "--publication-metadata-bundle-collection-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(workspace_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert main(["export-publication-catalog-workspace-preset", str(workspace_dir), "--output", str(preset_path)]) == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_catalog_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET"
+    assert "artifact_paths" not in preset
+    assert preset["publication_metadata_bundle_collection_dir"] == str(collection_dir.relative_to(tmp_path))
+    assert loaded["publication_metadata_bundle_collection_dir"] == str(collection_dir.resolve())
+
+    assert main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(roundtrip_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_metadata_bundle_collection_dir"] == str(collection_dir.resolve())
+    assert main(["publication-catalog-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_catalog_workspace_from_publication_metadata_bundle_collection(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     collection_dir = tmp_path / "publication_metadata_bundle_collection"

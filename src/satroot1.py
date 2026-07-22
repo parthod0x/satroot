@@ -12264,13 +12264,23 @@ def export_publication_catalog_workspace_preset_from_workspace(
         "version": "0.1",
     }
 
-    artifact_paths = [
-        _relative_output_path(Path(value).resolve(), base_dir=base_dir)
-        for value in summary.get("artifact_paths", [])
-        if isinstance(value, str) and value.strip()
-    ]
-    if artifact_paths:
-        preset["artifact_paths"] = artifact_paths
+    source_publication_metadata_bundle_collection_dir = summary.get("source_publication_metadata_bundle_collection_dir")
+    if (
+        isinstance(source_publication_metadata_bundle_collection_dir, str)
+        and source_publication_metadata_bundle_collection_dir.strip()
+    ):
+        preset["publication_metadata_bundle_collection_dir"] = _relative_output_path(
+            Path(source_publication_metadata_bundle_collection_dir).resolve(),
+            base_dir=base_dir,
+        )
+    else:
+        artifact_paths = [
+            _relative_output_path(Path(value).resolve(), base_dir=base_dir)
+            for value in summary.get("artifact_paths", [])
+            if isinstance(value, str) and value.strip()
+        ]
+        if artifact_paths:
+            preset["artifact_paths"] = artifact_paths
 
     component_dirs = _resolve_publication_catalog_workspace_component_dirs(workspace_path)
     if publication_descriptor_index_preset_path is not None:
