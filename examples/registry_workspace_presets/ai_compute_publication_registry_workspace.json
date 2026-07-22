@@ -1,6 +1,8 @@
 {
   "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
   "version": "0.1",
+  "publication_catalog_workspace_preset": "../publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json",
+  "publication_registry_preset": "../registry_presets/ai_compute_publication_registry.json",
   "publication_network_dir": "../generated_publication_network",
   "publication_descriptor_index": {
     "channel": "network",

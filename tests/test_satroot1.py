@@ -1969,12 +1969,56 @@ def test_load_publication_registry_workspace_preset_example():
     )
     assert preset["publication_network_dir"] == str((ROOT / "examples" / "generated_publication_network").resolve())
     assert preset["release_catalog_index_dir"] is None
+    assert preset["publication_catalog_workspace_preset_path"] == str(
+        (ROOT / "examples" / "publication_catalog_workspace_presets" / "ai_compute_publication_catalog_workspace.json").resolve()
+    )
+    assert preset["publication_registry_preset_path"] == str(
+        (ROOT / "examples" / "registry_presets" / "ai_compute_publication_registry.json").resolve()
+    )
     assert preset["artifact_paths"] == []
     assert preset["discover_under"] == []
     assert preset["recursive"] is True
     assert preset["descriptor_index_metadata"]["label"] == "SATROOT AI Compute Workspace Descriptor Index"
     assert preset["publication_metadata_catalog_metadata"]["label"] == "SATROOT AI Compute Workspace Metadata Catalog"
     assert preset["publication_registry_metadata"]["label"] == "SATROOT AI Compute Workspace Publication Registry"
+
+
+def test_load_machine_publication_registry_workspace_preset_example():
+    preset = load_machine_publication_registry_workspace_preset(
+        ROOT / "examples" / "registry_workspace_presets" / "machine_compute_publication_registry_workspace.json"
+    )
+    assert preset["publication_network_dir"] is None
+    assert preset["release_catalog_index_dir"] == str(
+        (ROOT / "examples" / "generated_machine_publication_network" / "release_catalog_index").resolve()
+    )
+    assert preset["publication_catalog_workspace_preset_path"] == str(
+        (ROOT / "examples" / "publication_catalog_workspace_presets" / "machine_compute_publication_catalog_workspace.json").resolve()
+    )
+    assert preset["publication_registry_preset_path"] == str(
+        (ROOT / "examples" / "registry_presets" / "machine_compute_publication_registry.json").resolve()
+    )
+    assert preset["descriptor_index_metadata"]["label"] == "SATROOT Machine Compute Workspace Descriptor Index"
+    assert preset["publication_metadata_catalog_metadata"]["label"] == "SATROOT Machine Compute Workspace Metadata Catalog"
+    assert preset["publication_registry_metadata"]["label"] == "SATROOT Machine Compute Workspace Publication Registry"
+
+
+def test_load_stable_publication_registry_workspace_preset_example():
+    preset = load_stable_publication_registry_workspace_preset(
+        ROOT / "examples" / "registry_workspace_presets" / "stable_reference_publication_registry_workspace.json"
+    )
+    assert preset["publication_network_dir"] is None
+    assert preset["release_catalog_index_dir"] == str(
+        (ROOT / "examples" / "generated_stable_publication_network" / "release_catalog_index").resolve()
+    )
+    assert preset["publication_catalog_workspace_preset_path"] == str(
+        (ROOT / "examples" / "publication_catalog_workspace_presets" / "stable_reference_publication_catalog_workspace.json").resolve()
+    )
+    assert preset["publication_registry_preset_path"] == str(
+        (ROOT / "examples" / "registry_presets" / "stable_reference_publication_registry.json").resolve()
+    )
+    assert preset["descriptor_index_metadata"]["label"] == "SATROOT Stable Reference Workspace Descriptor Index"
+    assert preset["publication_metadata_catalog_metadata"]["label"] == "SATROOT Stable Reference Workspace Metadata Catalog"
+    assert preset["publication_registry_metadata"]["label"] == "SATROOT Stable Reference Workspace Publication Registry"
 
 
 def test_load_publication_catalog_workspace_preset_example():
@@ -1984,8 +2028,48 @@ def test_load_publication_catalog_workspace_preset_example():
     assert preset["artifact_paths"] == []
     assert preset["discover_under"] == [str((ROOT / "examples" / "generated_publication_network").resolve())]
     assert preset["recursive"] is True
+    assert preset["publication_descriptor_index_preset_path"] == str(
+        (ROOT / "examples" / "publication_descriptor_index_presets" / "ai_compute_publication_descriptor_index.json").resolve()
+    )
+    assert preset["publication_metadata_catalog_preset_path"] == str(
+        (ROOT / "examples" / "publication_metadata_catalog_presets" / "ai_compute_publication_metadata_catalog.json").resolve()
+    )
     assert preset["descriptor_index_metadata"]["label"] == "SATROOT AI Compute Workspace Descriptor Index"
     assert preset["publication_metadata_catalog_metadata"]["label"] == "SATROOT AI Compute Workspace Metadata Catalog"
+
+
+def test_load_machine_publication_catalog_workspace_preset_example():
+    preset = load_machine_publication_catalog_workspace_preset(
+        ROOT / "examples" / "publication_catalog_workspace_presets" / "machine_compute_publication_catalog_workspace.json"
+    )
+    assert preset["artifact_paths"] == []
+    assert preset["discover_under"] == [str((ROOT / "examples" / "generated_machine_publication_network").resolve())]
+    assert preset["recursive"] is True
+    assert preset["publication_descriptor_index_preset_path"] == str(
+        (ROOT / "examples" / "publication_descriptor_index_presets" / "machine_compute_publication_descriptor_index.json").resolve()
+    )
+    assert preset["publication_metadata_catalog_preset_path"] == str(
+        (ROOT / "examples" / "publication_metadata_catalog_presets" / "machine_compute_publication_metadata_catalog.json").resolve()
+    )
+    assert preset["descriptor_index_metadata"]["label"] == "SATROOT Machine Compute Workspace Descriptor Index"
+    assert preset["publication_metadata_catalog_metadata"]["label"] == "SATROOT Machine Compute Workspace Metadata Catalog"
+
+
+def test_load_stable_publication_catalog_workspace_preset_example():
+    preset = load_stable_publication_catalog_workspace_preset(
+        ROOT / "examples" / "publication_catalog_workspace_presets" / "stable_reference_publication_catalog_workspace.json"
+    )
+    assert preset["artifact_paths"] == []
+    assert preset["discover_under"] == [str((ROOT / "examples" / "generated_stable_publication_network").resolve())]
+    assert preset["recursive"] is True
+    assert preset["publication_descriptor_index_preset_path"] == str(
+        (ROOT / "examples" / "publication_descriptor_index_presets" / "stable_reference_publication_descriptor_index.json").resolve()
+    )
+    assert preset["publication_metadata_catalog_preset_path"] == str(
+        (ROOT / "examples" / "publication_metadata_catalog_presets" / "stable_reference_publication_metadata_catalog.json").resolve()
+    )
+    assert preset["descriptor_index_metadata"]["label"] == "SATROOT Stable Reference Workspace Descriptor Index"
+    assert preset["publication_metadata_catalog_metadata"]["label"] == "SATROOT Stable Reference Workspace Metadata Catalog"
 
 
 def test_load_publication_metadata_catalog_preset_example():

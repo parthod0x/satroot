@@ -1,6 +1,8 @@
 {
   "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
   "version": "0.1",
+  "publication_descriptor_index_preset": "../publication_descriptor_index_presets/stable_reference_publication_descriptor_index.json",
+  "publication_metadata_catalog_preset": "../publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog.json",
   "discover_under": [
     "../generated_stable_publication_network"
   ],

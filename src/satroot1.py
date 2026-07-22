@@ -1560,9 +1560,15 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
     publication_network_dir = resolve_optional_path("publication_network_dir")
     release_catalog_index_dir = resolve_optional_path("release_catalog_index_dir")
     publication_registry_preset_path = resolve_optional_path("publication_registry_preset")
-    if not artifact_paths and not discover_under and publication_catalog_workspace_dir is None and publication_network_dir is None:
+    if (
+        not artifact_paths
+        and not discover_under
+        and publication_catalog_workspace_dir is None
+        and publication_catalog_workspace_preset_path is None
+        and publication_network_dir is None
+    ):
         raise SatRootError(
-            "publication registry workspace preset must contain artifact_paths, discover_under, publication_catalog_workspace_dir, or publication_network_dir"
+            "publication registry workspace preset must contain artifact_paths, discover_under, publication_catalog_workspace_dir, publication_catalog_workspace_preset, or publication_network_dir"
         )
     if release_catalog_index_dir is None and publication_network_dir is None:
         raise SatRootError(
