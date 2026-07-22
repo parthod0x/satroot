@@ -14148,8 +14148,14 @@ def bootstrap_publication_metadata_bundle_collection(
     output_dir: str | Path,
     signature_scheme: str,
     key_id: str,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
 ) -> Dict[str, Any]:
-    resolved_artifact_paths = resolve_satroot_artifact_inputs(artifact_paths)
+    resolved_artifact_paths = resolve_satroot_artifact_inputs(
+        artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
     output_path = Path(output_dir).resolve()
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -14179,10 +14185,81 @@ def bootstrap_publication_metadata_bundle_collection(
             }
         )
 
-    return {
+    summary = {
+        "signature_scheme": signature_scheme,
+        "artifact_count": len(resolved_artifact_paths),
+        "artifact_paths": resolved_artifact_paths,
+        "bundle_count": len(bundles),
         "bundle_dirs": bundle_dirs,
         "bundles": bundles,
     }
+    summary_path = output_path / "summary.json"
+    _write_json_file(summary_path, summary)
+
+    return {
+        "bundle_dirs": bundle_dirs,
+        "bundles": bundles,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
+def bootstrap_machine_publication_metadata_bundle_collection(
+    artifact_paths: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_artifact_paths = resolve_satroot_artifact_inputs(
+        artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    for artifact_path in resolved_artifact_paths:
+        _require_machine_satroot_artifact_path(
+            artifact_path,
+            label="machine publication metadata bundle collection source artifact",
+        )
+    return bootstrap_publication_metadata_bundle_collection(
+        resolved_artifact_paths,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        discover_under=None,
+        recursive=True,
+    )
+
+
+def bootstrap_stable_publication_metadata_bundle_collection(
+    artifact_paths: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_artifact_paths = resolve_satroot_artifact_inputs(
+        artifact_paths,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    for artifact_path in resolved_artifact_paths:
+        _require_stable_satroot_artifact_path(
+            artifact_path,
+            label="stable publication metadata bundle collection source artifact",
+        )
+    return bootstrap_publication_metadata_bundle_collection(
+        resolved_artifact_paths,
+        output_dir=output_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        discover_under=None,
+        recursive=True,
+    )
 
 
 def discover_publication_metadata_bundle_dirs(
@@ -17293,6 +17370,33 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_metadata_bundle_parser.add_argument("--output-dir", required=True, help="Directory where publication_report.md, publication_descriptor.json, and publication_metadata_manifest.json will be written")
     bootstrap_machine_publication_metadata_bundle_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_machine_publication_metadata_bundle_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata manifest")
+
+    bootstrap_publication_metadata_bundle_collection_parser = subparsers.add_parser("bootstrap-publication-metadata-bundle-collection", help="Generate signing material and write a ready-to-verify collection of SATROOT publication metadata bundle directories")
+    bootstrap_publication_metadata_bundle_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as publication metadata bundle collection sources")
+    bootstrap_publication_metadata_bundle_collection_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory")
+    bootstrap_publication_metadata_bundle_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
+    bootstrap_publication_metadata_bundle_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    bootstrap_publication_metadata_bundle_collection_parser.add_argument("--output-dir", required=True, help="Directory where nested publication metadata bundle directories and collection summary.json will be written")
+    bootstrap_publication_metadata_bundle_collection_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_publication_metadata_bundle_collection_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata manifests")
+
+    bootstrap_machine_publication_metadata_bundle_collection_parser = subparsers.add_parser("bootstrap-machine-publication-metadata-bundle-collection", help="Generate signing material and write a ready-to-verify machine-only collection of SATROOT publication metadata bundle directories")
+    bootstrap_machine_publication_metadata_bundle_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as machine publication metadata bundle collection sources")
+    bootstrap_machine_publication_metadata_bundle_collection_parser.add_argument("path", nargs="*", help="Path to a machine-only SATROOT artifact file or directory")
+    bootstrap_machine_publication_metadata_bundle_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested machine-only SATROOT artifacts; may be repeated")
+    bootstrap_machine_publication_metadata_bundle_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    bootstrap_machine_publication_metadata_bundle_collection_parser.add_argument("--output-dir", required=True, help="Directory where nested machine publication metadata bundle directories and collection summary.json will be written")
+    bootstrap_machine_publication_metadata_bundle_collection_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_machine_publication_metadata_bundle_collection_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata manifests")
+
+    bootstrap_stable_publication_metadata_bundle_collection_parser = subparsers.add_parser("bootstrap-stable-publication-metadata-bundle-collection", help="Generate signing material and write a ready-to-verify stable-only collection of SATROOT publication metadata bundle directories")
+    bootstrap_stable_publication_metadata_bundle_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added as stable publication metadata bundle collection sources")
+    bootstrap_stable_publication_metadata_bundle_collection_parser.add_argument("path", nargs="*", help="Path to a stable-only SATROOT artifact file or directory")
+    bootstrap_stable_publication_metadata_bundle_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested stable-only SATROOT artifacts; may be repeated")
+    bootstrap_stable_publication_metadata_bundle_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering artifacts")
+    bootstrap_stable_publication_metadata_bundle_collection_parser.add_argument("--output-dir", required=True, help="Directory where nested stable publication metadata bundle directories and collection summary.json will be written")
+    bootstrap_stable_publication_metadata_bundle_collection_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
+    bootstrap_stable_publication_metadata_bundle_collection_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the publication metadata manifests")
 
     bootstrap_publication_metadata_catalog_publication_parser = subparsers.add_parser("bootstrap-publication-metadata-catalog-publication", help="Generate signing material and write a ready-to-verify SATROOT publication metadata catalog directory")
     bootstrap_publication_metadata_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT publication metadata catalog preset JSON file with bundle paths, discovery roots, and catalog metadata defaults")
@@ -21716,6 +21820,45 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             key_id=args.key_id,
         )
         print(f"wrote bootstrapped SATROOT-MACHINE-1 publication metadata bundle to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-publication-metadata-bundle-collection":
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        bootstrap_publication_metadata_bundle_collection(
+            [*inventory_artifact_paths, *args.path],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote bootstrapped SATROOT publication metadata bundle collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-machine-publication-metadata-bundle-collection":
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        bootstrap_machine_publication_metadata_bundle_collection(
+            [*inventory_artifact_paths, *args.path],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote bootstrapped SATROOT-MACHINE-1 publication metadata bundle collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-stable-publication-metadata-bundle-collection":
+        inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        bootstrap_stable_publication_metadata_bundle_collection(
+            [*inventory_artifact_paths, *args.path],
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote bootstrapped SATROOT-STABLE-1 publication metadata bundle collection to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-publication-metadata-catalog-publication":

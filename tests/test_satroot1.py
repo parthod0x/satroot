@@ -16645,6 +16645,172 @@ def test_cli_bootstrap_stable_publication_metadata_bundle_rejects_non_stable_art
         )
 
 
+def test_cli_bootstrap_publication_metadata_bundle_collection(tmp_path, capsys):
+    release_dir, _machine_release_dir = make_demo_release_dirs(tmp_path)
+    network_root = tmp_path / "network_root"
+    network_root.mkdir()
+    network_dir = make_demo_publication_network_dir(network_root)
+    output_dir = tmp_path / "publication_metadata_bundle_collection"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            release_dir,
+            str(network_dir),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT publication metadata bundle collection to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["signature_scheme"] == "hmac-sha256"
+    assert summary["artifact_count"] == 2
+    assert summary["bundle_count"] == 2
+    assert {entry["artifact_kind"] for entry in summary["bundles"]} == {"release", "publication-network"}
+    assert set(summary["artifact_paths"]) == {str(Path(release_dir).resolve()), str(Path(network_dir).resolve())}
+    assert len(summary["bundle_dirs"]) == 2
+    for bundle_dir in summary["bundle_dirs"]:
+        bundle_path = Path(bundle_dir)
+        assert bundle_path.is_dir()
+        secrets = json.loads((bundle_path / "publication_metadata_secrets.json").read_text(encoding="utf-8"))
+        verified = verify_signed_publication_metadata_manifest(
+            bundle_path / "publication_metadata_manifest.json",
+            verifier=make_hmac_sha256_verifier(secrets),
+        )
+        assert verified["artifact_kind"] in {"release", "publication-network"}
+
+
+def test_cli_bootstrap_publication_metadata_bundle_collection_with_inventory_json(tmp_path, capsys):
+    source_root = tmp_path / "bundle_collection_sources"
+    release_dir, _machine_release_dir = make_demo_release_dirs(source_root)
+    network_root = source_root / "network_root"
+    network_root.mkdir(parents=True, exist_ok=True)
+    network_dir = make_demo_publication_network_dir(network_root)
+    inventory_path = tmp_path / "publication_metadata_bundle_collection_inventory.json"
+    output_dir = tmp_path / "publication_metadata_bundle_collection_inventory"
+
+    write_inventory_json_from_cli(inventory_path, release_dir, network_dir, capsys=capsys)
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            "--inventory-json",
+            str(inventory_path),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] >= 2
+    assert summary["bundle_count"] == summary["artifact_count"]
+    assert {"release", "publication-network"}.issubset({entry["artifact_kind"] for entry in summary["bundles"]})
+
+
+def test_cli_bootstrap_machine_publication_metadata_bundle_collection(tmp_path, capsys):
+    machine_catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path / "machine_sources")
+    catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path / "machine_catalogs")
+    output_dir = tmp_path / "machine_publication_metadata_bundle_collection"
+
+    assert main(
+        [
+            "bootstrap-machine-publication-metadata-bundle-collection",
+            str(machine_catalog_workspace_dir),
+            str(catalog_alpha_dir),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 publication metadata bundle collection to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 2
+    assert summary["bundle_count"] == 2
+    assert {entry["artifact_kind"] for entry in summary["bundles"]} == {"publication-catalog-workspace", "release-catalog"}
+
+
+def test_cli_bootstrap_machine_publication_metadata_bundle_collection_rejects_non_machine_artifact(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "machine_publication_metadata_bundle_collection"
+
+    with pytest.raises(SatRootError, match="SATROOT-MACHINE-1|machine"):
+        main(
+            [
+                "bootstrap-machine-publication-metadata-bundle-collection",
+                str(network_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+            ]
+        )
+
+
+def test_cli_bootstrap_stable_publication_metadata_bundle_collection(tmp_path, capsys):
+    stable_catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path / "stable_sources")
+    output_dir = tmp_path / "stable_publication_metadata_bundle_collection"
+
+    assert main(
+        [
+            "bootstrap-stable-publication-metadata-bundle-collection",
+            str(stable_catalog_workspace_dir),
+            str(stable_catalog_workspace_dir / "stable_catalog_workspace"),
+            "--output-dir",
+            str(output_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 publication metadata bundle collection to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 2
+    assert summary["bundle_count"] == 2
+    assert {entry["artifact_kind"] for entry in summary["bundles"]} == {"publication-catalog-workspace", "demo-catalog"}
+
+
+def test_cli_bootstrap_stable_publication_metadata_bundle_collection_rejects_non_stable_artifact(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    output_dir = tmp_path / "stable_publication_metadata_bundle_collection"
+
+    with pytest.raises(SatRootError, match="SATROOT-STABLE-1|stable"):
+        main(
+            [
+                "bootstrap-stable-publication-metadata-bundle-collection",
+                str(network_dir),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "metadata-key",
+            ]
+        )
+
+
 def test_cli_validate_and_verify_publication_metadata_manifest(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_metadata_bundle"
