@@ -5629,6 +5629,46 @@ def test_cli_bootstrap_publication_stack_with_stack_preset_json(tmp_path, capsys
     assert {entry["symbol"] for entry in identity_summary["bundles"]} == {"STKID1"}
 
 
+def test_cli_bootstrap_publication_stack_with_example_preset_tree(tmp_path, capsys):
+    staged = stage_example_json_tree(
+        tmp_path,
+        "stack_presets/ai_compute_publication_stack.json",
+        "catalog_presets/ai_compute_catalog.json",
+    )
+    output_dir = tmp_path / "publication_stack_example_preset_tree"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-stack",
+            "--stack-preset-json",
+            str(staged["stack_presets/ai_compute_publication_stack.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT AI Compute Example Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["stack_preset_path"] == str(staged["stack_presets/ai_compute_publication_stack.json"].resolve())
+    assert summary["release_catalog"]["catalog"]["label"] == "SATROOT AI Compute Example Stack Override"
+    catalog_summary = json.loads(
+        (output_dir / "catalog_workspaces" / "ai_compute_catalog" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert catalog_summary["bundle_count"] == 3
+    assert {entry["symbol"] for entry in catalog_summary["bundles"]} == {"EURSET1", "AICORE1", "OPSID1"}
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_machine_publication_stack_from_presets(tmp_path, capsys):
     catalog_preset_a = tmp_path / "machine_catalog_a.json"
     write_json(
@@ -5786,6 +5826,46 @@ def test_cli_bootstrap_machine_publication_stack_with_stack_preset_json(tmp_path
     assert {entry["symbol"] for entry in nested_summary["bundles"]} == {"MSTKP1"}
 
 
+def test_cli_bootstrap_machine_publication_stack_with_example_preset_tree(tmp_path, capsys):
+    staged = stage_example_json_tree(
+        tmp_path,
+        "stack_presets/machine_compute_publication_stack.json",
+        "catalog_presets/machine_compute_catalog.json",
+    )
+    output_dir = tmp_path / "machine_publication_stack_example_preset_tree"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-stack",
+            "--stack-preset-json",
+            str(staged["stack_presets/machine_compute_publication_stack.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Machine Example Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["stack_preset_path"] == str(staged["stack_presets/machine_compute_publication_stack.json"].resolve())
+    assert summary["release_catalog"]["catalog"]["label"] == "SATROOT Machine Example Stack Override"
+    catalog_summary = json.loads(
+        (output_dir / "catalog_workspaces" / "machine_compute_catalog" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert catalog_summary["bundle_count"] == 1
+    assert {entry["symbol"] for entry in catalog_summary["bundles"]} == {"AICOREM1"}
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_stable_publication_stack_from_presets(tmp_path, capsys):
     catalog_preset_a = tmp_path / "stable_catalog_a.json"
     write_json(
@@ -5941,6 +6021,46 @@ def test_cli_bootstrap_stable_publication_stack_with_stack_preset_json(tmp_path,
     assert summary["release_catalog"]["catalog"]["label"] == "Embedded Stable Stack Override"
     nested_summary = json.loads((output_dir / "catalog_workspaces" / "stable_catalog" / "summary.json").read_text(encoding="utf-8"))
     assert {entry["symbol"] for entry in nested_summary["bundles"]} == {"SSTKP1"}
+
+
+def test_cli_bootstrap_stable_publication_stack_with_example_preset_tree(tmp_path, capsys):
+    staged = stage_example_json_tree(
+        tmp_path,
+        "stack_presets/stable_reference_publication_stack.json",
+        "catalog_presets/stable_reference_catalog.json",
+    )
+    output_dir = tmp_path / "stable_publication_stack_example_preset_tree"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-stack",
+            "--stack-preset-json",
+            str(staged["stack_presets/stable_reference_publication_stack.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Stable Example Stack Override",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 1
+    assert summary["stack_preset_path"] == str(staged["stack_presets/stable_reference_publication_stack.json"].resolve())
+    assert summary["release_catalog"]["catalog"]["label"] == "SATROOT Stable Example Stack Override"
+    catalog_summary = json.loads(
+        (output_dir / "catalog_workspaces" / "stable_reference_catalog" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert catalog_summary["bundle_count"] == 1
+    assert {entry["symbol"] for entry in catalog_summary["bundles"]} == {"SETTLEUR1"}
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_bootstrap_publication_network_from_presets(tmp_path, capsys):
@@ -6151,6 +6271,59 @@ def test_cli_bootstrap_publication_network_with_network_preset_json(tmp_path, ca
     assert {entry["symbol"] for entry in json.loads((output_dir / "stack_workspaces" / "stack_single" / "catalog_workspaces" / "identity_catalog" / "summary.json").read_text(encoding="utf-8"))["bundles"]} == {"NETID1"}
 
 
+def test_cli_bootstrap_publication_network_with_example_preset_tree(tmp_path, capsys):
+    staged = stage_example_json_tree(
+        tmp_path,
+        "network_presets/ai_compute_publication_network.json",
+        "stack_presets/ai_compute_publication_stack.json",
+        "catalog_presets/ai_compute_catalog.json",
+    )
+    output_dir = tmp_path / "publication_network_example_preset_tree"
+
+    exit_code = main(
+        [
+            "bootstrap-publication-network",
+            "--network-preset-json",
+            str(staged["network_presets/ai_compute_publication_network.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT AI Compute Example Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["network_preset_path"] == str(staged["network_presets/ai_compute_publication_network.json"].resolve())
+    assert summary["release_catalog_index"]["index"]["label"] == "SATROOT AI Compute Example Network Override"
+    stack_summary = json.loads(
+        (output_dir / "stack_workspaces" / "ai_compute_publication_stack" / "summary.json").read_text(encoding="utf-8")
+    )
+    catalog_summary = json.loads(
+        (
+            output_dir
+            / "stack_workspaces"
+            / "ai_compute_publication_stack"
+            / "catalog_workspaces"
+            / "ai_compute_catalog"
+            / "summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert stack_summary["workspace_count"] == 1
+    assert {entry["symbol"] for entry in catalog_summary["bundles"]} == {"EURSET1", "AICORE1", "OPSID1"}
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_machine_publication_network_from_presets(tmp_path, capsys):
     machine_catalog_preset_a = tmp_path / "machine_catalog_a.json"
     write_json(
@@ -6354,6 +6527,56 @@ def test_cli_bootstrap_machine_publication_network_with_network_preset_json(tmp_
     assert summary["workspaces"][0]["workspace_name"] == "machine_stack_single"
 
 
+def test_cli_bootstrap_machine_publication_network_with_example_preset_tree(tmp_path, capsys):
+    staged = stage_example_json_tree(
+        tmp_path,
+        "network_presets/machine_compute_publication_network.json",
+        "stack_presets/machine_compute_publication_stack.json",
+        "catalog_presets/machine_compute_catalog.json",
+    )
+    output_dir = tmp_path / "machine_publication_network_example_preset_tree"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(staged["network_presets/machine_compute_publication_network.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Machine Example Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["network_preset_path"] == str(staged["network_presets/machine_compute_publication_network.json"].resolve())
+    assert summary["release_catalog_index"]["index"]["label"] == "SATROOT Machine Example Network Override"
+    catalog_summary = json.loads(
+        (
+            output_dir
+            / "stack_workspaces"
+            / "machine_compute_publication_stack"
+            / "catalog_workspaces"
+            / "machine_compute_catalog"
+            / "summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert catalog_summary["bundle_count"] == 1
+    assert {entry["symbol"] for entry in catalog_summary["bundles"]} == {"AICOREM1"}
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_stable_publication_network_from_presets(tmp_path, capsys):
     stable_catalog_preset_a = tmp_path / "stable_catalog_a.json"
     write_json(
@@ -6555,6 +6778,56 @@ def test_cli_bootstrap_stable_publication_network_with_network_preset_json(tmp_p
     assert summary["release_catalog_index"]["index"]["channel"] == "mesh"
     assert summary["release_catalog_index"]["index"]["label"] == "Embedded Stable Network Override"
     assert summary["workspaces"][0]["workspace_name"] == "stable_stack_single"
+
+
+def test_cli_bootstrap_stable_publication_network_with_example_preset_tree(tmp_path, capsys):
+    staged = stage_example_json_tree(
+        tmp_path,
+        "network_presets/stable_reference_publication_network.json",
+        "stack_presets/stable_reference_publication_stack.json",
+        "catalog_presets/stable_reference_catalog.json",
+    )
+    output_dir = tmp_path / "stable_publication_network_example_preset_tree"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(staged["network_presets/stable_reference_publication_network.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            "SATROOT Stable Example Network Override",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 1
+    assert summary["network_preset_path"] == str(staged["network_presets/stable_reference_publication_network.json"].resolve())
+    assert summary["release_catalog_index"]["index"]["label"] == "SATROOT Stable Example Network Override"
+    catalog_summary = json.loads(
+        (
+            output_dir
+            / "stack_workspaces"
+            / "stable_reference_publication_stack"
+            / "catalog_workspaces"
+            / "stable_reference_catalog"
+            / "summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert catalog_summary["bundle_count"] == 1
+    assert {entry["symbol"] for entry in catalog_summary["bundles"]} == {"SETTLEUR1"}
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 def test_cli_publish_publication_stack_from_existing_catalog_workspaces(tmp_path, capsys):
     stable_dir = tmp_path / "stable_workspace"

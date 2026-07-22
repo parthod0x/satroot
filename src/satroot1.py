@@ -922,6 +922,8 @@ def load_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(preset.get("catalog_presets"), label="publication stack preset catalog_presets")
     ]
+    for catalog_preset_path in catalog_preset_paths:
+        load_demo_catalog_preset(catalog_preset_path)
     catalog_workspace_dirs = [
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(
@@ -986,6 +988,8 @@ def load_publication_network_preset(path: str | Path) -> Dict[str, Any]:
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(preset.get("stack_presets"), label="publication network preset stack_presets")
     ]
+    for stack_preset_path in stack_preset_paths:
+        load_publication_stack_preset(stack_preset_path)
     publication_stack_dirs = [
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(
