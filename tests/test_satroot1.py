@@ -3755,6 +3755,51 @@ def test_cli_publish_machine_release_catalog_from_exported_preset_round_trip(tmp
     assert verified["release_count"] == 2
 
 
+def test_cli_publish_machine_release_catalog_with_example_preset(tmp_path, capsys):
+    release_root = tmp_path / "generated_machine_release_workspaces"
+    preset_path = stage_example_json(tmp_path, "release_catalog_presets/machine_compute_release_stack.json")
+    output_dir = tmp_path / "machine_release_catalog_example_preset"
+
+    make_machine_release_dirs(release_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-machine-release-catalog",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+                "--label",
+                "Preset Machine Release Catalog Override",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_manifest.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["channel"] == "machine"
+    assert catalog["catalog"]["label"] == "Preset Machine Release Catalog Override"
+    assert catalog["catalog"]["published_at"] == "2026-07-14T03:00:00Z"
+    assert manifest["release_count"] == 2
+    assert verified["release_count"] == 2
+    assert main(["release-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_publish_machine_release_catalog_rejects_non_machine_release(tmp_path):
     stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
     output_dir = tmp_path / "mixed_machine_release_catalog"
@@ -4561,6 +4606,51 @@ def test_cli_publish_machine_release_catalog_index_from_exported_preset_round_tr
         verifier=make_hmac_sha256_verifier({"index-key": "index-secret"}),
     )
     assert verified["release_catalog_count"] == 2
+
+
+def test_cli_publish_machine_release_catalog_index_with_example_preset(tmp_path, capsys):
+    catalog_root = tmp_path / "generated_machine_release_catalogs"
+    preset_path = stage_example_json(tmp_path, "release_catalog_index_presets/machine_compute_catalog_network.json")
+    output_dir = tmp_path / "machine_release_catalog_index_example_preset"
+
+    make_machine_release_catalog_dirs(catalog_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-machine-release-catalog-index",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+                "--label",
+                "Preset Machine Release Catalog Index Override",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_index_manifest.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"index-key": "index-secret"}),
+    )
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["channel"] == "machine"
+    assert index["index"]["label"] == "Preset Machine Release Catalog Index Override"
+    assert index["index"]["published_at"] == "2026-07-14T04:00:00Z"
+    assert manifest["release_catalog_count"] == 2
+    assert verified["release_catalog_count"] == 2
+    assert main(["release-catalog-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_publish_machine_release_catalog_index_rejects_non_machine_catalog(tmp_path):
@@ -20378,6 +20468,154 @@ def test_cli_publish_machine_release_from_exported_preset_round_trip(tmp_path):
         verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
     )
     assert summary["bundle_count"] == 2
+
+
+def test_cli_publish_machine_release_with_inventory_json(tmp_path, capsys):
+    bundle_root = tmp_path / "machine_bundles"
+    machine_bundle_alpha_dir = bundle_root / "machine_alpha_bundle"
+    machine_bundle_beta_dir = bundle_root / "machine_beta_bundle"
+    inventory_path = tmp_path / "machine_bundle_inventory.json"
+    release_dir = tmp_path / "machine_release_inventory"
+
+    assert main(
+        [
+            "bootstrap-machine-demo-bundle",
+            "--symbol",
+            "MINVPUB1",
+            "--name",
+            "Machine Inventory Publish Alpha",
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(machine_bundle_alpha_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-machine-demo-bundle",
+            "--symbol",
+            "MINVPUB2",
+            "--name",
+            "Machine Inventory Publish Beta",
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(machine_bundle_beta_dir),
+            "--service-scope",
+            "batch-jobs",
+        ]
+    ) == 0
+
+    write_inventory_json_from_cli(inventory_path, bundle_root, capsys=capsys)
+
+    assert (
+        main(
+            [
+                "publish-machine-release",
+                "--inventory-json",
+                str(inventory_path),
+                "--output-dir",
+                str(release_dir),
+                "--channel",
+                "machine",
+                "--label",
+                "Inventory Machine Release Publication",
+                "--published-at",
+                "2026-07-14T03:15:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    assert bundle_index["bundle_count"] == 2
+    assert bundle_index["release"]["label"] == "Inventory Machine Release Publication"
+    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"MINVPUB1", "MINVPUB2"}
+    assert release_manifest["bundle_count"] == 2
+    assert main(["release-lint", str(release_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_release_with_example_preset(tmp_path, capsys):
+    bundle_root = tmp_path / "generated_machine_bundle_collection"
+    machine_bundle_alpha_dir = bundle_root / "machine_alpha_bundle"
+    machine_bundle_beta_dir = bundle_root / "machine_beta_bundle"
+    preset_path = stage_example_json(tmp_path, "bundle_index_presets/machine_compute_bundle_index.json")
+    release_dir = tmp_path / "machine_release_example_preset"
+
+    assert main(
+        [
+            "bootstrap-machine-demo-bundle",
+            "--symbol",
+            "MEXREL1",
+            "--name",
+            "Machine Example Release Alpha",
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(machine_bundle_alpha_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-machine-demo-bundle",
+            "--symbol",
+            "MEXREL2",
+            "--name",
+            "Machine Example Release Beta",
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(machine_bundle_beta_dir),
+            "--service-scope",
+            "batch-jobs",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-machine-release",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(release_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+                "--label",
+                "Preset Machine Release Publication Override",
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
+    )
+    assert bundle_index["bundle_count"] == 2
+    assert bundle_index["release"]["channel"] == "machine"
+    assert bundle_index["release"]["label"] == "Preset Machine Release Publication Override"
+    assert bundle_index["release"]["published_at"] == "2026-07-14T02:00:00Z"
+    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"MEXREL1", "MEXREL2"}
+    assert release_manifest["bundle_count"] == 2
+    assert verified["bundle_count"] == 2
+    assert main(["release-lint", str(release_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_publish_machine_release_rejects_non_machine_bundle(tmp_path):
