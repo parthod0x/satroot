@@ -1591,6 +1591,12 @@ To derive a reusable preset back from a generated registry workspace:
 satroot1 export-publication-registry-workspace-preset publication_registry_workspace --output exported_registry_workspace.json
 ```
 
+That registry-workspace export can also emit nested publication-catalog-workspace and publication-registry preset files, and the nested catalog preset can in turn emit descriptor-index and metadata-catalog presets:
+
+```bash
+satroot1 export-publication-registry-workspace-preset publication_registry_workspace --publication-catalog-workspace-preset-path exported_catalog_workspace.json --publication-descriptor-index-preset-path exported_descriptor_index.json --publication-metadata-catalog-preset-path exported_metadata_catalog.json --publication-registry-preset-path exported_registry.json --output exported_registry_workspace.json
+```
+
 Published machine registry-workspace exports are a little stricter: when the original source network is not SATROOT-MACHINE-1-only, the exported machine preset falls back to `release_catalog_index_dir` instead of preserving a generic `publication_network_dir`, so the preset stays reusable by machine-only publish/bootstrap flows.
 
 For the machine-only registry lane, the matching export wrapper validates that the workspace still carries machine provenance:
@@ -1609,6 +1615,12 @@ To derive a reusable preset back from a generated publication catalog workspace:
 
 ```bash
 satroot1 export-publication-catalog-workspace-preset publication_catalog_workspace --output exported_catalog_workspace.json
+```
+
+If you want the component publications captured as reusable presets at the same time, the catalog-workspace export can also emit nested descriptor-index and metadata-catalog preset files:
+
+```bash
+satroot1 export-publication-catalog-workspace-preset publication_catalog_workspace --publication-descriptor-index-preset-path exported_descriptor_index.json --publication-metadata-catalog-preset-path exported_metadata_catalog.json --output exported_catalog_workspace.json
 ```
 
 And the machine-only publication catalog lane can be exported with the same validation guard:

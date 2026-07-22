@@ -1276,6 +1276,26 @@ def load_publication_metadata_catalog_preset(path: str | Path) -> Dict[str, Any]
     }
 
 
+def load_machine_publication_metadata_catalog_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_metadata_catalog_preset(path)
+    for publication_metadata_bundle_dir in preset.get("publication_metadata_bundle_dirs", []):
+        _require_machine_publication_metadata_bundle_publication(
+            publication_metadata_bundle_dir,
+            label="machine publication metadata catalog preset publication metadata bundle",
+        )
+    return preset
+
+
+def load_stable_publication_metadata_catalog_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_metadata_catalog_preset(path)
+    for publication_metadata_bundle_dir in preset.get("publication_metadata_bundle_dirs", []):
+        _require_stable_publication_metadata_bundle_publication(
+            publication_metadata_bundle_dir,
+            label="stable publication metadata catalog preset publication metadata bundle",
+        )
+    return preset
+
+
 def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any]:
     preset_path = Path(path).resolve()
     preset = _load_json_object_file(str(preset_path), label="publication catalog workspace preset")
@@ -1290,6 +1310,8 @@ def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any
         "artifact_paths",
         "discover_under",
         "recursive",
+        "publication_descriptor_index_preset",
+        "publication_metadata_catalog_preset",
         "publication_descriptor_index",
         "publication_metadata_catalog",
     }
@@ -1311,6 +1333,18 @@ def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any
             label="publication catalog workspace preset discover_under",
         )
     ]
+    publication_descriptor_index_preset_path = None
+    publication_descriptor_index_preset = preset.get("publication_descriptor_index_preset")
+    if publication_descriptor_index_preset is not None:
+        if not isinstance(publication_descriptor_index_preset, str) or not publication_descriptor_index_preset.strip():
+            raise SatRootError("publication catalog workspace preset publication_descriptor_index_preset must be a non-empty string when provided")
+        publication_descriptor_index_preset_path = str((preset_path.parent / publication_descriptor_index_preset).resolve())
+    publication_metadata_catalog_preset_path = None
+    publication_metadata_catalog_preset = preset.get("publication_metadata_catalog_preset")
+    if publication_metadata_catalog_preset is not None:
+        if not isinstance(publication_metadata_catalog_preset, str) or not publication_metadata_catalog_preset.strip():
+            raise SatRootError("publication catalog workspace preset publication_metadata_catalog_preset must be a non-empty string when provided")
+        publication_metadata_catalog_preset_path = str((preset_path.parent / publication_metadata_catalog_preset).resolve())
     recursive = preset.get("recursive", True)
     if not isinstance(recursive, bool):
         raise SatRootError("publication catalog workspace preset recursive must be a boolean")
@@ -1321,9 +1355,63 @@ def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any
         "artifact_paths": artifact_paths,
         "discover_under": discover_under,
         "recursive": recursive,
+        "publication_descriptor_index_preset_path": publication_descriptor_index_preset_path,
+        "publication_metadata_catalog_preset_path": publication_metadata_catalog_preset_path,
         "descriptor_index_metadata": validate_release_metadata_mapping(preset.get("publication_descriptor_index")),
         "publication_metadata_catalog_metadata": validate_release_metadata_mapping(preset.get("publication_metadata_catalog")),
     }
+
+
+def load_machine_publication_descriptor_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_descriptor_index_preset(path)
+    for artifact_path in preset.get("artifact_paths", []):
+        _require_machine_satroot_artifact_path(
+            artifact_path,
+            label="machine publication descriptor index preset artifact",
+        )
+    return preset
+
+
+def load_stable_publication_descriptor_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_descriptor_index_preset(path)
+    for artifact_path in preset.get("artifact_paths", []):
+        _require_stable_satroot_artifact_path(
+            artifact_path,
+            label="stable publication descriptor index preset artifact",
+        )
+    return preset
+
+
+def load_machine_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_catalog_workspace_preset(path)
+    publication_descriptor_index_preset_path = preset.get("publication_descriptor_index_preset_path")
+    if publication_descriptor_index_preset_path is not None:
+        load_machine_publication_descriptor_index_preset(publication_descriptor_index_preset_path)
+    publication_metadata_catalog_preset_path = preset.get("publication_metadata_catalog_preset_path")
+    if publication_metadata_catalog_preset_path is not None:
+        load_machine_publication_metadata_catalog_preset(publication_metadata_catalog_preset_path)
+    for artifact_path in preset.get("artifact_paths", []):
+        _require_machine_satroot_artifact_path(
+            artifact_path,
+            label="machine publication catalog workspace preset artifact",
+        )
+    return preset
+
+
+def load_stable_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_catalog_workspace_preset(path)
+    publication_descriptor_index_preset_path = preset.get("publication_descriptor_index_preset_path")
+    if publication_descriptor_index_preset_path is not None:
+        load_stable_publication_descriptor_index_preset(publication_descriptor_index_preset_path)
+    publication_metadata_catalog_preset_path = preset.get("publication_metadata_catalog_preset_path")
+    if publication_metadata_catalog_preset_path is not None:
+        load_stable_publication_metadata_catalog_preset(publication_metadata_catalog_preset_path)
+    for artifact_path in preset.get("artifact_paths", []):
+        _require_stable_satroot_artifact_path(
+            artifact_path,
+            label="stable publication catalog workspace preset artifact",
+        )
+    return preset
 
 
 def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
@@ -1368,6 +1456,52 @@ def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
     }
 
 
+def load_machine_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_registry_preset(path)
+    release_catalog_index_dir = preset.get("release_catalog_index_dir")
+    if release_catalog_index_dir is not None:
+        _require_machine_release_catalog_index_publication(
+            release_catalog_index_dir,
+            label="machine publication registry preset release catalog index",
+        )
+    publication_descriptor_index_dir = preset.get("publication_descriptor_index_dir")
+    if publication_descriptor_index_dir is not None:
+        _require_machine_publication_descriptor_index_publication(
+            publication_descriptor_index_dir,
+            label="machine publication registry preset publication descriptor index",
+        )
+    publication_metadata_catalog_dir = preset.get("publication_metadata_catalog_dir")
+    if publication_metadata_catalog_dir is not None:
+        _require_machine_publication_metadata_catalog_publication(
+            publication_metadata_catalog_dir,
+            label="machine publication registry preset publication metadata catalog",
+        )
+    return preset
+
+
+def load_stable_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_registry_preset(path)
+    release_catalog_index_dir = preset.get("release_catalog_index_dir")
+    if release_catalog_index_dir is not None:
+        _require_stable_release_catalog_index_publication(
+            release_catalog_index_dir,
+            label="stable publication registry preset release catalog index",
+        )
+    publication_descriptor_index_dir = preset.get("publication_descriptor_index_dir")
+    if publication_descriptor_index_dir is not None:
+        _require_stable_publication_descriptor_index_publication(
+            publication_descriptor_index_dir,
+            label="stable publication registry preset publication descriptor index",
+        )
+    publication_metadata_catalog_dir = preset.get("publication_metadata_catalog_dir")
+    if publication_metadata_catalog_dir is not None:
+        _require_stable_publication_metadata_catalog_publication(
+            publication_metadata_catalog_dir,
+            label="stable publication registry preset publication metadata catalog",
+        )
+    return preset
+
+
 def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, Any]:
     preset_path = Path(path).resolve()
     preset = _load_json_object_file(str(preset_path), label="publication registry workspace preset")
@@ -1383,8 +1517,10 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
         "discover_under",
         "recursive",
         "publication_catalog_workspace_dir",
+        "publication_catalog_workspace_preset",
         "publication_network_dir",
         "release_catalog_index_dir",
+        "publication_registry_preset",
         "publication_descriptor_index",
         "publication_metadata_catalog",
         "publication_registry",
@@ -1420,8 +1556,10 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
         return str((preset_path.parent / value).resolve())
 
     publication_catalog_workspace_dir = resolve_optional_path("publication_catalog_workspace_dir")
+    publication_catalog_workspace_preset_path = resolve_optional_path("publication_catalog_workspace_preset")
     publication_network_dir = resolve_optional_path("publication_network_dir")
     release_catalog_index_dir = resolve_optional_path("release_catalog_index_dir")
+    publication_registry_preset_path = resolve_optional_path("publication_registry_preset")
     if not artifact_paths and not discover_under and publication_catalog_workspace_dir is None and publication_network_dir is None:
         raise SatRootError(
             "publication registry workspace preset must contain artifact_paths, discover_under, publication_catalog_workspace_dir, or publication_network_dir"
@@ -1436,12 +1574,70 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
         "discover_under": discover_under,
         "recursive": recursive,
         "publication_catalog_workspace_dir": publication_catalog_workspace_dir,
+        "publication_catalog_workspace_preset_path": publication_catalog_workspace_preset_path,
         "publication_network_dir": publication_network_dir,
         "release_catalog_index_dir": release_catalog_index_dir,
+        "publication_registry_preset_path": publication_registry_preset_path,
         "descriptor_index_metadata": validate_release_metadata_mapping(preset.get("publication_descriptor_index")),
         "publication_metadata_catalog_metadata": validate_release_metadata_mapping(preset.get("publication_metadata_catalog")),
         "publication_registry_metadata": validate_release_metadata_mapping(preset.get("publication_registry")),
     }
+
+
+def load_machine_publication_registry_workspace_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_registry_workspace_preset(path)
+    publication_catalog_workspace_preset_path = preset.get("publication_catalog_workspace_preset_path")
+    if publication_catalog_workspace_preset_path is not None:
+        load_machine_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
+    publication_registry_preset_path = preset.get("publication_registry_preset_path")
+    if publication_registry_preset_path is not None:
+        load_publication_registry_preset(publication_registry_preset_path)
+    publication_catalog_workspace_dir = preset.get("publication_catalog_workspace_dir")
+    if publication_catalog_workspace_dir is not None:
+        _require_machine_publication_catalog_workspace(
+            publication_catalog_workspace_dir,
+            label="machine publication registry workspace preset publication catalog workspace",
+        )
+    publication_network_dir = preset.get("publication_network_dir")
+    if publication_network_dir is not None:
+        _require_machine_publication_network_workspace(
+            publication_network_dir,
+            label="machine publication registry workspace preset publication network",
+        )
+    for artifact_path in preset.get("artifact_paths", []):
+        _require_machine_satroot_artifact_path(
+            artifact_path,
+            label="machine publication registry workspace preset artifact",
+        )
+    return preset
+
+
+def load_stable_publication_registry_workspace_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_publication_registry_workspace_preset(path)
+    publication_catalog_workspace_preset_path = preset.get("publication_catalog_workspace_preset_path")
+    if publication_catalog_workspace_preset_path is not None:
+        load_stable_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
+    publication_registry_preset_path = preset.get("publication_registry_preset_path")
+    if publication_registry_preset_path is not None:
+        load_publication_registry_preset(publication_registry_preset_path)
+    publication_catalog_workspace_dir = preset.get("publication_catalog_workspace_dir")
+    if publication_catalog_workspace_dir is not None:
+        _require_stable_publication_catalog_workspace(
+            publication_catalog_workspace_dir,
+            label="stable publication registry workspace preset publication catalog workspace",
+        )
+    publication_network_dir = preset.get("publication_network_dir")
+    if publication_network_dir is not None:
+        _require_stable_publication_network_workspace(
+            publication_network_dir,
+            label="stable publication registry workspace preset publication network",
+        )
+    for artifact_path in preset.get("artifact_paths", []):
+        _require_stable_satroot_artifact_path(
+            artifact_path,
+            label="stable publication registry workspace preset artifact",
+        )
+    return preset
 
 
 def _unique_workspace_names(paths: Sequence[str | Path]) -> list[str]:
@@ -11947,11 +12143,17 @@ def export_publication_catalog_workspace_preset_from_workspace(
     publication_catalog_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
+    publication_descriptor_index_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
+    publication_metadata_catalog_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    _, summary = _load_workspace_summary(publication_catalog_workspace_dir, label="publication catalog workspace")
+    workspace_path, summary = _load_workspace_summary(publication_catalog_workspace_dir, label="publication catalog workspace")
     validate_publication_catalog_workspace_summary_consistency(summary)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    descriptor_preset_exporter = publication_descriptor_index_preset_exporter or export_publication_descriptor_index_preset_from_workspace
+    metadata_catalog_preset_exporter = publication_metadata_catalog_preset_exporter or export_publication_metadata_catalog_preset_from_workspace
     preset: Dict[str, Any] = {
         "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
         "version": "0.1",
@@ -11964,6 +12166,31 @@ def export_publication_catalog_workspace_preset_from_workspace(
     ]
     if artifact_paths:
         preset["artifact_paths"] = artifact_paths
+
+    component_dirs = _resolve_publication_catalog_workspace_component_dirs(workspace_path)
+    if publication_descriptor_index_preset_path is not None:
+        descriptor_output_path = Path(publication_descriptor_index_preset_path).resolve()
+        descriptor_output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(
+            descriptor_output_path,
+            descriptor_preset_exporter(
+                component_dirs["publication_descriptor_index_dir"],
+                output_path=descriptor_output_path,
+            ),
+        )
+        preset["publication_descriptor_index_preset"] = _relative_output_path(descriptor_output_path, base_dir=base_dir)
+
+    if publication_metadata_catalog_preset_path is not None:
+        metadata_output_path = Path(publication_metadata_catalog_preset_path).resolve()
+        metadata_output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(
+            metadata_output_path,
+            metadata_catalog_preset_exporter(
+                component_dirs["publication_metadata_catalog_dir"],
+                output_path=metadata_output_path,
+            ),
+        )
+        preset["publication_metadata_catalog_preset"] = _relative_output_path(metadata_output_path, base_dir=base_dir)
 
     descriptor_index = summary.get("publication_descriptor_index")
     if isinstance(descriptor_index, Mapping):
@@ -11984,6 +12211,8 @@ def export_machine_publication_catalog_workspace_preset_from_workspace(
     publication_catalog_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _require_machine_publication_catalog_workspace(
         publication_catalog_workspace_dir,
@@ -11992,6 +12221,10 @@ def export_machine_publication_catalog_workspace_preset_from_workspace(
     return export_publication_catalog_workspace_preset_from_workspace(
         publication_catalog_workspace_dir,
         output_path=output_path,
+        publication_descriptor_index_preset_path=publication_descriptor_index_preset_path,
+        publication_metadata_catalog_preset_path=publication_metadata_catalog_preset_path,
+        publication_descriptor_index_preset_exporter=export_machine_publication_descriptor_index_preset_from_workspace,
+        publication_metadata_catalog_preset_exporter=export_machine_publication_metadata_catalog_preset_from_workspace,
     )
 
 
@@ -11999,6 +12232,8 @@ def export_stable_publication_catalog_workspace_preset_from_workspace(
     publication_catalog_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _require_stable_publication_catalog_workspace(
         publication_catalog_workspace_dir,
@@ -12007,6 +12242,10 @@ def export_stable_publication_catalog_workspace_preset_from_workspace(
     return export_publication_catalog_workspace_preset_from_workspace(
         publication_catalog_workspace_dir,
         output_path=output_path,
+        publication_descriptor_index_preset_path=publication_descriptor_index_preset_path,
+        publication_metadata_catalog_preset_path=publication_metadata_catalog_preset_path,
+        publication_descriptor_index_preset_exporter=export_stable_publication_descriptor_index_preset_from_workspace,
+        publication_metadata_catalog_preset_exporter=export_stable_publication_metadata_catalog_preset_from_workspace,
     )
 
 
@@ -12014,11 +12253,19 @@ def export_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_catalog_workspace_preset_path: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
+    publication_registry_preset_path: Optional[str | Path] = None,
+    publication_catalog_workspace_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
+    publication_registry_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    _, summary = _load_workspace_summary(publication_registry_workspace_dir, label="publication registry workspace")
+    workspace_path, summary = _load_workspace_summary(publication_registry_workspace_dir, label="publication registry workspace")
     validate_publication_registry_workspace_summary_consistency(summary)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    catalog_workspace_preset_exporter = publication_catalog_workspace_preset_exporter or export_publication_catalog_workspace_preset_from_workspace
+    registry_preset_exporter = publication_registry_preset_exporter or export_publication_registry_preset_from_workspace
     preset: Dict[str, Any] = {
         "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
         "version": "0.1",
@@ -12031,6 +12278,49 @@ def export_publication_registry_workspace_preset_from_workspace(
     ]
     if artifact_paths:
         preset["artifact_paths"] = artifact_paths
+
+    component_dirs = _resolve_publication_registry_workspace_component_dirs(workspace_path)
+    nested_catalog_workspace_source = None
+    for key in (
+        "source_publication_catalog_workspace_dir",
+        "source_machine_publication_catalog_workspace_dir",
+        "source_stable_publication_catalog_workspace_dir",
+    ):
+        value = summary.get(key)
+        if isinstance(value, str) and value.strip():
+            nested_catalog_workspace_source = Path(value).resolve()
+            break
+    if nested_catalog_workspace_source is None:
+        nested_catalog_workspace_source = workspace_path
+
+    if publication_catalog_workspace_preset_path is not None:
+        catalog_workspace_output_path = Path(publication_catalog_workspace_preset_path).resolve()
+        catalog_workspace_output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(
+            catalog_workspace_output_path,
+            catalog_workspace_preset_exporter(
+                nested_catalog_workspace_source,
+                output_path=catalog_workspace_output_path,
+                publication_descriptor_index_preset_path=publication_descriptor_index_preset_path,
+                publication_metadata_catalog_preset_path=publication_metadata_catalog_preset_path,
+            ),
+        )
+        preset["publication_catalog_workspace_preset"] = _relative_output_path(
+            catalog_workspace_output_path,
+            base_dir=base_dir,
+        )
+
+    if publication_registry_preset_path is not None:
+        registry_output_path = Path(publication_registry_preset_path).resolve()
+        registry_output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(
+            registry_output_path,
+            registry_preset_exporter(
+                component_dirs["publication_registry_dir"],
+                output_path=registry_output_path,
+            ),
+        )
+        preset["publication_registry_preset"] = _relative_output_path(registry_output_path, base_dir=base_dir)
 
     source_publication_network_dir = summary.get("source_publication_network_dir")
     source_publication_catalog_workspace_dir = summary.get("source_publication_catalog_workspace_dir")
@@ -12587,6 +12877,10 @@ def export_machine_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_catalog_workspace_preset_path: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
+    publication_registry_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _, summary = _load_workspace_summary(publication_registry_workspace_dir, label="publication registry workspace")
     validate_publication_registry_workspace_summary_consistency(summary)
@@ -12621,9 +12915,29 @@ def export_machine_publication_registry_workspace_preset_from_workspace(
         except SatRootError:
             machine_release_catalog_index_valid = False
 
+    machine_publication_registry_valid = False
+    try:
+        _require_machine_publication_registry_publication(
+            _resolve_publication_registry_workspace_component_dirs(Path(publication_registry_workspace_dir).resolve())["publication_registry_dir"],
+            label="machine publication registry workspace preset export nested publication registry",
+        )
+        machine_publication_registry_valid = True
+    except SatRootError:
+        machine_publication_registry_valid = False
+
     preset = export_publication_registry_workspace_preset_from_workspace(
         publication_registry_workspace_dir,
         output_path=output_path,
+        publication_catalog_workspace_preset_path=publication_catalog_workspace_preset_path,
+        publication_descriptor_index_preset_path=publication_descriptor_index_preset_path,
+        publication_metadata_catalog_preset_path=publication_metadata_catalog_preset_path,
+        publication_registry_preset_path=publication_registry_preset_path,
+        publication_catalog_workspace_preset_exporter=export_machine_publication_catalog_workspace_preset_from_workspace,
+        publication_registry_preset_exporter=(
+            export_machine_publication_registry_preset_from_workspace
+            if machine_publication_registry_valid
+            else export_publication_registry_preset_from_workspace
+        ),
     )
     if not machine_release_catalog_index_valid:
         preset.pop("publication_catalog_workspace_dir", None)
@@ -12650,6 +12964,10 @@ def export_stable_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_catalog_workspace_preset_path: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
+    publication_registry_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _, summary = _load_workspace_summary(publication_registry_workspace_dir, label="publication registry workspace")
     validate_publication_registry_workspace_summary_consistency(summary)
@@ -12684,9 +13002,29 @@ def export_stable_publication_registry_workspace_preset_from_workspace(
         except SatRootError:
             stable_release_catalog_index_valid = False
 
+    stable_publication_registry_valid = False
+    try:
+        _require_stable_publication_registry_publication(
+            _resolve_publication_registry_workspace_component_dirs(Path(publication_registry_workspace_dir).resolve())["publication_registry_dir"],
+            label="stable publication registry workspace preset export nested publication registry",
+        )
+        stable_publication_registry_valid = True
+    except SatRootError:
+        stable_publication_registry_valid = False
+
     preset = export_publication_registry_workspace_preset_from_workspace(
         publication_registry_workspace_dir,
         output_path=output_path,
+        publication_catalog_workspace_preset_path=publication_catalog_workspace_preset_path,
+        publication_descriptor_index_preset_path=publication_descriptor_index_preset_path,
+        publication_metadata_catalog_preset_path=publication_metadata_catalog_preset_path,
+        publication_registry_preset_path=publication_registry_preset_path,
+        publication_catalog_workspace_preset_exporter=export_stable_publication_catalog_workspace_preset_from_workspace,
+        publication_registry_preset_exporter=(
+            export_stable_publication_registry_preset_from_workspace
+            if stable_publication_registry_valid
+            else export_publication_registry_preset_from_workspace
+        ),
     )
     if not stable_release_catalog_index_valid:
         preset.pop("publication_catalog_workspace_dir", None)
@@ -16343,26 +16681,44 @@ def build_cli_parser() -> Any:
 
     export_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-publication-catalog-workspace-preset", help="Export a SATROOT publication catalog workspace back into a reusable publication catalog workspace preset")
     export_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory")
+    export_publication_catalog_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested publication descriptor index preset should also be exported")
+    export_publication_catalog_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested publication metadata catalog preset should also be exported")
     export_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-machine-publication-catalog-workspace-preset", help="Export a SATROOT-MACHINE-1 publication catalog workspace back into a machine-validated reusable publication catalog workspace preset")
     export_machine_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT-MACHINE-1 publication catalog workspace directory")
+    export_machine_publication_catalog_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested machine publication descriptor index preset should also be exported")
+    export_machine_publication_catalog_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested machine publication metadata catalog preset should also be exported")
     export_machine_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-stable-publication-catalog-workspace-preset", help="Export a SATROOT-STABLE-1 publication catalog workspace back into a stable-validated reusable publication catalog workspace preset")
     export_stable_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT-STABLE-1 publication catalog workspace directory")
+    export_stable_publication_catalog_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested stable publication descriptor index preset should also be exported")
+    export_stable_publication_catalog_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested stable publication metadata catalog preset should also be exported")
     export_stable_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_registry_workspace_preset_parser = subparsers.add_parser("export-publication-registry-workspace-preset", help="Export a SATROOT publication registry workspace back into a reusable publication registry workspace preset")
     export_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
+    export_publication_registry_workspace_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional file path where a nested publication catalog workspace preset should also be exported")
+    export_publication_registry_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested publication descriptor index preset should also be exported alongside a generated catalog workspace preset")
+    export_publication_registry_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested publication metadata catalog preset should also be exported alongside a generated catalog workspace preset")
+    export_publication_registry_workspace_preset_parser.add_argument("--publication-registry-preset-path", help="Optional file path where a nested publication registry preset should also be exported")
     export_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_publication_registry_workspace_preset_parser = subparsers.add_parser("export-machine-publication-registry-workspace-preset", help="Export a SATROOT-MACHINE-1 publication registry workspace back into a machine-validated reusable publication registry workspace preset")
     export_machine_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT-MACHINE-1 publication registry workspace directory")
+    export_machine_publication_registry_workspace_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional file path where a nested machine publication catalog workspace preset should also be exported")
+    export_machine_publication_registry_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested machine publication descriptor index preset should also be exported alongside a generated catalog workspace preset")
+    export_machine_publication_registry_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested machine publication metadata catalog preset should also be exported alongside a generated catalog workspace preset")
+    export_machine_publication_registry_workspace_preset_parser.add_argument("--publication-registry-preset-path", help="Optional file path where a nested machine publication registry preset should also be exported")
     export_machine_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_publication_registry_workspace_preset_parser = subparsers.add_parser("export-stable-publication-registry-workspace-preset", help="Export a SATROOT-STABLE-1 publication registry workspace back into a stable-validated reusable publication registry workspace preset")
     export_stable_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT-STABLE-1 publication registry workspace directory")
+    export_stable_publication_registry_workspace_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional file path where a nested stable publication catalog workspace preset should also be exported")
+    export_stable_publication_registry_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested stable publication descriptor index preset should also be exported alongside a generated catalog workspace preset")
+    export_stable_publication_registry_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested stable publication metadata catalog preset should also be exported alongside a generated catalog workspace preset")
+    export_stable_publication_registry_workspace_preset_parser.add_argument("--publication-registry-preset-path", help="Optional file path where a nested stable publication registry preset should also be exported")
     export_stable_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_descriptor_index_preset_parser = subparsers.add_parser("export-publication-descriptor-index-preset", help="Export a SATROOT publication descriptor index back into a reusable publication descriptor index preset")
@@ -20130,6 +20486,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_publication_catalog_workspace_preset_from_workspace(
             args.publication_catalog_workspace_dir,
             output_path=args.output,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
         )
         _write_output(preset, args.output)
         return 0
@@ -20138,6 +20496,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_machine_publication_catalog_workspace_preset_from_workspace(
             args.publication_catalog_workspace_dir,
             output_path=args.output,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
         )
         _write_output(preset, args.output)
         return 0
@@ -20146,6 +20506,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_stable_publication_catalog_workspace_preset_from_workspace(
             args.publication_catalog_workspace_dir,
             output_path=args.output,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
         )
         _write_output(preset, args.output)
         return 0
@@ -20154,6 +20516,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_publication_registry_workspace_preset_from_workspace(
             args.publication_registry_workspace_dir,
             output_path=args.output,
+            publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
+            publication_registry_preset_path=args.publication_registry_preset_path,
         )
         _write_output(preset, args.output)
         return 0
@@ -20162,6 +20528,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_machine_publication_registry_workspace_preset_from_workspace(
             args.publication_registry_workspace_dir,
             output_path=args.output,
+            publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
+            publication_registry_preset_path=args.publication_registry_preset_path,
         )
         _write_output(preset, args.output)
         return 0
@@ -20170,6 +20540,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_stable_publication_registry_workspace_preset_from_workspace(
             args.publication_registry_workspace_dir,
             output_path=args.output,
+            publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
+            publication_registry_preset_path=args.publication_registry_preset_path,
         )
         _write_output(preset, args.output)
         return 0

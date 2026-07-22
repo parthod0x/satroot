@@ -57,6 +57,8 @@ from satroot1 import (
     load_machine_release_catalog_index_preset,
     load_machine_release_catalog_preset,
     load_machine_publication_network_preset,
+    load_machine_publication_catalog_workspace_preset,
+    load_machine_publication_registry_workspace_preset,
     load_machine_publication_stack_preset,
     load_publication_catalog_workspace_preset,
     load_protocol_schema,
@@ -76,6 +78,8 @@ from satroot1 import (
     load_publication_network_summary_schema,
     load_publication_stack_preset,
     load_stable_publication_network_preset,
+    load_stable_publication_catalog_workspace_preset,
+    load_stable_publication_registry_workspace_preset,
     load_stable_release_catalog_index_preset,
     load_stable_release_catalog_preset,
     load_stable_publication_stack_preset,
@@ -10904,6 +10908,35 @@ def test_cli_export_publication_catalog_workspace_preset(tmp_path):
     assert preset["publication_metadata_catalog"]["label"] == "Workspace Metadata Catalog"
 
 
+def test_cli_export_publication_catalog_workspace_preset_with_generated_nested_presets(tmp_path):
+    workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_catalog_workspace_with_nested.json"
+    descriptor_preset_path = tmp_path / "exported_descriptor_index.json"
+    metadata_preset_path = tmp_path / "exported_metadata_catalog.json"
+
+    exit_code = main(
+        [
+            "export-publication-catalog-workspace-preset",
+            str(workspace_dir),
+            "--publication-descriptor-index-preset-path",
+            str(descriptor_preset_path),
+            "--publication-metadata-catalog-preset-path",
+            str(metadata_preset_path),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_catalog_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET"
+    assert Path(loaded["publication_descriptor_index_preset_path"]).name == "exported_descriptor_index.json"
+    assert Path(loaded["publication_metadata_catalog_preset_path"]).name == "exported_metadata_catalog.json"
+    assert load_publication_descriptor_index_preset(loaded["publication_descriptor_index_preset_path"])["index_metadata"]["label"] == "Workspace Descriptor Index"
+    assert load_publication_metadata_catalog_preset(loaded["publication_metadata_catalog_preset_path"])["catalog_metadata"]["label"] == "Workspace Metadata Catalog"
+
+
 def test_cli_bootstrap_publication_catalog_workspace_from_exported_preset_round_trip(tmp_path, capsys):
     workspace_dir = make_publication_catalog_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_catalog_workspace.json"
@@ -10983,6 +11016,58 @@ def test_cli_export_machine_publication_catalog_workspace_preset(tmp_path):
     assert preset["type"] == "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET"
     assert len(loaded["artifact_paths"]) == 3
     assert preset["publication_metadata_catalog"]["label"] == "Machine Export Metadata Catalog"
+
+
+def test_cli_export_machine_publication_catalog_workspace_preset_with_generated_nested_presets(tmp_path):
+    workspace_dir = tmp_path / "machine_publication_catalog_workspace"
+    assert main(
+        [
+            "bootstrap-machine-publication-catalog-workspace",
+            "--symbol",
+            "APIMEXPCAT2",
+            "--name",
+            "Machine Export Catalog Workspace Nested",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--descriptor-index-label",
+            "Machine Nested Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Nested Metadata Catalog",
+            "--output-dir",
+            str(workspace_dir),
+        ]
+    ) == 0
+
+    preset_path = tmp_path / "exported_machine_catalog_workspace_with_nested.json"
+    descriptor_preset_path = tmp_path / "exported_machine_descriptor_index.json"
+    metadata_preset_path = tmp_path / "exported_machine_metadata_catalog.json"
+    exit_code = main(
+        [
+            "export-machine-publication-catalog-workspace-preset",
+            str(workspace_dir),
+            "--publication-descriptor-index-preset-path",
+            str(descriptor_preset_path),
+            "--publication-metadata-catalog-preset-path",
+            str(metadata_preset_path),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_machine_publication_catalog_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET"
+    assert Path(loaded["publication_descriptor_index_preset_path"]).name == "exported_machine_descriptor_index.json"
+    assert Path(loaded["publication_metadata_catalog_preset_path"]).name == "exported_machine_metadata_catalog.json"
 
 
 def test_cli_bootstrap_machine_publication_catalog_workspace_from_exported_preset_round_trip(tmp_path, capsys):
@@ -11079,6 +11164,33 @@ def test_cli_export_stable_publication_catalog_workspace_preset(tmp_path):
     assert preset["publication_metadata_catalog"]["label"] == "Stable Workspace Metadata Catalog"
 
 
+def test_cli_export_stable_publication_catalog_workspace_preset_with_generated_nested_presets(tmp_path):
+    workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_stable_catalog_workspace_with_nested.json"
+    descriptor_preset_path = tmp_path / "exported_stable_descriptor_index.json"
+    metadata_preset_path = tmp_path / "exported_stable_metadata_catalog.json"
+
+    exit_code = main(
+        [
+            "export-stable-publication-catalog-workspace-preset",
+            str(workspace_dir),
+            "--publication-descriptor-index-preset-path",
+            str(descriptor_preset_path),
+            "--publication-metadata-catalog-preset-path",
+            str(metadata_preset_path),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_stable_publication_catalog_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET"
+    assert Path(loaded["publication_descriptor_index_preset_path"]).name == "exported_stable_descriptor_index.json"
+    assert Path(loaded["publication_metadata_catalog_preset_path"]).name == "exported_stable_metadata_catalog.json"
+
+
 def test_cli_bootstrap_stable_publication_catalog_workspace_from_exported_preset_round_trip(tmp_path, capsys):
     workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
     capsys.readouterr()
@@ -11150,6 +11262,43 @@ def test_cli_export_publication_registry_workspace_preset(tmp_path):
     assert preset["publication_descriptor_index"]["label"] == "Workspace Descriptor Index"
     assert preset["publication_metadata_catalog"]["label"] == "Workspace Metadata Catalog"
     assert preset["publication_registry"]["label"] == "Workspace Publication Registry"
+
+
+def test_cli_export_publication_registry_workspace_preset_with_generated_nested_presets(tmp_path):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_registry_workspace_with_nested.json"
+    catalog_preset_path = tmp_path / "exported_nested_catalog_workspace.json"
+    descriptor_preset_path = tmp_path / "exported_nested_descriptor_index.json"
+    metadata_preset_path = tmp_path / "exported_nested_metadata_catalog.json"
+    registry_preset_path = tmp_path / "exported_nested_registry.json"
+
+    exit_code = main(
+        [
+            "export-publication-registry-workspace-preset",
+            str(workspace_dir),
+            "--publication-catalog-workspace-preset-path",
+            str(catalog_preset_path),
+            "--publication-descriptor-index-preset-path",
+            str(descriptor_preset_path),
+            "--publication-metadata-catalog-preset-path",
+            str(metadata_preset_path),
+            "--publication-registry-preset-path",
+            str(registry_preset_path),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET"
+    assert Path(loaded["publication_catalog_workspace_preset_path"]).name == "exported_nested_catalog_workspace.json"
+    assert Path(loaded["publication_registry_preset_path"]).name == "exported_nested_registry.json"
+    nested_catalog = load_publication_catalog_workspace_preset(loaded["publication_catalog_workspace_preset_path"])
+    assert Path(nested_catalog["publication_descriptor_index_preset_path"]).name == "exported_nested_descriptor_index.json"
+    assert Path(nested_catalog["publication_metadata_catalog_preset_path"]).name == "exported_nested_metadata_catalog.json"
+    assert load_publication_registry_preset(loaded["publication_registry_preset_path"])["registry_metadata"]["label"] == "Workspace Publication Registry"
 
 
 def test_cli_bootstrap_publication_registry_workspace_from_exported_preset_round_trip(tmp_path, capsys):
@@ -11248,6 +11397,71 @@ def test_cli_export_machine_publication_registry_workspace_preset(tmp_path):
     assert Path(loaded["release_catalog_index_dir"]).name == "release_catalog_index"
     assert loaded["publication_catalog_workspace_dir"] is None
     assert preset["publication_registry"]["label"] == "Machine Export Registry"
+
+
+def test_cli_export_machine_publication_registry_workspace_preset_with_generated_nested_presets(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    workspace_dir = tmp_path / "machine_publication_registry_workspace"
+    assert main(
+        [
+            "bootstrap-machine-publication-registry-workspace",
+            "--publication-network-dir",
+            str(network_dir),
+            "--symbol",
+            "APIMEXPREG3",
+            "--name",
+            "Machine Export Registry Workspace Nested",
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--descriptor-index-label",
+            "Machine Nested Registry Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Nested Registry Metadata Catalog",
+            "--publication-registry-label",
+            "Machine Nested Registry",
+            "--output-dir",
+            str(workspace_dir),
+        ]
+    ) == 0
+
+    preset_path = tmp_path / "exported_machine_registry_workspace_with_nested.json"
+    catalog_preset_path = tmp_path / "exported_nested_machine_catalog_workspace.json"
+    descriptor_preset_path = tmp_path / "exported_nested_machine_descriptor_index.json"
+    metadata_preset_path = tmp_path / "exported_nested_machine_metadata_catalog.json"
+    registry_preset_path = tmp_path / "exported_nested_machine_registry.json"
+    exit_code = main(
+        [
+            "export-machine-publication-registry-workspace-preset",
+            str(workspace_dir),
+            "--publication-catalog-workspace-preset-path",
+            str(catalog_preset_path),
+            "--publication-descriptor-index-preset-path",
+            str(descriptor_preset_path),
+            "--publication-metadata-catalog-preset-path",
+            str(metadata_preset_path),
+            "--publication-registry-preset-path",
+            str(registry_preset_path),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_machine_publication_registry_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET"
+    assert Path(loaded["publication_catalog_workspace_preset_path"]).name == "exported_nested_machine_catalog_workspace.json"
+    assert Path(loaded["publication_registry_preset_path"]).name == "exported_nested_machine_registry.json"
 
 
 def test_cli_bootstrap_machine_publication_registry_workspace_from_exported_presets_round_trip(tmp_path, capsys):
@@ -11375,6 +11589,39 @@ def test_cli_export_stable_publication_registry_workspace_preset(tmp_path):
     assert Path(loaded["publication_network_dir"]).name == "stable_only_publication_network"
     assert loaded["release_catalog_index_dir"] is None
     assert preset["publication_registry"]["label"] == "Stable Workspace Publication Registry"
+
+
+def test_cli_export_stable_publication_registry_workspace_preset_with_generated_nested_presets(tmp_path):
+    workspace_dir = make_stable_publication_registry_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_stable_registry_workspace_with_nested.json"
+    catalog_preset_path = tmp_path / "exported_nested_stable_catalog_workspace.json"
+    descriptor_preset_path = tmp_path / "exported_nested_stable_descriptor_index.json"
+    metadata_preset_path = tmp_path / "exported_nested_stable_metadata_catalog.json"
+    registry_preset_path = tmp_path / "exported_nested_stable_registry.json"
+
+    exit_code = main(
+        [
+            "export-stable-publication-registry-workspace-preset",
+            str(workspace_dir),
+            "--publication-catalog-workspace-preset-path",
+            str(catalog_preset_path),
+            "--publication-descriptor-index-preset-path",
+            str(descriptor_preset_path),
+            "--publication-metadata-catalog-preset-path",
+            str(metadata_preset_path),
+            "--publication-registry-preset-path",
+            str(registry_preset_path),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_stable_publication_registry_workspace_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET"
+    assert Path(loaded["publication_catalog_workspace_preset_path"]).name == "exported_nested_stable_catalog_workspace.json"
+    assert Path(loaded["publication_registry_preset_path"]).name == "exported_nested_stable_registry.json"
 
 
 def test_cli_publish_stable_publication_registry_workspace_from_exported_preset_round_trip(tmp_path, capsys):
