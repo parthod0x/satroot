@@ -147,6 +147,16 @@ def write_inventory_json_from_cli(path: Path, *roots: str | Path, capsys, non_re
     path.write_text(capsys.readouterr().out, encoding="utf-8")
 
 
+def stage_example_json(tmp_path: Path, relative_path: str) -> Path:
+    target_path = tmp_path / "examples" / relative_path
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(
+        target_path,
+        json.loads((ROOT / "examples" / relative_path).read_text(encoding="utf-8")),
+    )
+    return target_path
+
+
 def make_demo_release_dirs(tmp_path: Path) -> tuple[str, str]:
     stable = bootstrap_stable_reference_demo_release(
         symbol="RELSTB1",
@@ -13542,6 +13552,176 @@ def test_cli_publish_stable_publication_descriptor_index(tmp_path, capsys):
     assert verified["artifact_count"] == 1
 
 
+def test_cli_publish_publication_descriptor_index_with_inventory_json(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    inventory_path = tmp_path / "publication_descriptor_index_inventory.json"
+    output_dir = tmp_path / "publication_descriptor_index_publication_inventory"
+
+    write_inventory_json_from_cli(inventory_path, network_dir, capsys=capsys)
+
+    assert (
+        main(
+            [
+                "publish-publication-descriptor-index",
+                "--inventory-json",
+                str(inventory_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "network",
+                "--label",
+                "Inventory Published Descriptor Index",
+                "--published-at",
+                "2026-07-09T02:15:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "descriptor-key",
+                "--secret",
+                "descriptor-secret",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    assert index["artifact_count"] == 12
+    assert index["artifact_kind_counts"]["publication-network"] == 1
+    assert index["index"]["label"] == "Inventory Published Descriptor Index"
+    assert main(["publication-descriptor-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_descriptor_index_with_example_preset(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_machine_publication_network"
+    preset_path = stage_example_json(
+        tmp_path,
+        "publication_descriptor_index_presets/machine_compute_publication_descriptor_index.json",
+    )
+    output_dir = tmp_path / "machine_publication_descriptor_index_publication_preset"
+
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "machine_compute_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated Machine Network For Descriptor Preset",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-machine-publication-descriptor-index",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "descriptor-key",
+                "--secret",
+                "descriptor-secret",
+                "--label",
+                "Preset Published Machine Descriptor Index Override",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_descriptor_index_manifest(
+        output_dir / "publication_descriptor_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"descriptor-key": "descriptor-secret"}),
+    )
+    assert index["artifact_count"] >= 1
+    assert index["artifact_kind_counts"]["publication-network"] == 1
+    assert index["index"]["channel"] == "machine"
+    assert index["index"]["label"] == "Preset Published Machine Descriptor Index Override"
+    assert index["index"]["published_at"] == "2026-07-14T04:30:00Z"
+    assert verified["artifact_count"] == index["artifact_count"]
+    assert main(["publication-descriptor-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_descriptor_index_with_example_preset(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_stable_publication_network"
+    preset_path = stage_example_json(
+        tmp_path,
+        "publication_descriptor_index_presets/stable_reference_publication_descriptor_index.json",
+    )
+    output_dir = tmp_path / "stable_publication_descriptor_index_publication_preset"
+
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated Stable Network For Descriptor Preset",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-stable-publication-descriptor-index",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "descriptor-key",
+                "--secret",
+                "descriptor-secret",
+                "--label",
+                "Preset Published Stable Descriptor Index Override",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "publication_descriptor_index.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_descriptor_index_manifest(
+        output_dir / "publication_descriptor_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"descriptor-key": "descriptor-secret"}),
+    )
+    assert index["artifact_count"] >= 1
+    assert index["artifact_kind_counts"]["publication-network"] == 1
+    assert index["index"]["channel"] == "stable"
+    assert index["index"]["label"] == "Preset Published Stable Descriptor Index Override"
+    assert index["index"]["published_at"] == "2026-07-15T04:30:00Z"
+    assert verified["artifact_count"] == index["artifact_count"]
+    assert main(["publication-descriptor-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_descriptor_index_publication(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     output_dir = tmp_path / "publication_descriptor_index_publication"
@@ -14970,6 +15150,148 @@ def test_cli_publish_stable_publication_metadata_catalog(tmp_path, capsys):
     assert verified["bundle_count"] == 2
 
 
+def test_cli_publish_publication_metadata_catalog_with_inventory_json(tmp_path, capsys):
+    _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
+    inventory_path = tmp_path / "publication_metadata_catalog_inventory.json"
+    output_dir = tmp_path / "publication_metadata_catalog_publication_inventory"
+
+    write_inventory_json_from_cli(inventory_path, tmp_path, capsys=capsys)
+
+    assert (
+        main(
+            [
+                "publish-publication-metadata-catalog",
+                "--inventory-json",
+                str(inventory_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "network",
+                "--label",
+                "Inventory Published Metadata Catalog",
+                "--published-at",
+                "2026-07-09T04:15:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["bundle_count"] == 2
+    assert catalog["artifact_kind_counts"]["release"] == 1
+    assert catalog["artifact_kind_counts"]["publication-network"] == 1
+    assert catalog["index"]["label"] == "Inventory Published Metadata Catalog"
+    assert main(["publication-metadata-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_metadata_catalog_with_example_preset(tmp_path, capsys):
+    generated_bundle_root = tmp_path / "examples" / "generated_machine_publication_metadata_root"
+    preset_path = stage_example_json(
+        tmp_path,
+        "publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog.json",
+    )
+    output_dir = tmp_path / "machine_publication_metadata_catalog_publication_preset"
+
+    make_machine_publication_metadata_bundle_dirs(generated_bundle_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-machine-publication-metadata-catalog",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+                "--label",
+                "Preset Published Machine Metadata Catalog Override",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert catalog["bundle_count"] == 5
+    assert catalog["artifact_kind_counts"]["bundle"] == 1
+    assert catalog["artifact_kind_counts"]["release"] == 1
+    assert catalog["artifact_kind_counts"]["release-catalog"] == 1
+    assert catalog["artifact_kind_counts"]["demo-catalog"] == 1
+    assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert catalog["index"]["channel"] == "machine"
+    assert catalog["index"]["label"] == "Preset Published Machine Metadata Catalog Override"
+    assert catalog["index"]["published_at"] == "2026-07-14T05:00:00Z"
+    assert verified["bundle_count"] == 5
+    assert main(["publication-metadata-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_metadata_catalog_with_example_preset(tmp_path, capsys):
+    generated_bundle_root = tmp_path / "examples" / "generated_stable_publication_metadata_root"
+    preset_path = stage_example_json(
+        tmp_path,
+        "publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog.json",
+    )
+    output_dir = tmp_path / "stable_publication_metadata_catalog_publication_preset"
+
+    make_stable_publication_metadata_bundle_dirs(generated_bundle_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-stable-publication-metadata-catalog",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+                "--label",
+                "Preset Published Stable Metadata Catalog Override",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "publication_metadata_catalog.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_metadata_catalog_manifest(
+        output_dir / "publication_metadata_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert catalog["bundle_count"] == 5
+    assert catalog["artifact_kind_counts"]["bundle"] == 1
+    assert catalog["artifact_kind_counts"]["release"] == 1
+    assert catalog["artifact_kind_counts"]["demo-catalog"] == 2
+    assert catalog["artifact_kind_counts"]["publication-catalog-workspace"] == 1
+    assert catalog["index"]["channel"] == "stable"
+    assert catalog["index"]["label"] == "Preset Published Stable Metadata Catalog Override"
+    assert catalog["index"]["published_at"] == "2026-07-15T05:00:00Z"
+    assert verified["bundle_count"] == 5
+    assert main(["publication-metadata-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_metadata_catalog_publication(tmp_path, capsys):
     _release_bundle_dir, _network_bundle_dir = make_publication_metadata_bundle_dirs(tmp_path)
     output_dir = tmp_path / "publication_metadata_catalog_publication"
@@ -15965,6 +16287,249 @@ def test_cli_publish_stable_publication_registry(tmp_path, capsys):
         verifier=make_hmac_sha256_verifier({"registry-key": "registry-secret"}),
     )
     assert verified["component_count"] == 3
+
+
+def test_cli_publish_publication_registry_with_inventory_json(tmp_path, capsys):
+    release_catalog_index_dir, descriptor_index_dir, metadata_catalog_dir = make_publication_registry_component_dirs(tmp_path)
+    inventory_path = tmp_path / "publication_registry_inventory.json"
+    output_dir = tmp_path / "publication_registry_publication_inventory"
+
+    write_inventory_json_from_cli(
+        inventory_path,
+        release_catalog_index_dir.parent,
+        descriptor_index_dir,
+        metadata_catalog_dir,
+        capsys=capsys,
+    )
+
+    assert (
+        main(
+            [
+                "publish-publication-registry",
+                "--inventory-json",
+                str(inventory_path),
+                "--output-dir",
+                str(output_dir),
+                "--channel",
+                "network",
+                "--label",
+                "Inventory Published Publication Registry",
+                "--published-at",
+                "2026-07-09T05:15:00Z",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+                "--secret",
+                "registry-secret",
+            ]
+        )
+        == 0
+    )
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    assert registry["component_count"] == 3
+    assert registry["index"]["label"] == "Inventory Published Publication Registry"
+    assert main(["publication-registry-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_publication_registry_with_example_preset(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_machine_publication_network"
+    generated_descriptor_dir = tmp_path / "examples" / "generated_machine_publication_descriptor_index_publication"
+    generated_metadata_dir = tmp_path / "examples" / "generated_machine_publication_metadata_catalog_publication"
+    generated_metadata_root = tmp_path / "examples" / "generated_machine_publication_metadata_root"
+    preset_path = stage_example_json(tmp_path, "registry_presets/machine_compute_publication_registry.json")
+    output_dir = tmp_path / "machine_publication_registry_publication_preset"
+
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "machine_compute_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated Machine Network For Registry Preset",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-machine-publication-descriptor-index-publication",
+            "--discover-under",
+            str(generated_network_dir),
+            "--output-dir",
+            str(generated_descriptor_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Generated Machine Descriptor Index For Registry Preset",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(generated_metadata_root)
+    assert main(
+        [
+            "bootstrap-machine-publication-metadata-catalog-publication",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--output-dir",
+            str(generated_metadata_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Generated Machine Metadata Catalog For Registry Preset",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-machine-publication-registry",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+                "--secret",
+                "registry-secret",
+                "--label",
+                "Preset Published Machine Publication Registry Override",
+            ]
+        )
+        == 0
+    )
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier({"registry-key": "registry-secret"}),
+    )
+    assert registry["component_count"] == 3
+    assert registry["index"]["channel"] == "machine"
+    assert registry["index"]["label"] == "Preset Published Machine Publication Registry Override"
+    assert registry["index"]["published_at"] == "2026-07-14T06:00:00Z"
+    assert verified["component_count"] == 3
+    assert main(["publication-registry-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_publication_registry_with_example_preset(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_stable_publication_network"
+    generated_descriptor_dir = tmp_path / "examples" / "generated_stable_publication_descriptor_index_publication"
+    generated_metadata_dir = tmp_path / "examples" / "generated_stable_publication_metadata_catalog_publication"
+    generated_metadata_root = tmp_path / "examples" / "generated_stable_publication_metadata_root"
+    preset_path = stage_example_json(tmp_path, "registry_presets/stable_reference_publication_registry.json")
+    output_dir = tmp_path / "stable_publication_registry_publication_preset"
+
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated Stable Network For Registry Preset",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-stable-publication-descriptor-index-publication",
+            "--discover-under",
+            str(generated_network_dir),
+            "--output-dir",
+            str(generated_descriptor_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Generated Stable Descriptor Index For Registry Preset",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+    workspace_bundle_dir, catalog_bundle_dir = make_stable_publication_metadata_bundle_dirs(generated_metadata_root)
+    assert main(
+        [
+            "bootstrap-stable-publication-metadata-catalog-publication",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--output-dir",
+            str(generated_metadata_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Generated Stable Metadata Catalog For Registry Preset",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-stable-publication-registry",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "registry-key",
+                "--secret",
+                "registry-secret",
+                "--label",
+                "Preset Published Stable Publication Registry Override",
+            ]
+        )
+        == 0
+    )
+
+    registry = json.loads((output_dir / "publication_registry.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier({"registry-key": "registry-secret"}),
+    )
+    assert registry["component_count"] == 3
+    assert registry["index"]["channel"] == "stable"
+    assert registry["index"]["label"] == "Preset Published Stable Publication Registry Override"
+    assert registry["index"]["published_at"] == "2026-07-15T06:00:00Z"
+    assert verified["component_count"] == 3
+    assert main(["publication-registry-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_bootstrap_publication_registry_publication(tmp_path, capsys):
