@@ -20756,7 +20756,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-machine-publication-descriptor-index":
-        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
@@ -20788,7 +20788,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-stable-publication-descriptor-index":
-        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
@@ -20950,7 +20950,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-machine-publication-metadata-catalog":
-        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
@@ -20981,7 +20981,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-stable-publication-metadata-catalog":
-        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
@@ -21095,7 +21095,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-machine-publication-registry":
-        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_registry_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -21146,7 +21146,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "build-stable-publication-registry":
-        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_registry_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -21274,7 +21274,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-machine-publication-descriptor-index":
-        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
@@ -21301,7 +21301,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-stable-publication-descriptor-index":
-        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
@@ -21391,7 +21391,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-machine-publication-metadata-catalog":
-        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
@@ -21418,7 +21418,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-stable-publication-metadata-catalog":
-        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
@@ -21492,7 +21492,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-machine-publication-registry":
-        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_registry_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -21539,7 +21539,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "publish-stable-publication-registry":
-        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_registry_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -21611,7 +21611,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-stable-publication-descriptor-index-publication":
-        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
@@ -21646,7 +21646,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-machine-publication-descriptor-index-publication":
-        preset = load_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_descriptor_index_preset(args.preset_json) if args.preset_json else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         index_metadata = {
             **dict((preset or {}).get("index_metadata", {})),
@@ -21744,7 +21744,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-stable-publication-metadata-catalog-publication":
-        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
@@ -21775,7 +21775,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-machine-publication-metadata-catalog-publication":
-        preset = load_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_metadata_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_publication_metadata_bundle_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = {
             **dict((preset or {}).get("catalog_metadata", {})),
@@ -21851,7 +21851,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-stable-publication-registry-publication":
-        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_publication_registry_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -21914,7 +21914,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-machine-publication-registry-publication":
-        preset = load_publication_registry_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_publication_registry_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
