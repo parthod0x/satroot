@@ -3875,6 +3875,51 @@ def test_cli_publish_stable_release_catalog_from_exported_preset_round_trip(tmp_
     assert verified["release_count"] == 2
 
 
+def test_cli_publish_stable_release_catalog_with_example_preset(tmp_path, capsys):
+    release_root = tmp_path / "generated_stable_release_workspaces"
+    preset_path = stage_example_json(tmp_path, "release_catalog_presets/stable_reference_release_stack.json")
+    output_dir = tmp_path / "stable_release_catalog_example_preset"
+
+    make_stable_release_dirs(release_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-stable-release-catalog",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+                "--label",
+                "Preset Stable Release Catalog Override",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_manifest.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier({"catalog-key": "catalog-secret"}),
+    )
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["channel"] == "stable"
+    assert catalog["catalog"]["label"] == "Preset Stable Release Catalog Override"
+    assert catalog["catalog"]["published_at"] == "2026-07-15T03:00:00Z"
+    assert manifest["release_count"] == 2
+    assert verified["release_count"] == 2
+    assert main(["release-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_publish_stable_release_catalog_rejects_non_stable_release(tmp_path):
     stable_release_dir, machine_release_dir = make_demo_release_dirs(tmp_path)
     output_dir = tmp_path / "mixed_stable_release_catalog"
@@ -4749,6 +4794,51 @@ def test_cli_publish_stable_release_catalog_index_from_exported_preset_round_tri
         verifier=make_hmac_sha256_verifier({"index-key": "index-secret"}),
     )
     assert verified["release_catalog_count"] == 2
+
+
+def test_cli_publish_stable_release_catalog_index_with_example_preset(tmp_path, capsys):
+    catalog_root = tmp_path / "generated_stable_release_catalogs"
+    preset_path = stage_example_json(tmp_path, "release_catalog_index_presets/stable_reference_catalog_network.json")
+    output_dir = tmp_path / "stable_release_catalog_index_example_preset"
+
+    make_stable_release_catalog_dirs(catalog_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-stable-release-catalog-index",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+                "--label",
+                "Preset Stable Release Catalog Index Override",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "release_catalog_index_manifest.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier({"index-key": "index-secret"}),
+    )
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["channel"] == "stable"
+    assert index["index"]["label"] == "Preset Stable Release Catalog Index Override"
+    assert index["index"]["published_at"] == "2026-07-15T04:00:00Z"
+    assert manifest["release_catalog_count"] == 2
+    assert verified["release_catalog_count"] == 2
+    assert main(["release-catalog-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_publish_stable_release_catalog_index_rejects_non_stable_catalog(tmp_path):
@@ -20833,6 +20923,81 @@ def test_cli_publish_stable_release_from_exported_preset_round_trip(tmp_path):
         verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
     )
     assert summary["bundle_count"] == 2
+
+
+def test_cli_publish_stable_release_with_example_preset(tmp_path, capsys):
+    bundle_root = tmp_path / "generated_stable_bundle_collection"
+    bundle_alpha_dir = bundle_root / "stable_alpha_bundle"
+    bundle_beta_dir = bundle_root / "stable_beta_bundle"
+    preset_path = stage_example_json(tmp_path, "bundle_index_presets/stable_reference_bundle_index.json")
+    release_dir = tmp_path / "stable_release_example_preset"
+
+    assert main(
+        [
+            "bootstrap-stable-demo-bundle",
+            "--symbol",
+            "SEXREL1",
+            "--name",
+            "Stable Example Release Alpha",
+            "--scheme",
+            "hmac-sha256",
+            "--output-dir",
+            str(bundle_alpha_dir),
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-stable-demo-bundle",
+            "--symbol",
+            "SEXREL2",
+            "--name",
+            "Stable Example Release Beta",
+            "--scheme",
+            "hmac-sha256",
+            "--reference-unit",
+            "AUD",
+            "--output-dir",
+            str(bundle_beta_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-stable-release",
+                "--preset-json",
+                str(preset_path),
+                "--output-dir",
+                str(release_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "release-key",
+                "--secret",
+                "release-secret",
+                "--label",
+                "Preset Stable Release Publication Override",
+            ]
+        )
+        == 0
+    )
+
+    bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
+    release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+    verified = verify_signed_release_manifest(
+        release_dir / "release_manifest.json",
+        verifier=make_hmac_sha256_verifier({"release-key": "release-secret"}),
+    )
+    assert bundle_index["bundle_count"] == 2
+    assert bundle_index["release"]["channel"] == "stable"
+    assert bundle_index["release"]["label"] == "Preset Stable Release Publication Override"
+    assert bundle_index["release"]["published_at"] == "2026-07-15T02:00:00Z"
+    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"SEXREL1", "SEXREL2"}
+    assert release_manifest["bundle_count"] == 2
+    assert verified["bundle_count"] == 2
+    assert main(["release-lint", str(release_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_publish_stable_release_rejects_non_stable_bundle(tmp_path):
