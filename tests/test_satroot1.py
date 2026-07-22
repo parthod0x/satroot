@@ -165,6 +165,10 @@ def stage_example_json(tmp_path: Path, relative_path: str) -> Path:
     return target_path
 
 
+def stage_example_json_tree(tmp_path: Path, *relative_paths: str) -> dict[str, Path]:
+    return {relative_path: stage_example_json(tmp_path, relative_path) for relative_path in relative_paths}
+
+
 def make_demo_release_dirs(tmp_path: Path) -> tuple[str, str]:
     stable = bootstrap_stable_reference_demo_release(
         symbol="RELSTB1",
@@ -9154,7 +9158,10 @@ def test_cli_bootstrap_machine_publication_registry_workspace_with_presets(tmp_p
             "artifact_paths": [],
             "discover_under": [],
             "recursive": True,
-            "publication_network_dir": str(network_dir),
+            "publication_catalog_workspace_preset": str(
+                Path(publication_catalog_workspace_preset_path).relative_to(tmp_path)
+            ),
+            "release_catalog_index_dir": str(network_dir / "release_catalog_index"),
             "publication_descriptor_index": {
                 "label": "Preset Registry Descriptor Index Override",
             },
@@ -9204,7 +9211,8 @@ def test_cli_bootstrap_machine_publication_registry_workspace_with_presets(tmp_p
     nested_summary = json.loads(
         (output_dir / "machine_publication_catalog_workspace" / "summary.json").read_text(encoding="utf-8")
     )
-    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["source_publication_network_dir"] is None
+    assert summary["publication_network_dir"] == str((output_dir / "publication_network").resolve())
     assert summary["artifact_count"] == 15
     assert summary["publication_metadata_bundle_count"] == 15
     assert summary["publication_descriptor_index"]["index"]["label"] == "Preset Registry Descriptor Index Override"
@@ -9708,6 +9716,65 @@ def test_cli_bootstrap_stable_publication_catalog_workspace_with_presets(tmp_pat
     assert stable_summary["bundles"][0]["symbol"] == "STBPUBPRE1"
 
 
+def test_cli_bootstrap_publication_catalog_workspace_with_example_preset_tree(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_publication_network"
+    generated_metadata_root = tmp_path / "examples" / "generated_publication_metadata_root"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json",
+        "publication_descriptor_index_presets/ai_compute_publication_descriptor_index.json",
+        "publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json",
+    )
+    output_dir = tmp_path / "publication_catalog_workspace_example_preset"
+
+    assert main(
+        [
+            "bootstrap-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "ai_compute_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated AI Compute Network For Workspace Example",
+        ]
+    ) == 0
+    make_publication_metadata_bundle_dirs(generated_metadata_root)
+    capsys.readouterr()
+
+    assert main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            "--preset-json",
+            str(staged["publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 9
+    assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT AI Compute Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT AI Compute Workspace Metadata Catalog"
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_machine_publication_catalog_workspace_hmac(tmp_path, capsys):
     output_dir = tmp_path / "machine_publication_catalog_workspace"
 
@@ -9856,6 +9923,136 @@ def test_cli_bootstrap_machine_publication_catalog_workspace_with_presets(tmp_pa
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Preset Metadata Catalog Override"
     assert machine_summary["release"]["label"] == "Preset Machine Catalog"
     assert machine_summary["bundles"][0]["symbol"] == "APIPUBPRE1"
+
+
+def test_cli_bootstrap_machine_publication_catalog_workspace_with_example_preset_tree(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_machine_publication_network"
+    generated_metadata_root = tmp_path / "examples" / "generated_machine_publication_metadata_root"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "catalog_presets/machine_compute_catalog.json",
+        "publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json",
+        "publication_descriptor_index_presets/machine_compute_publication_descriptor_index.json",
+        "publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog.json",
+    )
+    output_dir = tmp_path / "machine_publication_catalog_workspace_example_preset"
+
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "machine_compute_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated Machine Network For Workspace Example",
+        ]
+    ) == 0
+    make_machine_publication_metadata_bundle_dirs(generated_metadata_root)
+    capsys.readouterr()
+
+    assert main(
+        [
+            "bootstrap-machine-publication-catalog-workspace",
+            "--catalog-preset-json",
+            str(staged["catalog_presets/machine_compute_catalog.json"]),
+            "--preset-json",
+            str(staged["publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 10
+    assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT Machine Compute Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT Machine Compute Workspace Metadata Catalog"
+    assert summary["source_machine_catalog_workspace_dir"] == str((output_dir / "machine_catalog_workspace").resolve())
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_publication_catalog_workspace_with_example_preset_tree(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_stable_publication_network"
+    generated_metadata_root = tmp_path / "examples" / "generated_stable_publication_metadata_root"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "catalog_presets/stable_reference_catalog.json",
+        "publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json",
+        "publication_descriptor_index_presets/stable_reference_publication_descriptor_index.json",
+        "publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog.json",
+    )
+    output_dir = tmp_path / "stable_publication_catalog_workspace_example_preset"
+
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated Stable Network For Workspace Example",
+        ]
+    ) == 0
+    make_stable_publication_metadata_bundle_dirs(generated_metadata_root)
+    capsys.readouterr()
+
+    assert main(
+        [
+            "bootstrap-stable-publication-catalog-workspace",
+            "--catalog-preset-json",
+            str(staged["catalog_presets/stable_reference_catalog.json"]),
+            "--preset-json",
+            str(staged["publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 10
+    assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT Stable Reference Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT Stable Reference Workspace Metadata Catalog"
+    assert summary["source_stable_catalog_workspace_dir"] == str((output_dir / "stable_catalog_workspace").resolve())
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_bootstrap_publication_catalog_workspace_with_preset_json_and_cli_overrides(tmp_path, capsys):
@@ -10070,6 +10267,327 @@ def test_cli_bootstrap_publication_registry_workspace_with_preset_catalog_worksp
     assert summary["source_publication_catalog_workspace_dir"] == str(catalog_workspace_dir.resolve())
     assert summary["source_publication_network_dir"] == str(network_dir.resolve())
     assert summary["publication_registry"]["index"]["label"] == "Preset Workspace Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_publication_registry_workspace_with_example_preset_tree(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_publication_network"
+    generated_descriptor_dir = tmp_path / "examples" / "generated_publication_descriptor_index_publication"
+    generated_metadata_root = tmp_path / "examples" / "generated_publication_metadata_root"
+    generated_metadata_dir = tmp_path / "examples" / "generated_publication_metadata_catalog_publication"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json",
+        "publication_descriptor_index_presets/ai_compute_publication_descriptor_index.json",
+        "publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json",
+        "registry_presets/ai_compute_publication_registry.json",
+        "registry_workspace_presets/ai_compute_publication_registry_workspace.json",
+    )
+    output_dir = tmp_path / "publication_registry_workspace_example_preset"
+
+    assert main(
+        [
+            "bootstrap-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "ai_compute_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated AI Compute Network For Registry Example",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--discover-under",
+            str(generated_network_dir),
+            "--output-dir",
+            str(generated_descriptor_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Generated Descriptor Index For Registry Example",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+    make_publication_metadata_bundle_dirs(generated_metadata_root)
+    assert main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            "--discover-under",
+            str(generated_metadata_root),
+            "--output-dir",
+            str(generated_metadata_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Generated Metadata Catalog For Registry Example",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--preset-json",
+            str(staged["registry_workspace_presets/ai_compute_publication_registry_workspace.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 9
+    assert summary["source_publication_network_dir"] == str(generated_network_dir.resolve())
+    assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT AI Compute Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT AI Compute Workspace Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "SATROOT AI Compute Workspace Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_machine_publication_registry_workspace_with_example_preset_tree(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_machine_publication_network"
+    generated_descriptor_dir = tmp_path / "examples" / "generated_machine_publication_descriptor_index_publication"
+    generated_metadata_root = tmp_path / "examples" / "generated_machine_publication_metadata_root"
+    generated_metadata_dir = tmp_path / "examples" / "generated_machine_publication_metadata_catalog_publication"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "catalog_presets/machine_compute_catalog.json",
+        "publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json",
+        "publication_descriptor_index_presets/machine_compute_publication_descriptor_index.json",
+        "publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog.json",
+        "registry_presets/machine_compute_publication_registry.json",
+        "registry_workspace_presets/machine_compute_publication_registry_workspace.json",
+    )
+    output_dir = tmp_path / "machine_publication_registry_workspace_example_preset"
+
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "machine_compute_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated Machine Network For Registry Example",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-machine-publication-descriptor-index-publication",
+            "--discover-under",
+            str(generated_network_dir),
+            "--output-dir",
+            str(generated_descriptor_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Generated Machine Descriptor Index For Registry Example",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+    workspace_bundle_dir, catalog_bundle_dir = make_machine_publication_metadata_bundle_dirs(generated_metadata_root)
+    assert main(
+        [
+            "bootstrap-machine-publication-metadata-catalog-publication",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--output-dir",
+            str(generated_metadata_dir),
+            "--channel",
+            "machine",
+            "--label",
+            "Generated Machine Metadata Catalog For Registry Example",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert main(
+        [
+            "bootstrap-machine-publication-registry-workspace",
+            "--catalog-preset-json",
+            str(staged["catalog_presets/machine_compute_catalog.json"]),
+            "--publication-catalog-workspace-preset-json",
+            str(staged["publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json"]),
+            "--preset-json",
+            str(staged["registry_workspace_presets/machine_compute_publication_registry_workspace.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 10
+    assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT Machine Compute Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT Machine Compute Workspace Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "SATROOT Machine Compute Workspace Publication Registry"
+    assert summary["source_machine_catalog_workspace_dir"] == str(
+        (output_dir / "machine_publication_catalog_workspace" / "machine_catalog_workspace").resolve()
+    )
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_publication_registry_workspace_with_example_preset_tree(tmp_path, capsys):
+    generated_network_dir = tmp_path / "examples" / "generated_stable_publication_network"
+    generated_descriptor_dir = tmp_path / "examples" / "generated_stable_publication_descriptor_index_publication"
+    generated_metadata_root = tmp_path / "examples" / "generated_stable_publication_metadata_root"
+    generated_metadata_dir = tmp_path / "examples" / "generated_stable_publication_metadata_catalog_publication"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "catalog_presets/stable_reference_catalog.json",
+        "publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json",
+        "publication_descriptor_index_presets/stable_reference_publication_descriptor_index.json",
+        "publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog.json",
+        "registry_presets/stable_reference_publication_registry.json",
+        "registry_workspace_presets/stable_reference_publication_registry_workspace.json",
+    )
+    output_dir = tmp_path / "stable_publication_registry_workspace_example_preset"
+
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json"),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(generated_network_dir),
+            "--label",
+            "Generated Stable Network For Registry Example",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-stable-publication-descriptor-index-publication",
+            "--discover-under",
+            str(generated_network_dir),
+            "--output-dir",
+            str(generated_descriptor_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Generated Stable Descriptor Index For Registry Example",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+    workspace_bundle_dir, catalog_bundle_dir = make_stable_publication_metadata_bundle_dirs(generated_metadata_root)
+    assert main(
+        [
+            "bootstrap-stable-publication-metadata-catalog-publication",
+            str(workspace_bundle_dir),
+            str(catalog_bundle_dir),
+            "--output-dir",
+            str(generated_metadata_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Generated Stable Metadata Catalog For Registry Example",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert main(
+        [
+            "bootstrap-stable-publication-registry-workspace",
+            "--catalog-preset-json",
+            str(staged["catalog_presets/stable_reference_catalog.json"]),
+            "--publication-catalog-workspace-preset-json",
+            str(staged["publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json"]),
+            "--preset-json",
+            str(staged["registry_workspace_presets/stable_reference_publication_registry_workspace.json"]),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 10
+    assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT Stable Reference Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT Stable Reference Workspace Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "SATROOT Stable Reference Workspace Publication Registry"
+    assert summary["source_stable_catalog_workspace_dir"] == str(
+        (output_dir / "stable_publication_catalog_workspace" / "stable_catalog_workspace").resolve()
+    )
     assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
 

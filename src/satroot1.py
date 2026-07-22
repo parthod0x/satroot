@@ -1345,6 +1345,10 @@ def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any
         if not isinstance(publication_metadata_catalog_preset, str) or not publication_metadata_catalog_preset.strip():
             raise SatRootError("publication catalog workspace preset publication_metadata_catalog_preset must be a non-empty string when provided")
         publication_metadata_catalog_preset_path = str((preset_path.parent / publication_metadata_catalog_preset).resolve())
+    if publication_descriptor_index_preset_path is not None:
+        load_publication_descriptor_index_preset(publication_descriptor_index_preset_path)
+    if publication_metadata_catalog_preset_path is not None:
+        load_publication_metadata_catalog_preset(publication_metadata_catalog_preset_path)
     recursive = preset.get("recursive", True)
     if not isinstance(recursive, bool):
         raise SatRootError("publication catalog workspace preset recursive must be a boolean")
@@ -1560,6 +1564,10 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
     publication_network_dir = resolve_optional_path("publication_network_dir")
     release_catalog_index_dir = resolve_optional_path("release_catalog_index_dir")
     publication_registry_preset_path = resolve_optional_path("publication_registry_preset")
+    if publication_catalog_workspace_preset_path is not None:
+        load_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
+    if publication_registry_preset_path is not None:
+        load_publication_registry_preset(publication_registry_preset_path)
     if (
         not artifact_paths
         and not discover_under
@@ -19047,7 +19055,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         catalog_preset_path = None if not args.catalog_preset_json else Path(args.catalog_preset_json).resolve()
         stable_preset = load_stable_demo_catalog_preset(catalog_preset_path) if catalog_preset_path is not None else None
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
-        preset = load_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
+        preset = load_stable_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         stable_inputs = resolve_stable_demo_bootstrap_inputs(
             command_name="bootstrap-stable-publication-catalog-workspace",
@@ -19129,7 +19137,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         catalog_preset_path = None if not args.catalog_preset_json else Path(args.catalog_preset_json).resolve()
         machine_preset = load_machine_demo_catalog_preset(catalog_preset_path) if catalog_preset_path is not None else None
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
-        preset = load_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
+        preset = load_machine_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         machine_inputs = resolve_machine_demo_bootstrap_inputs(
             command_name="bootstrap-machine-publication-catalog-workspace",
@@ -19220,12 +19228,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             None if not args.publication_catalog_workspace_preset_json else Path(args.publication_catalog_workspace_preset_json).resolve()
         )
         publication_catalog_workspace_preset = (
-            load_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
+            load_stable_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
             if publication_catalog_workspace_preset_path is not None
             else None
         )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
-        preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        preset = load_stable_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         inventory_publication_catalog_workspace_dir = (
             load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
@@ -19383,12 +19391,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             None if not args.publication_catalog_workspace_preset_json else Path(args.publication_catalog_workspace_preset_json).resolve()
         )
         publication_catalog_workspace_preset = (
-            load_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
+            load_machine_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
             if publication_catalog_workspace_preset_path is not None
             else None
         )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
-        preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        preset = load_machine_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         inventory_publication_catalog_workspace_dir = (
             load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
