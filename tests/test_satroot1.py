@@ -12147,6 +12147,174 @@ def test_cli_bootstrap_publication_catalog_workspace_from_exported_preset_round_
     capsys.readouterr()
 
 
+def test_cli_bootstrap_publication_catalog_workspace_from_publication_metadata_bundle_collection(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    collection_dir = tmp_path / "publication_metadata_bundle_collection"
+    output_dir = tmp_path / "publication_catalog_workspace_from_collection"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            "--publication-metadata-bundle-collection-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-metadata-catalog-label",
+            "Collection Metadata Catalog",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT publication catalog workspace to" in captured.out
+
+    source_summary = json.loads((collection_dir / "summary.json").read_text(encoding="utf-8"))
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == source_summary["artifact_count"] == 12
+    assert summary["publication_metadata_bundle_count"] == source_summary["bundle_count"] == 12
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Collection Metadata Catalog"
+    assert summary["source_publication_metadata_bundle_collection_dir"] == str(collection_dir.resolve())
+
+    source_bundle_dir = Path(source_summary["bundle_dirs"][0]).resolve()
+    copied_bundle_dir = output_dir / "publication_metadata_bundles" / source_bundle_dir.name
+    assert copied_bundle_dir.is_dir()
+    assert (
+        copied_bundle_dir / "publication_metadata_manifest.json"
+    ).read_text(encoding="utf-8") == (
+        source_bundle_dir / "publication_metadata_manifest.json"
+    ).read_text(encoding="utf-8")
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_publication_catalog_workspace_with_collection_preset(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    collection_dir = tmp_path / "publication_metadata_bundle_collection"
+    preset_path = tmp_path / "publication_catalog_workspace_with_collection.json"
+    output_dir = tmp_path / "publication_catalog_workspace_with_collection_preset"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_json(
+        preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "publication_metadata_bundle_collection_dir": str(collection_dir.relative_to(tmp_path)),
+            "publication_descriptor_index": {
+                "label": "Collection Preset Descriptor Index",
+            },
+            "publication_metadata_catalog": {
+                "label": "Collection Preset Metadata Catalog",
+            },
+        },
+    )
+
+    assert main(
+        [
+            "bootstrap-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["artifact_count"] == 12
+    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Collection Preset Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Collection Preset Metadata Catalog"
+    assert summary["source_publication_metadata_bundle_collection_dir"] == str(collection_dir.resolve())
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_publication_catalog_workspace_rejects_mixed_collection_and_artifact_sources(tmp_path):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    collection_dir = tmp_path / "publication_metadata_bundle_collection"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+
+    with pytest.raises(
+        SatRootError,
+        match="either SATROOT artifact sources or publication_metadata_bundle_collection_dir",
+    ):
+        main(
+            [
+                "bootstrap-publication-catalog-workspace",
+                str(network_dir),
+                "--publication-metadata-bundle-collection-dir",
+                str(collection_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--publication-descriptor-index-key-id",
+                "descriptor-key",
+                "--publication-metadata-key-id",
+                "metadata-key",
+                "--publication-metadata-catalog-key-id",
+                "catalog-key",
+                "--output-dir",
+                str(tmp_path / "should_not_exist"),
+            ]
+        )
+
+
 def test_cli_export_machine_publication_catalog_workspace_preset(tmp_path):
     workspace_dir = tmp_path / "machine_publication_catalog_workspace"
     assert main(

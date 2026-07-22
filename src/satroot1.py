@@ -1318,6 +1318,7 @@ def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any
         "artifact_paths",
         "discover_under",
         "recursive",
+        "publication_metadata_bundle_collection_dir",
         "publication_descriptor_index_preset",
         "publication_metadata_catalog_preset",
         "publication_descriptor_index",
@@ -1341,6 +1342,20 @@ def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any
             label="publication catalog workspace preset discover_under",
         )
     ]
+    publication_metadata_bundle_collection_dir = None
+    publication_metadata_bundle_collection_entry = preset.get("publication_metadata_bundle_collection_dir")
+    if publication_metadata_bundle_collection_entry is not None:
+        if (
+            not isinstance(publication_metadata_bundle_collection_entry, str)
+            or not publication_metadata_bundle_collection_entry.strip()
+        ):
+            raise SatRootError(
+                "publication catalog workspace preset publication_metadata_bundle_collection_dir must be a non-empty string when provided"
+            )
+        publication_metadata_bundle_collection_dir = str(
+            (preset_path.parent / publication_metadata_bundle_collection_entry).resolve()
+        )
+        summarize_publication_metadata_bundle_collection(publication_metadata_bundle_collection_dir)
     publication_descriptor_index_preset_path = None
     publication_descriptor_index_preset = preset.get("publication_descriptor_index_preset")
     if publication_descriptor_index_preset is not None:
@@ -1360,13 +1375,16 @@ def load_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any
     recursive = preset.get("recursive", True)
     if not isinstance(recursive, bool):
         raise SatRootError("publication catalog workspace preset recursive must be a boolean")
-    if not artifact_paths and not discover_under:
-        raise SatRootError("publication catalog workspace preset must contain artifact_paths or discover_under")
+    if not artifact_paths and not discover_under and publication_metadata_bundle_collection_dir is None:
+        raise SatRootError(
+            "publication catalog workspace preset must contain artifact_paths, discover_under, or publication_metadata_bundle_collection_dir"
+        )
 
     return {
         "artifact_paths": artifact_paths,
         "discover_under": discover_under,
         "recursive": recursive,
+        "publication_metadata_bundle_collection_dir": publication_metadata_bundle_collection_dir,
         "publication_descriptor_index_preset_path": publication_descriptor_index_preset_path,
         "publication_metadata_catalog_preset_path": publication_metadata_catalog_preset_path,
         "descriptor_index_metadata": validate_release_metadata_mapping(preset.get("publication_descriptor_index")),
@@ -1396,6 +1414,14 @@ def load_stable_publication_descriptor_index_preset(path: str | Path) -> Dict[st
 
 def load_machine_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any]:
     preset = load_publication_catalog_workspace_preset(path)
+    publication_metadata_bundle_collection_dir = preset.get("publication_metadata_bundle_collection_dir")
+    if publication_metadata_bundle_collection_dir is not None:
+        collection_summary = summarize_publication_metadata_bundle_collection(publication_metadata_bundle_collection_dir)
+        for artifact_path in collection_summary.get("artifact_paths", []):
+            _require_machine_satroot_artifact_path(
+                artifact_path,
+                label="machine publication catalog workspace preset publication metadata bundle collection artifact",
+            )
     publication_descriptor_index_preset_path = preset.get("publication_descriptor_index_preset_path")
     if publication_descriptor_index_preset_path is not None:
         load_machine_publication_descriptor_index_preset(publication_descriptor_index_preset_path)
@@ -1412,6 +1438,14 @@ def load_machine_publication_catalog_workspace_preset(path: str | Path) -> Dict[
 
 def load_stable_publication_catalog_workspace_preset(path: str | Path) -> Dict[str, Any]:
     preset = load_publication_catalog_workspace_preset(path)
+    publication_metadata_bundle_collection_dir = preset.get("publication_metadata_bundle_collection_dir")
+    if publication_metadata_bundle_collection_dir is not None:
+        collection_summary = summarize_publication_metadata_bundle_collection(publication_metadata_bundle_collection_dir)
+        for artifact_path in collection_summary.get("artifact_paths", []):
+            _require_stable_satroot_artifact_path(
+                artifact_path,
+                label="stable publication catalog workspace preset publication metadata bundle collection artifact",
+            )
     publication_descriptor_index_preset_path = preset.get("publication_descriptor_index_preset_path")
     if publication_descriptor_index_preset_path is not None:
         load_stable_publication_descriptor_index_preset(publication_descriptor_index_preset_path)
@@ -11281,21 +11315,17 @@ def publish_publication_catalog_workspace(
 def write_publication_catalog_workspace(
     *,
     artifact_paths: Sequence[str | Path],
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
     output_dir: str | Path,
     signature_scheme: str,
     publication_descriptor_index_key_id: str,
     publication_metadata_key_id: str,
     publication_metadata_catalog_key_id: str,
-    discover_under: Optional[Sequence[str | Path]] = None,
-    recursive: bool = True,
+    publication_metadata_bundle_collection_dir: Optional[str | Path] = None,
     descriptor_index_metadata: Optional[Mapping[str, str]] = None,
     publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
-    resolved_artifact_paths = resolve_satroot_artifact_inputs(
-        artifact_paths,
-        discover_under=discover_under,
-        recursive=recursive,
-    )
     root_output_dir = Path(output_dir).resolve()
     root_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -11303,18 +11333,70 @@ def write_publication_catalog_workspace(
     metadata_bundles_dir = root_output_dir / "publication_metadata_bundles"
     metadata_catalog_dir = root_output_dir / "publication_metadata_catalog"
 
+    source_publication_metadata_bundle_collection_dir: Optional[str] = None
+    if publication_metadata_bundle_collection_dir is not None:
+        if artifact_paths or discover_under:
+            raise SatRootError(
+                "publication catalog workspace generation accepts either SATROOT artifact sources or publication_metadata_bundle_collection_dir, not both"
+            )
+        collection_summary = summarize_publication_metadata_bundle_collection(publication_metadata_bundle_collection_dir)
+        resolved_artifact_paths = list(collection_summary["artifact_paths"])
+        source_publication_metadata_bundle_collection_dir = collection_summary["collection_dir"]
+        metadata_bundles_dir.mkdir(parents=True, exist_ok=True)
+        copied_bundle_dirs: list[str] = []
+        copied_bundles: list[Dict[str, Any]] = []
+        seen_bundle_names: set[str] = set()
+        for entry in collection_summary["bundles"]:
+            bundle_name = str(entry["bundle_name"])
+            if bundle_name in seen_bundle_names:
+                raise SatRootError(
+                    f"publication metadata bundle collection contains duplicate bundle names: {bundle_name}"
+                )
+            seen_bundle_names.add(bundle_name)
+            source_bundle_dir = Path(str(entry["bundle_dir"])).resolve()
+            copied_bundle_dir = _copy_workspace_directory(
+                source_bundle_dir,
+                metadata_bundles_dir / bundle_name,
+                label="publication metadata bundle",
+            )
+            manifest_path, report_path, descriptor_path, manifest, descriptor = _load_publication_metadata_bundle_publication(
+                copied_bundle_dir
+            )
+            copied_bundle_dirs.append(str(copied_bundle_dir.resolve()))
+            copied_bundles.append(
+                {
+                    "bundle_name": bundle_name,
+                    "bundle_dir": str(copied_bundle_dir.resolve()),
+                    "publication_metadata_manifest_path": str(manifest_path.resolve()),
+                    "publication_report_path": str(report_path.resolve()),
+                    "publication_descriptor_path": str(descriptor_path.resolve()),
+                    "artifact_kind": descriptor.get("artifact_kind", manifest.get("artifact_kind")),
+                    "artifact_path": descriptor.get("artifact_path", manifest.get("artifact_path")),
+                }
+            )
+        metadata_bundle_collection = {
+            "bundle_dirs": copied_bundle_dirs,
+            "bundles": copied_bundles,
+        }
+    else:
+        resolved_artifact_paths = resolve_satroot_artifact_inputs(
+            artifact_paths,
+            discover_under=discover_under,
+            recursive=recursive,
+        )
+        metadata_bundle_collection = bootstrap_publication_metadata_bundle_collection(
+            resolved_artifact_paths,
+            output_dir=metadata_bundles_dir,
+            signature_scheme=signature_scheme,
+            key_id=publication_metadata_key_id,
+        )
+
     descriptor_index_publication = bootstrap_publication_descriptor_index_publication(
         resolved_artifact_paths,
         output_dir=descriptor_index_dir,
         signature_scheme=signature_scheme,
         key_id=publication_descriptor_index_key_id,
         index_metadata=descriptor_index_metadata,
-    )
-    metadata_bundle_collection = bootstrap_publication_metadata_bundle_collection(
-        resolved_artifact_paths,
-        output_dir=metadata_bundles_dir,
-        signature_scheme=signature_scheme,
-        key_id=publication_metadata_key_id,
     )
     metadata_catalog_publication = bootstrap_publication_metadata_catalog_publication(
         metadata_bundle_collection["bundle_dirs"],
@@ -11337,6 +11419,7 @@ def write_publication_catalog_workspace(
         "publication_descriptor_index": copy.deepcopy(descriptor_index_publication["publication_descriptor_index"]),
         "publication_metadata_bundles": copy.deepcopy(metadata_bundle_collection["bundles"]),
         "publication_metadata_catalog": copy.deepcopy(metadata_catalog_publication["publication_metadata_catalog"]),
+        "source_publication_metadata_bundle_collection_dir": source_publication_metadata_bundle_collection_dir,
     }
     summary_path = root_output_dir / "summary.json"
     _write_json_file(summary_path, summary)
@@ -14262,6 +14345,102 @@ def bootstrap_stable_publication_metadata_bundle_collection(
     )
 
 
+def validate_publication_metadata_bundle_collection_summary_consistency(summary: Mapping[str, Any]) -> None:
+    signature_scheme = summary.get("signature_scheme")
+    artifact_paths = summary.get("artifact_paths")
+    artifact_count = summary.get("artifact_count")
+    bundle_dirs = summary.get("bundle_dirs")
+    bundle_count = summary.get("bundle_count")
+    bundles = summary.get("bundles")
+
+    if not isinstance(signature_scheme, str) or not signature_scheme.strip():
+        raise SatRootError("publication metadata bundle collection summary signature_scheme must be a non-empty string")
+    if not isinstance(artifact_paths, list):
+        raise SatRootError("publication metadata bundle collection summary artifact_paths must be an array")
+    if not isinstance(bundle_dirs, list):
+        raise SatRootError("publication metadata bundle collection summary bundle_dirs must be an array")
+    if not isinstance(bundles, list):
+        raise SatRootError("publication metadata bundle collection summary bundles must be an array")
+    if not isinstance(artifact_count, int) or artifact_count != len(artifact_paths):
+        raise SatRootError("publication metadata bundle collection summary artifact_count mismatch")
+    if not isinstance(bundle_count, int) or bundle_count != len(bundle_dirs) or bundle_count != len(bundles):
+        raise SatRootError("publication metadata bundle collection summary bundle_count mismatch")
+    for artifact_path in artifact_paths:
+        if not isinstance(artifact_path, str) or not artifact_path.strip():
+            raise SatRootError("publication metadata bundle collection summary artifact_paths entries must be non-empty strings")
+    for bundle_dir in bundle_dirs:
+        if not isinstance(bundle_dir, str) or not bundle_dir.strip():
+            raise SatRootError("publication metadata bundle collection summary bundle_dirs entries must be non-empty strings")
+
+
+def summarize_publication_metadata_bundle_collection(
+    publication_metadata_bundle_collection_dir: str | Path,
+) -> Dict[str, Any]:
+    collection_path, summary = _load_workspace_summary(
+        publication_metadata_bundle_collection_dir,
+        label="publication metadata bundle collection",
+    )
+    validate_publication_metadata_bundle_collection_summary_consistency(summary)
+
+    artifact_paths = [str(Path(value).resolve()) for value in summary.get("artifact_paths", []) if isinstance(value, str)]
+    bundles = summary.get("bundles")
+    assert isinstance(bundles, list)
+
+    relocated_bundles: list[Dict[str, Any]] = []
+    bundle_dirs: list[str] = []
+    for entry in bundles:
+        if not isinstance(entry, Mapping):
+            raise SatRootError("publication metadata bundle collection summary bundles must contain objects")
+        bundle_name = entry.get("bundle_name")
+        entry_bundle_dir = entry.get("bundle_dir")
+
+        bundle_dir: Optional[Path] = None
+        if isinstance(bundle_name, str) and bundle_name.strip():
+            expected_bundle_dir = (collection_path / bundle_name).resolve()
+            if expected_bundle_dir.is_dir():
+                bundle_dir = expected_bundle_dir
+        if bundle_dir is None and isinstance(entry_bundle_dir, str) and entry_bundle_dir.strip():
+            bundle_dir = Path(entry_bundle_dir).resolve()
+            if not bundle_dir.is_dir():
+                raise SatRootError(
+                    f"publication metadata bundle collection bundle directory not found: {entry_bundle_dir}"
+                )
+            if not isinstance(bundle_name, str) or not bundle_name.strip():
+                bundle_name = bundle_dir.name
+        if bundle_dir is None or not isinstance(bundle_name, str) or not bundle_name.strip():
+            raise SatRootError(
+                "publication metadata bundle collection summary bundles must contain bundle_name or bundle_dir metadata"
+            )
+
+        manifest_path, report_path, descriptor_path, manifest, descriptor = _load_publication_metadata_bundle_publication(bundle_dir)
+        bundle_dirs.append(str(bundle_dir.resolve()))
+        relocated_bundles.append(
+            {
+                "bundle_name": bundle_name,
+                "bundle_dir": str(bundle_dir.resolve()),
+                "publication_metadata_manifest_path": str(manifest_path.resolve()),
+                "publication_report_path": str(report_path.resolve()),
+                "publication_descriptor_path": str(descriptor_path.resolve()),
+                "artifact_kind": descriptor.get("artifact_kind", manifest.get("artifact_kind")),
+                "artifact_path": descriptor.get("artifact_path", manifest.get("artifact_path")),
+            }
+        )
+
+    if len(bundle_dirs) != summary.get("bundle_count"):
+        raise SatRootError("publication metadata bundle collection summary bundle_count does not match discovered bundle directories")
+
+    return {
+        "collection_dir": str(collection_path.resolve()),
+        "summary_path": str((collection_path / "summary.json").resolve()),
+        "signature_scheme": summary.get("signature_scheme"),
+        "artifact_count": len(artifact_paths),
+        "artifact_paths": artifact_paths,
+        "bundle_count": len(bundle_dirs),
+        "bundle_dirs": bundle_dirs,
+        "bundles": relocated_bundles,
+    }
+
+
 def discover_publication_metadata_bundle_dirs(
     search_roots: Sequence[str | Path],
     *,
@@ -16560,6 +16739,7 @@ def build_cli_parser() -> Any:
     bootstrap_publication_catalog_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added to the catalog workspace sources")
     bootstrap_publication_catalog_workspace_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory to include in the descriptor and metadata lanes")
     bootstrap_publication_catalog_workspace_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
+    bootstrap_publication_catalog_workspace_parser.add_argument("--publication-metadata-bundle-collection-dir", help="Optional existing publication metadata bundle collection directory to copy and reuse instead of regenerating nested metadata bundles")
     bootstrap_publication_catalog_workspace_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each discovery root")
     bootstrap_publication_catalog_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
     bootstrap_publication_catalog_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
@@ -20019,6 +20199,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        publication_metadata_bundle_collection_dir = (
+            Path((preset or {}).get("publication_metadata_bundle_collection_dir")).resolve()
+            if (preset or {}).get("publication_metadata_bundle_collection_dir")
+            else None
+        )
+        if args.publication_metadata_bundle_collection_dir:
+            publication_metadata_bundle_collection_dir = Path(args.publication_metadata_bundle_collection_dir).resolve()
         descriptor_index_metadata = dict((preset or {}).get("descriptor_index_metadata", {}))
         for key, value in {
             "channel": args.descriptor_index_channel,
@@ -20044,6 +20231,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
             publication_metadata_key_id=args.publication_metadata_key_id,
             publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
             descriptor_index_metadata=descriptor_index_metadata,
             publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
         )
