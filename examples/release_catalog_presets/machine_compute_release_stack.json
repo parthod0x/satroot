@@ -1,6 +1,9 @@
 {
   "type": "SATROOT-RELEASE-CATALOG-PRESET",
   "version": "0.1",
+  "bundle_index_presets": [
+    "../bundle_index_presets/machine_compute_bundle_index.json"
+  ],
   "discover_under": [
     "../../generated_machine_release_workspaces"
   ],

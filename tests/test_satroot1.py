@@ -1788,6 +1788,9 @@ def test_load_demo_catalog_preset_example():
 def test_load_release_catalog_preset_example():
     preset = load_release_catalog_preset(ROOT / "examples" / "release_catalog_presets" / "ai_compute_release_stack.json")
     assert preset["release_dirs"] == []
+    assert preset["bundle_index_preset_paths"] == [
+        str((ROOT / "examples" / "bundle_index_presets" / "ai_compute_bundle_index.json").resolve())
+    ]
     assert preset["discover_under"] == [str((ROOT / "generated_release_workspaces").resolve())]
     assert preset["recursive"] is True
     assert preset["catalog_metadata"]["label"] == "SATROOT AI Compute Release Stack"
@@ -1796,6 +1799,9 @@ def test_load_release_catalog_preset_example():
 def test_load_machine_release_catalog_preset_example():
     preset = load_release_catalog_preset(ROOT / "examples" / "release_catalog_presets" / "machine_compute_release_stack.json")
     assert preset["release_dirs"] == []
+    assert preset["bundle_index_preset_paths"] == [
+        str((ROOT / "examples" / "bundle_index_presets" / "machine_compute_bundle_index.json").resolve())
+    ]
     assert preset["discover_under"] == [str((ROOT / "generated_machine_release_workspaces").resolve())]
     assert preset["recursive"] is True
     assert preset["catalog_metadata"]["label"] == "SATROOT Machine Compute Release Stack"
@@ -1804,6 +1810,9 @@ def test_load_machine_release_catalog_preset_example():
 def test_load_stable_release_catalog_preset_example():
     preset = load_release_catalog_preset(ROOT / "examples" / "release_catalog_presets" / "stable_reference_release_stack.json")
     assert preset["release_dirs"] == []
+    assert preset["bundle_index_preset_paths"] == [
+        str((ROOT / "examples" / "bundle_index_presets" / "stable_reference_bundle_index.json").resolve())
+    ]
     assert preset["discover_under"] == [str((ROOT / "generated_stable_release_workspaces").resolve())]
     assert preset["recursive"] is True
     assert preset["catalog_metadata"]["label"] == "SATROOT Stable Reference Release Stack"
@@ -1812,6 +1821,9 @@ def test_load_stable_release_catalog_preset_example():
 def test_load_release_catalog_index_preset_example():
     preset = load_release_catalog_index_preset(ROOT / "examples" / "release_catalog_index_presets" / "ai_compute_catalog_network.json")
     assert preset["release_catalog_dirs"] == []
+    assert preset["release_catalog_preset_paths"] == [
+        str((ROOT / "examples" / "release_catalog_presets" / "ai_compute_release_stack.json").resolve())
+    ]
     assert preset["discover_under"] == [str((ROOT / "generated_release_catalogs").resolve())]
     assert preset["recursive"] is True
     assert preset["index_metadata"]["label"] == "SATROOT AI Compute Catalog Network"
@@ -1820,6 +1832,9 @@ def test_load_release_catalog_index_preset_example():
 def test_load_machine_release_catalog_index_preset_example():
     preset = load_release_catalog_index_preset(ROOT / "examples" / "release_catalog_index_presets" / "machine_compute_catalog_network.json")
     assert preset["release_catalog_dirs"] == []
+    assert preset["release_catalog_preset_paths"] == [
+        str((ROOT / "examples" / "release_catalog_presets" / "machine_compute_release_stack.json").resolve())
+    ]
     assert preset["discover_under"] == [str((ROOT / "generated_machine_release_catalogs").resolve())]
     assert preset["recursive"] is True
     assert preset["index_metadata"]["label"] == "SATROOT Machine Compute Catalog Network"
@@ -1828,6 +1843,9 @@ def test_load_machine_release_catalog_index_preset_example():
 def test_load_stable_release_catalog_index_preset_example():
     preset = load_release_catalog_index_preset(ROOT / "examples" / "release_catalog_index_presets" / "stable_reference_catalog_network.json")
     assert preset["release_catalog_dirs"] == []
+    assert preset["release_catalog_preset_paths"] == [
+        str((ROOT / "examples" / "release_catalog_presets" / "stable_reference_release_stack.json").resolve())
+    ]
     assert preset["discover_under"] == [str((ROOT / "generated_stable_release_catalogs").resolve())]
     assert preset["recursive"] is True
     assert preset["index_metadata"]["label"] == "SATROOT Stable Reference Catalog Network"
@@ -3853,7 +3871,11 @@ def test_cli_publish_machine_release_catalog_from_exported_preset_round_trip(tmp
 
 def test_cli_publish_machine_release_catalog_with_example_preset(tmp_path, capsys):
     release_root = tmp_path / "generated_machine_release_workspaces"
-    preset_path = stage_example_json(tmp_path, "release_catalog_presets/machine_compute_release_stack.json")
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_presets/machine_compute_release_stack.json",
+        "bundle_index_presets/machine_compute_bundle_index.json",
+    )
     output_dir = tmp_path / "machine_release_catalog_example_preset"
 
     make_machine_release_dirs(release_root)
@@ -3864,7 +3886,7 @@ def test_cli_publish_machine_release_catalog_with_example_preset(tmp_path, capsy
             [
                 "publish-machine-release-catalog",
                 "--preset-json",
-                str(preset_path),
+                str(staged["release_catalog_presets/machine_compute_release_stack.json"]),
                 "--output-dir",
                 str(output_dir),
                 "--scheme",
@@ -3892,6 +3914,89 @@ def test_cli_publish_machine_release_catalog_with_example_preset(tmp_path, capsy
     assert catalog["catalog"]["published_at"] == "2026-07-14T03:00:00Z"
     assert manifest["release_count"] == 2
     assert verified["release_count"] == 2
+    assert main(["release-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_release_catalog_with_example_preset_tree(tmp_path, capsys):
+    release_root = tmp_path / "generated_release_workspaces"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_presets/ai_compute_release_stack.json",
+        "bundle_index_presets/ai_compute_bundle_index.json",
+    )
+    output_dir = tmp_path / "release_catalog_example_preset_tree"
+
+    make_demo_release_dirs(release_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-release-catalog",
+                "--preset-json",
+                str(staged["release_catalog_presets/ai_compute_release_stack.json"]),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+                "--label",
+                "Preset Release Catalog Tree Override",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Preset Release Catalog Tree Override"
+    assert catalog["catalog"]["published_at"] == "2026-07-01T00:00:00Z"
+    assert main(["release-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_release_catalog_with_example_preset_tree(tmp_path, capsys):
+    release_root = tmp_path / "generated_machine_release_workspaces"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_presets/machine_compute_release_stack.json",
+        "bundle_index_presets/machine_compute_bundle_index.json",
+    )
+    output_dir = tmp_path / "machine_release_catalog_example_preset_tree"
+
+    make_machine_release_dirs(release_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-machine-release-catalog",
+                "--preset-json",
+                str(staged["release_catalog_presets/machine_compute_release_stack.json"]),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+                "--label",
+                "Preset Machine Release Catalog Tree Override",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["channel"] == "machine"
+    assert catalog["catalog"]["label"] == "Preset Machine Release Catalog Tree Override"
+    assert catalog["catalog"]["published_at"] == "2026-07-14T03:00:00Z"
     assert main(["release-catalog-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
@@ -3973,7 +4078,11 @@ def test_cli_publish_stable_release_catalog_from_exported_preset_round_trip(tmp_
 
 def test_cli_publish_stable_release_catalog_with_example_preset(tmp_path, capsys):
     release_root = tmp_path / "generated_stable_release_workspaces"
-    preset_path = stage_example_json(tmp_path, "release_catalog_presets/stable_reference_release_stack.json")
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_presets/stable_reference_release_stack.json",
+        "bundle_index_presets/stable_reference_bundle_index.json",
+    )
     output_dir = tmp_path / "stable_release_catalog_example_preset"
 
     make_stable_release_dirs(release_root)
@@ -3984,7 +4093,7 @@ def test_cli_publish_stable_release_catalog_with_example_preset(tmp_path, capsys
             [
                 "publish-stable-release-catalog",
                 "--preset-json",
-                str(preset_path),
+                str(staged["release_catalog_presets/stable_reference_release_stack.json"]),
                 "--output-dir",
                 str(output_dir),
                 "--scheme",
@@ -4012,6 +4121,48 @@ def test_cli_publish_stable_release_catalog_with_example_preset(tmp_path, capsys
     assert catalog["catalog"]["published_at"] == "2026-07-15T03:00:00Z"
     assert manifest["release_count"] == 2
     assert verified["release_count"] == 2
+    assert main(["release-catalog-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_release_catalog_with_example_preset_tree(tmp_path, capsys):
+    release_root = tmp_path / "generated_stable_release_workspaces"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_presets/stable_reference_release_stack.json",
+        "bundle_index_presets/stable_reference_bundle_index.json",
+    )
+    output_dir = tmp_path / "stable_release_catalog_example_preset_tree"
+
+    make_stable_release_dirs(release_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-stable-release-catalog",
+                "--preset-json",
+                str(staged["release_catalog_presets/stable_reference_release_stack.json"]),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "catalog-key",
+                "--secret",
+                "catalog-secret",
+                "--label",
+                "Preset Stable Release Catalog Tree Override",
+            ]
+        )
+        == 0
+    )
+
+    catalog = json.loads((output_dir / "release_catalog.json").read_text(encoding="utf-8"))
+    assert catalog["release_count"] == 2
+    assert catalog["catalog"]["channel"] == "stable"
+    assert catalog["catalog"]["label"] == "Preset Stable Release Catalog Tree Override"
+    assert catalog["catalog"]["published_at"] == "2026-07-15T03:00:00Z"
     assert main(["release-catalog-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
@@ -4751,7 +4902,12 @@ def test_cli_publish_machine_release_catalog_index_from_exported_preset_round_tr
 
 def test_cli_publish_machine_release_catalog_index_with_example_preset(tmp_path, capsys):
     catalog_root = tmp_path / "generated_machine_release_catalogs"
-    preset_path = stage_example_json(tmp_path, "release_catalog_index_presets/machine_compute_catalog_network.json")
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_index_presets/machine_compute_catalog_network.json",
+        "release_catalog_presets/machine_compute_release_stack.json",
+        "bundle_index_presets/machine_compute_bundle_index.json",
+    )
     output_dir = tmp_path / "machine_release_catalog_index_example_preset"
 
     make_machine_release_catalog_dirs(catalog_root)
@@ -4762,7 +4918,7 @@ def test_cli_publish_machine_release_catalog_index_with_example_preset(tmp_path,
             [
                 "publish-machine-release-catalog-index",
                 "--preset-json",
-                str(preset_path),
+                str(staged["release_catalog_index_presets/machine_compute_catalog_network.json"]),
                 "--output-dir",
                 str(output_dir),
                 "--scheme",
@@ -4790,6 +4946,91 @@ def test_cli_publish_machine_release_catalog_index_with_example_preset(tmp_path,
     assert index["index"]["published_at"] == "2026-07-14T04:00:00Z"
     assert manifest["release_catalog_count"] == 2
     assert verified["release_catalog_count"] == 2
+    assert main(["release-catalog-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_release_catalog_index_with_example_preset_tree(tmp_path, capsys):
+    catalog_root = tmp_path / "generated_release_catalogs"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_index_presets/ai_compute_catalog_network.json",
+        "release_catalog_presets/ai_compute_release_stack.json",
+        "bundle_index_presets/ai_compute_bundle_index.json",
+    )
+    output_dir = tmp_path / "release_catalog_index_example_preset_tree"
+
+    make_demo_release_catalog_dir(catalog_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-release-catalog-index",
+                "--preset-json",
+                str(staged["release_catalog_index_presets/ai_compute_catalog_network.json"]),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+                "--label",
+                "Preset Release Catalog Index Tree Override",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 1
+    assert index["index"]["label"] == "Preset Release Catalog Index Tree Override"
+    assert index["index"]["published_at"] == "2026-07-02T00:00:00Z"
+    assert main(["release-catalog-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_machine_release_catalog_index_with_example_preset_tree(tmp_path, capsys):
+    catalog_root = tmp_path / "generated_machine_release_catalogs"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_index_presets/machine_compute_catalog_network.json",
+        "release_catalog_presets/machine_compute_release_stack.json",
+        "bundle_index_presets/machine_compute_bundle_index.json",
+    )
+    output_dir = tmp_path / "machine_release_catalog_index_example_preset_tree"
+
+    make_machine_release_catalog_dirs(catalog_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-machine-release-catalog-index",
+                "--preset-json",
+                str(staged["release_catalog_index_presets/machine_compute_catalog_network.json"]),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+                "--label",
+                "Preset Machine Release Catalog Index Tree Override",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["channel"] == "machine"
+    assert index["index"]["label"] == "Preset Machine Release Catalog Index Tree Override"
+    assert index["index"]["published_at"] == "2026-07-14T04:00:00Z"
     assert main(["release-catalog-index-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
@@ -4894,7 +5135,12 @@ def test_cli_publish_stable_release_catalog_index_from_exported_preset_round_tri
 
 def test_cli_publish_stable_release_catalog_index_with_example_preset(tmp_path, capsys):
     catalog_root = tmp_path / "generated_stable_release_catalogs"
-    preset_path = stage_example_json(tmp_path, "release_catalog_index_presets/stable_reference_catalog_network.json")
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_index_presets/stable_reference_catalog_network.json",
+        "release_catalog_presets/stable_reference_release_stack.json",
+        "bundle_index_presets/stable_reference_bundle_index.json",
+    )
     output_dir = tmp_path / "stable_release_catalog_index_example_preset"
 
     make_stable_release_catalog_dirs(catalog_root)
@@ -4905,7 +5151,7 @@ def test_cli_publish_stable_release_catalog_index_with_example_preset(tmp_path, 
             [
                 "publish-stable-release-catalog-index",
                 "--preset-json",
-                str(preset_path),
+                str(staged["release_catalog_index_presets/stable_reference_catalog_network.json"]),
                 "--output-dir",
                 str(output_dir),
                 "--scheme",
@@ -4933,6 +5179,49 @@ def test_cli_publish_stable_release_catalog_index_with_example_preset(tmp_path, 
     assert index["index"]["published_at"] == "2026-07-15T04:00:00Z"
     assert manifest["release_catalog_count"] == 2
     assert verified["release_catalog_count"] == 2
+    assert main(["release-catalog-index-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_publish_stable_release_catalog_index_with_example_preset_tree(tmp_path, capsys):
+    catalog_root = tmp_path / "generated_stable_release_catalogs"
+    staged = stage_example_json_tree(
+        tmp_path,
+        "release_catalog_index_presets/stable_reference_catalog_network.json",
+        "release_catalog_presets/stable_reference_release_stack.json",
+        "bundle_index_presets/stable_reference_bundle_index.json",
+    )
+    output_dir = tmp_path / "stable_release_catalog_index_example_preset_tree"
+
+    make_stable_release_catalog_dirs(catalog_root)
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "publish-stable-release-catalog-index",
+                "--preset-json",
+                str(staged["release_catalog_index_presets/stable_reference_catalog_network.json"]),
+                "--output-dir",
+                str(output_dir),
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+                "--secret",
+                "index-secret",
+                "--label",
+                "Preset Stable Release Catalog Index Tree Override",
+            ]
+        )
+        == 0
+    )
+
+    index = json.loads((output_dir / "release_catalog_index.json").read_text(encoding="utf-8"))
+    assert index["release_catalog_count"] == 2
+    assert index["index"]["channel"] == "stable"
+    assert index["index"]["label"] == "Preset Stable Release Catalog Index Tree Override"
+    assert index["index"]["published_at"] == "2026-07-15T04:00:00Z"
     assert main(["release-catalog-index-lint", str(output_dir)]) == 0
     capsys.readouterr()
 

@@ -1,6 +1,9 @@
 {
   "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
   "version": "0.1",
+  "release_catalog_presets": [
+    "../release_catalog_presets/stable_reference_release_stack.json"
+  ],
   "discover_under": [
     "../../generated_stable_release_catalogs"
   ],

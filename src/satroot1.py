@@ -880,6 +880,8 @@ def load_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
             label="release catalog preset bundle_index_presets",
         )
     ]
+    for bundle_index_preset_path in bundle_index_preset_paths:
+        load_bundle_index_preset(bundle_index_preset_path)
     discover_under = [
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(preset.get("discover_under"), label="release catalog preset discover_under")
@@ -1060,6 +1062,8 @@ def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
             label="release catalog index preset release_catalog_presets",
         )
     ]
+    for release_catalog_preset_path in release_catalog_preset_paths:
+        load_release_catalog_preset(release_catalog_preset_path)
     discover_under = [
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(
@@ -22386,7 +22390,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-machine-bundle-index":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_bundle_index_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
@@ -22409,7 +22413,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-stable-bundle-index":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_bundle_index_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
@@ -22504,7 +22508,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-stable-release-catalog":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_release_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
@@ -22527,7 +22531,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-machine-release-catalog":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_release_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
@@ -22626,7 +22630,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-stable-release-catalog-index":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_release_catalog_index_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
@@ -22653,7 +22657,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "build-machine-release-catalog-index":
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
-        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_release_catalog_index_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
@@ -22729,7 +22733,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-release":
         signer = _release_manifest_signer_from_args(args)
-        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_bundle_index_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
@@ -22757,7 +22761,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-machine-release":
         signer = _release_manifest_signer_from_args(args)
-        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_bundle_index_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
@@ -22843,7 +22847,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-stable-release-catalog":
         signer = _release_manifest_signer_from_args(args)
-        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_release_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
@@ -22872,7 +22876,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-machine-release-catalog":
         signer = _release_manifest_signer_from_args(args)
-        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_release_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
@@ -22929,7 +22933,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-stable-release-catalog-index":
         signer = _release_manifest_signer_from_args(args)
-        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_release_catalog_index_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
@@ -22958,7 +22962,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-machine-release-catalog-index":
         signer = _release_manifest_signer_from_args(args)
-        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_release_catalog_index_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
@@ -22986,7 +22990,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-release-publication":
-        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_bundle_index_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
@@ -23012,7 +23016,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-machine-release-publication":
-        preset = load_bundle_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_bundle_index_preset(args.preset_json) if args.preset_json else None
         inventory_bundle_dirs = load_inventory_bundle_dirs(args.inventory_json) if args.inventory_json else []
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
@@ -23066,7 +23070,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-release-catalog-publication":
-        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_release_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
@@ -23092,7 +23096,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-stable-release-catalog-publication":
-        preset = load_release_catalog_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_release_catalog_preset(args.preset_json) if args.preset_json else None
         inventory_release_dirs = load_inventory_release_dirs(args.inventory_json) if args.inventory_json else []
         catalog_metadata = dict((preset or {}).get("catalog_metadata", {}))
         for key, value in {
@@ -23146,7 +23150,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-release-catalog-index-publication":
-        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_stable_release_catalog_index_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
@@ -23172,7 +23176,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-stable-release-catalog-index-publication":
-        preset = load_release_catalog_index_preset(args.preset_json) if args.preset_json else None
+        preset = load_machine_release_catalog_index_preset(args.preset_json) if args.preset_json else None
         inventory_release_catalog_dirs = load_inventory_release_catalog_dirs(args.inventory_json) if args.inventory_json else []
         index_metadata = dict((preset or {}).get("index_metadata", {}))
         for key, value in {
