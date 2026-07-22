@@ -860,6 +860,7 @@ def load_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
         "type",
         "version",
         "release_dirs",
+        "bundle_index_presets",
         "discover_under",
         "recursive",
         "catalog",
@@ -872,6 +873,13 @@ def load_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(preset.get("release_dirs"), label="release catalog preset release_dirs")
     ]
+    bundle_index_preset_paths = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("bundle_index_presets"),
+            label="release catalog preset bundle_index_presets",
+        )
+    ]
     discover_under = [
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(preset.get("discover_under"), label="release catalog preset discover_under")
@@ -882,6 +890,7 @@ def load_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
 
     return {
         "release_dirs": release_dirs,
+        "bundle_index_preset_paths": bundle_index_preset_paths,
         "discover_under": discover_under,
         "recursive": recursive,
         "catalog_metadata": validate_release_metadata_mapping(preset.get("catalog")),
@@ -1028,6 +1037,7 @@ def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
         "type",
         "version",
         "release_catalog_dirs",
+        "release_catalog_presets",
         "discover_under",
         "recursive",
         "index",
@@ -1043,6 +1053,13 @@ def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
             label="release catalog index preset release_catalog_dirs",
         )
     ]
+    release_catalog_preset_paths = [
+        str((preset_path.parent / entry).resolve())
+        for entry in _validate_string_sequence(
+            preset.get("release_catalog_presets"),
+            label="release catalog index preset release_catalog_presets",
+        )
+    ]
     discover_under = [
         str((preset_path.parent / entry).resolve())
         for entry in _validate_string_sequence(
@@ -1056,6 +1073,7 @@ def load_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
 
     return {
         "release_catalog_dirs": release_catalog_dirs,
+        "release_catalog_preset_paths": release_catalog_preset_paths,
         "discover_under": discover_under,
         "recursive": recursive,
         "index_metadata": validate_release_metadata_mapping(preset.get("index")),
@@ -1102,6 +1120,62 @@ def load_bundle_index_preset(path: str | Path) -> Dict[str, Any]:
         "recursive": recursive,
         "release_metadata": validate_release_metadata_mapping(preset.get("release")),
     }
+
+
+def load_machine_bundle_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_bundle_index_preset(path)
+    for bundle_dir in preset.get("bundle_dirs", []):
+        _require_machine_bundle_directory(bundle_dir, label="machine bundle index preset bundle directory")
+    return preset
+
+
+def load_stable_bundle_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_bundle_index_preset(path)
+    for bundle_dir in preset.get("bundle_dirs", []):
+        _require_stable_bundle_directory(bundle_dir, label="stable bundle index preset bundle directory")
+    return preset
+
+
+def load_machine_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_release_catalog_preset(path)
+    for bundle_index_preset_path in preset.get("bundle_index_preset_paths", []):
+        load_machine_bundle_index_preset(bundle_index_preset_path)
+    for release_dir in preset.get("release_dirs", []):
+        _require_machine_release_publication(release_dir, label="machine release catalog preset release directory")
+    return preset
+
+
+def load_stable_release_catalog_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_release_catalog_preset(path)
+    for bundle_index_preset_path in preset.get("bundle_index_preset_paths", []):
+        load_stable_bundle_index_preset(bundle_index_preset_path)
+    for release_dir in preset.get("release_dirs", []):
+        _require_stable_release_publication(release_dir, label="stable release catalog preset release directory")
+    return preset
+
+
+def load_machine_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_release_catalog_index_preset(path)
+    for release_catalog_preset_path in preset.get("release_catalog_preset_paths", []):
+        load_machine_release_catalog_preset(release_catalog_preset_path)
+    for release_catalog_dir in preset.get("release_catalog_dirs", []):
+        _require_machine_release_catalog_publication(
+            release_catalog_dir,
+            label="machine release catalog index preset release catalog directory",
+        )
+    return preset
+
+
+def load_stable_release_catalog_index_preset(path: str | Path) -> Dict[str, Any]:
+    preset = load_release_catalog_index_preset(path)
+    for release_catalog_preset_path in preset.get("release_catalog_preset_paths", []):
+        load_stable_release_catalog_preset(release_catalog_preset_path)
+    for release_catalog_dir in preset.get("release_catalog_dirs", []):
+        _require_stable_release_catalog_publication(
+            release_catalog_dir,
+            label="stable release catalog index preset release catalog directory",
+        )
+    return preset
 
 
 def load_publication_descriptor_index_preset(path: str | Path) -> Dict[str, Any]:
@@ -3329,6 +3403,21 @@ def _relative_output_path(path: str | Path, *, base_dir: str | Path) -> str:
             return Path(os.path.relpath(target_path, base_path)).as_posix()
         except ValueError:
             return target_path.as_posix()
+
+
+def _allocate_export_json_path(
+    output_dir: str | Path,
+    stem: str,
+    *,
+    used_stems: MutableMapping[str, int],
+) -> Path:
+    output_path = Path(output_dir).resolve()
+    normalized_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem.strip()) if stem.strip() else "artifact"
+    normalized_stem = normalized_stem.strip("._-") or "artifact"
+    suffix = used_stems.get(normalized_stem, 0)
+    used_stems[normalized_stem] = suffix + 1
+    filename = f"{normalized_stem}.json" if suffix == 0 else f"{normalized_stem}_{suffix + 1}.json"
+    return output_path / filename
 
 
 def release_manifest_signing_payload(manifest: Mapping[str, Any]) -> str:
@@ -12205,6 +12294,8 @@ def export_release_catalog_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    bundle_index_preset_dir: Optional[str | Path] = None,
+    bundle_index_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     candidate_path = Path(path).resolve()
     if candidate_path.is_dir():
@@ -12216,12 +12307,16 @@ def export_release_catalog_preset_from_workspace(
     _manifest_path, catalog_path, _manifest, catalog = _load_release_catalog_publication(release_catalog_dir)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    export_bundle_index_dir = None if bundle_index_preset_dir is None else Path(bundle_index_preset_dir).resolve()
+    nested_bundle_index_exporter = bundle_index_preset_exporter or export_bundle_index_preset_from_artifact
     preset: Dict[str, Any] = {
         "type": "SATROOT-RELEASE-CATALOG-PRESET",
         "version": "0.1",
     }
 
     release_dirs: list[str] = []
+    bundle_index_preset_paths: list[str] = []
+    used_bundle_index_stems: dict[str, int] = {}
     for entry in catalog.get("releases", []):
         if not isinstance(entry, Mapping):
             continue
@@ -12230,8 +12325,25 @@ def export_release_catalog_preset_from_workspace(
             continue
         resolved_release_dir = (catalog_path.parent / release_path).resolve()
         release_dirs.append(_relative_output_path(resolved_release_dir, base_dir=base_dir))
+        if export_bundle_index_dir is not None:
+            bundle_index_output_path = _allocate_export_json_path(
+                export_bundle_index_dir,
+                resolved_release_dir.name,
+                used_stems=used_bundle_index_stems,
+            )
+            bundle_index_output_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json_file(
+                bundle_index_output_path,
+                nested_bundle_index_exporter(
+                    resolved_release_dir,
+                    output_path=bundle_index_output_path,
+                ),
+            )
+            bundle_index_preset_paths.append(_relative_output_path(bundle_index_output_path, base_dir=base_dir))
     if release_dirs:
         preset["release_dirs"] = release_dirs
+    if bundle_index_preset_paths:
+        preset["bundle_index_presets"] = bundle_index_preset_paths
 
     catalog_metadata = _filtered_string_mapping(catalog.get("catalog"))
     if catalog_metadata:
@@ -12243,6 +12355,7 @@ def export_machine_release_catalog_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    bundle_index_preset_dir: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _require_machine_release_catalog_publication(
         path,
@@ -12251,6 +12364,8 @@ def export_machine_release_catalog_preset_from_workspace(
     return export_release_catalog_preset_from_workspace(
         path,
         output_path=output_path,
+        bundle_index_preset_dir=bundle_index_preset_dir,
+        bundle_index_preset_exporter=export_machine_bundle_index_preset_from_artifact,
     )
 
 
@@ -12258,6 +12373,7 @@ def export_stable_release_catalog_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    bundle_index_preset_dir: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _require_stable_release_catalog_publication(
         path,
@@ -12266,6 +12382,8 @@ def export_stable_release_catalog_preset_from_workspace(
     return export_release_catalog_preset_from_workspace(
         path,
         output_path=output_path,
+        bundle_index_preset_dir=bundle_index_preset_dir,
+        bundle_index_preset_exporter=export_stable_bundle_index_preset_from_artifact,
     )
 
 
@@ -12360,6 +12478,9 @@ def export_release_catalog_index_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    release_catalog_preset_dir: Optional[str | Path] = None,
+    bundle_index_preset_dir: Optional[str | Path] = None,
+    release_catalog_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     candidate_path = Path(path).resolve()
     if candidate_path.is_dir():
@@ -12373,12 +12494,17 @@ def export_release_catalog_index_preset_from_workspace(
     _manifest_path, index_path, _manifest, index = _load_release_catalog_index_publication(release_catalog_index_dir)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    export_release_catalog_dir = None if release_catalog_preset_dir is None else Path(release_catalog_preset_dir).resolve()
+    export_bundle_index_dir = None if bundle_index_preset_dir is None else Path(bundle_index_preset_dir).resolve()
+    nested_release_catalog_exporter = release_catalog_preset_exporter or export_release_catalog_preset_from_workspace
     preset: Dict[str, Any] = {
         "type": "SATROOT-RELEASE-CATALOG-INDEX-PRESET",
         "version": "0.1",
     }
 
     release_catalog_dirs: list[str] = []
+    release_catalog_preset_paths: list[str] = []
+    used_release_catalog_stems: dict[str, int] = {}
     for entry in index.get("release_catalogs", []):
         if not isinstance(entry, Mapping):
             continue
@@ -12387,8 +12513,29 @@ def export_release_catalog_index_preset_from_workspace(
             continue
         resolved_release_catalog_dir = (index_path.parent / release_catalog_path).resolve()
         release_catalog_dirs.append(_relative_output_path(resolved_release_catalog_dir, base_dir=base_dir))
+        if export_release_catalog_dir is not None:
+            release_catalog_output_path = _allocate_export_json_path(
+                export_release_catalog_dir,
+                resolved_release_catalog_dir.name,
+                used_stems=used_release_catalog_stems,
+            )
+            release_catalog_output_path.parent.mkdir(parents=True, exist_ok=True)
+            nested_bundle_index_dir = None
+            if export_bundle_index_dir is not None:
+                nested_bundle_index_dir = export_bundle_index_dir / release_catalog_output_path.stem
+            _write_json_file(
+                release_catalog_output_path,
+                nested_release_catalog_exporter(
+                    resolved_release_catalog_dir,
+                    output_path=release_catalog_output_path,
+                    bundle_index_preset_dir=nested_bundle_index_dir,
+                ),
+            )
+            release_catalog_preset_paths.append(_relative_output_path(release_catalog_output_path, base_dir=base_dir))
     if release_catalog_dirs:
         preset["release_catalog_dirs"] = release_catalog_dirs
+    if release_catalog_preset_paths:
+        preset["release_catalog_presets"] = release_catalog_preset_paths
 
     index_metadata = _filtered_string_mapping(index.get("index"))
     if index_metadata:
@@ -12400,6 +12547,8 @@ def export_machine_release_catalog_index_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    release_catalog_preset_dir: Optional[str | Path] = None,
+    bundle_index_preset_dir: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _require_machine_release_catalog_index_publication(
         path,
@@ -12408,6 +12557,9 @@ def export_machine_release_catalog_index_preset_from_workspace(
     return export_release_catalog_index_preset_from_workspace(
         path,
         output_path=output_path,
+        release_catalog_preset_dir=release_catalog_preset_dir,
+        bundle_index_preset_dir=bundle_index_preset_dir,
+        release_catalog_preset_exporter=export_machine_release_catalog_preset_from_workspace,
     )
 
 
@@ -12415,6 +12567,8 @@ def export_stable_release_catalog_index_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    release_catalog_preset_dir: Optional[str | Path] = None,
+    bundle_index_preset_dir: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _require_stable_release_catalog_index_publication(
         path,
@@ -12423,6 +12577,9 @@ def export_stable_release_catalog_index_preset_from_workspace(
     return export_release_catalog_index_preset_from_workspace(
         path,
         output_path=output_path,
+        release_catalog_preset_dir=release_catalog_preset_dir,
+        bundle_index_preset_dir=bundle_index_preset_dir,
+        release_catalog_preset_exporter=export_stable_release_catalog_preset_from_workspace,
     )
 
 
@@ -16259,26 +16416,35 @@ def build_cli_parser() -> Any:
     export_release_catalog_preset_parser = subparsers.add_parser("export-release-catalog-preset", help="Export a SATROOT release catalog back into a reusable release catalog preset")
     export_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory or release_catalog.json file")
     export_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
+    export_release_catalog_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested bundle index presets should be exported")
 
     export_machine_release_catalog_preset_parser = subparsers.add_parser("export-machine-release-catalog-preset", help="Export a machine-only SATROOT release catalog back into a machine-validated reusable release catalog preset")
     export_machine_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a machine-only release catalog directory or release_catalog.json file")
     export_machine_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
+    export_machine_release_catalog_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested machine bundle index presets should be exported")
 
     export_stable_release_catalog_preset_parser = subparsers.add_parser("export-stable-release-catalog-preset", help="Export a stable-only SATROOT release catalog back into a stable-validated reusable release catalog preset")
     export_stable_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a stable-only release catalog directory or release_catalog.json file")
     export_stable_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
+    export_stable_release_catalog_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested stable bundle index presets should be exported")
 
     export_release_catalog_index_preset_parser = subparsers.add_parser("export-release-catalog-index-preset", help="Export a SATROOT release catalog index back into a reusable release catalog index preset")
     export_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory or release_catalog_index.json file")
     export_release_catalog_index_preset_parser.add_argument("--output", help="Optional output path")
+    export_release_catalog_index_preset_parser.add_argument("--release-catalog-preset-dir", help="Optional directory where nested release catalog presets should be exported")
+    export_release_catalog_index_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested bundle index presets should be exported beneath nested release catalog preset names")
 
     export_machine_release_catalog_index_preset_parser = subparsers.add_parser("export-machine-release-catalog-index-preset", help="Export a machine-only SATROOT release catalog index back into a machine-validated reusable release catalog index preset")
     export_machine_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a machine-only release catalog index directory or release_catalog_index.json file")
     export_machine_release_catalog_index_preset_parser.add_argument("--output", help="Optional output path")
+    export_machine_release_catalog_index_preset_parser.add_argument("--release-catalog-preset-dir", help="Optional directory where nested machine release catalog presets should be exported")
+    export_machine_release_catalog_index_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested machine bundle index presets should be exported beneath nested release catalog preset names")
 
     export_stable_release_catalog_index_preset_parser = subparsers.add_parser("export-stable-release-catalog-index-preset", help="Export a stable-only SATROOT release catalog index back into a stable-validated reusable release catalog index preset")
     export_stable_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a stable-only release catalog index directory or release_catalog_index.json file")
     export_stable_release_catalog_index_preset_parser.add_argument("--output", help="Optional output path")
+    export_stable_release_catalog_index_preset_parser.add_argument("--release-catalog-preset-dir", help="Optional directory where nested stable release catalog presets should be exported")
+    export_stable_release_catalog_index_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested stable bundle index presets should be exported beneath nested release catalog preset names")
 
     render_publication_report_parser = subparsers.add_parser("render-publication-report", help="Render a human-readable markdown report for a SATROOT bundle, release, catalog, index, or workspace")
     render_publication_report_parser.add_argument("path", help="Path to a SATROOT artifact file or directory")
@@ -20108,6 +20274,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_release_catalog_preset_from_workspace(
             args.release_catalog_dir,
             output_path=args.output,
+            bundle_index_preset_dir=args.bundle_index_preset_dir,
         )
         _write_output(preset, args.output)
         return 0
@@ -20116,6 +20283,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_machine_release_catalog_preset_from_workspace(
             args.release_catalog_dir,
             output_path=args.output,
+            bundle_index_preset_dir=args.bundle_index_preset_dir,
         )
         _write_output(preset, args.output)
         return 0
@@ -20124,6 +20292,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_stable_release_catalog_preset_from_workspace(
             args.release_catalog_dir,
             output_path=args.output,
+            bundle_index_preset_dir=args.bundle_index_preset_dir,
         )
         _write_output(preset, args.output)
         return 0
@@ -20132,6 +20301,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_release_catalog_index_preset_from_workspace(
             args.release_catalog_index_dir,
             output_path=args.output,
+            release_catalog_preset_dir=args.release_catalog_preset_dir,
+            bundle_index_preset_dir=args.bundle_index_preset_dir,
         )
         _write_output(preset, args.output)
         return 0
@@ -20140,6 +20311,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_machine_release_catalog_index_preset_from_workspace(
             args.release_catalog_index_dir,
             output_path=args.output,
+            release_catalog_preset_dir=args.release_catalog_preset_dir,
+            bundle_index_preset_dir=args.bundle_index_preset_dir,
         )
         _write_output(preset, args.output)
         return 0
@@ -20148,6 +20321,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_stable_release_catalog_index_preset_from_workspace(
             args.release_catalog_index_dir,
             output_path=args.output,
+            release_catalog_preset_dir=args.release_catalog_preset_dir,
+            bundle_index_preset_dir=args.bundle_index_preset_dir,
         )
         _write_output(preset, args.output)
         return 0

@@ -54,6 +54,8 @@ from satroot1 import (
     load_bundle_index_preset,
     load_demo_catalog_summary_schema,
     load_demo_catalog_preset,
+    load_machine_release_catalog_index_preset,
+    load_machine_release_catalog_preset,
     load_machine_publication_network_preset,
     load_machine_publication_stack_preset,
     load_publication_catalog_workspace_preset,
@@ -74,6 +76,8 @@ from satroot1 import (
     load_publication_network_summary_schema,
     load_publication_stack_preset,
     load_stable_publication_network_preset,
+    load_stable_release_catalog_index_preset,
+    load_stable_release_catalog_preset,
     load_stable_publication_stack_preset,
     load_publication_stack_summary_schema,
     load_release_catalog_index_manifest_schema,
@@ -12019,6 +12023,35 @@ def test_cli_export_release_catalog_preset(tmp_path):
     assert preset["catalog"]["label"] == "Publication Stack Override"
 
 
+def test_cli_export_release_catalog_preset_with_generated_bundle_index_presets(tmp_path):
+    release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
+    preset_path = tmp_path / "exported_release_catalog_with_nested.json"
+    bundle_index_preset_dir = tmp_path / "exported_bundle_index_presets"
+
+    exit_code = main(
+        [
+            "export-release-catalog-preset",
+            str(release_catalog_dir),
+            "--bundle-index-preset-dir",
+            str(bundle_index_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_release_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
+    assert len(loaded["release_dirs"]) == 2
+    assert len(loaded["bundle_index_preset_paths"]) == 2
+    nested_labels = sorted(
+        json.loads(Path(value).read_text(encoding="utf-8"))["release"]["label"]
+        for value in loaded["bundle_index_preset_paths"]
+    )
+    assert nested_labels == ["Publication Machine Release", "Publication Stable Release"]
+
+
 def test_cli_bootstrap_release_catalog_from_exported_preset_round_trip(tmp_path, capsys):
     release_catalog_dir = make_demo_publication_stack_dir(tmp_path) / "release_catalog"
     preset_path = tmp_path / "exported_release_catalog.json"
@@ -12072,6 +12105,35 @@ def test_cli_export_machine_release_catalog_preset(tmp_path):
     assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
     assert len(loaded["release_dirs"]) == 2
     assert preset["catalog"]["label"] == "SATROOT Machine Catalog Alpha"
+
+
+def test_cli_export_machine_release_catalog_preset_with_generated_bundle_index_presets(tmp_path):
+    catalog_alpha_dir, _catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_release_catalog_with_nested.json"
+    bundle_index_preset_dir = tmp_path / "exported_machine_bundle_index_presets"
+
+    exit_code = main(
+        [
+            "export-machine-release-catalog-preset",
+            str(catalog_alpha_dir / "release_catalog.json"),
+            "--bundle-index-preset-dir",
+            str(bundle_index_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_machine_release_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
+    assert len(loaded["release_dirs"]) == 2
+    assert len(loaded["bundle_index_preset_paths"]) == 2
+    nested_labels = sorted(
+        json.loads(Path(value).read_text(encoding="utf-8"))["release"]["label"]
+        for value in loaded["bundle_index_preset_paths"]
+    )
+    assert nested_labels == ["Machine Release Alpha", "Machine Release Beta"]
 
 
 def test_cli_bootstrap_machine_release_catalog_from_exported_preset_round_trip(tmp_path, capsys):
@@ -12144,6 +12206,35 @@ def test_cli_export_stable_release_catalog_preset(tmp_path):
     assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
     assert len(loaded["release_dirs"]) == 2
     assert preset["catalog"]["label"] == "SATROOT Stable Catalog Alpha"
+
+
+def test_cli_export_stable_release_catalog_preset_with_generated_bundle_index_presets(tmp_path):
+    stable_catalog_dir, _stable_catalog_dir_two = make_stable_release_catalog_dirs(tmp_path)
+    preset_path = tmp_path / "exported_stable_release_catalog_with_nested.json"
+    bundle_index_preset_dir = tmp_path / "exported_stable_bundle_index_presets"
+
+    exit_code = main(
+        [
+            "export-stable-release-catalog-preset",
+            str(stable_catalog_dir / "release_catalog.json"),
+            "--bundle-index-preset-dir",
+            str(bundle_index_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_stable_release_catalog_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-PRESET"
+    assert len(loaded["release_dirs"]) == 2
+    assert len(loaded["bundle_index_preset_paths"]) == 2
+    nested_labels = sorted(
+        json.loads(Path(value).read_text(encoding="utf-8"))["release"]["label"]
+        for value in loaded["bundle_index_preset_paths"]
+    )
+    assert nested_labels == ["Stable Release Alpha", "Stable Release Beta"]
 
 
 def test_cli_bootstrap_stable_release_catalog_from_exported_preset_round_trip(tmp_path, capsys):
@@ -12239,6 +12330,42 @@ def test_cli_export_release_catalog_index_preset(tmp_path):
     assert preset["index"]["label"] == "Publication Network Override"
 
 
+def test_cli_export_release_catalog_index_preset_with_generated_nested_presets(tmp_path):
+    release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
+    preset_path = tmp_path / "exported_release_catalog_index_with_nested.json"
+    release_catalog_preset_dir = tmp_path / "exported_release_catalog_presets"
+    bundle_index_preset_dir = tmp_path / "exported_release_catalog_bundle_index_presets"
+
+    exit_code = main(
+        [
+            "export-release-catalog-index-preset",
+            str(release_catalog_index_dir),
+            "--release-catalog-preset-dir",
+            str(release_catalog_preset_dir),
+            "--bundle-index-preset-dir",
+            str(bundle_index_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_release_catalog_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-INDEX-PRESET"
+    assert len(loaded["release_catalog_dirs"]) == 2
+    assert len(loaded["release_catalog_preset_paths"]) == 2
+    nested_catalog_labels = sorted(
+        load_release_catalog_preset(value)["catalog_metadata"]["label"]
+        for value in loaded["release_catalog_preset_paths"]
+    )
+    assert nested_catalog_labels == ["Publication Network Stack Alpha", "Publication Network Stack Beta"]
+    for value in loaded["release_catalog_preset_paths"]:
+        nested = load_release_catalog_preset(value)
+        assert len(nested["bundle_index_preset_paths"]) == 1
+        assert Path(nested["bundle_index_preset_paths"][0]).is_file()
+
+
 def test_cli_bootstrap_release_catalog_index_from_exported_preset_round_trip(tmp_path, capsys):
     release_catalog_index_dir = make_demo_publication_network_dir(tmp_path) / "release_catalog_index"
     preset_path = tmp_path / "exported_release_catalog_index.json"
@@ -12323,6 +12450,41 @@ def test_cli_export_machine_release_catalog_index_preset(tmp_path):
     assert preset["type"] == "SATROOT-RELEASE-CATALOG-INDEX-PRESET"
     assert len(loaded["release_catalog_dirs"]) == 2
     assert preset["index"]["label"] == "Machine Registry Catalog Network"
+
+
+def test_cli_export_machine_release_catalog_index_preset_with_generated_nested_presets(tmp_path):
+    release_catalog_index_dir, _descriptor_index_dir, _metadata_catalog_dir = make_machine_publication_registry_component_dirs(tmp_path)
+    preset_path = tmp_path / "exported_machine_release_catalog_index_with_nested.json"
+    release_catalog_preset_dir = tmp_path / "exported_machine_release_catalog_presets"
+    bundle_index_preset_dir = tmp_path / "exported_machine_bundle_index_presets"
+
+    exit_code = main(
+        [
+            "export-machine-release-catalog-index-preset",
+            str(release_catalog_index_dir),
+            "--release-catalog-preset-dir",
+            str(release_catalog_preset_dir),
+            "--bundle-index-preset-dir",
+            str(bundle_index_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_machine_release_catalog_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-INDEX-PRESET"
+    assert len(loaded["release_catalog_dirs"]) == 2
+    assert len(loaded["release_catalog_preset_paths"]) == 2
+    nested_catalog_labels = sorted(
+        load_release_catalog_preset(value)["catalog_metadata"]["label"]
+        for value in loaded["release_catalog_preset_paths"]
+    )
+    assert nested_catalog_labels == ["SATROOT Machine Catalog Alpha", "SATROOT Machine Catalog Beta"]
+    for value in loaded["release_catalog_preset_paths"]:
+        nested = load_machine_release_catalog_preset(value)
+        assert len(nested["bundle_index_preset_paths"]) == 2
 
 
 def test_cli_bootstrap_machine_release_catalog_index_from_exported_preset_round_trip(tmp_path, capsys):
@@ -12417,6 +12579,63 @@ def test_cli_export_stable_release_catalog_index_preset(tmp_path):
     assert preset["type"] == "SATROOT-RELEASE-CATALOG-INDEX-PRESET"
     assert len(loaded["release_catalog_dirs"]) == 2
     assert preset["index"]["label"] == "Stable Release Catalog Index Export Source"
+
+
+def test_cli_export_stable_release_catalog_index_preset_with_generated_nested_presets(tmp_path):
+    catalog_alpha_dir, catalog_beta_dir = make_stable_release_catalog_dirs(tmp_path)
+    release_catalog_index_dir = tmp_path / "stable_release_catalog_index_export_source"
+    preset_path = tmp_path / "exported_stable_release_catalog_index_with_nested.json"
+    release_catalog_preset_dir = tmp_path / "exported_stable_release_catalog_presets"
+    bundle_index_preset_dir = tmp_path / "exported_stable_bundle_index_presets"
+
+    assert (
+        main(
+            [
+                "bootstrap-stable-release-catalog-index-publication",
+                str(catalog_alpha_dir),
+                str(catalog_beta_dir),
+                "--output-dir",
+                str(release_catalog_index_dir),
+                "--channel",
+                "stable",
+                "--label",
+                "Stable Release Catalog Index Export Source",
+                "--scheme",
+                "hmac-sha256",
+                "--key-id",
+                "index-key",
+            ]
+        )
+        == 0
+    )
+
+    exit_code = main(
+        [
+            "export-stable-release-catalog-index-preset",
+            str(release_catalog_index_dir),
+            "--release-catalog-preset-dir",
+            str(release_catalog_preset_dir),
+            "--bundle-index-preset-dir",
+            str(bundle_index_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    )
+    assert exit_code == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_stable_release_catalog_index_preset(preset_path)
+    assert preset["type"] == "SATROOT-RELEASE-CATALOG-INDEX-PRESET"
+    assert len(loaded["release_catalog_dirs"]) == 2
+    assert len(loaded["release_catalog_preset_paths"]) == 2
+    nested_catalog_labels = sorted(
+        load_release_catalog_preset(value)["catalog_metadata"]["label"]
+        for value in loaded["release_catalog_preset_paths"]
+    )
+    assert nested_catalog_labels == ["SATROOT Stable Catalog Alpha", "SATROOT Stable Catalog Beta"]
+    for value in loaded["release_catalog_preset_paths"]:
+        nested = load_stable_release_catalog_preset(value)
+        assert len(nested["bundle_index_preset_paths"]) == 2
 
 
 def test_cli_bootstrap_stable_release_catalog_index_from_exported_preset_round_trip(tmp_path, capsys):

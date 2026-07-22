@@ -1216,6 +1216,27 @@ The stable-only network lane now has the same export wrapper for nested stable s
 satroot1 export-stable-publication-network-preset stable_publication_network --stack-preset-dir exported_stable_stack_presets --catalog-preset-dir exported_stable_catalog_presets --output exported_stable_network.json
 ```
 
+At the lower release layers, release catalog preset export can now also emit nested bundle-index presets while still preserving source `release_dirs` for publish/bootstrap reuse:
+
+```bash
+satroot1 export-release-catalog-preset release_catalog --bundle-index-preset-dir exported_bundle_index_presets --output exported_release_catalog.json
+```
+
+The machine-only and stable-only wrappers validate those nested bundle-index presets against `SATROOT-MACHINE-1` and `SATROOT-STABLE-1` respectively:
+
+```bash
+satroot1 export-machine-release-catalog-preset machine_release_catalog --bundle-index-preset-dir exported_machine_bundle_index_presets --output exported_machine_release_catalog.json
+satroot1 export-stable-release-catalog-preset stable_release_catalog --bundle-index-preset-dir exported_stable_bundle_index_presets --output exported_stable_release_catalog.json
+```
+
+Release catalog index preset export can likewise emit nested release-catalog presets and, beneath those, nested bundle-index presets:
+
+```bash
+satroot1 export-release-catalog-index-preset release_catalog_index --release-catalog-preset-dir exported_release_catalog_presets --bundle-index-preset-dir exported_bundle_index_presets --output exported_release_catalog_index.json
+```
+
+Those top-level release catalog index presets still preserve source `release_catalog_dirs`, so the nested preset tree is an export-time convenience rather than a runtime requirement.
+
 To render a human-readable markdown report for a generated SATROOT artifact or workspace:
 
 ```bash
