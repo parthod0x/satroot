@@ -13038,6 +13038,39 @@ def test_cli_export_publication_registry_workspace_preset_with_generated_nested_
     assert load_publication_registry_preset(loaded["publication_registry_preset_path"])["registry_metadata"]["label"] == "Workspace Publication Registry"
 
 
+def test_cli_export_publication_registry_workspace_preset_with_generated_nested_network_preset(tmp_path):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_registry_workspace_with_network.json"
+    network_preset_path = tmp_path / "exported_nested_network.json"
+    stack_preset_dir = tmp_path / "exported_nested_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_nested_catalog_presets"
+
+    assert (
+        main(
+            [
+                "export-publication-registry-workspace-preset",
+                str(workspace_dir),
+                "--publication-network-preset-path",
+                str(network_preset_path),
+                "--stack-preset-dir",
+                str(stack_preset_dir),
+                "--catalog-preset-dir",
+                str(catalog_preset_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+
+    loaded = load_publication_registry_workspace_preset(preset_path)
+    nested_network = load_publication_network_preset(loaded["publication_network_preset_path"])
+    assert Path(loaded["publication_network_preset_path"]).name == "exported_nested_network.json"
+    assert [Path(value).name for value in nested_network["stack_preset_paths"]] == ["stack_a.json", "stack_b.json"]
+    assert (catalog_preset_dir / "stack_a" / "stable_catalog.json").is_file()
+    assert (catalog_preset_dir / "stack_b" / "machine_catalog.json").is_file()
+
+
 def test_cli_export_publication_registry_workspace_preset_with_nested_collection_backed_catalog_preset(tmp_path, capsys):
     network_dir = make_demo_publication_network_dir(tmp_path)
     collection_dir = tmp_path / "publication_metadata_bundle_collection"
@@ -13160,6 +13193,75 @@ def test_cli_bootstrap_publication_registry_workspace_from_exported_preset_round
     assert summary["publication_descriptor_index"]["index"]["label"] == "Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
     assert summary["publication_registry"]["index"]["label"] == "Roundtrip Workspace Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_publication_registry_workspace_from_exported_preset_with_nested_network_round_trip(tmp_path, capsys):
+    workspace_dir = make_publication_registry_workspace_dir(tmp_path)
+    preset_path = tmp_path / "exported_registry_workspace_with_network.json"
+    network_preset_path = tmp_path / "exported_nested_network.json"
+    stack_preset_dir = tmp_path / "exported_nested_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_nested_catalog_presets"
+
+    assert (
+        main(
+            [
+                "export-publication-registry-workspace-preset",
+                str(workspace_dir),
+                "--publication-network-preset-path",
+                str(network_preset_path),
+                "--stack-preset-dir",
+                str(stack_preset_dir),
+                "--catalog-preset-dir",
+                str(catalog_preset_dir),
+                "--output",
+                str(preset_path),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    roundtrip_dir = tmp_path / "publication_registry_workspace_network_roundtrip"
+    assert (
+        main(
+            [
+                "bootstrap-publication-registry-workspace",
+                "--preset-json",
+                str(preset_path),
+                "--scheme",
+                "hmac-sha256",
+                "--release-key-id",
+                "release-key",
+                "--release-catalog-key-id",
+                "release-catalog-key",
+                "--release-catalog-index-key-id",
+                "index-key",
+                "--publication-descriptor-index-key-id",
+                "descriptor-key",
+                "--publication-metadata-key-id",
+                "metadata-key",
+                "--publication-metadata-catalog-key-id",
+                "metadata-catalog-key",
+                "--publication-registry-key-id",
+                "registry-key",
+                "--publication-registry-label",
+                "Roundtrip Workspace Publication Registry",
+                "--output-dir",
+                str(roundtrip_dir),
+            ]
+        )
+        == 0
+    )
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_network_preset_path"] == str(network_preset_path.resolve())
+    assert summary["source_publication_network_dir"] is None
+    assert summary["publication_network_dir"] == str((roundtrip_dir / "publication_network").resolve())
+    nested_network_summary = json.loads((roundtrip_dir / "publication_network" / "summary.json").read_text(encoding="utf-8"))
+    assert nested_network_summary["network_preset_path"] == str(network_preset_path.resolve())
+    assert nested_network_summary["stack_count"] == 2
     assert main(["publication-registry-workspace-lint", str(roundtrip_dir)]) == 0
     capsys.readouterr()
 
