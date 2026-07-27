@@ -3,7 +3,7 @@
   "version": "0.1",
   "publication_catalog_workspace_preset": "../publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json",
   "publication_registry_preset": "../registry_presets/stable_reference_publication_registry.json",
-  "release_catalog_index_dir": "../generated_stable_publication_network/release_catalog_index",
+  "publication_network_preset": "../network_presets/stable_reference_publication_network.json",
   "publication_descriptor_index": {
     "channel": "stable",
     "label": "SATROOT Stable Reference Workspace Descriptor Index",

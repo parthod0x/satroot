@@ -1995,7 +1995,10 @@ def test_load_publication_registry_workspace_preset_example():
     preset = load_publication_registry_workspace_preset(
         ROOT / "examples" / "registry_workspace_presets" / "ai_compute_publication_registry_workspace.json"
     )
-    assert preset["publication_network_dir"] == str((ROOT / "examples" / "generated_publication_network").resolve())
+    assert preset["publication_network_preset_path"] == str(
+        (ROOT / "examples" / "network_presets" / "ai_compute_publication_network.json").resolve()
+    )
+    assert preset["publication_network_dir"] is None
     assert preset["release_catalog_index_dir"] is None
     assert preset["publication_catalog_workspace_preset_path"] == str(
         (ROOT / "examples" / "publication_catalog_workspace_presets" / "ai_compute_publication_catalog_workspace.json").resolve()
@@ -2015,10 +2018,11 @@ def test_load_machine_publication_registry_workspace_preset_example():
     preset = load_machine_publication_registry_workspace_preset(
         ROOT / "examples" / "registry_workspace_presets" / "machine_compute_publication_registry_workspace.json"
     )
-    assert preset["publication_network_dir"] is None
-    assert preset["release_catalog_index_dir"] == str(
-        (ROOT / "examples" / "generated_machine_publication_network" / "release_catalog_index").resolve()
+    assert preset["publication_network_preset_path"] == str(
+        (ROOT / "examples" / "network_presets" / "machine_compute_publication_network.json").resolve()
     )
+    assert preset["publication_network_dir"] is None
+    assert preset["release_catalog_index_dir"] is None
     assert preset["publication_catalog_workspace_preset_path"] == str(
         (ROOT / "examples" / "publication_catalog_workspace_presets" / "machine_compute_publication_catalog_workspace.json").resolve()
     )
@@ -2034,10 +2038,11 @@ def test_load_stable_publication_registry_workspace_preset_example():
     preset = load_stable_publication_registry_workspace_preset(
         ROOT / "examples" / "registry_workspace_presets" / "stable_reference_publication_registry_workspace.json"
     )
-    assert preset["publication_network_dir"] is None
-    assert preset["release_catalog_index_dir"] == str(
-        (ROOT / "examples" / "generated_stable_publication_network" / "release_catalog_index").resolve()
+    assert preset["publication_network_preset_path"] == str(
+        (ROOT / "examples" / "network_presets" / "stable_reference_publication_network.json").resolve()
     )
+    assert preset["publication_network_dir"] is None
+    assert preset["release_catalog_index_dir"] is None
     assert preset["publication_catalog_workspace_preset_path"] == str(
         (ROOT / "examples" / "publication_catalog_workspace_presets" / "stable_reference_publication_catalog_workspace.json").resolve()
     )
@@ -10996,6 +11001,9 @@ def test_cli_bootstrap_publication_registry_workspace_with_example_preset_tree(t
     generated_metadata_dir = tmp_path / "examples" / "generated_publication_metadata_catalog_publication"
     staged = stage_example_json_tree(
         tmp_path,
+        "catalog_presets/ai_compute_catalog.json",
+        "stack_presets/ai_compute_publication_stack.json",
+        "network_presets/ai_compute_publication_network.json",
         "publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json",
         "publication_descriptor_index_presets/ai_compute_publication_descriptor_index.json",
         "publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json",
@@ -11067,6 +11075,12 @@ def test_cli_bootstrap_publication_registry_workspace_with_example_preset_tree(t
             str(staged["registry_workspace_presets/ai_compute_publication_registry_workspace.json"]),
             "--scheme",
             "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
             "--publication-descriptor-index-key-id",
             "descriptor-key",
             "--publication-metadata-key-id",
@@ -11082,7 +11096,10 @@ def test_cli_bootstrap_publication_registry_workspace_with_example_preset_tree(t
 
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["artifact_count"] == 9
-    assert summary["source_publication_network_dir"] == str(generated_network_dir.resolve())
+    assert summary["source_publication_network_preset_path"] == str(
+        staged["network_presets/ai_compute_publication_network.json"].resolve()
+    )
+    assert summary["source_publication_network_dir"] is None
     assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT AI Compute Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT AI Compute Workspace Metadata Catalog"
     assert summary["publication_registry"]["index"]["label"] == "SATROOT AI Compute Workspace Publication Registry"
@@ -11098,6 +11115,8 @@ def test_cli_bootstrap_machine_publication_registry_workspace_with_example_prese
     staged = stage_example_json_tree(
         tmp_path,
         "catalog_presets/machine_compute_catalog.json",
+        "stack_presets/machine_compute_publication_stack.json",
+        "network_presets/machine_compute_publication_network.json",
         "publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json",
         "publication_descriptor_index_presets/machine_compute_publication_descriptor_index.json",
         "publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog.json",
@@ -11175,6 +11194,10 @@ def test_cli_bootstrap_machine_publication_registry_workspace_with_example_prese
             "hmac-sha256",
             "--release-key-id",
             "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
             "--publication-descriptor-index-key-id",
             "descriptor-key",
             "--publication-metadata-key-id",
@@ -11190,6 +11213,10 @@ def test_cli_bootstrap_machine_publication_registry_workspace_with_example_prese
 
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["artifact_count"] == 10
+    assert summary["source_publication_network_preset_path"] == str(
+        staged["network_presets/machine_compute_publication_network.json"].resolve()
+    )
+    assert summary["source_publication_network_dir"] is None
     assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT Machine Compute Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT Machine Compute Workspace Metadata Catalog"
     assert summary["publication_registry"]["index"]["label"] == "SATROOT Machine Compute Workspace Publication Registry"
@@ -11208,6 +11235,8 @@ def test_cli_bootstrap_stable_publication_registry_workspace_with_example_preset
     staged = stage_example_json_tree(
         tmp_path,
         "catalog_presets/stable_reference_catalog.json",
+        "stack_presets/stable_reference_publication_stack.json",
+        "network_presets/stable_reference_publication_network.json",
         "publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json",
         "publication_descriptor_index_presets/stable_reference_publication_descriptor_index.json",
         "publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog.json",
@@ -11285,6 +11314,10 @@ def test_cli_bootstrap_stable_publication_registry_workspace_with_example_preset
             "hmac-sha256",
             "--release-key-id",
             "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
             "--publication-descriptor-index-key-id",
             "descriptor-key",
             "--publication-metadata-key-id",
@@ -11300,6 +11333,10 @@ def test_cli_bootstrap_stable_publication_registry_workspace_with_example_preset
 
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["artifact_count"] == 10
+    assert summary["source_publication_network_preset_path"] == str(
+        staged["network_presets/stable_reference_publication_network.json"].resolve()
+    )
+    assert summary["source_publication_network_dir"] is None
     assert summary["publication_descriptor_index"]["index"]["label"] == "SATROOT Stable Reference Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "SATROOT Stable Reference Workspace Metadata Catalog"
     assert summary["publication_registry"]["index"]["label"] == "SATROOT Stable Reference Workspace Publication Registry"

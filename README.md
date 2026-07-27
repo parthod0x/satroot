@@ -611,7 +611,7 @@ satroot1 bootstrap-stable-publication-registry-workspace --publication-network-d
 That registry wrapper can also compose the stable catalog preset, a publication-catalog-workspace preset, and a publication-registry-workspace preset:
 
 ```bash
-satroot1 bootstrap-stable-publication-registry-workspace --catalog-preset-json examples/catalog_presets/stable_reference_catalog.json --publication-catalog-workspace-preset-json examples/publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json --preset-json examples/registry_workspace_presets/stable_reference_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir stable_publication_registry_workspace_preset --publication-registry-label "SATROOT Stable Registry Override"
+satroot1 bootstrap-stable-publication-registry-workspace --catalog-preset-json examples/catalog_presets/stable_reference_catalog.json --publication-catalog-workspace-preset-json examples/publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json --preset-json examples/registry_workspace_presets/stable_reference_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir stable_publication_registry_workspace_preset --publication-registry-label "SATROOT Stable Registry Override"
 ```
 
 Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly from machine-profile inputs:
@@ -635,7 +635,7 @@ satroot1 bootstrap-machine-publication-registry-workspace --publication-network-
 That registry wrapper can also compose the machine catalog preset, a publication-catalog-workspace preset, and a publication-registry-workspace preset:
 
 ```bash
-satroot1 bootstrap-machine-publication-registry-workspace --catalog-preset-json examples/catalog_presets/machine_compute_catalog.json --publication-catalog-workspace-preset-json examples/publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json --preset-json examples/registry_workspace_presets/machine_compute_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir machine_publication_registry_workspace_preset --publication-registry-label "SATROOT Machine Registry Override"
+satroot1 bootstrap-machine-publication-registry-workspace --catalog-preset-json examples/catalog_presets/machine_compute_catalog.json --publication-catalog-workspace-preset-json examples/publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json --preset-json examples/registry_workspace_presets/machine_compute_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir machine_publication_registry_workspace_preset --publication-registry-label "SATROOT Machine Registry Override"
 ```
 
 Generate a full multi-profile demo catalog workspace with `bundles/`, `release/`, and a root `summary.json` in one step:
@@ -1528,7 +1528,7 @@ satroot1 bootstrap-publication-catalog-workspace --preset-json examples/publicat
 For a checked-in repeatable registry-workspace composition, the same command can also load a preset:
 
 ```bash
-satroot1 bootstrap-publication-registry-workspace --preset-json examples/registry_workspace_presets/ai_compute_publication_registry_workspace.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --publication-registry-label "SATROOT Workspace Registry Override"
+satroot1 bootstrap-publication-registry-workspace --preset-json examples/registry_workspace_presets/ai_compute_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --publication-registry-label "SATROOT Workspace Registry Override"
 ```
 
 For a checked-in repeatable top-level registry publication, use the publication preset:
