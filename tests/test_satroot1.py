@@ -11554,6 +11554,110 @@ def test_cli_export_publication_stack_preset_with_generated_catalog_presets(tmp_
     assert machine_catalog["symbol_overrides"]["SATROOT-MACHINE-1"] == "PSTMCH1"
 
 
+def test_cli_export_publication_stack_preset_preserves_catalog_workspace_references(tmp_path, capsys):
+    stable_dir = tmp_path / "stable_workspace"
+    machine_dir = tmp_path / "machine_workspace"
+    assert main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-STABLE-1",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(stable_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Stable Exportable Workspace",
+            "--published-at",
+            "2026-07-06T01:00:00Z",
+        ]
+    ) == 0
+    capsys.readouterr()
+    assert main(
+        [
+            "bootstrap-demo-catalog",
+            "--scheme",
+            "hmac-sha256",
+            "--profile",
+            "SATROOT-MACHINE-1",
+            "--release-key-id",
+            "release-key",
+            "--output-dir",
+            str(machine_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Machine Exportable Workspace",
+            "--published-at",
+            "2026-07-06T02:00:00Z",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    stack_dir = tmp_path / "published_stack_source"
+    assert main(
+        [
+            "publish-publication-stack",
+            str(stable_dir),
+            str(machine_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_dir),
+            "--channel",
+            "stable",
+            "--label",
+            "Published Existing Stack",
+            "--published-at",
+            "2026-07-06T03:00:00Z",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_stack_workspace_refs.json"
+
+    assert main(["export-publication-stack-preset", str(stack_dir), "--output", str(preset_path)]) == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_stack_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-STACK-PRESET"
+    assert "catalog_presets" not in preset
+    assert sorted(Path(value).name for value in loaded["catalog_workspace_dirs"]) == ["machine_workspace", "stable_workspace"]
+
+    roundtrip_dir = tmp_path / "publication_stack_workspace_ref_roundtrip"
+    assert main(
+        [
+            "bootstrap-publication-stack",
+            "--stack-preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Workspace Ref Publication Stack",
+        ]
+    ) == 0
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["stack_preset_path"] == str(preset_path.resolve())
+    assert summary["release_catalog"]["catalog"]["label"] == "Workspace Ref Publication Stack"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"stable_workspace", "machine_workspace"}
+    assert main(["publication-stack-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_stack_from_exported_preset_round_trip(tmp_path, capsys):
     stack_dir = make_demo_publication_stack_dir(tmp_path)
     preset_path = tmp_path / "exported_stack.json"
@@ -11871,6 +11975,77 @@ def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp
     assert stack_b["release_catalog"]["label"] == "Publication Network Stack Beta"
     assert (catalog_preset_dir / "stack_a" / "stable_catalog.json").is_file()
     assert (catalog_preset_dir / "stack_b" / "machine_catalog.json").is_file()
+
+
+def test_cli_export_publication_network_preset_preserves_publication_stack_references(tmp_path, capsys):
+    stack_alpha_root = tmp_path / "stack_alpha_root"
+    stack_beta_root = tmp_path / "stack_beta_root"
+    stack_alpha_root.mkdir()
+    stack_beta_root.mkdir()
+    stack_alpha_dir = make_demo_publication_stack_dir(stack_alpha_root)
+    stack_beta_dir = make_demo_publication_stack_dir(stack_beta_root)
+    capsys.readouterr()
+
+    network_dir = tmp_path / "published_network_source"
+    assert main(
+        [
+            "publish-publication-network",
+            str(stack_alpha_dir),
+            str(stack_beta_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--channel",
+            "network",
+            "--label",
+            "Published Existing Network",
+            "--published-at",
+            "2026-07-06T04:00:00Z",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    preset_path = tmp_path / "exported_network_workspace_refs.json"
+
+    assert main(["export-publication-network-preset", str(network_dir), "--output", str(preset_path)]) == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_network_preset(preset_path)
+    assert preset["type"] == "SATROOT-PUBLICATION-NETWORK-PRESET"
+    assert "stack_presets" not in preset
+    assert sorted(Path(value).name for value in loaded["publication_stack_dirs"]) == ["publication_stack", "publication_stack-2"]
+
+    roundtrip_dir = tmp_path / "publication_network_workspace_ref_roundtrip"
+    assert main(
+        [
+            "bootstrap-publication-network",
+            "--network-preset-json",
+            str(preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Workspace Ref Publication Network",
+        ]
+    ) == 0
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["stack_count"] == 2
+    assert summary["network_preset_path"] == str(preset_path.resolve())
+    assert summary["release_catalog_index"]["index"]["label"] == "Workspace Ref Publication Network"
+    assert {entry["workspace_name"] for entry in summary["workspaces"]} == {"publication_stack", "publication_stack-2"}
+    assert main(["publication-network-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_bootstrap_publication_network_from_exported_preset_round_trip(tmp_path, capsys):
