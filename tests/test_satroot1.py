@@ -10839,6 +10839,156 @@ def test_cli_bootstrap_publication_registry_workspace_with_preset_catalog_worksp
     capsys.readouterr()
 
 
+def test_cli_bootstrap_publication_registry_workspace_with_publication_catalog_workspace_preset_json(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    collection_dir = tmp_path / "publication_metadata_bundle_collection"
+    catalog_workspace_preset_path = tmp_path / "publication_catalog_workspace_collection_preset.json"
+    output_dir = tmp_path / "publication_registry_workspace_collection_preset_json"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_json(
+        catalog_workspace_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "publication_metadata_bundle_collection_dir": str(collection_dir.relative_to(tmp_path)),
+            "publication_descriptor_index": {
+                "label": "Registry Collection Descriptor Index",
+            },
+            "publication_metadata_catalog": {
+                "label": "Registry Collection Metadata Catalog",
+            },
+        },
+    )
+
+    assert main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--publication-catalog-workspace-preset-json",
+            str(catalog_workspace_preset_path),
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--publication-registry-label",
+            "Registry Collection Workspace",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_catalog_workspace_dir"] is None
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["source_publication_metadata_bundle_collection_dir"] == str(collection_dir.resolve())
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Registry Collection Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Registry Collection Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Registry Collection Workspace"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_publication_registry_workspace_with_preset_nested_catalog_workspace_preset_reference(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    collection_dir = tmp_path / "publication_metadata_bundle_collection"
+    catalog_workspace_preset_path = tmp_path / "publication_catalog_workspace_collection_preset.json"
+    registry_workspace_preset_path = tmp_path / "publication_registry_workspace_collection_preset.json"
+    output_dir = tmp_path / "publication_registry_workspace_collection_preset_reference"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_json(
+        catalog_workspace_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "publication_metadata_bundle_collection_dir": str(collection_dir.relative_to(tmp_path)),
+            "publication_descriptor_index": {
+                "label": "Preset Nested Registry Descriptor Index",
+            },
+            "publication_metadata_catalog": {
+                "label": "Preset Nested Registry Metadata Catalog",
+            },
+        },
+    )
+    write_json(
+        registry_workspace_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+            "version": "0.1",
+            "publication_network_dir": str(network_dir.relative_to(tmp_path)),
+            "publication_catalog_workspace_preset": str(catalog_workspace_preset_path.relative_to(tmp_path)),
+            "publication_registry": {
+                "label": "Preset Nested Registry Workspace",
+            },
+        },
+    )
+
+    assert main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--preset-json",
+            str(registry_workspace_preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(output_dir),
+        ]
+    ) == 0
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["source_publication_network_dir"] == str(network_dir.resolve())
+    assert summary["source_publication_metadata_bundle_collection_dir"] == str(collection_dir.resolve())
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Preset Nested Registry Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Preset Nested Registry Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Preset Nested Registry Workspace"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_registry_workspace_with_example_preset_tree(tmp_path, capsys):
     generated_network_dir = tmp_path / "examples" / "generated_publication_network"
     generated_descriptor_dir = tmp_path / "examples" / "generated_publication_descriptor_index_publication"
@@ -12711,6 +12861,86 @@ def test_cli_export_publication_registry_workspace_preset_with_generated_nested_
     assert Path(nested_catalog["publication_descriptor_index_preset_path"]).name == "exported_nested_descriptor_index.json"
     assert Path(nested_catalog["publication_metadata_catalog_preset_path"]).name == "exported_nested_metadata_catalog.json"
     assert load_publication_registry_preset(loaded["publication_registry_preset_path"])["registry_metadata"]["label"] == "Workspace Publication Registry"
+
+
+def test_cli_export_publication_registry_workspace_preset_with_nested_collection_backed_catalog_preset(tmp_path, capsys):
+    network_dir = make_demo_publication_network_dir(tmp_path)
+    collection_dir = tmp_path / "publication_metadata_bundle_collection"
+    catalog_workspace_preset_path = tmp_path / "publication_catalog_workspace_collection_preset.json"
+    workspace_dir = tmp_path / "publication_registry_workspace_collection_source"
+    preset_path = tmp_path / "exported_registry_workspace_collection_source.json"
+    nested_catalog_preset_path = tmp_path / "exported_nested_collection_catalog_workspace.json"
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle-collection",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(collection_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    write_json(
+        catalog_workspace_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+            "version": "0.1",
+            "publication_metadata_bundle_collection_dir": str(collection_dir.relative_to(tmp_path)),
+            "publication_descriptor_index": {
+                "label": "Exported Nested Collection Descriptor Index",
+            },
+            "publication_metadata_catalog": {
+                "label": "Exported Nested Collection Metadata Catalog",
+            },
+        },
+    )
+
+    assert main(
+        [
+            "bootstrap-publication-registry-workspace",
+            "--publication-catalog-workspace-preset-json",
+            str(catalog_workspace_preset_path),
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(workspace_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert main(
+        [
+            "export-publication-registry-workspace-preset",
+            str(workspace_dir),
+            "--publication-catalog-workspace-preset-path",
+            str(nested_catalog_preset_path),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
+    loaded = load_publication_registry_workspace_preset(preset_path)
+    nested_catalog = load_publication_catalog_workspace_preset(loaded["publication_catalog_workspace_preset_path"])
+    assert preset["type"] == "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET"
+    assert Path(loaded["publication_catalog_workspace_preset_path"]).name == "exported_nested_collection_catalog_workspace.json"
+    assert nested_catalog["publication_metadata_bundle_collection_dir"] == str(collection_dir.resolve())
 
 
 def test_cli_bootstrap_publication_registry_workspace_from_exported_preset_round_trip(tmp_path, capsys):

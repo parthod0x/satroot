@@ -11510,6 +11510,7 @@ def write_publication_registry_workspace(
     discover_under: Optional[Sequence[str | Path]] = None,
     recursive: bool = True,
     publication_catalog_workspace_dir: Optional[str | Path] = None,
+    publication_metadata_bundle_collection_dir: Optional[str | Path] = None,
     publication_network_dir: Optional[str | Path] = None,
     descriptor_index_metadata: Optional[Mapping[str, str]] = None,
     publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
@@ -11625,6 +11626,7 @@ def write_publication_registry_workspace(
             publication_descriptor_index_key_id=publication_descriptor_index_key_id,
             publication_metadata_key_id=publication_metadata_key_id,
             publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+            publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
             descriptor_index_metadata=descriptor_index_metadata,
             publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
         )
@@ -16768,6 +16770,7 @@ def build_cli_parser() -> Any:
     bootstrap_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered artifact paths and unique publication component directories will be added to the registry workspace inputs")
     bootstrap_publication_registry_workspace_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory to include in the descriptor and metadata lanes")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-dir", help="Optional publication catalog workspace directory to copy instead of regenerating descriptor and metadata publication lanes")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for nested descriptor and metadata workspace defaults")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to use as a default discovery root and release-catalog-index source")
     bootstrap_publication_registry_workspace_parser.add_argument("--release-catalog-index-dir", help="Optional release catalog index publication directory; defaults to <publication-network-dir>/release_catalog_index when --publication-network-dir is provided")
     bootstrap_publication_registry_workspace_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT artifacts; may be repeated")
@@ -20249,8 +20252,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "bootstrap-publication-registry-workspace":
+        publication_catalog_workspace_preset_path = (
+            None if not args.publication_catalog_workspace_preset_json else Path(args.publication_catalog_workspace_preset_json).resolve()
+        )
+        publication_catalog_workspace_preset = (
+            load_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
+            if publication_catalog_workspace_preset_path is not None
+            else None
+        )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        if publication_catalog_workspace_preset is None and (preset or {}).get("publication_catalog_workspace_preset_path"):
+            publication_catalog_workspace_preset_path = Path(str((preset or {}).get("publication_catalog_workspace_preset_path"))).resolve()
+            publication_catalog_workspace_preset = load_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         inventory_publication_catalog_workspace_dir = (
             load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
@@ -20273,8 +20287,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_network_dir = Path(args.publication_network_dir).resolve()
         elif publication_network_dir is None and inventory_publication_network_dir is not None:
             publication_network_dir = Path(inventory_publication_network_dir).resolve()
+        publication_metadata_bundle_collection_dir = (publication_catalog_workspace_preset or {}).get(
+            "publication_metadata_bundle_collection_dir"
+        )
         discover_under = [*((preset or {}).get("discover_under", [])), *((args.discover_under or []))]
-        if publication_network_dir is not None:
+        if (
+            publication_network_dir is not None
+            and publication_catalog_workspace_dir is None
+            and publication_metadata_bundle_collection_dir is None
+        ):
             discover_under.append(str(publication_network_dir))
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
@@ -20284,7 +20305,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if release_catalog_index_dir is None:
             raise SatRootError("bootstrap-publication-registry-workspace requires --release-catalog-index-dir or --publication-network-dir")
 
-        descriptor_index_metadata = dict((preset or {}).get("descriptor_index_metadata", {}))
+        descriptor_index_metadata = _merge_release_metadata_defaults(
+            (publication_catalog_workspace_preset or {}).get("descriptor_index_metadata"),
+            (preset or {}).get("descriptor_index_metadata"),
+        )
         for key, value in {
             "channel": args.descriptor_index_channel,
             "label": args.descriptor_index_label,
@@ -20292,7 +20316,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         }.items():
             if value is not None:
                 descriptor_index_metadata[key] = value
-        publication_metadata_catalog_metadata = dict((preset or {}).get("publication_metadata_catalog_metadata", {}))
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(
+            (publication_catalog_workspace_preset or {}).get("publication_metadata_catalog_metadata"),
+            (preset or {}).get("publication_metadata_catalog_metadata"),
+        )
         for key, value in {
             "channel": args.publication_metadata_catalog_channel,
             "label": args.publication_metadata_catalog_label,
@@ -20309,11 +20336,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 publication_registry_metadata[key] = value
         write_publication_registry_workspace(
-            artifact_paths=[*((preset or {}).get("artifact_paths", [])), *inventory_artifact_paths, *((args.path or []))],
-            discover_under=discover_under,
-            recursive=False if args.non_recursive else (preset or {}).get("recursive", True),
+            artifact_paths=[
+                *((publication_catalog_workspace_preset or {}).get("artifact_paths", [])),
+                *((preset or {}).get("artifact_paths", [])),
+                *inventory_artifact_paths,
+                *((args.path or [])),
+            ],
+            discover_under=[
+                *((publication_catalog_workspace_preset or {}).get("discover_under", [])),
+                *discover_under,
+            ],
+            recursive=False
+            if args.non_recursive
+            else (publication_catalog_workspace_preset or {}).get("recursive", (preset or {}).get("recursive", True)),
             release_catalog_index_dir=release_catalog_index_dir,
             publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+            publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
             publication_network_dir=publication_network_dir,
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
