@@ -174,6 +174,30 @@ Bootstrap a machine demo release catalog index publication from repeated machine
 satroot1 bootstrap-machine-demo-release-catalog-index-publication --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --catalog-scheme hmac-sha256 --catalog-key-id catalog-key --scheme hmac-sha256 --key-id index-key --catalog-label "Machine Demo Release Catalog" --label "Machine Demo Release Catalog Index" --output-dir machine_demo_release_catalog_index_publication
 ```
 
+Bootstrap a stable demo publication stack from repeated stable preset inputs:
+
+```bash
+satroot1 bootstrap-stable-demo-publication-stack --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --label "Stable Demo Publication Stack" --output-dir stable_demo_publication_stack
+```
+
+Bootstrap a machine demo publication stack from repeated machine preset inputs:
+
+```bash
+satroot1 bootstrap-machine-demo-publication-stack --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --label "Machine Demo Publication Stack" --output-dir machine_demo_publication_stack
+```
+
+Bootstrap a stable demo publication network from repeated stable preset inputs:
+
+```bash
+satroot1 bootstrap-stable-demo-publication-network --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --catalog-label "Stable Demo Publication Stack" --label "Stable Demo Publication Network" --output-dir stable_demo_publication_network
+```
+
+Bootstrap a machine demo publication network from repeated machine preset inputs:
+
+```bash
+satroot1 bootstrap-machine-demo-publication-network --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --catalog-label "Machine Demo Publication Stack" --label "Machine Demo Publication Network" --output-dir machine_demo_publication_network
+```
+
 Bootstrap a machine collection-backed release catalog publication:
 
 ```bash

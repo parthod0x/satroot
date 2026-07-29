@@ -12760,6 +12760,210 @@ def write_publication_network_workspace(
     }
 
 
+def bootstrap_machine_demo_publication_stack_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_catalog_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_preset_paths = [Path(value).resolve() for value in preset_paths]
+    if not resolved_preset_paths:
+        raise SatRootError("machine demo publication stack bootstrap requires at least one SATROOT-MACHINE-1 preset")
+    for preset_path in resolved_preset_paths:
+        load_machine_demo_catalog_preset(preset_path)
+    return write_publication_stack_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        release_catalog_scheme=release_catalog_scheme,
+        release_catalog_key_id=release_catalog_key_id,
+        output_dir=output_dir,
+        catalog_preset_paths=resolved_preset_paths,
+        catalog_workspace_dirs=(),
+        catalog_workspace_collection_dir=None,
+        release_catalog_metadata=release_catalog_metadata,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+    )
+
+
+def bootstrap_stable_demo_publication_stack_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_catalog_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_preset_paths = [Path(value).resolve() for value in preset_paths]
+    if not resolved_preset_paths:
+        raise SatRootError("stable demo publication stack bootstrap requires at least one SATROOT-STABLE-1 preset")
+    for preset_path in resolved_preset_paths:
+        load_stable_demo_catalog_preset(preset_path)
+    return write_publication_stack_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        release_catalog_scheme=release_catalog_scheme,
+        release_catalog_key_id=release_catalog_key_id,
+        output_dir=output_dir,
+        catalog_preset_paths=resolved_preset_paths,
+        catalog_workspace_dirs=(),
+        catalog_workspace_collection_dir=None,
+        release_catalog_metadata=release_catalog_metadata,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+    )
+
+
+def bootstrap_machine_demo_publication_network_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_catalog_index_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_catalog_scheme: Optional[str] = None,
+    release_catalog_index_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+    release_catalog_index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    stack_source_dir = root_output_dir / "publication_stack_source"
+    stack_workspace = bootstrap_machine_demo_publication_stack_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=stack_source_dir,
+        release_key_id=release_key_id,
+        release_catalog_key_id=release_catalog_key_id,
+        release_scheme=release_scheme,
+        release_catalog_scheme=release_catalog_scheme,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_catalog_metadata=release_catalog_metadata,
+    )
+    network_workspace = write_publication_network_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        release_catalog_scheme=release_catalog_scheme,
+        release_catalog_key_id=release_catalog_key_id,
+        release_catalog_index_scheme=release_catalog_index_scheme,
+        release_catalog_index_key_id=release_catalog_index_key_id,
+        output_dir=root_output_dir,
+        stack_preset_paths=(),
+        publication_stack_dirs=[stack_source_dir],
+        release_catalog_index_metadata=release_catalog_index_metadata,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+    )
+    return {
+        "publication_stack_workspace": stack_workspace,
+        "publication_network_workspace": network_workspace,
+        "summary": network_workspace["summary"],
+        "summary_path": network_workspace["summary_path"],
+    }
+
+
+def bootstrap_stable_demo_publication_network_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_catalog_index_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_catalog_scheme: Optional[str] = None,
+    release_catalog_index_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+    release_catalog_index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    stack_source_dir = root_output_dir / "publication_stack_source"
+    stack_workspace = bootstrap_stable_demo_publication_stack_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=stack_source_dir,
+        release_key_id=release_key_id,
+        release_catalog_key_id=release_catalog_key_id,
+        release_scheme=release_scheme,
+        release_catalog_scheme=release_catalog_scheme,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_catalog_metadata=release_catalog_metadata,
+    )
+    network_workspace = write_publication_network_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        release_catalog_scheme=release_catalog_scheme,
+        release_catalog_key_id=release_catalog_key_id,
+        release_catalog_index_scheme=release_catalog_index_scheme,
+        release_catalog_index_key_id=release_catalog_index_key_id,
+        output_dir=root_output_dir,
+        stack_preset_paths=(),
+        publication_stack_dirs=[stack_source_dir],
+        release_catalog_index_metadata=release_catalog_index_metadata,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+    )
+    return {
+        "publication_stack_workspace": stack_workspace,
+        "publication_network_workspace": network_workspace,
+        "summary": network_workspace["summary"],
+        "summary_path": network_workspace["summary_path"],
+    }
+
+
 def relocate_publication_network_workspace_summary(publication_network_dir: str | Path) -> Dict[str, Any]:
     network_path, summary = _load_workspace_summary(publication_network_dir, label="publication network")
     validate_publication_network_summary_consistency(summary)
@@ -20081,6 +20285,40 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label override")
     bootstrap_machine_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
 
+    bootstrap_machine_demo_publication_stack_parser = subparsers.add_parser("bootstrap-machine-demo-publication-stack", help="Generate one or more SATROOT-MACHINE-1 demo catalog workspaces from repeated machine-only presets and publish them as a signed release catalog stack")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--preset-json", action="append", dest="preset_jsons", help="Machine-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each machine workspace release manifest")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the top-level machine release catalog manifest")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where catalog_workspaces/, release_catalog/, and summary.json will be written")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--channel", help="Optional release catalog channel metadata override")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label override")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
+
+    bootstrap_stable_demo_publication_stack_parser = subparsers.add_parser("bootstrap-stable-demo-publication-stack", help="Generate one or more SATROOT-STABLE-1 demo catalog workspaces from repeated stable-only presets and publish them as a signed release catalog stack")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--preset-json", action="append", dest="preset_jsons", help="Stable-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each stable workspace release manifest")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the top-level stable release catalog manifest")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where catalog_workspaces/, release_catalog/, and summary.json will be written")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--channel", help="Optional release catalog channel metadata override")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label override")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
+
     bootstrap_publication_network_parser = subparsers.add_parser("bootstrap-publication-network", help="Generate one or more publication stacks from presets and publish them as a signed release-catalog index")
     bootstrap_publication_network_parser.add_argument("--network-preset-json", help="Optional SATROOT publication network preset JSON file with stack preset paths and release-catalog-index metadata defaults")
     bootstrap_publication_network_parser.add_argument("--stack-preset-json", action="append", dest="stack_preset_jsons", help="SATROOT publication stack preset JSON file; may be repeated")
@@ -20143,6 +20381,50 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata override")
     bootstrap_machine_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label override")
     bootstrap_machine_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
+
+    bootstrap_machine_demo_publication_network_parser = subparsers.add_parser("bootstrap-machine-demo-publication-network", help="Generate a SATROOT-MACHINE-1 publication stack from repeated machine-only catalog presets and publish it as a signed release-catalog index")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--preset-json", action="append", dest="preset_jsons", help="Machine-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each machine workspace release manifest")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-stack release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the machine release catalog manifest")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--release-catalog-index-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-index-manifest signing; defaults to --scheme")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--release-catalog-index-key-id", required=True, help="Signature key identifier to generate and use for the top-level machine release-catalog index manifest")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--output-dir", required=True, help="Directory where publication_stack_source/, stack_workspaces/, release_catalog_index/, and summary.json will be written")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--catalog-channel", help="Optional release catalog channel metadata override for the generated publication stack")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--catalog-label", help="Optional human-readable release catalog label override for the generated publication stack")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--catalog-published-at", help="Optional ISO-8601 style published-at metadata override for the generated publication stack")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata override")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label override")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
+
+    bootstrap_stable_demo_publication_network_parser = subparsers.add_parser("bootstrap-stable-demo-publication-network", help="Generate a SATROOT-STABLE-1 publication stack from repeated stable-only catalog presets and publish it as a signed release-catalog index")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--preset-json", action="append", dest="preset_jsons", help="Stable-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each stable workspace release manifest")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-stack release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the stable release catalog manifest")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--release-catalog-index-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-index-manifest signing; defaults to --scheme")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--release-catalog-index-key-id", required=True, help="Signature key identifier to generate and use for the top-level stable release-catalog index manifest")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--output-dir", required=True, help="Directory where publication_stack_source/, stack_workspaces/, release_catalog_index/, and summary.json will be written")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--catalog-channel", help="Optional release catalog channel metadata override for the generated publication stack")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--catalog-label", help="Optional human-readable release catalog label override for the generated publication stack")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--catalog-published-at", help="Optional ISO-8601 style published-at metadata override for the generated publication stack")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata override")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label override")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
 
     bootstrap_publication_stack_collection_parser = subparsers.add_parser("bootstrap-publication-stack-collection", help="Copy one or more SATROOT publication stack workspaces into a reusable collection directory with summary.json")
     bootstrap_publication_stack_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_stack_dir entries will be added as collection sources")
@@ -24103,6 +24385,66 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote SATROOT-STABLE-1 publication stack to {Path(args.output_dir).resolve()}")
         return 0
 
+    if args.command == "bootstrap-machine-demo-publication-stack":
+        if not args.preset_jsons:
+            raise SatRootError("bootstrap-machine-demo-publication-stack requires at least one --preset-json")
+        catalog_metadata = {}
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+
+        bootstrap_machine_demo_publication_stack_from_presets(
+            preset_paths=[Path(value).resolve() for value in args.preset_jsons],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            release_catalog_scheme=args.release_catalog_scheme,
+            release_catalog_key_id=args.release_catalog_key_id,
+            output_dir=args.output_dir,
+            release_catalog_metadata=catalog_metadata,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+        )
+        print(f"wrote SATROOT-MACHINE-1 demo publication stack to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-stable-demo-publication-stack":
+        if not args.preset_jsons:
+            raise SatRootError("bootstrap-stable-demo-publication-stack requires at least one --preset-json")
+        catalog_metadata = {}
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+
+        bootstrap_stable_demo_publication_stack_from_presets(
+            preset_paths=[Path(value).resolve() for value in args.preset_jsons],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            release_catalog_scheme=args.release_catalog_scheme,
+            release_catalog_key_id=args.release_catalog_key_id,
+            output_dir=args.output_dir,
+            release_catalog_metadata=catalog_metadata,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+        )
+        print(f"wrote SATROOT-STABLE-1 demo publication stack to {Path(args.output_dir).resolve()}")
+        return 0
+
     if args.command == "bootstrap-publication-network":
         network_preset_path = None if not args.network_preset_json else Path(args.network_preset_json).resolve()
         network_preset = load_publication_network_preset(network_preset_path) if network_preset_path is not None else None
@@ -24294,6 +24636,88 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_stack_collection_dir=publication_stack_collection_dir,
         )
         print(f"wrote SATROOT-STABLE-1 publication network to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-machine-demo-publication-network":
+        if not args.preset_jsons:
+            raise SatRootError("bootstrap-machine-demo-publication-network requires at least one --preset-json")
+        release_catalog_metadata = {}
+        for key, value in {
+            "channel": args.catalog_channel,
+            "label": args.catalog_label,
+            "published_at": args.catalog_published_at,
+        }.items():
+            if value is not None:
+                release_catalog_metadata[key] = value
+        release_catalog_index_metadata = {}
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                release_catalog_index_metadata[key] = value
+
+        bootstrap_machine_demo_publication_network_from_presets(
+            preset_paths=[Path(value).resolve() for value in args.preset_jsons],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            release_catalog_scheme=args.release_catalog_scheme,
+            release_catalog_key_id=args.release_catalog_key_id,
+            release_catalog_index_scheme=args.release_catalog_index_scheme,
+            release_catalog_index_key_id=args.release_catalog_index_key_id,
+            output_dir=args.output_dir,
+            release_catalog_metadata=release_catalog_metadata,
+            release_catalog_index_metadata=release_catalog_index_metadata,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+        )
+        print(f"wrote SATROOT-MACHINE-1 demo publication network to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-stable-demo-publication-network":
+        if not args.preset_jsons:
+            raise SatRootError("bootstrap-stable-demo-publication-network requires at least one --preset-json")
+        release_catalog_metadata = {}
+        for key, value in {
+            "channel": args.catalog_channel,
+            "label": args.catalog_label,
+            "published_at": args.catalog_published_at,
+        }.items():
+            if value is not None:
+                release_catalog_metadata[key] = value
+        release_catalog_index_metadata = {}
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                release_catalog_index_metadata[key] = value
+
+        bootstrap_stable_demo_publication_network_from_presets(
+            preset_paths=[Path(value).resolve() for value in args.preset_jsons],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            release_catalog_scheme=args.release_catalog_scheme,
+            release_catalog_key_id=args.release_catalog_key_id,
+            release_catalog_index_scheme=args.release_catalog_index_scheme,
+            release_catalog_index_key_id=args.release_catalog_index_key_id,
+            output_dir=args.output_dir,
+            release_catalog_metadata=release_catalog_metadata,
+            release_catalog_index_metadata=release_catalog_index_metadata,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+        )
+        print(f"wrote SATROOT-STABLE-1 demo publication network to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-publication-catalog-workspace":

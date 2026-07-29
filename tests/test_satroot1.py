@@ -16478,6 +16478,390 @@ def test_cli_bootstrap_stable_publication_stack_from_exported_preset_round_trip(
     capsys.readouterr()
 
 
+def test_cli_bootstrap_machine_demo_publication_stack_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "machine_publication_alpha.json"
+    preset_beta = tmp_path / "machine_publication_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPUBST01"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Publication Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "alpha-cluster",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "alpha-publication-credit",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Machine Publication Alpha Release",
+                "published_at": "2026-07-25T08:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPUBST02"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Publication Beta"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "beta-cluster",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "beta-publication-credit",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Machine Publication Beta Release",
+                "published_at": "2026-07-26T08:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_demo_publication_stack"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-publication-stack",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--label",
+            "Machine Demo Publication Stack",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo publication stack to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    catalog = json.loads((output_dir / "release_catalog" / "release_catalog.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "release_catalog" / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Machine Demo Publication Stack"
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"MPUBST01", "MPUBST02"}
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog" / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"] == catalog["catalog"]
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_demo_publication_stack_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "stable_publication_alpha.json"
+    preset_beta = tmp_path / "stable_publication_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPUBST01"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Publication Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "EUR",
+                    "intended_use": "alpha-stable-publication",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Stable Publication Alpha Release",
+                "published_at": "2026-07-25T09:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPUBST02"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Publication Beta"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "JPY",
+                    "intended_use": "beta-stable-publication",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Stable Publication Beta Release",
+                "published_at": "2026-07-26T09:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_demo_publication_stack"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-publication-stack",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--label",
+            "Stable Demo Publication Stack",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo publication stack to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    catalog = json.loads((output_dir / "release_catalog" / "release_catalog.json").read_text(encoding="utf-8"))
+    secrets = json.loads((output_dir / "release_catalog" / "release_catalog_secrets.json").read_text(encoding="utf-8"))
+    assert summary["workspace_count"] == 2
+    assert summary["release_catalog"]["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Stable Demo Publication Stack"
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"SPUBST01", "SPUBST02"}
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog" / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"] == catalog["catalog"]
+    assert main(["publication-stack-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_machine_demo_publication_network_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "machine_network_alpha.json"
+    preset_beta = tmp_path / "machine_network_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPUBNW01"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Network Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "network-alpha",
+                    "billing_unit": "request",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "network-alpha-credit",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Machine Network Alpha Release",
+                "published_at": "2026-07-27T08:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPUBNW02"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Network Beta"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "network-beta",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "network-beta-credit",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Machine Network Beta Release",
+                "published_at": "2026-07-28T08:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_demo_publication_network"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-publication-network",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--catalog-label",
+            "Machine Demo Publication Stack",
+            "--label",
+            "Machine Demo Publication Network",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo publication network to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    index = json.loads((output_dir / "release_catalog_index" / "release_catalog_index.json").read_text(encoding="utf-8"))
+    secrets = json.loads(
+        (output_dir / "release_catalog_index" / "release_catalog_index_secrets.json").read_text(encoding="utf-8")
+    )
+    nested_stack_summary = json.loads(
+        (output_dir / "stack_workspaces" / "publication_stack_source" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["stack_count"] == 1
+    assert summary["release_catalog_index"]["release_catalog_count"] == 1
+    assert nested_stack_summary["workspace_count"] == 2
+    assert nested_stack_summary["release_catalog"]["catalog"]["label"] == "Machine Demo Publication Stack"
+    assert index["index"]["label"] == "Machine Demo Publication Network"
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 1
+    assert verified["index"] == index["index"]
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_demo_publication_network_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "stable_network_alpha.json"
+    preset_beta = tmp_path / "stable_network_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPUBNW01"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Network Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "GBP",
+                    "intended_use": "network-alpha-stable",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Stable Network Alpha Release",
+                "published_at": "2026-07-27T09:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPUBNW02"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Network Beta"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "INR",
+                    "intended_use": "network-beta-stable",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Stable Network Beta Release",
+                "published_at": "2026-07-28T09:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_demo_publication_network"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-publication-network",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--catalog-label",
+            "Stable Demo Publication Stack",
+            "--label",
+            "Stable Demo Publication Network",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo publication network to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    index = json.loads((output_dir / "release_catalog_index" / "release_catalog_index.json").read_text(encoding="utf-8"))
+    secrets = json.loads(
+        (output_dir / "release_catalog_index" / "release_catalog_index_secrets.json").read_text(encoding="utf-8")
+    )
+    nested_stack_summary = json.loads(
+        (output_dir / "stack_workspaces" / "publication_stack_source" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["stack_count"] == 1
+    assert summary["release_catalog_index"]["release_catalog_count"] == 1
+    assert nested_stack_summary["workspace_count"] == 2
+    assert nested_stack_summary["release_catalog"]["catalog"]["label"] == "Stable Demo Publication Stack"
+    assert index["index"]["label"] == "Stable Demo Publication Network"
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 1
+    assert verified["index"] == index["index"]
+    assert main(["publication-network-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_publication_network_preset_with_generated_nested_presets(tmp_path):
     network_dir = make_demo_publication_network_dir(tmp_path)
     preset_path = tmp_path / "exported_network.json"
