@@ -7,7 +7,7 @@ This directory contains both runnable ledger examples and reusable preset trees 
 - `genesis_*.json` and `events_*.json` are direct runnable SATROOT ledgers.
 - `catalog_presets/` and `stack_presets/` are the first reusable workspace-entry presets.
 - `bundle_index_presets/`, `release_catalog_presets/`, and `release_catalog_index_presets/` are the lower signed publication aggregation presets.
-- `network_presets/`, `publication_catalog_workspace_presets/`, `registry_workspace_presets/`, and `registry_presets/` are the higher publication/discovery presets.
+- `publication_metadata_catalog_presets/`, `network_presets/`, `publication_catalog_workspace_presets/`, `registry_workspace_presets/`, and `registry_presets/` are the higher publication/discovery presets.
 
 ## Lane naming
 
@@ -52,10 +52,14 @@ If you want the smallest useful preset chain for each lane:
   `release_catalog_index_presets/ai_compute_catalog_network.json`
 - Generic:
   `catalog_presets/ai_compute_catalog.json`
+  `publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json`
+  `publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json`
   `stack_presets/ai_compute_publication_stack.json`
   `network_presets/ai_compute_publication_network.json`
   `registry_workspace_presets/ai_compute_publication_registry_workspace.json`
-- Generic collection-backed publication stack:
+- Generic collection-backed publication metadata/catalog/stack:
+  `publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog_collection_backed.json`
+  `publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace_collection_backed.json`
   `stack_presets/ai_compute_publication_stack_collection_backed.json`
 
 - Machine lower release layers:
@@ -64,10 +68,14 @@ If you want the smallest useful preset chain for each lane:
   `release_catalog_index_presets/machine_compute_catalog_network.json`
 - Machine:
   `catalog_presets/machine_compute_catalog.json`
+  `publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog.json`
+  `publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json`
   `stack_presets/machine_compute_publication_stack.json`
   `network_presets/machine_compute_publication_network.json`
   `registry_workspace_presets/machine_compute_publication_registry_workspace.json`
-- Machine collection-backed publication stack:
+- Machine collection-backed publication metadata/catalog/stack:
+  `publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog_collection_backed.json`
+  `publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace_collection_backed.json`
   `stack_presets/machine_compute_publication_stack_collection_backed.json`
 
 - Stable lower release layers:
@@ -76,10 +84,14 @@ If you want the smallest useful preset chain for each lane:
   `release_catalog_index_presets/stable_reference_catalog_network.json`
 - Stable:
   `catalog_presets/stable_reference_catalog.json`
+  `publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog.json`
+  `publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json`
   `stack_presets/stable_reference_publication_stack.json`
   `network_presets/stable_reference_publication_network.json`
   `registry_workspace_presets/stable_reference_publication_registry_workspace.json`
-- Stable collection-backed publication stack:
+- Stable collection-backed publication metadata/catalog/stack:
+  `publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog_collection_backed.json`
+  `publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace_collection_backed.json`
   `stack_presets/stable_reference_publication_stack_collection_backed.json`
 
 If you specifically want frozen collection-backed examples, start with:
@@ -93,12 +105,21 @@ If you specifically want frozen collection-backed examples, start with:
 - `release_catalog_index_presets/ai_compute_catalog_network_collection_backed.json`
 - `release_catalog_index_presets/machine_compute_catalog_network_collection_backed.json`
 - `release_catalog_index_presets/stable_reference_catalog_network_collection_backed.json`
+- `publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog_collection_backed.json`
+- `publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog_collection_backed.json`
+- `publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog_collection_backed.json`
+- `publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace_collection_backed.json`
+- `publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace_collection_backed.json`
+- `publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace_collection_backed.json`
 - `stack_presets/ai_compute_publication_stack_collection_backed.json`
 - `stack_presets/machine_compute_publication_stack_collection_backed.json`
 - `stack_presets/stable_reference_publication_stack_collection_backed.json`
 - `network_presets/ai_compute_publication_network_collection_backed.json`
 - `network_presets/machine_compute_publication_network_collection_backed.json`
 - `network_presets/stable_reference_publication_network_collection_backed.json`
+- `registry_presets/ai_compute_publication_registry_collection_backed.json`
+- `registry_presets/machine_compute_publication_registry_collection_backed.json`
+- `registry_presets/stable_reference_publication_registry_collection_backed.json`
 - `registry_workspace_presets/ai_compute_publication_registry_workspace_collection_backed.json`
 - `registry_workspace_presets/machine_compute_publication_registry_workspace_collection_backed.json`
 - `registry_workspace_presets/stable_reference_publication_registry_workspace_collection_backed.json`
@@ -147,6 +168,18 @@ Bootstrap a generic collection-backed publication stack:
 satroot1 bootstrap-publication-stack --stack-preset-json examples/stack_presets/ai_compute_publication_stack_collection_backed.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir publication_stack_collection_backed --label "SATROOT Collection-Backed Stack Override"
 ```
 
+Bootstrap a generic collection-backed publication metadata catalog publication:
+
+```bash
+satroot1 bootstrap-publication-metadata-catalog-publication --preset-json examples/publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog_collection_backed.json --output-dir publication_metadata_catalog_collection_backed --scheme hmac-sha256 --key-id catalog-key --label "SATROOT Collection-Backed Metadata Catalog Override"
+```
+
+Bootstrap a generic collection-backed publication catalog workspace:
+
+```bash
+satroot1 bootstrap-publication-catalog-workspace --preset-json examples/publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace_collection_backed.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --output-dir publication_catalog_workspace_collection_backed
+```
+
 Bootstrap a generic collection-backed registry workspace:
 
 ```bash
@@ -193,4 +226,10 @@ Bootstrap a stable workspace-backed top-level registry publication:
 
 ```bash
 satroot1 bootstrap-stable-publication-registry-publication --preset-json examples/registry_presets/stable_reference_publication_registry_workspace_backed.json --output-dir stable_publication_registry_publication_workspace_backed --label "SATROOT Stable Workspace-Backed Registry Override" --scheme hmac-sha256 --key-id registry-key
+```
+
+Bootstrap a machine collection-backed top-level registry publication:
+
+```bash
+satroot1 bootstrap-machine-publication-registry-publication --preset-json examples/registry_presets/machine_compute_publication_registry_collection_backed.json --output-dir machine_publication_registry_publication_collection_backed --label "SATROOT Machine Collection-Backed Registry Override" --scheme hmac-sha256 --key-id registry-key
 ```

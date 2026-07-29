@@ -252,10 +252,9 @@ This repo now includes the first stable-value profile draft:
 - `satroot1 publish-stable-publication-registry-workspace` for binding an existing stable publication catalog workspace to a stable release-catalog-index source while preserving stable provenance,
 - `satroot1 export-stable-publication-registry-workspace-preset` for exporting that stable publication registry workspace shape back into a validated reusable preset,
 - `satroot1 export-stable-publication-descriptor-index-preset`, `satroot1 export-stable-publication-metadata-catalog-preset`, and `satroot1 export-stable-publication-registry-preset` for exporting stable component publications back into validated reusable presets.
-- checked-in example presets now cover generic, machine-only, and stable-only component publication layers across `examples/bundle_index_presets/`, `examples/release_catalog_presets/`, `examples/release_catalog_index_presets/`, `examples/publication_descriptor_index_presets/`, `examples/publication_metadata_catalog_presets/`, and `examples/registry_presets/`.
+- checked-in example presets now cover generic, machine-only, and stable-only component publication layers across `examples/bundle_index_presets/`, `examples/release_catalog_presets/`, `examples/release_catalog_index_presets/`, `examples/publication_descriptor_index_presets/`, `examples/publication_metadata_catalog_presets/`, `examples/publication_catalog_workspace_presets/`, `examples/registry_workspace_presets/`, and `examples/registry_presets/`.
 - `examples/bundle_index_presets/`, `examples/release_catalog_presets/`, and `examples/release_catalog_index_presets/` now also include collection-backed companion presets for frozen generated bundle, release, and release-catalog sets.
-- `examples/stack_presets/` now also includes collection-backed companion presets for frozen demo-catalog workspace collections.
-- `examples/network_presets/` and `examples/registry_workspace_presets/` now also include collection-backed companion presets for frozen publication-stack and publication-network collections.
+- `examples/stack_presets/`, `examples/network_presets/`, `examples/publication_metadata_catalog_presets/`, `examples/publication_catalog_workspace_presets/`, `examples/registry_workspace_presets/`, and `examples/registry_presets/` now also include collection-backed companion presets for frozen demo-catalog, publication-stack, publication-network, publication-metadata-bundle, publication-catalog-workspace, and publication-registry inputs.
 - `examples/README.md` maps the generic, machine, stable, and collection-backed preset trees if you want one entry point into the full example set.
 
 If you want the shortest path into the checked-in reusable SATROOT preset tree, start here:
@@ -264,7 +263,9 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/ai_compute_bundle_index.json`
   `examples/release_catalog_presets/ai_compute_release_stack.json`
   `examples/release_catalog_index_presets/ai_compute_catalog_network.json`
-- Generic publication stack/network/registry-workspace:
+- Generic publication metadata/catalog/stack/network/registry-workspace:
+  `examples/publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog.json`
+  `examples/publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace.json`
   `examples/stack_presets/ai_compute_publication_stack.json`
   `examples/network_presets/ai_compute_publication_network.json`
   `examples/registry_workspace_presets/ai_compute_publication_registry_workspace.json`
@@ -272,7 +273,9 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/ai_compute_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/ai_compute_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/ai_compute_catalog_network_collection_backed.json`
-- Generic collection-backed publication stack/network/registry-workspace:
+- Generic collection-backed publication metadata/catalog/stack/network/registry-workspace:
+  `examples/publication_metadata_catalog_presets/ai_compute_publication_metadata_catalog_collection_backed.json`
+  `examples/publication_catalog_workspace_presets/ai_compute_publication_catalog_workspace_collection_backed.json`
   `examples/stack_presets/ai_compute_publication_stack_collection_backed.json`
   `examples/network_presets/ai_compute_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/ai_compute_publication_registry_workspace_collection_backed.json`
@@ -280,7 +283,9 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/machine_compute_bundle_index.json`
   `examples/release_catalog_presets/machine_compute_release_stack.json`
   `examples/release_catalog_index_presets/machine_compute_catalog_network.json`
-- Machine publication stack/network/registry-workspace:
+- Machine publication metadata/catalog/stack/network/registry-workspace:
+  `examples/publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog.json`
+  `examples/publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json`
   `examples/stack_presets/machine_compute_publication_stack.json`
   `examples/network_presets/machine_compute_publication_network.json`
   `examples/registry_workspace_presets/machine_compute_publication_registry_workspace.json`
@@ -288,7 +293,9 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/machine_compute_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/machine_compute_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/machine_compute_catalog_network_collection_backed.json`
-- Machine collection-backed publication stack/network/registry-workspace:
+- Machine collection-backed publication metadata/catalog/stack/network/registry-workspace:
+  `examples/publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog_collection_backed.json`
+  `examples/publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace_collection_backed.json`
   `examples/stack_presets/machine_compute_publication_stack_collection_backed.json`
   `examples/network_presets/machine_compute_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/machine_compute_publication_registry_workspace_collection_backed.json`
@@ -296,7 +303,9 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/stable_reference_bundle_index.json`
   `examples/release_catalog_presets/stable_reference_release_stack.json`
   `examples/release_catalog_index_presets/stable_reference_catalog_network.json`
-- Stable publication stack/network/registry-workspace:
+- Stable publication metadata/catalog/stack/network/registry-workspace:
+  `examples/publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog.json`
+  `examples/publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json`
   `examples/stack_presets/stable_reference_publication_stack.json`
   `examples/network_presets/stable_reference_publication_network.json`
   `examples/registry_workspace_presets/stable_reference_publication_registry_workspace.json`
@@ -304,10 +313,16 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/stable_reference_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/stable_reference_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/stable_reference_catalog_network_collection_backed.json`
-- Stable collection-backed publication stack/network/registry-workspace:
+- Stable collection-backed publication metadata/catalog/stack/network/registry-workspace:
+  `examples/publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog_collection_backed.json`
+  `examples/publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace_collection_backed.json`
   `examples/stack_presets/stable_reference_publication_stack_collection_backed.json`
   `examples/network_presets/stable_reference_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/stable_reference_publication_registry_workspace_collection_backed.json`
+- Collection-backed top-level registry publications:
+  `examples/registry_presets/ai_compute_publication_registry_collection_backed.json`
+  `examples/registry_presets/machine_compute_publication_registry_collection_backed.json`
+  `examples/registry_presets/stable_reference_publication_registry_collection_backed.json`
 - Workspace-backed top-level registry publications:
   `examples/registry_presets/ai_compute_publication_registry_workspace_backed.json`
   `examples/registry_presets/machine_compute_publication_registry_workspace_backed.json`
