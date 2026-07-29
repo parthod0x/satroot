@@ -22,6 +22,7 @@ Several preset directories now include checked-in collection-backed companions f
 - `bundle_index_presets/*_collection_backed.json`
 - `release_catalog_presets/*_collection_backed.json`
 - `release_catalog_index_presets/*_collection_backed.json`
+- `stack_presets/*_collection_backed.json`
 - `network_presets/*_collection_backed.json`
 - `publication_metadata_catalog_presets/*_collection_backed.json`
 - `publication_catalog_workspace_presets/*_collection_backed.json`
@@ -33,6 +34,7 @@ These collection-backed presets preserve lineage to generated collections such a
 - `bundle_collection_dir`
 - `release_collection_dir`
 - `release_catalog_collection_dir`
+- `catalog_workspace_collection_dir`
 - `publication_stack_collection_dir`
 - `publication_network_collection_dir`
 - `publication_metadata_bundle_collection_dir`
@@ -53,6 +55,8 @@ If you want the smallest useful preset chain for each lane:
   `stack_presets/ai_compute_publication_stack.json`
   `network_presets/ai_compute_publication_network.json`
   `registry_workspace_presets/ai_compute_publication_registry_workspace.json`
+- Generic collection-backed publication stack:
+  `stack_presets/ai_compute_publication_stack_collection_backed.json`
 
 - Machine lower release layers:
   `bundle_index_presets/machine_compute_bundle_index.json`
@@ -63,6 +67,8 @@ If you want the smallest useful preset chain for each lane:
   `stack_presets/machine_compute_publication_stack.json`
   `network_presets/machine_compute_publication_network.json`
   `registry_workspace_presets/machine_compute_publication_registry_workspace.json`
+- Machine collection-backed publication stack:
+  `stack_presets/machine_compute_publication_stack_collection_backed.json`
 
 - Stable lower release layers:
   `bundle_index_presets/stable_reference_bundle_index.json`
@@ -73,6 +79,8 @@ If you want the smallest useful preset chain for each lane:
   `stack_presets/stable_reference_publication_stack.json`
   `network_presets/stable_reference_publication_network.json`
   `registry_workspace_presets/stable_reference_publication_registry_workspace.json`
+- Stable collection-backed publication stack:
+  `stack_presets/stable_reference_publication_stack_collection_backed.json`
 
 If you specifically want frozen collection-backed examples, start with:
 
@@ -85,6 +93,9 @@ If you specifically want frozen collection-backed examples, start with:
 - `release_catalog_index_presets/ai_compute_catalog_network_collection_backed.json`
 - `release_catalog_index_presets/machine_compute_catalog_network_collection_backed.json`
 - `release_catalog_index_presets/stable_reference_catalog_network_collection_backed.json`
+- `stack_presets/ai_compute_publication_stack_collection_backed.json`
+- `stack_presets/machine_compute_publication_stack_collection_backed.json`
+- `stack_presets/stable_reference_publication_stack_collection_backed.json`
 - `network_presets/ai_compute_publication_network_collection_backed.json`
 - `network_presets/machine_compute_publication_network_collection_backed.json`
 - `network_presets/stable_reference_publication_network_collection_backed.json`
@@ -128,6 +139,12 @@ Bootstrap a generic collection-backed publication network:
 
 ```bash
 satroot1 bootstrap-publication-network --network-preset-json examples/network_presets/ai_compute_publication_network_collection_backed.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --output-dir publication_network_collection_backed --label "SATROOT Collection-Backed Network Override"
+```
+
+Bootstrap a generic collection-backed publication stack:
+
+```bash
+satroot1 bootstrap-publication-stack --stack-preset-json examples/stack_presets/ai_compute_publication_stack_collection_backed.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir publication_stack_collection_backed --label "SATROOT Collection-Backed Stack Override"
 ```
 
 Bootstrap a generic collection-backed registry workspace:

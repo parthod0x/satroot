@@ -19,6 +19,7 @@
     "bundle_scheme": {"enum": ["hmac-sha256", "ed25519"]},
     "release_scheme": {"enum": ["hmac-sha256", "ed25519"]},
     "release_catalog_scheme": {"enum": ["hmac-sha256", "ed25519"]},
+    "source_catalog_workspace_collection_dir": {"type": ["string", "null"], "minLength": 1},
     "workspace_count": {"type": "integer", "minimum": 1},
     "catalog_workspaces_dir": {"type": "string", "minLength": 1},
     "release_catalog_dir": {"type": "string", "minLength": 1},

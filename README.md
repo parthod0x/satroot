@@ -254,6 +254,7 @@ This repo now includes the first stable-value profile draft:
 - `satroot1 export-stable-publication-descriptor-index-preset`, `satroot1 export-stable-publication-metadata-catalog-preset`, and `satroot1 export-stable-publication-registry-preset` for exporting stable component publications back into validated reusable presets.
 - checked-in example presets now cover generic, machine-only, and stable-only component publication layers across `examples/bundle_index_presets/`, `examples/release_catalog_presets/`, `examples/release_catalog_index_presets/`, `examples/publication_descriptor_index_presets/`, `examples/publication_metadata_catalog_presets/`, and `examples/registry_presets/`.
 - `examples/bundle_index_presets/`, `examples/release_catalog_presets/`, and `examples/release_catalog_index_presets/` now also include collection-backed companion presets for frozen generated bundle, release, and release-catalog sets.
+- `examples/stack_presets/` now also includes collection-backed companion presets for frozen demo-catalog workspace collections.
 - `examples/network_presets/` and `examples/registry_workspace_presets/` now also include collection-backed companion presets for frozen publication-stack and publication-network collections.
 - `examples/README.md` maps the generic, machine, stable, and collection-backed preset trees if you want one entry point into the full example set.
 
@@ -271,7 +272,8 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/ai_compute_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/ai_compute_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/ai_compute_catalog_network_collection_backed.json`
-- Generic collection-backed network/registry-workspace:
+- Generic collection-backed publication stack/network/registry-workspace:
+  `examples/stack_presets/ai_compute_publication_stack_collection_backed.json`
   `examples/network_presets/ai_compute_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/ai_compute_publication_registry_workspace_collection_backed.json`
 - Machine lower release layers:
@@ -286,7 +288,8 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/machine_compute_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/machine_compute_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/machine_compute_catalog_network_collection_backed.json`
-- Machine collection-backed network/registry-workspace:
+- Machine collection-backed publication stack/network/registry-workspace:
+  `examples/stack_presets/machine_compute_publication_stack_collection_backed.json`
   `examples/network_presets/machine_compute_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/machine_compute_publication_registry_workspace_collection_backed.json`
 - Stable lower release layers:
@@ -301,7 +304,8 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/bundle_index_presets/stable_reference_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/stable_reference_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/stable_reference_catalog_network_collection_backed.json`
-- Stable collection-backed network/registry-workspace:
+- Stable collection-backed publication stack/network/registry-workspace:
+  `examples/stack_presets/stable_reference_publication_stack_collection_backed.json`
   `examples/network_presets/stable_reference_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/stable_reference_publication_registry_workspace_collection_backed.json`
 - Workspace-backed top-level registry publications:
@@ -1070,6 +1074,14 @@ There is now a matching stable-only lane that validates every nested catalog pre
 satroot1 bootstrap-stable-publication-stack --stack-preset-json examples/stack_presets/stable_reference_publication_stack.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir stable_publication_stack --label "Stable Stack Override"
 ```
 
+That same stack preset shape can also point at a previously copied `catalog_workspace_collection_dir` when you want to reuse an already-frozen set of generated demo catalog workspaces. Exported stack presets preserve that collection reference even when they also emit nested catalog presets, so round-tripped preset trees keep provenance without making the collection itself the execution input.
+
+There is now a checked-in collection-backed companion preset for that flow too:
+
+```bash
+satroot1 bootstrap-publication-stack --stack-preset-json examples/stack_presets/ai_compute_publication_stack_collection_backed.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --output-dir publication_stack_collection_backed --label "SATROOT Collection-Backed Stack Override"
+```
+
 To generate multiple stack workspaces and a top-level signed release-catalog index in one pass, use `bootstrap-publication-network` with one or more stack presets:
 
 ```bash
@@ -1118,6 +1130,10 @@ satroot1 publish-publication-stack generated_catalogs/stable_workspace generated
 satroot1 publish-publication-stack --inventory-json artifact_inventory.json --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_existing --label "Inventory Published Stack"
 ```
 
+```bash
+satroot1 publish-publication-stack --catalog-workspace-collection-dir generated_catalog_workspace_collection --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_collection --label "Collection Published Stack"
+```
+
 That same publish lane can now also load a stack preset that preserves source `catalog_workspace_dirs`, which makes exported stack presets reusable for both bootstrap and publish workflows:
 
 ```bash
@@ -1142,6 +1158,12 @@ If you want to freeze a reusable set of generated stack workspaces for later net
 
 ```bash
 satroot1 bootstrap-publication-stack-collection generated_stacks/stack_alpha generated_stacks/stack_beta --output-dir publication_stack_collection
+```
+
+One layer lower, if you want to freeze a reusable set of generated demo catalog workspaces for later stack assembly, use `bootstrap-demo-catalog-workspace-collection`:
+
+```bash
+satroot1 bootstrap-demo-catalog-workspace-collection generated_catalogs/stable_workspace generated_catalogs/machine_workspace --output-dir generated_catalog_workspace_collection
 ```
 
 If you already have generated publication stack workspaces and want a top-level signed network without regenerating the nested stacks, use `publish-publication-network`:

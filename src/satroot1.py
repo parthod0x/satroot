@@ -925,6 +925,7 @@ def load_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
         "version",
         "catalog_presets",
         "catalog_workspace_dirs",
+        "catalog_workspace_collection_dir",
         "release_catalog",
     }
     unexpected = set(preset) - allowed_keys
@@ -944,12 +945,28 @@ def load_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
             label="publication stack preset catalog_workspace_dirs",
         )
     ]
-    if not catalog_preset_paths and not catalog_workspace_dirs:
-        raise SatRootError("publication stack preset must contain at least one catalog_preset or catalog_workspace_dir")
+    catalog_workspace_collection_dir = None
+    catalog_workspace_collection_dir_entry = preset.get("catalog_workspace_collection_dir")
+    if catalog_workspace_collection_dir_entry is not None:
+        if not isinstance(catalog_workspace_collection_dir_entry, str) or not catalog_workspace_collection_dir_entry.strip():
+            raise SatRootError(
+                "publication stack preset catalog_workspace_collection_dir must be a non-empty string when provided"
+            )
+        catalog_workspace_collection_dir = str((preset_path.parent / catalog_workspace_collection_dir_entry).resolve())
+        summarize_demo_catalog_workspace_collection(catalog_workspace_collection_dir)
+    if catalog_workspace_collection_dir is not None and catalog_workspace_dirs:
+        raise SatRootError(
+            "publication stack preset accepts either catalog_workspace_dirs or catalog_workspace_collection_dir, not both"
+        )
+    if not catalog_preset_paths and not catalog_workspace_dirs and catalog_workspace_collection_dir is None:
+        raise SatRootError(
+            "publication stack preset must contain at least one catalog_preset, catalog_workspace_dir, or catalog_workspace_collection_dir"
+        )
 
     return {
         "catalog_preset_paths": catalog_preset_paths,
         "catalog_workspace_dirs": catalog_workspace_dirs,
+        "catalog_workspace_collection_dir": catalog_workspace_collection_dir,
         "release_catalog_metadata": validate_release_metadata_mapping(preset.get("release_catalog")),
     }
 
@@ -963,6 +980,14 @@ def load_machine_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
             catalog_workspace_dir,
             label="machine publication stack preset catalog workspace",
         )
+    catalog_workspace_collection_dir = preset.get("catalog_workspace_collection_dir")
+    if isinstance(catalog_workspace_collection_dir, str) and catalog_workspace_collection_dir.strip():
+        collection_summary = summarize_demo_catalog_workspace_collection(catalog_workspace_collection_dir)
+        for catalog_workspace_dir in collection_summary.get("catalog_workspace_dirs", []):
+            _require_machine_demo_catalog_workspace(
+                catalog_workspace_dir,
+                label="machine publication stack preset catalog workspace collection workspace",
+            )
     return preset
 
 
@@ -975,6 +1000,14 @@ def load_stable_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
             catalog_workspace_dir,
             label="stable publication stack preset catalog workspace",
         )
+    catalog_workspace_collection_dir = preset.get("catalog_workspace_collection_dir")
+    if isinstance(catalog_workspace_collection_dir, str) and catalog_workspace_collection_dir.strip():
+        collection_summary = summarize_demo_catalog_workspace_collection(catalog_workspace_collection_dir)
+        for catalog_workspace_dir in collection_summary.get("catalog_workspace_dirs", []):
+            _require_stable_demo_catalog_workspace(
+                catalog_workspace_dir,
+                label="stable publication stack preset catalog workspace collection workspace",
+            )
     return preset
 
 
@@ -6001,9 +6034,18 @@ def discover_publication_registry_workspace_dirs(
 def resolve_demo_catalog_workspace_inputs(
     workspace_dirs: Sequence[str | Path],
     *,
+    catalog_workspace_collection_dir: Optional[str | Path] = None,
     discover_under: Optional[Sequence[str | Path]] = None,
     recursive: bool = True,
 ) -> list[str | Path]:
+    if catalog_workspace_collection_dir is not None:
+        if workspace_dirs or discover_under:
+            raise SatRootError(
+                "demo catalog workspace resolution accepts either workspace_dirs/discover_under or catalog_workspace_collection_dir, not both"
+            )
+        collection_summary = summarize_demo_catalog_workspace_collection(catalog_workspace_collection_dir)
+        return list(collection_summary["catalog_workspace_dirs"])
+
     resolved: list[str | Path] = []
     seen: set[str] = set()
 
@@ -8582,6 +8624,230 @@ def lint_demo_catalog_workspace(demo_catalog_dir: str | Path) -> Dict[str, Any]:
     }
 
 
+def bootstrap_demo_catalog_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = resolve_demo_catalog_workspace_inputs(
+        workspace_dirs,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    workspace_names = _unique_workspace_names(resolved_workspace_dirs)
+    source_workspace_dir_entries: list[str] = []
+    copied_workspace_dir_entries: list[str] = []
+    catalog_workspaces: list[Dict[str, Any]] = []
+
+    for source_workspace_dir, workspace_name in zip(resolved_workspace_dirs, workspace_names):
+        source_path = Path(source_workspace_dir).resolve()
+        copied_workspace_dir = _copy_workspace_directory(
+            source_path,
+            output_path / workspace_name,
+            label="demo catalog workspace",
+        )
+        copied_summary = relocate_demo_catalog_workspace_summary(copied_workspace_dir)
+
+        source_workspace_dir_entries.append(str(source_path.resolve()))
+        copied_workspace_dir_entries.append(str(copied_workspace_dir.resolve()))
+        catalog_workspaces.append(
+            {
+                "workspace_name": workspace_name,
+                "source_catalog_workspace_dir": str(source_path.resolve()),
+                "catalog_workspace_dir": str(copied_workspace_dir.resolve()),
+                "summary_path": str((copied_workspace_dir / "summary.json").resolve()),
+                "preset_path": copied_summary.get("preset_path"),
+                "bundle_scheme": copied_summary.get("bundle_scheme"),
+                "release_scheme": copied_summary.get("release_scheme"),
+                "bundle_count": copied_summary.get("bundle_count"),
+                "release_dir": copied_summary.get("release_dir"),
+                "release_manifest_path": copied_summary.get("release_manifest_path"),
+                "bundle_index_path": copied_summary.get("bundle_index_path"),
+            }
+        )
+
+    summary = {
+        "workspace_count": len(copied_workspace_dir_entries),
+        "source_catalog_workspace_dirs": source_workspace_dir_entries,
+        "catalog_workspace_dirs": copied_workspace_dir_entries,
+        "catalog_workspaces": catalog_workspaces,
+    }
+    summary_path = output_path / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "catalog_workspace_dirs": copied_workspace_dir_entries,
+        "catalog_workspaces": catalog_workspaces,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
+def bootstrap_machine_demo_catalog_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = resolve_demo_catalog_workspace_inputs(
+        workspace_dirs,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    for workspace_dir in resolved_workspace_dirs:
+        _require_machine_demo_catalog_workspace(
+            workspace_dir,
+            label="machine demo catalog workspace collection source workspace",
+        )
+    return bootstrap_demo_catalog_workspace_collection(
+        resolved_workspace_dirs,
+        output_dir=output_dir,
+        discover_under=None,
+        recursive=True,
+    )
+
+
+def bootstrap_stable_demo_catalog_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = resolve_demo_catalog_workspace_inputs(
+        workspace_dirs,
+        discover_under=discover_under,
+        recursive=recursive,
+    )
+    for workspace_dir in resolved_workspace_dirs:
+        _require_stable_demo_catalog_workspace(
+            workspace_dir,
+            label="stable demo catalog workspace collection source workspace",
+        )
+    return bootstrap_demo_catalog_workspace_collection(
+        resolved_workspace_dirs,
+        output_dir=output_dir,
+        discover_under=None,
+        recursive=True,
+    )
+
+
+def validate_demo_catalog_workspace_collection_summary_consistency(summary: Mapping[str, Any]) -> None:
+    source_catalog_workspace_dirs = summary.get("source_catalog_workspace_dirs")
+    catalog_workspace_dirs = summary.get("catalog_workspace_dirs")
+    catalog_workspaces = summary.get("catalog_workspaces")
+    workspace_count = summary.get("workspace_count")
+
+    if not isinstance(source_catalog_workspace_dirs, list):
+        raise SatRootError("demo catalog workspace collection summary source_catalog_workspace_dirs must be an array")
+    if not isinstance(catalog_workspace_dirs, list):
+        raise SatRootError("demo catalog workspace collection summary catalog_workspace_dirs must be an array")
+    if not isinstance(catalog_workspaces, list):
+        raise SatRootError("demo catalog workspace collection summary catalog_workspaces must be an array")
+    if (
+        not isinstance(workspace_count, int)
+        or workspace_count != len(source_catalog_workspace_dirs)
+        or workspace_count != len(catalog_workspace_dirs)
+        or workspace_count != len(catalog_workspaces)
+    ):
+        raise SatRootError("demo catalog workspace collection summary workspace_count mismatch")
+    for source_catalog_workspace_dir in source_catalog_workspace_dirs:
+        if not isinstance(source_catalog_workspace_dir, str) or not source_catalog_workspace_dir.strip():
+            raise SatRootError(
+                "demo catalog workspace collection summary source_catalog_workspace_dirs entries must be non-empty strings"
+            )
+    for catalog_workspace_dir in catalog_workspace_dirs:
+        if not isinstance(catalog_workspace_dir, str) or not catalog_workspace_dir.strip():
+            raise SatRootError(
+                "demo catalog workspace collection summary catalog_workspace_dirs entries must be non-empty strings"
+            )
+
+
+def summarize_demo_catalog_workspace_collection(
+    catalog_workspace_collection_dir: str | Path,
+) -> Dict[str, Any]:
+    collection_path, summary = _load_workspace_summary(
+        catalog_workspace_collection_dir,
+        label="demo catalog workspace collection",
+    )
+    validate_demo_catalog_workspace_collection_summary_consistency(summary)
+
+    source_catalog_workspace_dirs = [
+        str(Path(value).resolve())
+        for value in summary.get("source_catalog_workspace_dirs", [])
+        if isinstance(value, str) and value.strip()
+    ]
+    catalog_workspaces = summary.get("catalog_workspaces")
+    assert isinstance(catalog_workspaces, list)
+
+    relocated_catalog_workspaces: list[Dict[str, Any]] = []
+    catalog_workspace_dirs: list[str] = []
+    for entry in catalog_workspaces:
+        if not isinstance(entry, Mapping):
+            raise SatRootError("demo catalog workspace collection summary catalog_workspaces must contain objects")
+        workspace_name = entry.get("workspace_name")
+        entry_catalog_workspace_dir = entry.get("catalog_workspace_dir")
+        source_catalog_workspace_dir = entry.get("source_catalog_workspace_dir")
+
+        catalog_workspace_dir: Optional[Path] = None
+        if isinstance(workspace_name, str) and workspace_name.strip():
+            expected_catalog_workspace_dir = (collection_path / workspace_name).resolve()
+            if expected_catalog_workspace_dir.is_dir():
+                catalog_workspace_dir = expected_catalog_workspace_dir
+        if catalog_workspace_dir is None and isinstance(entry_catalog_workspace_dir, str) and entry_catalog_workspace_dir.strip():
+            catalog_workspace_dir = Path(entry_catalog_workspace_dir).resolve()
+            if not catalog_workspace_dir.is_dir():
+                raise SatRootError(
+                    f"demo catalog workspace collection workspace directory not found: {entry_catalog_workspace_dir}"
+                )
+            if not isinstance(workspace_name, str) or not workspace_name.strip():
+                workspace_name = catalog_workspace_dir.name
+        if catalog_workspace_dir is None or not isinstance(workspace_name, str) or not workspace_name.strip():
+            raise SatRootError(
+                "demo catalog workspace collection summary catalog_workspaces must contain workspace_name or catalog_workspace_dir metadata"
+            )
+
+        copied_summary = relocate_demo_catalog_workspace_summary(catalog_workspace_dir)
+        catalog_workspace_dirs.append(str(catalog_workspace_dir.resolve()))
+        relocated_catalog_workspaces.append(
+            {
+                "workspace_name": workspace_name,
+                "source_catalog_workspace_dir": (
+                    None
+                    if not isinstance(source_catalog_workspace_dir, str) or not source_catalog_workspace_dir.strip()
+                    else str(Path(source_catalog_workspace_dir).resolve())
+                ),
+                "catalog_workspace_dir": str(catalog_workspace_dir.resolve()),
+                "summary_path": str((catalog_workspace_dir / "summary.json").resolve()),
+                "preset_path": copied_summary.get("preset_path"),
+                "bundle_scheme": copied_summary.get("bundle_scheme"),
+                "release_scheme": copied_summary.get("release_scheme"),
+                "bundle_count": copied_summary.get("bundle_count"),
+                "release_dir": copied_summary.get("release_dir"),
+                "release_manifest_path": copied_summary.get("release_manifest_path"),
+                "bundle_index_path": copied_summary.get("bundle_index_path"),
+            }
+        )
+
+    if len(catalog_workspace_dirs) != len(catalog_workspaces):
+        raise SatRootError(
+            "demo catalog workspace collection summary workspace_count does not match discovered demo catalog workspace directories"
+        )
+
+    return {
+        "collection_dir": str(collection_path.resolve()),
+        "workspace_count": len(catalog_workspace_dirs),
+        "source_catalog_workspace_dirs": source_catalog_workspace_dirs,
+        "catalog_workspace_dirs": catalog_workspace_dirs,
+        "catalog_workspaces": relocated_catalog_workspaces,
+    }
+
+
 def summarize_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
     stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
     validate_publication_stack_summary_consistency(summary)
@@ -8593,6 +8859,7 @@ def summarize_publication_stack_workspace(publication_stack_dir: str | Path) -> 
         "bundle_scheme": summary.get("bundle_scheme"),
         "release_scheme": summary.get("release_scheme"),
         "release_catalog_scheme": summary.get("release_catalog_scheme"),
+        "source_catalog_workspace_collection_dir": summary.get("source_catalog_workspace_collection_dir"),
         "workspace_count": summary.get("workspace_count"),
         "catalog_workspaces_dir": summary.get("catalog_workspaces_dir"),
         "release_catalog_dir": summary.get("release_catalog_dir"),
@@ -11875,6 +12142,7 @@ def write_publication_stack_workspace(
     release_catalog_key_id: str,
     catalog_preset_paths: Sequence[str | Path],
     catalog_workspace_dirs: Sequence[str | Path] = (),
+    catalog_workspace_collection_dir: Optional[str | Path] = None,
     release_catalog_metadata: Optional[Mapping[str, str]] = None,
     release_scheme: Optional[str] = None,
     release_catalog_scheme: Optional[str] = None,
@@ -11983,6 +12251,11 @@ def write_publication_stack_workspace(
         "bundle_scheme": actual_bundle_scheme,
         "release_scheme": actual_release_scheme,
         "release_catalog_scheme": release_catalog_scheme or bundle_scheme,
+        "source_catalog_workspace_collection_dir": (
+            None
+            if catalog_workspace_collection_dir is None
+            else str(Path(catalog_workspace_collection_dir).resolve())
+        ),
         "workspace_count": len(workspace_entries),
         "catalog_workspaces_dir": str(catalog_workspaces_dir.resolve()),
         "release_catalog_dir": str(release_catalog_dir.resolve()),
@@ -12218,6 +12491,7 @@ def publish_publication_stack_workspace(
     output_dir: str | Path,
     signature_scheme: str,
     key_id: str,
+    catalog_workspace_collection_dir: Optional[str | Path] = None,
     release_catalog_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     resolved_workspace_dirs = [Path(value).resolve() for value in workspace_dirs]
@@ -12279,6 +12553,11 @@ def publish_publication_stack_workspace(
         "bundle_scheme": bundle_scheme,
         "release_scheme": release_scheme,
         "release_catalog_scheme": signature_scheme,
+        "source_catalog_workspace_collection_dir": (
+            None
+            if catalog_workspace_collection_dir is None
+            else str(Path(catalog_workspace_collection_dir).resolve())
+        ),
         "workspace_count": len(workspace_entries),
         "catalog_workspaces_dir": str(catalog_workspaces_dir.resolve()),
         "release_catalog_dir": str(release_catalog_dir.resolve()),
@@ -12306,6 +12585,7 @@ def publish_machine_publication_stack_workspace(
     output_dir: str | Path,
     signature_scheme: str,
     key_id: str,
+    catalog_workspace_collection_dir: Optional[str | Path] = None,
     release_catalog_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     resolved_workspace_dirs = [Path(value).resolve() for value in workspace_dirs]
@@ -12323,6 +12603,7 @@ def publish_machine_publication_stack_workspace(
         output_dir=output_dir,
         signature_scheme=signature_scheme,
         key_id=key_id,
+        catalog_workspace_collection_dir=catalog_workspace_collection_dir,
         release_catalog_metadata=release_catalog_metadata,
     )
 
@@ -12333,6 +12614,7 @@ def publish_stable_publication_stack_workspace(
     output_dir: str | Path,
     signature_scheme: str,
     key_id: str,
+    catalog_workspace_collection_dir: Optional[str | Path] = None,
     release_catalog_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     resolved_workspace_dirs = [Path(value).resolve() for value in workspace_dirs]
@@ -12350,6 +12632,7 @@ def publish_stable_publication_stack_workspace(
         output_dir=output_dir,
         signature_scheme=signature_scheme,
         key_id=key_id,
+        catalog_workspace_collection_dir=catalog_workspace_collection_dir,
         release_catalog_metadata=release_catalog_metadata,
     )
 
@@ -14115,6 +14398,7 @@ def export_publication_stack_preset_from_workspace(
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
     export_catalog_dir = None if catalog_preset_dir is None else Path(catalog_preset_dir).resolve()
+    source_catalog_workspace_collection_dir = summary.get("source_catalog_workspace_collection_dir")
     catalog_preset_paths: list[str] = []
     catalog_workspace_dirs: list[str] = []
 
@@ -14126,7 +14410,14 @@ def export_publication_stack_preset_from_workspace(
         preset_path = entry.get("preset_path")
         if not isinstance(workspace_name, str) or not workspace_name.strip():
             continue
-        if isinstance(workspace_dir, str) and workspace_dir.strip():
+        if (
+            not (
+                isinstance(source_catalog_workspace_collection_dir, str)
+                and source_catalog_workspace_collection_dir.strip()
+            )
+            and isinstance(workspace_dir, str)
+            and workspace_dir.strip()
+        ):
             catalog_workspace_dirs.append(_relative_output_path(Path(workspace_dir).resolve(), base_dir=base_dir))
 
         if export_catalog_dir is not None:
@@ -14139,6 +14430,12 @@ def export_publication_stack_preset_from_workspace(
                 export_demo_catalog_preset_from_workspace(workspace_dir),
             )
             catalog_preset_paths.append(_relative_output_path(catalog_output_path, base_dir=base_dir))
+            continue
+
+        if (
+            isinstance(source_catalog_workspace_collection_dir, str)
+            and source_catalog_workspace_collection_dir.strip()
+        ):
             continue
 
         if isinstance(preset_path, str) and preset_path.strip():
@@ -14160,7 +14457,15 @@ def export_publication_stack_preset_from_workspace(
     }
     if catalog_preset_paths:
         preset["catalog_presets"] = catalog_preset_paths
-    if catalog_workspace_dirs:
+    if (
+        isinstance(source_catalog_workspace_collection_dir, str)
+        and source_catalog_workspace_collection_dir.strip()
+    ):
+        preset["catalog_workspace_collection_dir"] = _relative_output_path(
+            Path(source_catalog_workspace_collection_dir).resolve(),
+            base_dir=base_dir,
+        )
+    elif catalog_workspace_dirs:
         preset["catalog_workspace_dirs"] = catalog_workspace_dirs
     if release_catalog_metadata:
         preset["release_catalog"] = release_catalog_metadata
@@ -18925,9 +19230,31 @@ def build_cli_parser() -> Any:
     bootstrap_demo_catalog_parser.add_argument("--label", help="Optional human-readable release label for the catalog bundle index")
     bootstrap_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the catalog bundle index")
 
+    bootstrap_demo_catalog_workspace_collection_parser = subparsers.add_parser("bootstrap-demo-catalog-workspace-collection", help="Copy one or more SATROOT demo catalog workspaces into a reusable collection directory with summary.json")
+    bootstrap_demo_catalog_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo_catalog_dir entries will be added as collection sources")
+    bootstrap_demo_catalog_workspace_collection_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to a SATROOT demo catalog workspace directory")
+    bootstrap_demo_catalog_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested demo catalog workspaces; may be repeated")
+    bootstrap_demo_catalog_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    bootstrap_demo_catalog_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied demo catalog workspaces and collection summary.json will be written")
+
+    bootstrap_machine_demo_catalog_workspace_collection_parser = subparsers.add_parser("bootstrap-machine-demo-catalog-workspace-collection", help="Copy one or more SATROOT-MACHINE-1 demo catalog workspaces into a reusable machine-only collection directory with summary.json")
+    bootstrap_machine_demo_catalog_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo_catalog_dir entries will be added as machine collection sources")
+    bootstrap_machine_demo_catalog_workspace_collection_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to a SATROOT-MACHINE-1 demo catalog workspace directory")
+    bootstrap_machine_demo_catalog_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 demo catalog workspaces; may be repeated")
+    bootstrap_machine_demo_catalog_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    bootstrap_machine_demo_catalog_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied machine demo catalog workspaces and collection summary.json will be written")
+
+    bootstrap_stable_demo_catalog_workspace_collection_parser = subparsers.add_parser("bootstrap-stable-demo-catalog-workspace-collection", help="Copy one or more SATROOT-STABLE-1 demo catalog workspaces into a reusable stable-only collection directory with summary.json")
+    bootstrap_stable_demo_catalog_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo_catalog_dir entries will be added as stable collection sources")
+    bootstrap_stable_demo_catalog_workspace_collection_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to a SATROOT-STABLE-1 demo catalog workspace directory")
+    bootstrap_stable_demo_catalog_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-STABLE-1 demo catalog workspaces; may be repeated")
+    bootstrap_stable_demo_catalog_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
+    bootstrap_stable_demo_catalog_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied stable demo catalog workspaces and collection summary.json will be written")
+
     bootstrap_publication_stack_parser = subparsers.add_parser("bootstrap-publication-stack", help="Generate one or more demo catalog workspaces from presets and publish them as a signed release catalog stack")
-    bootstrap_publication_stack_parser.add_argument("--stack-preset-json", help="Optional SATROOT publication stack preset JSON file with catalog preset paths and release-catalog metadata defaults")
+    bootstrap_publication_stack_parser.add_argument("--stack-preset-json", help="Optional SATROOT publication stack preset JSON file with catalog preset paths, optional catalog_workspace_collection_dir, and release-catalog metadata defaults")
     bootstrap_publication_stack_parser.add_argument("--catalog-preset-json", action="append", dest="catalog_preset_jsons", help="SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_publication_stack_parser.add_argument("--catalog-workspace-collection-dir", help="Optional reusable demo catalog workspace collection directory to consume instead of explicit catalog workspace roots")
     bootstrap_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
     bootstrap_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
     bootstrap_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each workspace release manifest")
@@ -18947,6 +19274,7 @@ def build_cli_parser() -> Any:
     bootstrap_stable_publication_stack_parser = subparsers.add_parser("bootstrap-stable-publication-stack", help="Generate one or more SATROOT-STABLE-1 demo catalog workspaces from stable-only presets and publish them as a signed release catalog stack")
     bootstrap_stable_publication_stack_parser.add_argument("--stack-preset-json", help="Optional SATROOT publication stack preset JSON file; every nested catalog preset must resolve to SATROOT-STABLE-1 only")
     bootstrap_stable_publication_stack_parser.add_argument("--catalog-preset-json", action="append", dest="catalog_preset_jsons", help="Stable-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_stable_publication_stack_parser.add_argument("--catalog-workspace-collection-dir", help="Optional reusable stable-only demo catalog workspace collection directory to consume instead of explicit catalog workspace roots")
     bootstrap_stable_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles")
     bootstrap_stable_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
     bootstrap_stable_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each workspace release manifest")
@@ -18966,6 +19294,7 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_stack_parser = subparsers.add_parser("bootstrap-machine-publication-stack", help="Generate one or more SATROOT-MACHINE-1 demo catalog workspaces from machine-only presets and publish them as a signed release catalog stack")
     bootstrap_machine_publication_stack_parser.add_argument("--stack-preset-json", help="Optional SATROOT publication stack preset JSON file; every nested catalog preset must resolve to SATROOT-MACHINE-1 only")
     bootstrap_machine_publication_stack_parser.add_argument("--catalog-preset-json", action="append", dest="catalog_preset_jsons", help="Machine-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_machine_publication_stack_parser.add_argument("--catalog-workspace-collection-dir", help="Optional reusable machine-only demo catalog workspace collection directory to consume instead of explicit catalog workspace roots")
     bootstrap_machine_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles")
     bootstrap_machine_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
     bootstrap_machine_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each workspace release manifest")
@@ -19138,9 +19467,10 @@ def build_cli_parser() -> Any:
     bootstrap_publication_registry_workspace_parser.add_argument("--output-dir", required=True, help="Directory where a copied publication_network/ or release_catalog_index/ plus publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, publication_registry/, and summary.json will be written")
 
     publish_publication_stack_parser = subparsers.add_parser("publish-publication-stack", help="Copy existing demo catalog workspaces into one SATROOT publication stack and publish a signed release catalog")
-    publish_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs and release-catalog metadata defaults")
+    publish_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs, optional catalog_workspace_collection_dir, and release-catalog metadata defaults")
     publish_publication_stack_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo catalog workspace directories will be added as publication stack sources")
     publish_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT demo catalog workspace directory")
+    publish_publication_stack_parser.add_argument("--catalog-workspace-collection-dir", help="Optional reusable demo catalog workspace collection directory to consume instead of explicit catalog workspace roots")
     publish_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested demo catalog workspaces; may be repeated")
     publish_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where copied catalog workspaces, release_catalog/, and summary.json will be written")
@@ -19151,9 +19481,10 @@ def build_cli_parser() -> Any:
     publish_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
     publish_machine_publication_stack_parser = subparsers.add_parser("publish-machine-publication-stack", help="Copy existing SATROOT-MACHINE-1 demo catalog workspaces into one machine-only publication stack and publish a signed release catalog")
-    publish_machine_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs and release-catalog metadata defaults")
+    publish_machine_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs, optional catalog_workspace_collection_dir, and release-catalog metadata defaults")
     publish_machine_publication_stack_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo catalog workspace directories will be added as machine publication stack sources")
     publish_machine_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT-MACHINE-1 demo catalog workspace directory")
+    publish_machine_publication_stack_parser.add_argument("--catalog-workspace-collection-dir", help="Optional reusable machine-only demo catalog workspace collection directory to consume instead of explicit catalog workspace roots")
     publish_machine_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 demo catalog workspaces; may be repeated")
     publish_machine_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_machine_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where copied machine catalog workspaces, release_catalog/, and summary.json will be written")
@@ -19164,9 +19495,10 @@ def build_cli_parser() -> Any:
     publish_machine_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata")
 
     publish_stable_publication_stack_parser = subparsers.add_parser("publish-stable-publication-stack", help="Copy existing SATROOT-STABLE-1 demo catalog workspaces into one stable-only publication stack and publish a signed release catalog")
-    publish_stable_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs and release-catalog metadata defaults")
+    publish_stable_publication_stack_parser.add_argument("--preset-json", help="Optional SATROOT publication stack preset JSON file supplying source catalog_workspace_dirs, optional catalog_workspace_collection_dir, and release-catalog metadata defaults")
     publish_stable_publication_stack_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo catalog workspace directories will be added as stable publication stack sources")
     publish_stable_publication_stack_parser.add_argument("catalog_workspace_dir", nargs="*", help="Path to an existing SATROOT-STABLE-1 demo catalog workspace directory")
+    publish_stable_publication_stack_parser.add_argument("--catalog-workspace-collection-dir", help="Optional reusable stable-only demo catalog workspace collection directory to consume instead of explicit catalog workspace roots")
     publish_stable_publication_stack_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-STABLE-1 demo catalog workspaces; may be repeated")
     publish_stable_publication_stack_parser.add_argument("--non-recursive", action="store_true", help="Only scan immediate children of each --discover-under directory")
     publish_stable_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where copied stable catalog workspaces, release_catalog/, and summary.json will be written")
@@ -22562,6 +22894,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-publication-stack":
         stack_preset_path = None if not args.stack_preset_json else Path(args.stack_preset_json).resolve()
         stack_preset = load_publication_stack_preset(stack_preset_path) if stack_preset_path is not None else None
+        catalog_workspace_collection_dir = (
+            Path(args.catalog_workspace_collection_dir).resolve()
+            if args.catalog_workspace_collection_dir
+            else (
+                Path(str((stack_preset or {}).get("catalog_workspace_collection_dir"))).resolve()
+                if (stack_preset or {}).get("catalog_workspace_collection_dir")
+                else None
+            )
+        )
         catalog_preset_paths = [
             Path(value).resolve()
             for value in [*((stack_preset or {}).get("catalog_preset_paths", [])), *((args.catalog_preset_jsons or []))]
@@ -22569,11 +22910,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         catalog_workspace_dirs = (
             []
             if catalog_preset_paths
-            else [Path(value).resolve() for value in (stack_preset or {}).get("catalog_workspace_dirs", [])]
+            else [
+                Path(value).resolve()
+                for value in resolve_demo_catalog_workspace_inputs(
+                    (stack_preset or {}).get("catalog_workspace_dirs", []),
+                    catalog_workspace_collection_dir=catalog_workspace_collection_dir,
+                )
+            ]
         )
-        if not catalog_preset_paths and not catalog_workspace_dirs:
+        if not catalog_preset_paths and not catalog_workspace_dirs and catalog_workspace_collection_dir is None:
             raise SatRootError(
-                "bootstrap-publication-stack requires at least one --catalog-preset-json, a --stack-preset-json with catalog_presets, or a --stack-preset-json with catalog_workspace_dirs"
+                "bootstrap-publication-stack requires at least one --catalog-preset-json, a --stack-preset-json with catalog_presets, a --stack-preset-json with catalog_workspace_dirs, or a --stack-preset-json with catalog_workspace_collection_dir"
             )
         release_catalog_preset_path = None if not args.release_catalog_preset_json else Path(args.release_catalog_preset_json).resolve()
         release_catalog_preset = (
@@ -22600,6 +22947,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             catalog_preset_paths=catalog_preset_paths,
             catalog_workspace_dirs=catalog_workspace_dirs,
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             release_catalog_metadata=catalog_metadata,
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
@@ -22615,6 +22963,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-machine-publication-stack":
         stack_preset_path = None if not args.stack_preset_json else Path(args.stack_preset_json).resolve()
         stack_preset = load_machine_publication_stack_preset(stack_preset_path) if stack_preset_path is not None else None
+        catalog_workspace_collection_dir = (
+            Path(args.catalog_workspace_collection_dir).resolve()
+            if args.catalog_workspace_collection_dir
+            else (
+                Path(str((stack_preset or {}).get("catalog_workspace_collection_dir"))).resolve()
+                if (stack_preset or {}).get("catalog_workspace_collection_dir")
+                else None
+            )
+        )
         catalog_preset_paths = [
             Path(value).resolve()
             for value in [*((stack_preset or {}).get("catalog_preset_paths", [])), *((args.catalog_preset_jsons or []))]
@@ -22622,11 +22979,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         catalog_workspace_dirs = (
             []
             if catalog_preset_paths
-            else [Path(value).resolve() for value in (stack_preset or {}).get("catalog_workspace_dirs", [])]
+            else [
+                Path(value).resolve()
+                for value in resolve_demo_catalog_workspace_inputs(
+                    (stack_preset or {}).get("catalog_workspace_dirs", []),
+                    catalog_workspace_collection_dir=catalog_workspace_collection_dir,
+                )
+            ]
         )
-        if not catalog_preset_paths and not catalog_workspace_dirs:
+        if not catalog_preset_paths and not catalog_workspace_dirs and catalog_workspace_collection_dir is None:
             raise SatRootError(
-                "bootstrap-machine-publication-stack requires at least one --catalog-preset-json, a --stack-preset-json with catalog_presets, or a --stack-preset-json with catalog_workspace_dirs"
+                "bootstrap-machine-publication-stack requires at least one --catalog-preset-json, a --stack-preset-json with catalog_presets, a --stack-preset-json with catalog_workspace_dirs, or a --stack-preset-json with catalog_workspace_collection_dir"
             )
         for catalog_preset_path in catalog_preset_paths:
             load_machine_demo_catalog_preset(catalog_preset_path)
@@ -22655,6 +23018,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             catalog_preset_paths=catalog_preset_paths,
             catalog_workspace_dirs=catalog_workspace_dirs,
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             release_catalog_metadata=catalog_metadata,
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
@@ -22670,6 +23034,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-stable-publication-stack":
         stack_preset_path = None if not args.stack_preset_json else Path(args.stack_preset_json).resolve()
         stack_preset = load_stable_publication_stack_preset(stack_preset_path) if stack_preset_path is not None else None
+        catalog_workspace_collection_dir = (
+            Path(args.catalog_workspace_collection_dir).resolve()
+            if args.catalog_workspace_collection_dir
+            else (
+                Path(str((stack_preset or {}).get("catalog_workspace_collection_dir"))).resolve()
+                if (stack_preset or {}).get("catalog_workspace_collection_dir")
+                else None
+            )
+        )
         catalog_preset_paths = [
             Path(value).resolve()
             for value in [*((stack_preset or {}).get("catalog_preset_paths", [])), *((args.catalog_preset_jsons or []))]
@@ -22677,11 +23050,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         catalog_workspace_dirs = (
             []
             if catalog_preset_paths
-            else [Path(value).resolve() for value in (stack_preset or {}).get("catalog_workspace_dirs", [])]
+            else [
+                Path(value).resolve()
+                for value in resolve_demo_catalog_workspace_inputs(
+                    (stack_preset or {}).get("catalog_workspace_dirs", []),
+                    catalog_workspace_collection_dir=catalog_workspace_collection_dir,
+                )
+            ]
         )
-        if not catalog_preset_paths and not catalog_workspace_dirs:
+        if not catalog_preset_paths and not catalog_workspace_dirs and catalog_workspace_collection_dir is None:
             raise SatRootError(
-                "bootstrap-stable-publication-stack requires at least one --catalog-preset-json, a --stack-preset-json with catalog_presets, or a --stack-preset-json with catalog_workspace_dirs"
+                "bootstrap-stable-publication-stack requires at least one --catalog-preset-json, a --stack-preset-json with catalog_presets, a --stack-preset-json with catalog_workspace_dirs, or a --stack-preset-json with catalog_workspace_collection_dir"
             )
         for catalog_preset_path in catalog_preset_paths:
             load_stable_demo_catalog_preset(catalog_preset_path)
@@ -22710,6 +23089,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             catalog_preset_paths=catalog_preset_paths,
             catalog_workspace_dirs=catalog_workspace_dirs,
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             release_catalog_metadata=catalog_metadata,
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
@@ -23110,7 +23490,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-publication-stack":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_stack_preset(preset_path) if preset_path is not None else None
-        inventory_workspace_dirs = load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        catalog_workspace_collection_dir = (
+            Path(args.catalog_workspace_collection_dir).resolve()
+            if args.catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("catalog_workspace_collection_dir")
+                else None
+            )
+        )
+        inventory_workspace_dirs = [] if catalog_workspace_collection_dir is not None else (load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else [])
         catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
@@ -23118,6 +23507,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
             [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir],
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -23126,6 +23516,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.release_catalog_key_id,
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             release_catalog_metadata=catalog_metadata,
         )
         print(f"wrote SATROOT publication stack from existing workspaces to {Path(args.output_dir).resolve()}")
@@ -23134,7 +23525,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-machine-publication-stack":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_machine_publication_stack_preset(preset_path) if preset_path is not None else None
-        inventory_workspace_dirs = load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        catalog_workspace_collection_dir = (
+            Path(args.catalog_workspace_collection_dir).resolve()
+            if args.catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("catalog_workspace_collection_dir")
+                else None
+            )
+        )
+        inventory_workspace_dirs = [] if catalog_workspace_collection_dir is not None else (load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else [])
         catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
@@ -23142,6 +23542,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
             [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir],
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -23150,6 +23551,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.release_catalog_key_id,
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             release_catalog_metadata=catalog_metadata,
         )
         print(f"wrote SATROOT-MACHINE-1 publication stack from existing workspaces to {Path(args.output_dir).resolve()}")
@@ -23158,7 +23560,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "publish-stable-publication-stack":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_stable_publication_stack_preset(preset_path) if preset_path is not None else None
-        inventory_workspace_dirs = load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        catalog_workspace_collection_dir = (
+            Path(args.catalog_workspace_collection_dir).resolve()
+            if args.catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("catalog_workspace_collection_dir")
+                else None
+            )
+        )
+        inventory_workspace_dirs = [] if catalog_workspace_collection_dir is not None else (load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else [])
         catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
@@ -23166,6 +23577,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
             [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir],
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
         )
@@ -23174,6 +23586,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.release_catalog_key_id,
+            catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             release_catalog_metadata=catalog_metadata,
         )
         print(f"wrote SATROOT-STABLE-1 publication stack from existing workspaces to {Path(args.output_dir).resolve()}")
@@ -25734,6 +26147,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             recursive=not args.non_recursive,
         )
         print(f"wrote SATROOT-STABLE-1 release catalog collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-demo-catalog-workspace-collection":
+        inventory_workspace_dirs = load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_demo_catalog_workspace_collection(
+            [*inventory_workspace_dirs, *args.catalog_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT demo catalog workspace collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-machine-demo-catalog-workspace-collection":
+        inventory_workspace_dirs = load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_machine_demo_catalog_workspace_collection(
+            [*inventory_workspace_dirs, *args.catalog_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT-MACHINE-1 demo catalog workspace collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-stable-demo-catalog-workspace-collection":
+        inventory_workspace_dirs = load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_stable_demo_catalog_workspace_collection(
+            [*inventory_workspace_dirs, *args.catalog_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT-STABLE-1 demo catalog workspace collection to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-publication-stack-collection":
