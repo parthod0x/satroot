@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
+  "version": "0.1",
+  "publication_stack_collection_dir": "../../generated_publication_stack_collection",
+  "release_catalog_index": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Collection-Backed Publication Network",
+    "published_at": "2026-07-03T00:15:00Z"
+  }
+}

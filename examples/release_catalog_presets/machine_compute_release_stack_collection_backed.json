@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-RELEASE-CATALOG-PRESET",
+  "version": "0.1",
+  "release_collection_dir": "../../generated_machine_release_collection",
+  "catalog": {
+    "channel": "machine",
+    "label": "SATROOT Machine Compute Collection-Backed Release Stack",
+    "published_at": "2026-07-14T03:15:00Z"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET",
+  "version": "0.1",
+  "publication_metadata_bundle_collection_dir": "../generated_publication_metadata_collection",
+  "catalog": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Collection-Backed Publication Metadata Catalog",
+    "published_at": "2026-07-08T04:30:00Z"
+  }
+}

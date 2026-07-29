@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-RELEASE-CATALOG-PRESET",
+  "version": "0.1",
+  "release_collection_dir": "../../generated_stable_release_collection",
+  "catalog": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Collection-Backed Release Stack",
+    "published_at": "2026-07-15T03:15:00Z"
+  }
+}

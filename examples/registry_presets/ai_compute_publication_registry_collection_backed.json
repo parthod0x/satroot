@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
+  "version": "0.1",
+  "publication_registry_workspace_dir": "../generated_publication_registry_workspace",
+  "registry": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Collection-Backed Publication Registry",
+    "published_at": "2026-07-08T07:30:00Z"
+  }
+}

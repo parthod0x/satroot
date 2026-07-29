@@ -1,0 +1,11 @@
+{
+  "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+  "version": "0.1",
+  "publication_catalog_workspace_preset": "../publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json",
+  "publication_network_collection_dir": "../../generated_stable_publication_network_collection",
+  "publication_registry": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Collection-Backed Publication Registry Workspace",
+    "published_at": "2026-07-15T05:15:00Z"
+  }
+}

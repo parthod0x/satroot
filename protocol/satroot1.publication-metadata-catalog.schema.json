@@ -62,6 +62,10 @@
       },
       "additionalProperties": false
     },
+    "source_publication_metadata_bundle_collection_dir": {
+      "type": "string",
+      "minLength": 1
+    },
     "bundles": {
       "type": "array",
       "minItems": 1,

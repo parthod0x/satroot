@@ -15,6 +15,7 @@
     "version": {"const": "0.1"},
     "index_type": {"const": "release-catalog-index"},
     "release_catalog_count": {"type": "integer", "minimum": 1},
+    "source_release_catalog_collection_dir": {"type": "string", "minLength": 1},
     "index": {
       "type": "object",
       "properties": {

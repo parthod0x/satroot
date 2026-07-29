@@ -1,0 +1,17 @@
+{
+  "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+  "version": "0.1",
+  "publication_descriptor_index_preset": "../publication_descriptor_index_presets/stable_reference_publication_descriptor_index.json",
+  "publication_metadata_catalog_preset": "../publication_metadata_catalog_presets/stable_reference_publication_metadata_catalog_collection_backed.json",
+  "publication_metadata_bundle_collection_dir": "../generated_stable_publication_metadata_collection",
+  "publication_descriptor_index": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Collection-Backed Workspace Descriptor Index",
+    "published_at": "2026-07-08T08:00:00Z"
+  },
+  "publication_metadata_catalog": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Collection-Backed Workspace Metadata Catalog",
+    "published_at": "2026-07-08T08:05:00Z"
+  }
+}

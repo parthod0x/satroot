@@ -1,0 +1,17 @@
+{
+  "type": "SATROOT-PUBLICATION-CATALOG-WORKSPACE-PRESET",
+  "version": "0.1",
+  "publication_descriptor_index_preset": "../publication_descriptor_index_presets/machine_compute_publication_descriptor_index.json",
+  "publication_metadata_catalog_preset": "../publication_metadata_catalog_presets/machine_compute_publication_metadata_catalog_collection_backed.json",
+  "publication_metadata_bundle_collection_dir": "../generated_machine_publication_metadata_collection",
+  "publication_descriptor_index": {
+    "channel": "machine",
+    "label": "SATROOT Machine Compute Collection-Backed Workspace Descriptor Index",
+    "published_at": "2026-07-14T04:30:00Z"
+  },
+  "publication_metadata_catalog": {
+    "channel": "machine",
+    "label": "SATROOT Machine Compute Collection-Backed Workspace Metadata Catalog",
+    "published_at": "2026-07-14T05:00:00Z"
+  }
+}

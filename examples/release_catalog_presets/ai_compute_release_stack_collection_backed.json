@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-RELEASE-CATALOG-PRESET",
+  "version": "0.1",
+  "release_collection_dir": "../../generated_release_collection",
+  "catalog": {
+    "channel": "stable",
+    "label": "SATROOT AI Compute Collection-Backed Release Stack",
+    "published_at": "2026-07-01T00:15:00Z"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-PUBLICATION-METADATA-CATALOG-PRESET",
+  "version": "0.1",
+  "publication_metadata_bundle_collection_dir": "../generated_stable_publication_metadata_collection",
+  "catalog": {
+    "channel": "stable",
+    "label": "SATROOT Stable Reference Collection-Backed Publication Metadata Catalog",
+    "published_at": "2026-07-15T05:00:00Z"
+  }
+}

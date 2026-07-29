@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-BUNDLE-INDEX-PRESET",
+  "version": "0.1",
+  "bundle_collection_dir": "../../generated_machine_bundle_collection",
+  "release": {
+    "channel": "machine",
+    "label": "SATROOT Machine Compute Collection-Backed Bundle Index",
+    "published_at": "2026-07-14T02:15:00Z"
+  }
+}

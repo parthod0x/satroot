@@ -15,6 +15,7 @@
     "version": {"const": "0.1"},
     "index_type": {"const": "bundle-index"},
     "bundle_count": {"type": "integer", "minimum": 1},
+    "source_bundle_collection_dir": {"type": "string", "minLength": 1},
     "release": {
       "type": "object",
       "properties": {

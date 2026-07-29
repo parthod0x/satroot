@@ -12,6 +12,10 @@
     "type": {"const": "SATROOT-PUBLICATION-REGISTRY"},
     "version": {"const": "0.1"},
     "component_count": {"type": "integer", "minimum": 1},
+    "source_publication_registry_workspace_dir": {
+      "type": "string",
+      "minLength": 1
+    },
     "index": {
       "type": "object",
       "properties": {
