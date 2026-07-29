@@ -7454,6 +7454,113 @@ def test_cli_bootstrap_machine_release_catalog_index_publication(tmp_path, capsy
     assert verified["index"] == index["index"]
 
 
+def test_cli_bootstrap_machine_demo_release_catalog_index_publication_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "machine_index_alpha.json"
+    preset_beta = tmp_path / "machine_index_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MINDEX01"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Index Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "alpha-index",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "alpha-index-credit",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Machine Index Alpha Release",
+                "published_at": "2026-07-25T05:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MINDEX02"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Index Beta"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "beta-index",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "beta-index-credit",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Machine Index Beta Release",
+                "published_at": "2026-07-26T05:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_demo_release_catalog_index_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-release-catalog-index-publication",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--bundle-scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--catalog-scheme",
+            "hmac-sha256",
+            "--catalog-key-id",
+            "catalog-key",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+            "--catalog-label",
+            "Machine Demo Release Catalog",
+            "--label",
+            "Machine Demo Release Catalog Index",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 demo release catalog index publication to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    index = json.loads(
+        (output_dir / "release_catalog_index_publication" / "release_catalog_index.json").read_text(encoding="utf-8")
+    )
+    secrets = json.loads(
+        (output_dir / "release_catalog_index_publication" / "release_catalog_index_secrets.json").read_text(encoding="utf-8")
+    )
+    assert summary["profile"] == "SATROOT-MACHINE-1"
+    assert summary["generated_release_count"] == 2
+    assert summary["release_collection"]["release_count"] == 2
+    assert summary["release_catalog"]["release_count"] == 2
+    assert summary["release_catalog_index"]["release_catalog_count"] == 1
+    assert index["index"]["label"] == "Machine Demo Release Catalog Index"
+    assert index["release_catalog_count"] == 1
+    assert {symbol for entry in summary["release_catalog"]["releases"] for symbol in entry["bundle_symbols"]} == {"MINDEX01", "MINDEX02"}
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_publication" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 1
+    assert verified["index"] == index["index"]
+
+
 def test_cli_bootstrap_machine_release_catalog_index_publication_from_catalog_json_inputs(tmp_path, capsys):
     catalog_alpha_dir, catalog_beta_dir = make_machine_release_catalog_dirs(tmp_path)
     output_dir = tmp_path / "machine_release_catalog_index_publication_json_inputs"
@@ -7639,6 +7746,109 @@ def test_cli_bootstrap_stable_release_catalog_index_publication(tmp_path, capsys
         verifier=make_hmac_sha256_verifier(secrets),
     )
     assert verified["release_catalog_count"] == 2
+    assert verified["index"] == index["index"]
+
+
+def test_cli_bootstrap_stable_demo_release_catalog_index_publication_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "stable_index_alpha.json"
+    preset_beta = tmp_path / "stable_index_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SINDEX01"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Index Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "EUR",
+                    "intended_use": "alpha-index-ledger",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Stable Index Alpha Release",
+                "published_at": "2026-07-27T05:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SINDEX02"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Index Beta"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "GBP",
+                    "intended_use": "beta-index-ledger",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Stable Index Beta Release",
+                "published_at": "2026-07-28T05:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_demo_release_catalog_index_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-release-catalog-index-publication",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--bundle-scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--catalog-scheme",
+            "hmac-sha256",
+            "--catalog-key-id",
+            "catalog-key",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "index-key",
+            "--catalog-label",
+            "Stable Demo Release Catalog",
+            "--label",
+            "Stable Demo Release Catalog Index",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 demo release catalog index publication to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    index = json.loads(
+        (output_dir / "release_catalog_index_publication" / "release_catalog_index.json").read_text(encoding="utf-8")
+    )
+    secrets = json.loads(
+        (output_dir / "release_catalog_index_publication" / "release_catalog_index_secrets.json").read_text(encoding="utf-8")
+    )
+    assert summary["profile"] == "SATROOT-STABLE-1"
+    assert summary["generated_release_count"] == 2
+    assert summary["release_collection"]["release_count"] == 2
+    assert summary["release_catalog"]["release_count"] == 2
+    assert summary["release_catalog_index"]["release_catalog_count"] == 1
+    assert index["index"]["label"] == "Stable Demo Release Catalog Index"
+    assert index["release_catalog_count"] == 1
+    assert {symbol for entry in summary["release_catalog"]["releases"] for symbol in entry["bundle_symbols"]} == {"SINDEX01", "SINDEX02"}
+
+    verified = verify_signed_release_catalog_index_manifest(
+        output_dir / "release_catalog_index_publication" / "release_catalog_index_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_catalog_count"] == 1
     assert verified["index"] == index["index"]
 
 

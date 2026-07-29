@@ -13461,6 +13461,220 @@ def bootstrap_stable_release_catalog_index_publication(
     )
 
 
+def bootstrap_machine_demo_release_catalog_index_publication_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    catalog_signature_scheme: str,
+    catalog_key_id: str,
+    index_signature_scheme: str,
+    index_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    service_scope: str = "api-compute",
+    billing_unit: str = "request",
+    consumption_model: str = "burn-on-use",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    tenant_account: str = "tenant_a",
+    worker_account: str = "worker_node",
+    max_supply: Optional[str] = None,
+    initial_balance: str = "100000000",
+    tenant_amount: str = "5000000",
+    worker_amount: str = "1200000",
+    worker_burn_amount: str = "200000",
+    intended_use: str = "machine-api-credit",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    release_catalog_publication_workspace_dir = root_output_dir / "release_catalog_publication_workspace"
+    release_catalog_index_publication_dir = root_output_dir / "release_catalog_index_publication"
+    generated = bootstrap_machine_demo_release_catalog_publication_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=release_catalog_publication_workspace_dir,
+        release_key_id=release_key_id,
+        signature_scheme=catalog_signature_scheme,
+        key_id=catalog_key_id,
+        release_scheme=release_scheme,
+        symbol=symbol,
+        name=name,
+        service_scope=service_scope,
+        billing_unit=billing_unit,
+        consumption_model=consumption_model,
+        root_id=root_id,
+        issuer=issuer,
+        tenant_account=tenant_account,
+        worker_account=worker_account,
+        max_supply=max_supply,
+        initial_balance=initial_balance,
+        tenant_amount=tenant_amount,
+        worker_amount=worker_amount,
+        worker_burn_amount=worker_burn_amount,
+        intended_use=intended_use,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        catalog_metadata=catalog_metadata,
+    )
+    catalog_publication = generated["release_catalog_publication"]
+    published = bootstrap_machine_release_catalog_index_publication(
+        [catalog_publication["release_catalog_manifest_path"]],
+        output_dir=release_catalog_index_publication_dir,
+        signature_scheme=index_signature_scheme,
+        key_id=index_key_id,
+        release_catalog_collection_dir=None,
+        index_metadata=index_metadata,
+    )
+    summary = {
+        "profile": MACHINE_DEMO_CATALOG_PROFILE,
+        "generated_release_count": generated["summary"]["generated_release_count"],
+        "release_catalog_publication_workspace_dir": str(release_catalog_publication_workspace_dir.resolve()),
+        "release_catalog_publication_workspace_summary_path": generated["summary_path"],
+        "generated_releases": copy.deepcopy(generated["summary"]["generated_releases"]),
+        "release_collection_dir": generated["summary"]["release_collection_dir"],
+        "release_collection_summary_path": generated["summary"]["release_collection_summary_path"],
+        "release_collection": copy.deepcopy(generated["summary"]["release_collection"]),
+        "release_catalog_publication_dir": generated["summary"]["release_catalog_publication_dir"],
+        "release_catalog_path": generated["summary"]["release_catalog_path"],
+        "release_catalog_manifest_path": generated["summary"]["release_catalog_manifest_path"],
+        "release_catalog": copy.deepcopy(generated["summary"]["release_catalog"]),
+        "release_catalog_index_publication_dir": str(release_catalog_index_publication_dir.resolve()),
+        "release_catalog_index_path": published["release_catalog_index_path"],
+        "release_catalog_index_manifest_path": published["release_catalog_index_manifest_path"],
+        "release_catalog_index": copy.deepcopy(published["release_catalog_index"]),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "release_catalog_publication_workspace": generated,
+        "release_catalog_index_publication": published,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
+def bootstrap_stable_demo_release_catalog_index_publication_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    catalog_signature_scheme: str,
+    catalog_key_id: str,
+    index_signature_scheme: str,
+    index_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    reference_unit: str = "USD",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    merchant_account: str = "merchant",
+    service_account: str = "api_node",
+    initial_balance: str = "25000000",
+    merchant_amount: str = "1250000",
+    service_amount: str = "250000",
+    merchant_burn_amount: str = "5000",
+    intended_use: str = "invoice-credit-accounting",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    release_catalog_publication_workspace_dir = root_output_dir / "release_catalog_publication_workspace"
+    release_catalog_index_publication_dir = root_output_dir / "release_catalog_index_publication"
+    generated = bootstrap_stable_demo_release_catalog_publication_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=release_catalog_publication_workspace_dir,
+        release_key_id=release_key_id,
+        signature_scheme=catalog_signature_scheme,
+        key_id=catalog_key_id,
+        release_scheme=release_scheme,
+        symbol=symbol,
+        name=name,
+        reference_unit=reference_unit,
+        root_id=root_id,
+        issuer=issuer,
+        merchant_account=merchant_account,
+        service_account=service_account,
+        initial_balance=initial_balance,
+        merchant_amount=merchant_amount,
+        service_amount=service_amount,
+        merchant_burn_amount=merchant_burn_amount,
+        intended_use=intended_use,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        catalog_metadata=catalog_metadata,
+    )
+    catalog_publication = generated["release_catalog_publication"]
+    published = bootstrap_stable_release_catalog_index_publication(
+        [catalog_publication["release_catalog_manifest_path"]],
+        output_dir=release_catalog_index_publication_dir,
+        signature_scheme=index_signature_scheme,
+        key_id=index_key_id,
+        release_catalog_collection_dir=None,
+        index_metadata=index_metadata,
+    )
+    summary = {
+        "profile": STABLE_DEMO_CATALOG_PROFILE,
+        "generated_release_count": generated["summary"]["generated_release_count"],
+        "release_catalog_publication_workspace_dir": str(release_catalog_publication_workspace_dir.resolve()),
+        "release_catalog_publication_workspace_summary_path": generated["summary_path"],
+        "generated_releases": copy.deepcopy(generated["summary"]["generated_releases"]),
+        "release_collection_dir": generated["summary"]["release_collection_dir"],
+        "release_collection_summary_path": generated["summary"]["release_collection_summary_path"],
+        "release_collection": copy.deepcopy(generated["summary"]["release_collection"]),
+        "release_catalog_publication_dir": generated["summary"]["release_catalog_publication_dir"],
+        "release_catalog_path": generated["summary"]["release_catalog_path"],
+        "release_catalog_manifest_path": generated["summary"]["release_catalog_manifest_path"],
+        "release_catalog": copy.deepcopy(generated["summary"]["release_catalog"]),
+        "release_catalog_index_publication_dir": str(release_catalog_index_publication_dir.resolve()),
+        "release_catalog_index_path": published["release_catalog_index_path"],
+        "release_catalog_index_manifest_path": published["release_catalog_index_manifest_path"],
+        "release_catalog_index": copy.deepcopy(published["release_catalog_index"]),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "release_catalog_publication_workspace": generated,
+        "release_catalog_index_publication": published,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
 def publish_stable_release_catalog_index(
     release_catalog_dirs: Sequence[str | Path],
     *,
@@ -21785,6 +21999,87 @@ def build_cli_parser() -> Any:
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog index manifest")
 
+    bootstrap_stable_demo_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-stable-demo-release-catalog-index-publication", help="Generate multiple SATROOT-STABLE-1 demo releases from repeated presets, bootstrap a stable release catalog publication, and bootstrap a signed stable release catalog index publication in one step")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple stable demo releases")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--symbol", help="Optional shared stable symbol override when a preset omits it")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--name", help="Optional shared stable name override when a preset omits it")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--bundle-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --bundle-scheme")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--output-dir", required=True, help="Directory where the generated release catalog publication workspace, release catalog index publication, and summary.json will be written")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--reference-unit", default="USD", help="External reference unit; defaults to USD")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and distribution events")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--merchant-account", default="merchant", help="Merchant account for the first reference distribution leg")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--service-account", default="api_node", help="Service account for the second reference distribution leg")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--initial-balance", default="25000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--merchant-amount", default="1250000", help="Amount transferred from the issuer to the merchant account")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--service-amount", default="250000", help="Amount transferred from the issuer to the service account")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--merchant-burn-amount", default="5000", help="Optional merchant-side burn amount; use 0 to skip the burn event")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--intended-use", default="invoice-credit-accounting", help="Reference-only intended_use metadata")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--catalog-channel", help="Optional release catalog channel metadata")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--catalog-label", help="Optional human-readable release catalog label")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--catalog-published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--catalog-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog manifest")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--catalog-key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--channel", help="Optional index channel metadata")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--label", help="Optional human-readable index label")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog index manifest")
+    bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog index manifest")
+
+    bootstrap_machine_demo_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-machine-demo-release-catalog-index-publication", help="Generate multiple SATROOT-MACHINE-1 demo releases from repeated presets, bootstrap a machine release catalog publication, and bootstrap a signed machine release catalog index publication in one step")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple machine demo releases")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--symbol", help="Optional shared machine symbol override when a preset omits it")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--name", help="Optional shared machine name override when a preset omits it")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--bundle-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --bundle-scheme")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--output-dir", required=True, help="Directory where the generated release catalog publication workspace, release catalog index publication, and summary.json will be written")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--service-scope", default="api-compute", help="Compact machine service scope metadata")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--billing-unit", default="request", help="Compact machine billing unit metadata")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--consumption-model", default="burn-on-use", help="Compact machine consumption model metadata")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and tenant allocation events")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--tenant-account", default="tenant_a", help="Tenant account receiving the primary machine-credit allocation")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--worker-account", default="worker_node", help="Machine worker account receiving consumable execution credits")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--max-supply", help="Optional explicit max_supply override; defaults to the initial issued balance")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--initial-balance", default="100000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--tenant-amount", default="5000000", help="Amount transferred from the issuer to the tenant account")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--worker-amount", default="1200000", help="Amount transferred from the tenant account to the worker account")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--worker-burn-amount", default="200000", help="Optional worker-side burn amount; use 0 to skip the burn event")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--intended-use", default="machine-api-credit", help="Compact machine intended_use metadata")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--catalog-channel", help="Optional release catalog channel metadata")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--catalog-label", help="Optional human-readable release catalog label")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--catalog-published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--catalog-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog manifest")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--catalog-key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--channel", help="Optional index channel metadata")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--label", help="Optional human-readable index label")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog index manifest")
+    bootstrap_machine_demo_release_catalog_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog index manifest")
+
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
@@ -28192,6 +28487,129 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(
             "wrote bootstrapped SATROOT-MACHINE-1 demo release catalog publication to "
             f"{Path(generated['release_catalog_publication']['release_catalog_manifest_path']).parent}"
+        )
+        return 0
+
+    if args.command == "bootstrap-stable-demo-release-catalog-index-publication":
+        generated = bootstrap_stable_demo_release_catalog_index_publication_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.bundle_scheme,
+            output_dir=args.output_dir,
+            release_key_id=args.release_key_id,
+            catalog_signature_scheme=args.catalog_scheme,
+            catalog_key_id=args.catalog_key_id,
+            index_signature_scheme=args.scheme,
+            index_key_id=args.key_id,
+            release_scheme=args.release_scheme,
+            symbol=args.symbol,
+            name=args.name,
+            reference_unit=args.reference_unit,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            merchant_account=args.merchant_account,
+            service_account=args.service_account,
+            initial_balance=args.initial_balance,
+            merchant_amount=args.merchant_amount,
+            service_amount=args.service_amount,
+            merchant_burn_amount=args.merchant_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            catalog_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.catalog_channel,
+                    "label": args.catalog_label,
+                    "published_at": args.catalog_published_at,
+                }.items()
+                if value is not None
+            },
+            index_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.channel,
+                    "label": args.label,
+                    "published_at": args.published_at,
+                }.items()
+                if value is not None
+            },
+        )
+        print(
+            "wrote bootstrapped SATROOT-STABLE-1 demo release catalog index publication to "
+            f"{Path(generated['release_catalog_index_publication']['release_catalog_index_manifest_path']).parent}"
+        )
+        return 0
+
+    if args.command == "bootstrap-machine-demo-release-catalog-index-publication":
+        generated = bootstrap_machine_demo_release_catalog_index_publication_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.bundle_scheme,
+            output_dir=args.output_dir,
+            release_key_id=args.release_key_id,
+            catalog_signature_scheme=args.catalog_scheme,
+            catalog_key_id=args.catalog_key_id,
+            index_signature_scheme=args.scheme,
+            index_key_id=args.key_id,
+            release_scheme=args.release_scheme,
+            symbol=args.symbol,
+            name=args.name,
+            service_scope=args.service_scope,
+            billing_unit=args.billing_unit,
+            consumption_model=args.consumption_model,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            tenant_account=args.tenant_account,
+            worker_account=args.worker_account,
+            max_supply=args.max_supply,
+            initial_balance=args.initial_balance,
+            tenant_amount=args.tenant_amount,
+            worker_amount=args.worker_amount,
+            worker_burn_amount=args.worker_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            catalog_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.catalog_channel,
+                    "label": args.catalog_label,
+                    "published_at": args.catalog_published_at,
+                }.items()
+                if value is not None
+            },
+            index_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.channel,
+                    "label": args.label,
+                    "published_at": args.published_at,
+                }.items()
+                if value is not None
+            },
+        )
+        print(
+            "wrote bootstrapped SATROOT-MACHINE-1 demo release catalog index publication to "
+            f"{Path(generated['release_catalog_index_publication']['release_catalog_index_manifest_path']).parent}"
         )
         return 0
 

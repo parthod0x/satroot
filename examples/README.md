@@ -162,6 +162,18 @@ Bootstrap a machine demo release catalog publication from repeated machine prese
 satroot1 bootstrap-machine-demo-release-catalog-publication --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --release-label "Machine Collection Override" --label "Machine Demo Release Catalog" --output-dir machine_demo_release_catalog_publication
 ```
 
+Bootstrap a stable demo release catalog index publication from repeated stable preset inputs:
+
+```bash
+satroot1 bootstrap-stable-demo-release-catalog-index-publication --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --catalog-scheme hmac-sha256 --catalog-key-id catalog-key --scheme hmac-sha256 --key-id index-key --catalog-label "Stable Demo Release Catalog" --label "Stable Demo Release Catalog Index" --output-dir stable_demo_release_catalog_index_publication
+```
+
+Bootstrap a machine demo release catalog index publication from repeated machine preset inputs:
+
+```bash
+satroot1 bootstrap-machine-demo-release-catalog-index-publication --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --catalog-scheme hmac-sha256 --catalog-key-id catalog-key --scheme hmac-sha256 --key-id index-key --catalog-label "Machine Demo Release Catalog" --label "Machine Demo Release Catalog Index" --output-dir machine_demo_release_catalog_index_publication
+```
+
 Bootstrap a machine collection-backed release catalog publication:
 
 ```bash
