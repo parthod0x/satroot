@@ -19136,6 +19136,176 @@ def test_cli_export_stable_publication_registry_workspace_preset_with_nested_net
     assert len(nested_network["stack_preset_paths"]) == 2
 
 
+def test_cli_export_publication_registry_workspace_preset_preserves_nested_catalog_workspace_collection_reference(
+    tmp_path,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="generic",
+    )
+    catalog_root = tmp_path / "catalog_root"
+    catalog_root.mkdir()
+    catalog_workspace_dir = make_publication_catalog_workspace_dir(catalog_root)
+    workspace_dir = tmp_path / "publication_registry_workspace_nested_collection_source"
+    preset_path = tmp_path / "exported_registry_workspace_nested_collection_network.json"
+    network_preset_path = tmp_path / "exported_registry_workspace_deep_nested_network.json"
+    stack_preset_dir = tmp_path / "exported_registry_workspace_deep_nested_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_registry_workspace_deep_nested_catalog_presets"
+
+    assert main(
+        [
+            "publish-publication-registry-workspace",
+            str(catalog_workspace_dir),
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(workspace_dir),
+            "--label",
+            "Deep Nested Collection Registry",
+        ]
+    ) == 0
+    assert main(
+        [
+            "export-publication-registry-workspace-preset",
+            str(workspace_dir),
+            "--publication-network-preset-path",
+            str(network_preset_path),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    loaded = load_publication_registry_workspace_preset(preset_path)
+    nested_network = load_publication_network_preset(loaded["publication_network_preset_path"])
+    assert loaded["publication_network_dir"] is None
+    assert Path(loaded["publication_network_preset_path"]).name == "exported_registry_workspace_deep_nested_network.json"
+    assert nested_network["publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    nested_stack_presets = [load_publication_stack_preset(path) for path in nested_network["stack_preset_paths"]]
+    assert len(nested_stack_presets) == 2
+    assert all(preset["catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve()) for preset in nested_stack_presets)
+    assert all(preset["catalog_workspace_dirs"] == [] for preset in nested_stack_presets)
+
+
+def test_cli_export_machine_publication_registry_workspace_preset_preserves_nested_catalog_workspace_collection_reference(
+    tmp_path,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="machine",
+    )
+    catalog_workspace_dir = make_machine_publication_catalog_workspace_dir(tmp_path)
+    workspace_dir = tmp_path / "machine_publication_registry_workspace_nested_collection_source"
+    preset_path = tmp_path / "exported_machine_registry_workspace_nested_collection_network.json"
+    network_preset_path = tmp_path / "exported_machine_registry_workspace_deep_nested_network.json"
+    stack_preset_dir = tmp_path / "exported_machine_registry_workspace_deep_nested_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_machine_registry_workspace_deep_nested_catalog_presets"
+
+    assert main(
+        [
+            "publish-machine-publication-registry-workspace",
+            str(catalog_workspace_dir),
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(workspace_dir),
+            "--label",
+            "Machine Deep Nested Collection Registry",
+        ]
+    ) == 0
+    assert main(
+        [
+            "export-machine-publication-registry-workspace-preset",
+            str(workspace_dir),
+            "--publication-network-preset-path",
+            str(network_preset_path),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    loaded = load_machine_publication_registry_workspace_preset(preset_path)
+    nested_network = load_machine_publication_network_preset(loaded["publication_network_preset_path"])
+    assert loaded["publication_network_dir"] is None
+    assert Path(loaded["publication_network_preset_path"]).name == "exported_machine_registry_workspace_deep_nested_network.json"
+    assert nested_network["publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    nested_stack_presets = [load_machine_publication_stack_preset(path) for path in nested_network["stack_preset_paths"]]
+    assert len(nested_stack_presets) == 2
+    assert all(preset["catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve()) for preset in nested_stack_presets)
+    assert all(preset["catalog_workspace_dirs"] == [] for preset in nested_stack_presets)
+
+
+def test_cli_export_stable_publication_registry_workspace_preset_preserves_nested_catalog_workspace_collection_reference(
+    tmp_path,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="stable",
+    )
+    catalog_workspace_dir = make_stable_publication_catalog_workspace_dir(tmp_path)
+    workspace_dir = tmp_path / "stable_publication_registry_workspace_nested_collection_source"
+    preset_path = tmp_path / "exported_stable_registry_workspace_nested_collection_network.json"
+    network_preset_path = tmp_path / "exported_stable_registry_workspace_deep_nested_network.json"
+    stack_preset_dir = tmp_path / "exported_stable_registry_workspace_deep_nested_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_stable_registry_workspace_deep_nested_catalog_presets"
+
+    assert main(
+        [
+            "publish-stable-publication-registry-workspace",
+            str(catalog_workspace_dir),
+            "--publication-network-dir",
+            str(network_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--output-dir",
+            str(workspace_dir),
+            "--label",
+            "Stable Deep Nested Collection Registry",
+        ]
+    ) == 0
+    assert main(
+        [
+            "export-stable-publication-registry-workspace-preset",
+            str(workspace_dir),
+            "--publication-network-preset-path",
+            str(network_preset_path),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(preset_path),
+        ]
+    ) == 0
+
+    loaded = load_stable_publication_registry_workspace_preset(preset_path)
+    nested_network = load_stable_publication_network_preset(loaded["publication_network_preset_path"])
+    assert loaded["publication_network_dir"] is None
+    assert Path(loaded["publication_network_preset_path"]).name == "exported_stable_registry_workspace_deep_nested_network.json"
+    assert nested_network["publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    nested_stack_presets = [load_stable_publication_stack_preset(path) for path in nested_network["stack_preset_paths"]]
+    assert len(nested_stack_presets) == 2
+    assert all(preset["catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve()) for preset in nested_stack_presets)
+    assert all(preset["catalog_workspace_dirs"] == [] for preset in nested_stack_presets)
+
+
 def test_cli_export_stable_publication_registry_workspace_preset(tmp_path):
     workspace_dir = make_stable_publication_registry_workspace_dir(tmp_path)
     preset_path = tmp_path / "exported_stable_registry_workspace.json"
