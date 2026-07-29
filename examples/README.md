@@ -198,6 +198,18 @@ Bootstrap a machine demo publication network from repeated machine preset inputs
 satroot1 bootstrap-machine-demo-publication-network --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --catalog-label "Machine Demo Publication Stack" --label "Machine Demo Publication Network" --output-dir machine_demo_publication_network
 ```
 
+Bootstrap a stable demo publication catalog workspace from repeated stable preset inputs:
+
+```bash
+satroot1 bootstrap-stable-demo-publication-catalog-workspace --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --release-label "Stable Demo Catalog Release Override" --descriptor-index-label "Stable Demo Workspace Descriptor Index" --publication-metadata-catalog-label "Stable Demo Workspace Metadata Catalog" --output-dir stable_demo_publication_catalog_workspace
+```
+
+Bootstrap a machine demo publication catalog workspace from repeated machine preset inputs:
+
+```bash
+satroot1 bootstrap-machine-demo-publication-catalog-workspace --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --release-label "Machine Demo Catalog Release Override" --descriptor-index-label "Machine Demo Workspace Descriptor Index" --publication-metadata-catalog-label "Machine Demo Workspace Metadata Catalog" --output-dir machine_demo_publication_catalog_workspace
+```
+
 Bootstrap a machine collection-backed release catalog publication:
 
 ```bash

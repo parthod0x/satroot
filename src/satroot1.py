@@ -12964,6 +12964,238 @@ def bootstrap_stable_demo_publication_network_from_presets(
     }
 
 
+def bootstrap_machine_demo_publication_catalog_workspace_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_preset_paths = [Path(value).resolve() for value in preset_paths]
+    if not resolved_preset_paths:
+        raise SatRootError("machine demo publication catalog workspace bootstrapping requires at least one preset")
+
+    root_output_dir = Path(output_dir).resolve()
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    source_workspaces_dir = root_output_dir / "catalog_workspace_sources"
+    collection_dir = root_output_dir / "catalog_workspaces"
+    generated_workspace_dirs: list[str] = []
+
+    for preset_path, workspace_name in zip(resolved_preset_paths, _unique_workspace_names(resolved_preset_paths)):
+        machine_preset = load_machine_demo_catalog_preset(preset_path)
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
+            command_name="bootstrap-machine-demo-publication-catalog-workspace",
+            preset_option_name="--preset-json",
+            machine_preset=machine_preset,
+            symbol=None,
+            name=None,
+            service_scope="api-compute",
+            billing_unit="request",
+            consumption_model="burn-on-use",
+            root_id=None,
+            issuer="issuer",
+            tenant_account="tenant_a",
+            worker_account="worker_node",
+            max_supply=None,
+            initial_balance="100000000",
+            tenant_amount="5000000",
+            worker_amount="1200000",
+            worker_burn_amount="200000",
+            intended_use="machine-api-credit",
+            profile_fields=None,
+            rules_hash=None,
+            nonce=None,
+        )
+        release_metadata = _merge_release_metadata_defaults(
+            machine_preset.get("release_metadata"),
+            release_metadata_overrides,
+        )
+        workspace = bootstrap_machine_credit_demo_catalog_workspace(
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
+            bundle_scheme=bundle_scheme,
+            release_scheme=release_scheme,
+            release_key_id=release_key_id,
+            output_dir=source_workspaces_dir / workspace_name,
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+            verifier_only=verifier_only,
+            release_metadata=release_metadata,
+        )
+        generated_workspace_dirs.append(str(Path(workspace["summary_path"]).parent.resolve()))
+
+    catalog_workspace_collection = bootstrap_machine_demo_catalog_workspace_collection(
+        generated_workspace_dirs,
+        output_dir=collection_dir,
+    )
+    publication_catalog_workspace = write_publication_catalog_workspace(
+        artifact_paths=[],
+        discover_under=catalog_workspace_collection["catalog_workspace_dirs"],
+        recursive=True,
+        output_dir=root_output_dir,
+        signature_scheme=bundle_scheme,
+        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+        publication_metadata_key_id=publication_metadata_key_id,
+        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+        descriptor_index_metadata=descriptor_index_metadata,
+        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+    )
+
+    summary = copy.deepcopy(publication_catalog_workspace["summary"])
+    summary["source_machine_catalog_workspace_collection_dir"] = str(collection_dir.resolve())
+    summary["source_machine_catalog_workspace_collection_summary_path"] = catalog_workspace_collection["summary_path"]
+    summary["source_machine_catalog_workspace_collection"] = copy.deepcopy(catalog_workspace_collection["summary"])
+    _write_json_file(root_output_dir / "summary.json", summary)
+
+    publication_catalog_workspace["summary"] = summary
+    publication_catalog_workspace["machine_catalog_workspace_collection_dir"] = str(collection_dir.resolve())
+    publication_catalog_workspace["machine_catalog_workspace_collection"] = catalog_workspace_collection
+    return publication_catalog_workspace
+
+
+def bootstrap_stable_demo_publication_catalog_workspace_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_preset_paths = [Path(value).resolve() for value in preset_paths]
+    if not resolved_preset_paths:
+        raise SatRootError("stable demo publication catalog workspace bootstrapping requires at least one preset")
+
+    root_output_dir = Path(output_dir).resolve()
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    source_workspaces_dir = root_output_dir / "catalog_workspace_sources"
+    collection_dir = root_output_dir / "catalog_workspaces"
+    generated_workspace_dirs: list[str] = []
+
+    for preset_path, workspace_name in zip(resolved_preset_paths, _unique_workspace_names(resolved_preset_paths)):
+        stable_preset = load_stable_demo_catalog_preset(preset_path)
+        stable_inputs = resolve_stable_demo_bootstrap_inputs(
+            command_name="bootstrap-stable-demo-publication-catalog-workspace",
+            preset_option_name="--preset-json",
+            stable_preset=stable_preset,
+            symbol=None,
+            name=None,
+            reference_unit="USD",
+            root_id=None,
+            issuer="issuer",
+            merchant_account="merchant",
+            service_account="api_node",
+            initial_balance="25000000",
+            merchant_amount="1250000",
+            service_amount="250000",
+            merchant_burn_amount="5000",
+            intended_use="invoice-credit-accounting",
+            profile_fields=None,
+            rules_hash=None,
+            nonce=None,
+        )
+        release_metadata = _merge_release_metadata_defaults(
+            stable_preset.get("release_metadata"),
+            release_metadata_overrides,
+        )
+        workspace = bootstrap_stable_reference_demo_catalog_workspace(
+            symbol=stable_inputs["symbol"],
+            name=stable_inputs["name"],
+            bundle_scheme=bundle_scheme,
+            release_scheme=release_scheme,
+            release_key_id=release_key_id,
+            output_dir=source_workspaces_dir / workspace_name,
+            reference_unit=str(stable_inputs["reference_unit"]),
+            root_id=stable_inputs["root_id"],
+            issuer=str(stable_inputs["issuer"]),
+            merchant_account=str(stable_inputs["merchant_account"]),
+            service_account=str(stable_inputs["service_account"]),
+            initial_balance=str(stable_inputs["initial_balance"]),
+            merchant_amount=str(stable_inputs["merchant_amount"]),
+            service_amount=str(stable_inputs["service_amount"]),
+            merchant_burn_amount=str(stable_inputs["merchant_burn_amount"]),
+            intended_use=str(stable_inputs["intended_use"]),
+            profile_fields=stable_inputs["profile_fields"],
+            rules_hash=stable_inputs["rules_hash"],
+            nonce=stable_inputs["nonce"],
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+            verifier_only=verifier_only,
+            release_metadata=release_metadata,
+        )
+        generated_workspace_dirs.append(str(Path(workspace["summary_path"]).parent.resolve()))
+
+    catalog_workspace_collection = bootstrap_stable_demo_catalog_workspace_collection(
+        generated_workspace_dirs,
+        output_dir=collection_dir,
+    )
+    publication_catalog_workspace = write_publication_catalog_workspace(
+        artifact_paths=[],
+        discover_under=catalog_workspace_collection["catalog_workspace_dirs"],
+        recursive=True,
+        output_dir=root_output_dir,
+        signature_scheme=bundle_scheme,
+        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+        publication_metadata_key_id=publication_metadata_key_id,
+        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+        descriptor_index_metadata=descriptor_index_metadata,
+        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+    )
+
+    summary = copy.deepcopy(publication_catalog_workspace["summary"])
+    summary["source_stable_catalog_workspace_collection_dir"] = str(collection_dir.resolve())
+    summary["source_stable_catalog_workspace_collection_summary_path"] = catalog_workspace_collection["summary_path"]
+    summary["source_stable_catalog_workspace_collection"] = copy.deepcopy(catalog_workspace_collection["summary"])
+    _write_json_file(root_output_dir / "summary.json", summary)
+
+    publication_catalog_workspace["summary"] = summary
+    publication_catalog_workspace["stable_catalog_workspace_collection_dir"] = str(collection_dir.resolve())
+    publication_catalog_workspace["stable_catalog_workspace_collection"] = catalog_workspace_collection
+    return publication_catalog_workspace
+
+
 def relocate_publication_network_workspace_summary(publication_network_dir: str | Path) -> Dict[str, Any]:
     network_path, summary = _load_workspace_summary(publication_network_dir, label="publication network")
     validate_publication_network_summary_consistency(summary)
@@ -19990,6 +20222,30 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_catalog_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bootstrap_stable_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
+    bootstrap_stable_demo_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-stable-demo-publication-catalog-workspace", help="Generate multiple SATROOT-STABLE-1 demo catalog workspaces from repeated stable-only presets and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="Stable-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles and publication manifests")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for nested release-manifest signing; defaults to --scheme")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each nested stable catalog release manifest")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--output-dir", required=True, help="Directory where catalog_workspaces/, publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, and summary.json will be written")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated stable catalog bundle indexes")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated stable catalog bundle indexes")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated stable catalog bundle indexes")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-published-at", help="Optional descriptor-index published_at metadata")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
+    bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
+
     bootstrap_stable_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-stable-publication-catalog-workspace", help="Generate a SATROOT-STABLE-1 stable demo catalog workspace and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested stable catalog; it must resolve to SATROOT-STABLE-1 only")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for descriptor and metadata defaults")
@@ -20083,6 +20339,30 @@ def build_cli_parser() -> Any:
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-registry-channel", help="Optional publication-registry channel metadata")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-registry-label", help="Optional human-readable publication-registry label")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-registry-published-at", help="Optional publication-registry published_at metadata")
+
+    bootstrap_machine_demo_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-machine-demo-publication-catalog-workspace", help="Generate multiple SATROOT-MACHINE-1 demo catalog workspaces from repeated machine-only presets and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="Machine-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles and publication manifests")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for nested release-manifest signing; defaults to --scheme")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each nested machine catalog release manifest")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--output-dir", required=True, help="Directory where catalog_workspaces/, publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, and summary.json will be written")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated machine catalog bundle indexes")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated machine catalog bundle indexes")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated machine catalog bundle indexes")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-published-at", help="Optional descriptor-index published_at metadata")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
+    bootstrap_machine_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
 
     bootstrap_machine_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-machine-publication-catalog-workspace", help="Generate a SATROOT-MACHINE-1 machine demo catalog workspace and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested machine catalog; it must resolve to SATROOT-MACHINE-1 only")
@@ -23531,6 +23811,42 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote SATROOT-STABLE-1 publication catalog workspace to {Path(workspace['summary_path']).parent}")
         return 0
 
+    if args.command == "bootstrap-stable-demo-publication-catalog-workspace":
+        descriptor_index_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        })
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+        })
+        workspace = bootstrap_stable_demo_publication_catalog_workspace_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            output_dir=args.output_dir,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+        )
+        print(f"wrote SATROOT-STABLE-1 demo publication catalog workspace to {Path(workspace['summary_path']).parent}")
+        return 0
+
     if args.command == "bootstrap-machine-publication-catalog-workspace":
         catalog_preset_path = None if not args.catalog_preset_json else Path(args.catalog_preset_json).resolve()
         machine_preset = load_machine_demo_catalog_preset(catalog_preset_path) if catalog_preset_path is not None else None
@@ -23623,6 +23939,42 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             recursive=(preset or {}).get("recursive", True),
         )
         print(f"wrote SATROOT-MACHINE-1 publication catalog workspace to {Path(workspace['summary_path']).parent}")
+        return 0
+
+    if args.command == "bootstrap-machine-demo-publication-catalog-workspace":
+        descriptor_index_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        })
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+        })
+        workspace = bootstrap_machine_demo_publication_catalog_workspace_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            output_dir=args.output_dir,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+        )
+        print(f"wrote SATROOT-MACHINE-1 demo publication catalog workspace to {Path(workspace['summary_path']).parent}")
         return 0
 
     if args.command == "bootstrap-stable-publication-registry-workspace":

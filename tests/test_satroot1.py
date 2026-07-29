@@ -12328,8 +12328,8 @@ def test_cli_publish_publication_catalog_workspace_from_existing_publications(tm
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["source_publication_descriptor_index_dir"] == str((catalog_workspace_dir / "publication_descriptor_index").resolve())
     assert summary["source_publication_metadata_catalog_dir"] == str((catalog_workspace_dir / "publication_metadata_catalog").resolve())
-    assert summary["artifact_count"] == 12
-    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
     assert summary["publication_descriptor_index"]["index"]["label"] == "Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
     assert all(
@@ -13741,8 +13741,8 @@ def test_cli_bootstrap_publication_registry_workspace_from_publication_network(t
 
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["source_publication_network_dir"] == str(network_dir.resolve())
-    assert summary["artifact_count"] == 12
-    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
     assert summary["publication_descriptor_index"]["index"]["label"] == "Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
     assert summary["publication_registry"]["index"]["label"] == "Workspace Publication Registry"
@@ -14296,8 +14296,8 @@ def test_cli_bootstrap_publication_catalog_workspace(tmp_path, capsys):
     assert "wrote SATROOT publication catalog workspace to" in captured.out
 
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
-    assert summary["artifact_count"] == 12
-    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
     assert summary["publication_descriptor_index"]["index"]["label"] == "Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
     assert (output_dir / "publication_descriptor_index" / "publication_descriptor_index_manifest.json").is_file()
@@ -14348,8 +14348,8 @@ def test_cli_bootstrap_publication_catalog_workspace_with_inventory_json(tmp_pat
     ) == 0
 
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
-    assert summary["artifact_count"] == 12
-    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
     assert summary["publication_descriptor_index"]["index"]["label"] == "Inventory Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Inventory Workspace Metadata Catalog"
     assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
@@ -18310,8 +18310,8 @@ def test_cli_bootstrap_publication_catalog_workspace_from_exported_preset_round_
     assert "wrote SATROOT publication catalog workspace to" in captured.out
 
     summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
-    assert summary["artifact_count"] == 12
-    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
     assert summary["publication_descriptor_index"]["index"]["label"] == "Roundtrip Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Workspace Metadata Catalog"
     assert main(["publication-catalog-workspace-lint", str(roundtrip_dir)]) == 0
@@ -18509,8 +18509,8 @@ def test_cli_bootstrap_publication_catalog_workspace_with_collection_preset(tmp_
     ) == 0
 
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
-    assert summary["artifact_count"] == 12
-    assert summary["publication_metadata_bundle_count"] == 12
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
     assert summary["publication_descriptor_index"]["index"]["label"] == "Collection Preset Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Collection Preset Metadata Catalog"
     assert summary["source_publication_metadata_bundle_collection_dir"] == str(collection_dir.resolve())
@@ -18726,6 +18726,106 @@ def test_cli_bootstrap_machine_publication_catalog_workspace_from_exported_prese
     capsys.readouterr()
 
 
+def test_cli_bootstrap_machine_demo_publication_catalog_workspace_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "machine_demo_catalog_alpha.json"
+    preset_beta = tmp_path / "machine_demo_catalog_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPUBCAT1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Publication Catalog Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "alpha-batch",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "alpha-publication-catalog",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Machine Publication Catalog Alpha Release",
+                "published_at": "2026-07-25T10:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPUBCAT2"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Publication Catalog Beta"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "beta-batch",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "beta-publication-catalog",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Machine Publication Catalog Beta Release",
+                "published_at": "2026-07-26T10:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_demo_publication_catalog_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--release-label",
+            "Machine Demo Catalog Release Override",
+            "--descriptor-index-label",
+            "Machine Demo Workspace Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Demo Workspace Metadata Catalog",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    nested_bundle_index = json.loads(
+        (output_dir / "catalog_workspaces" / "machine_demo_catalog_alpha" / "release" / "bundle_index.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert summary["source_machine_catalog_workspace_collection_dir"] == str((output_dir / "catalog_workspaces").resolve())
+    assert summary["source_machine_catalog_workspace_collection"]["workspace_count"] == 2
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Machine Demo Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Machine Demo Workspace Metadata Catalog"
+    assert nested_bundle_index["release"]["label"] == "Machine Demo Catalog Release Override"
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_machine_publication_catalog_workspace_preset_preserves_collection_source(tmp_path, capsys):
     staged = stage_example_json_tree(
         tmp_path,
@@ -18909,6 +19009,102 @@ def test_cli_bootstrap_stable_publication_catalog_workspace_from_exported_preset
     assert summary["publication_descriptor_index"]["index"]["label"] == "Stable Workspace Descriptor Index"
     assert summary["publication_metadata_catalog"]["index"]["label"] == "Roundtrip Stable Metadata Catalog"
     assert main(["publication-catalog-workspace-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_demo_publication_catalog_workspace_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "stable_demo_catalog_alpha.json"
+    preset_beta = tmp_path / "stable_demo_catalog_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPUBCAT1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Publication Catalog Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "EUR",
+                    "intended_use": "alpha-stable-publication-catalog",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Stable Publication Catalog Alpha Release",
+                "published_at": "2026-07-25T11:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPUBCAT2"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Publication Catalog Beta"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "GBP",
+                    "intended_use": "beta-stable-publication-catalog",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Stable Publication Catalog Beta Release",
+                "published_at": "2026-07-26T11:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_demo_publication_catalog_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-publication-catalog-workspace",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--release-label",
+            "Stable Demo Catalog Release Override",
+            "--descriptor-index-label",
+            "Stable Demo Workspace Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Stable Demo Workspace Metadata Catalog",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo publication catalog workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    nested_bundle_index = json.loads(
+        (output_dir / "catalog_workspaces" / "stable_demo_catalog_alpha" / "release" / "bundle_index.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert summary["source_stable_catalog_workspace_collection_dir"] == str((output_dir / "catalog_workspaces").resolve())
+    assert summary["source_stable_catalog_workspace_collection"]["workspace_count"] == 2
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Stable Demo Workspace Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Stable Demo Workspace Metadata Catalog"
+    assert nested_bundle_index["release"]["label"] == "Stable Demo Catalog Release Override"
+    assert main(["publication-catalog-workspace-lint", str(output_dir)]) == 0
     capsys.readouterr()
 
 
