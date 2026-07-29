@@ -37188,6 +37188,96 @@ def test_cli_bootstrap_machine_demo_release_with_preset_json(tmp_path, capsys):
     assert summary["release"] == bundle_index["release"]
 
 
+def test_cli_bootstrap_machine_demo_release_collection_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "machine_alpha.json"
+    preset_beta = tmp_path / "machine_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APICOLL01"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Collection Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "alpha-compute",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "alpha-credit",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Machine Alpha Release",
+                "published_at": "2026-07-11T08:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "APICOLL02"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Collection Beta"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "beta-compute",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "beta-credit",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Machine Beta Release",
+                "published_at": "2026-07-12T08:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_release_collection_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-release-collection",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--label",
+            "Collection Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo release collection to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    collection_summary = json.loads(
+        (output_dir / "release_collection" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["profile"] == "SATROOT-MACHINE-1"
+    assert summary["generated_release_count"] == 2
+    assert summary["release_collection"]["release_count"] == 2
+    assert [entry["symbol"] for entry in summary["generated_releases"]] == ["APICOLL01", "APICOLL02"]
+    assert [entry["release_name"] for entry in collection_summary["releases"]] == ["machine_alpha", "machine_beta"]
+    assert collection_summary["release_count"] == 2
+    assert collection_summary["releases"][0]["bundle_symbols"] == ["APICOLL01"]
+    assert collection_summary["releases"][0]["release"]["label"] == "Collection Override"
+    assert collection_summary["releases"][1]["bundle_symbols"] == ["APICOLL02"]
+    assert (Path(summary["generated_releases"][0]["workspace_dir"]) / "bundle" / "bundle_manifest.json").exists()
+    assert (Path(summary["generated_releases"][1]["workspace_dir"]) / "release" / "release_manifest.json").exists()
+
+
 def test_cli_bootstrap_stable_demo_catalog_hmac(tmp_path, capsys):
     output_dir = tmp_path / "stable_catalog_workspace"
 
@@ -38091,6 +38181,92 @@ def test_cli_bootstrap_stable_demo_release_with_preset_json(tmp_path, capsys):
     )
     assert summary["bundle_count"] == 1
     assert summary["release"] == bundle_index["release"]
+
+
+def test_cli_bootstrap_stable_demo_release_collection_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "stable_alpha.json"
+    preset_beta = tmp_path / "stable_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "USDCOLL01"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Collection Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "EUR",
+                    "intended_use": "alpha-ledger",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Stable Alpha Release",
+                "published_at": "2026-07-13T07:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "USDCOLL02"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Collection Beta"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "GBP",
+                    "intended_use": "beta-ledger",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Stable Beta Release",
+                "published_at": "2026-07-14T07:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_release_collection_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-release-collection",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--label",
+            "Stable Collection Override",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo release collection to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    collection_summary = json.loads(
+        (output_dir / "release_collection" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["profile"] == "SATROOT-STABLE-1"
+    assert summary["generated_release_count"] == 2
+    assert summary["release_collection"]["release_count"] == 2
+    assert [entry["symbol"] for entry in summary["generated_releases"]] == ["USDCOLL01", "USDCOLL02"]
+    assert [entry["release_name"] for entry in collection_summary["releases"]] == ["stable_alpha", "stable_beta"]
+    assert collection_summary["release_count"] == 2
+    assert collection_summary["releases"][0]["bundle_symbols"] == ["USDCOLL01"]
+    assert collection_summary["releases"][0]["release"]["label"] == "Stable Collection Override"
+    assert collection_summary["releases"][1]["bundle_symbols"] == ["USDCOLL02"]
+    assert (Path(summary["generated_releases"][0]["workspace_dir"]) / "bundle" / "bundle_manifest.json").exists()
+    assert (Path(summary["generated_releases"][1]["workspace_dir"]) / "release" / "release_manifest.json").exists()
 
 
 def test_cli_bootstrap_machine_demo_release_hmac(tmp_path, capsys):

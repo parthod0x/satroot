@@ -1957,6 +1957,17 @@ def _unique_workspace_names(paths: Sequence[str | Path]) -> list[str]:
     return names
 
 
+def _unique_release_collection_names(paths: Sequence[str | Path]) -> list[str]:
+    normalized_paths: list[Path] = []
+    for value in paths:
+        path = Path(value)
+        if path.stem == "release" and path.parent.name:
+            normalized_paths.append(path.parent)
+        else:
+            normalized_paths.append(path)
+    return _unique_workspace_names(normalized_paths)
+
+
 def _copy_workspace_directory(source_dir: str | Path, target_dir: str | Path, *, label: str) -> Path:
     source_path = Path(source_dir).resolve()
     target_path = Path(target_dir).resolve()
@@ -3558,7 +3569,7 @@ def bootstrap_release_collection(
     output_path = Path(output_dir).resolve()
     output_path.mkdir(parents=True, exist_ok=True)
 
-    release_names = _unique_workspace_names(resolved_release_dirs)
+    release_names = _unique_release_collection_names(resolved_release_dirs)
     source_release_dir_entries: list[str] = []
     copied_release_dir_entries: list[str] = []
     releases: list[Dict[str, Any]] = []
@@ -11044,6 +11055,297 @@ def bootstrap_machine_credit_demo_release(
         "release_dir": str(release_dir.resolve()),
         "release_publication": published,
         "release_material": published["release_material"],
+    }
+
+
+def _allocate_collection_member_dir_name(
+    preset_path: Path,
+    *,
+    allocated: set[str],
+    fallback_prefix: str,
+) -> str:
+    base_name = preset_path.stem or fallback_prefix
+    candidate = base_name
+    duplicate_index = 2
+    while candidate in allocated:
+        candidate = f"{base_name}-{duplicate_index}"
+        duplicate_index += 1
+    allocated.add(candidate)
+    return candidate
+
+
+def bootstrap_machine_demo_release_collection_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    service_scope: str = "api-compute",
+    billing_unit: str = "request",
+    consumption_model: str = "burn-on-use",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    tenant_account: str = "tenant_a",
+    worker_account: str = "worker_node",
+    max_supply: Optional[str] = None,
+    initial_balance: str = "100000000",
+    tenant_amount: str = "5000000",
+    worker_amount: str = "1200000",
+    worker_burn_amount: str = "200000",
+    intended_use: str = "machine-api-credit",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    generated_releases_dir = root_output_dir / "generated_releases"
+    collection_output_dir = root_output_dir / "release_collection"
+    generated_releases: List[Dict[str, Any]] = []
+    generated_release_dirs: List[str] = []
+    allocated_names: set[str] = set()
+
+    for index, preset_path_value in enumerate(preset_paths, start=1):
+        preset_path = Path(preset_path_value).resolve()
+        machine_preset = load_machine_demo_catalog_preset(preset_path)
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
+            command_name="bootstrap-machine-demo-release-collection",
+            preset_option_name="--preset-json",
+            machine_preset=machine_preset,
+            symbol=symbol,
+            name=name,
+            service_scope=service_scope,
+            billing_unit=billing_unit,
+            consumption_model=consumption_model,
+            root_id=root_id,
+            issuer=issuer,
+            tenant_account=tenant_account,
+            worker_account=worker_account,
+            max_supply=max_supply,
+            initial_balance=initial_balance,
+            tenant_amount=tenant_amount,
+            worker_amount=worker_amount,
+            worker_burn_amount=worker_burn_amount,
+            intended_use=intended_use,
+            profile_fields=None,
+            rules_hash=rules_hash,
+            nonce=nonce,
+        )
+        release_metadata = _merge_release_metadata_defaults(
+            machine_preset.get("release_metadata"),
+            release_metadata_overrides,
+        )
+        member_name = _allocate_collection_member_dir_name(
+            preset_path,
+            allocated=allocated_names,
+            fallback_prefix=f"machine-demo-release-{index}",
+        )
+        release_workspace_dir = generated_releases_dir / member_name
+        released = bootstrap_machine_credit_demo_release(
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
+            bundle_scheme=bundle_scheme,
+            release_scheme=release_scheme,
+            release_key_id=release_key_id,
+            output_dir=release_workspace_dir,
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+            verifier_only=verifier_only,
+            release_metadata=release_metadata,
+        )
+        generated_release_dirs.append(released["release_dir"])
+        generated_releases.append(
+            {
+                "preset_path": str(preset_path),
+                "workspace_dir": str(release_workspace_dir.resolve()),
+                "bundle_dir": released["bundle_dir"],
+                "release_dir": released["release_dir"],
+                "symbol": machine_inputs["symbol"],
+                "name": machine_inputs["name"],
+                "release_metadata": release_metadata,
+            }
+        )
+
+    collection = bootstrap_machine_release_collection(
+        generated_release_dirs,
+        output_dir=collection_output_dir,
+    )
+    summary = {
+        "profile": MACHINE_DEMO_CATALOG_PROFILE,
+        "generated_release_count": len(generated_releases),
+        "generated_releases_dir": str(generated_releases_dir.resolve()),
+        "generated_releases": generated_releases,
+        "release_collection_dir": str(collection_output_dir.resolve()),
+        "release_collection_summary_path": collection["summary_path"],
+        "release_collection": copy.deepcopy(collection["summary"]),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "generated_releases": generated_releases,
+        "generated_release_dirs": generated_release_dirs,
+        "release_collection_dir": str(collection_output_dir.resolve()),
+        "collection": collection,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
+def bootstrap_stable_demo_release_collection_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    reference_unit: str = "USD",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    merchant_account: str = "merchant",
+    service_account: str = "api_node",
+    initial_balance: str = "25000000",
+    merchant_amount: str = "1250000",
+    service_amount: str = "250000",
+    merchant_burn_amount: str = "5000",
+    intended_use: str = "invoice-credit-accounting",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    generated_releases_dir = root_output_dir / "generated_releases"
+    collection_output_dir = root_output_dir / "release_collection"
+    generated_releases: List[Dict[str, Any]] = []
+    generated_release_dirs: List[str] = []
+    allocated_names: set[str] = set()
+
+    for index, preset_path_value in enumerate(preset_paths, start=1):
+        preset_path = Path(preset_path_value).resolve()
+        stable_preset = load_stable_demo_catalog_preset(preset_path)
+        stable_inputs = resolve_stable_demo_bootstrap_inputs(
+            command_name="bootstrap-stable-demo-release-collection",
+            preset_option_name="--preset-json",
+            stable_preset=stable_preset,
+            symbol=symbol,
+            name=name,
+            reference_unit=reference_unit,
+            root_id=root_id,
+            issuer=issuer,
+            merchant_account=merchant_account,
+            service_account=service_account,
+            initial_balance=initial_balance,
+            merchant_amount=merchant_amount,
+            service_amount=service_amount,
+            merchant_burn_amount=merchant_burn_amount,
+            intended_use=intended_use,
+            profile_fields=None,
+            rules_hash=rules_hash,
+            nonce=nonce,
+        )
+        release_metadata = _merge_release_metadata_defaults(
+            stable_preset.get("release_metadata"),
+            release_metadata_overrides,
+        )
+        member_name = _allocate_collection_member_dir_name(
+            preset_path,
+            allocated=allocated_names,
+            fallback_prefix=f"stable-demo-release-{index}",
+        )
+        release_workspace_dir = generated_releases_dir / member_name
+        released = bootstrap_stable_reference_demo_release(
+            symbol=stable_inputs["symbol"],
+            name=stable_inputs["name"],
+            bundle_scheme=bundle_scheme,
+            release_scheme=release_scheme,
+            release_key_id=release_key_id,
+            output_dir=release_workspace_dir,
+            reference_unit=str(stable_inputs["reference_unit"]),
+            root_id=stable_inputs["root_id"],
+            issuer=str(stable_inputs["issuer"]),
+            merchant_account=str(stable_inputs["merchant_account"]),
+            service_account=str(stable_inputs["service_account"]),
+            initial_balance=str(stable_inputs["initial_balance"]),
+            merchant_amount=str(stable_inputs["merchant_amount"]),
+            service_amount=str(stable_inputs["service_amount"]),
+            merchant_burn_amount=str(stable_inputs["merchant_burn_amount"]),
+            intended_use=str(stable_inputs["intended_use"]),
+            profile_fields=stable_inputs["profile_fields"],
+            rules_hash=stable_inputs["rules_hash"],
+            nonce=stable_inputs["nonce"],
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+            verifier_only=verifier_only,
+            release_metadata=release_metadata,
+        )
+        generated_release_dirs.append(released["release_dir"])
+        generated_releases.append(
+            {
+                "preset_path": str(preset_path),
+                "workspace_dir": str(release_workspace_dir.resolve()),
+                "bundle_dir": released["bundle_dir"],
+                "release_dir": released["release_dir"],
+                "symbol": stable_inputs["symbol"],
+                "name": stable_inputs["name"],
+                "release_metadata": release_metadata,
+            }
+        )
+
+    collection = bootstrap_stable_release_collection(
+        generated_release_dirs,
+        output_dir=collection_output_dir,
+    )
+    summary = {
+        "profile": STABLE_DEMO_CATALOG_PROFILE,
+        "generated_release_count": len(generated_releases),
+        "generated_releases_dir": str(generated_releases_dir.resolve()),
+        "generated_releases": generated_releases,
+        "release_collection_dir": str(collection_output_dir.resolve()),
+        "release_collection_summary_path": collection["summary_path"],
+        "release_collection": copy.deepcopy(collection["summary"]),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "generated_releases": generated_releases,
+        "generated_release_dirs": generated_release_dirs,
+        "release_collection_dir": str(collection_output_dir.resolve()),
+        "collection": collection,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
     }
 
 
@@ -18895,6 +19197,35 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bootstrap_stable_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
+    bootstrap_stable_demo_release_collection_parser = subparsers.add_parser("bootstrap-stable-demo-release-collection", help="Generate multiple SATROOT-STABLE-1 demo releases from repeated presets and package them into a release collection")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple stable demo releases")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--symbol", help="Optional shared stable symbol override when a preset omits it")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--name", help="Optional shared stable name override when a preset omits it")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every release manifest")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--output-dir", required=True, help="Directory where generated releases, release_collection/, and summary.json will be written")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--reference-unit", default="USD", help="External reference unit; defaults to USD")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and distribution events")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--merchant-account", default="merchant", help="Merchant account for the first reference distribution leg")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--service-account", default="api_node", help="Service account for the second reference distribution leg")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--initial-balance", default="25000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--merchant-amount", default="1250000", help="Amount transferred from the issuer to the merchant account")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--service-amount", default="250000", help="Amount transferred from the issuer to the service account")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--merchant-burn-amount", default="5000", help="Optional merchant-side burn amount; use 0 to skip the burn event")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--intended-use", default="invoice-credit-accounting", help="Reference-only intended_use metadata")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_stable_demo_release_collection_parser.add_argument("--published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+
     bootstrap_machine_demo_bundle_parser = subparsers.add_parser("bootstrap-machine-demo-bundle", help="Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle from profile parameters")
     bootstrap_machine_demo_bundle_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-MACHINE-1 only")
     bootstrap_machine_demo_bundle_parser.add_argument("--symbol", help="Asset symbol for the machine-credit demo bundle; required when --preset-json does not provide it")
@@ -18953,6 +19284,38 @@ def build_cli_parser() -> Any:
     bootstrap_machine_demo_release_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
     bootstrap_machine_demo_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bootstrap_machine_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+
+    bootstrap_machine_demo_release_collection_parser = subparsers.add_parser("bootstrap-machine-demo-release-collection", help="Generate multiple SATROOT-MACHINE-1 demo releases from repeated presets and package them into a release collection")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple machine demo releases")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--symbol", help="Optional shared machine symbol override when a preset omits it")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--name", help="Optional shared machine name override when a preset omits it")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every release manifest")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--output-dir", required=True, help="Directory where generated releases, release_collection/, and summary.json will be written")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--service-scope", default="api-compute", help="Compact machine service scope metadata")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--billing-unit", default="request", help="Compact machine billing unit metadata")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--consumption-model", default="burn-on-use", help="Compact machine consumption model metadata")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and tenant allocation events")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--tenant-account", default="tenant_a", help="Tenant account receiving the primary machine-credit allocation")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--worker-account", default="worker_node", help="Machine worker account receiving consumable execution credits")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--max-supply", help="Optional explicit max_supply override; defaults to the initial issued balance")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--initial-balance", default="100000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--tenant-amount", default="5000000", help="Amount transferred from the issuer to the tenant account")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--worker-amount", default="1200000", help="Amount transferred from the tenant account to the worker account")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--worker-burn-amount", default="200000", help="Optional worker-side burn amount; use 0 to skip the burn event")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--intended-use", default="machine-api-credit", help="Compact machine intended_use metadata")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_machine_demo_release_collection_parser.add_argument("--published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
 
     bootstrap_machine_demo_catalog_parser = subparsers.add_parser("bootstrap-machine-demo-catalog", help="Generate a SATROOT-MACHINE-1 machine-credit demo catalog workspace with one signed bundle plus signed release directory")
     bootstrap_machine_demo_catalog_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-MACHINE-1 only")
@@ -21913,6 +22276,44 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote SATROOT-STABLE-1 demo release to {Path(released['release_dir'])}")
         return 0
 
+    if args.command == "bootstrap-stable-demo-release-collection":
+        generated = bootstrap_stable_demo_release_collection_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            symbol=args.symbol,
+            name=args.name,
+            reference_unit=args.reference_unit,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            merchant_account=args.merchant_account,
+            service_account=args.service_account,
+            initial_balance=args.initial_balance,
+            merchant_amount=args.merchant_amount,
+            service_amount=args.service_amount,
+            merchant_burn_amount=args.merchant_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.channel,
+                "label": args.label,
+                "published_at": args.published_at,
+            },
+        )
+        print(
+            "wrote SATROOT-STABLE-1 demo release collection to "
+            f"{Path(generated['release_collection_dir'])}"
+        )
+        return 0
+
     if args.command == "bootstrap-machine-demo-bundle":
         if args.verifier_only and args.scheme != "ed25519":
             raise SatRootError("--verifier-only is only supported for ed25519 bundles")
@@ -22037,6 +22438,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_metadata=release_metadata,
         )
         print(f"wrote SATROOT-MACHINE-1 demo release to {Path(released['release_dir'])}")
+        return 0
+
+    if args.command == "bootstrap-machine-demo-release-collection":
+        generated = bootstrap_machine_demo_release_collection_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            symbol=args.symbol,
+            name=args.name,
+            service_scope=args.service_scope,
+            billing_unit=args.billing_unit,
+            consumption_model=args.consumption_model,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            tenant_account=args.tenant_account,
+            worker_account=args.worker_account,
+            max_supply=args.max_supply,
+            initial_balance=args.initial_balance,
+            tenant_amount=args.tenant_amount,
+            worker_amount=args.worker_amount,
+            worker_burn_amount=args.worker_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.channel,
+                "label": args.label,
+                "published_at": args.published_at,
+            },
+        )
+        print(
+            "wrote SATROOT-MACHINE-1 demo release collection to "
+            f"{Path(generated['release_collection_dir'])}"
+        )
         return 0
 
     if args.command == "bootstrap-machine-demo-catalog":
