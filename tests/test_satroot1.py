@@ -19108,6 +19108,290 @@ def test_cli_bootstrap_stable_demo_publication_catalog_workspace_from_presets(tm
     capsys.readouterr()
 
 
+def test_cli_bootstrap_machine_demo_publication_registry_workspace_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "machine_demo_registry_alpha.json"
+    preset_beta = tmp_path / "machine_demo_registry_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPUBREG1"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Publication Registry Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "registry-alpha",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "alpha-publication-registry",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Machine Publication Registry Alpha Release",
+                "published_at": "2026-07-27T10:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MPUBREG2"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Publication Registry Beta"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "registry-beta",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "beta-publication-registry",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Machine Publication Registry Beta Release",
+                "published_at": "2026-07-28T10:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_demo_publication_registry_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-publication-registry-workspace",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--release-label",
+            "Machine Demo Registry Release Override",
+            "--release-catalog-label",
+            "Machine Demo Registry Publication Stack",
+            "--release-catalog-index-label",
+            "Machine Demo Registry Publication Network",
+            "--descriptor-index-label",
+            "Machine Demo Registry Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Machine Demo Registry Metadata Catalog",
+            "--publication-registry-label",
+            "Machine Demo Publication Registry",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-MACHINE-1 demo publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    nested_bundle_index = json.loads(
+        (
+            output_dir
+            / "publication_catalog_workspace_source"
+            / "catalog_workspaces"
+            / "machine_demo_registry_alpha"
+            / "release"
+            / "bundle_index.json"
+        ).read_text(encoding="utf-8")
+    )
+    network_index = json.loads(
+        (
+            output_dir
+            / "publication_network_source"
+            / "release_catalog_index"
+            / "release_catalog_index.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert summary["source_machine_publication_catalog_workspace_dir"] == str(
+        (output_dir / "publication_catalog_workspace_source").resolve()
+    )
+    assert summary["source_publication_catalog_workspace_dir"] == str(
+        (output_dir / "publication_catalog_workspace_source").resolve()
+    )
+    assert summary["source_machine_catalog_workspace_collection_dir"] == str(
+        (output_dir / "publication_catalog_workspace_source" / "catalog_workspaces").resolve()
+    )
+    assert summary["source_publication_network_dir"] == str((output_dir / "publication_network_source").resolve())
+    assert summary["publication_network_dir"] == str((output_dir / "publication_network").resolve())
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Machine Demo Registry Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Machine Demo Registry Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Machine Demo Publication Registry"
+    assert nested_bundle_index["release"]["label"] == "Machine Demo Registry Release Override"
+    assert network_index["index"]["label"] == "Machine Demo Registry Publication Network"
+
+    secrets = json.loads((output_dir / "publication_registry" / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry" / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"]["label"] == "Machine Demo Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
+def test_cli_bootstrap_stable_demo_publication_registry_workspace_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "stable_demo_registry_alpha.json"
+    preset_beta = tmp_path / "stable_demo_registry_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPUBREG1"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Publication Registry Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "EUR",
+                    "intended_use": "alpha-stable-publication-registry",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Stable Publication Registry Alpha Release",
+                "published_at": "2026-07-27T11:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SPUBREG2"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Publication Registry Beta"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "GBP",
+                    "intended_use": "beta-stable-publication-registry",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Stable Publication Registry Beta Release",
+                "published_at": "2026-07-28T11:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_demo_publication_registry_workspace"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-publication-registry-workspace",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--publication-descriptor-index-key-id",
+            "descriptor-key",
+            "--publication-metadata-key-id",
+            "metadata-key",
+            "--publication-metadata-catalog-key-id",
+            "catalog-key",
+            "--publication-registry-key-id",
+            "registry-key",
+            "--release-label",
+            "Stable Demo Registry Release Override",
+            "--release-catalog-label",
+            "Stable Demo Registry Publication Stack",
+            "--release-catalog-index-label",
+            "Stable Demo Registry Publication Network",
+            "--descriptor-index-label",
+            "Stable Demo Registry Descriptor Index",
+            "--publication-metadata-catalog-label",
+            "Stable Demo Registry Metadata Catalog",
+            "--publication-registry-label",
+            "Stable Demo Publication Registry",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote SATROOT-STABLE-1 demo publication registry workspace to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    nested_bundle_index = json.loads(
+        (
+            output_dir
+            / "publication_catalog_workspace_source"
+            / "catalog_workspaces"
+            / "stable_demo_registry_alpha"
+            / "release"
+            / "bundle_index.json"
+        ).read_text(encoding="utf-8")
+    )
+    network_index = json.loads(
+        (
+            output_dir
+            / "publication_network_source"
+            / "release_catalog_index"
+            / "release_catalog_index.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert summary["source_stable_publication_catalog_workspace_dir"] == str(
+        (output_dir / "publication_catalog_workspace_source").resolve()
+    )
+    assert summary["source_publication_catalog_workspace_dir"] == str(
+        (output_dir / "publication_catalog_workspace_source").resolve()
+    )
+    assert summary["source_stable_catalog_workspace_collection_dir"] == str(
+        (output_dir / "publication_catalog_workspace_source" / "catalog_workspaces").resolve()
+    )
+    assert summary["source_publication_network_dir"] == str((output_dir / "publication_network_source").resolve())
+    assert summary["publication_network_dir"] == str((output_dir / "publication_network").resolve())
+    assert summary["artifact_count"] == 6
+    assert summary["publication_metadata_bundle_count"] == 6
+    assert summary["publication_descriptor_index"]["index"]["label"] == "Stable Demo Registry Descriptor Index"
+    assert summary["publication_metadata_catalog"]["index"]["label"] == "Stable Demo Registry Metadata Catalog"
+    assert summary["publication_registry"]["index"]["label"] == "Stable Demo Publication Registry"
+    assert nested_bundle_index["release"]["label"] == "Stable Demo Registry Release Override"
+    assert network_index["index"]["label"] == "Stable Demo Registry Publication Network"
+
+    secrets = json.loads((output_dir / "publication_registry" / "publication_registry_secrets.json").read_text(encoding="utf-8"))
+    verified = verify_signed_publication_registry_manifest(
+        output_dir / "publication_registry" / "publication_registry_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["component_count"] == 3
+    assert verified["index"]["label"] == "Stable Demo Publication Registry"
+    assert main(["publication-registry-workspace-lint", str(output_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_export_stable_publication_catalog_workspace_preset_preserves_collection_source(tmp_path, capsys):
     staged = stage_example_json_tree(
         tmp_path,

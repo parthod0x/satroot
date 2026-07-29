@@ -210,6 +210,18 @@ Bootstrap a machine demo publication catalog workspace from repeated machine pre
 satroot1 bootstrap-machine-demo-publication-catalog-workspace --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --release-label "Machine Demo Catalog Release Override" --descriptor-index-label "Machine Demo Workspace Descriptor Index" --publication-metadata-catalog-label "Machine Demo Workspace Metadata Catalog" --output-dir machine_demo_publication_catalog_workspace
 ```
 
+Bootstrap a stable demo publication registry workspace from repeated stable preset inputs:
+
+```bash
+satroot1 bootstrap-stable-demo-publication-registry-workspace --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --release-label "Stable Demo Registry Release Override" --release-catalog-label "Stable Demo Registry Publication Stack" --release-catalog-index-label "Stable Demo Registry Publication Network" --descriptor-index-label "Stable Demo Registry Descriptor Index" --publication-metadata-catalog-label "Stable Demo Registry Metadata Catalog" --publication-registry-label "Stable Demo Publication Registry" --output-dir stable_demo_publication_registry_workspace
+```
+
+Bootstrap a machine demo publication registry workspace from repeated machine preset inputs:
+
+```bash
+satroot1 bootstrap-machine-demo-publication-registry-workspace --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --release-label "Machine Demo Registry Release Override" --release-catalog-label "Machine Demo Registry Publication Stack" --release-catalog-index-label "Machine Demo Registry Publication Network" --descriptor-index-label "Machine Demo Registry Descriptor Index" --publication-metadata-catalog-label "Machine Demo Registry Metadata Catalog" --publication-registry-label "Machine Demo Publication Registry" --output-dir machine_demo_publication_registry_workspace
+```
+
 Bootstrap a machine collection-backed release catalog publication:
 
 ```bash
