@@ -888,6 +888,150 @@ def bootstrap_example_collection_backed_publication_network_collection(
     return output_dir, stack_collection_dir
 
 
+def bootstrap_example_nested_collection_backed_publication_network(
+    tmp_path: Path, *, profile: str
+) -> tuple[Path, Path, Path]:
+    stack_command = {
+        "generic": "bootstrap-publication-stack",
+        "machine": "bootstrap-machine-publication-stack",
+        "stable": "bootstrap-stable-publication-stack",
+    }[profile]
+    stack_collection_command = {
+        "generic": "bootstrap-publication-stack-collection",
+        "machine": "bootstrap-machine-publication-stack-collection",
+        "stable": "bootstrap-stable-publication-stack-collection",
+    }[profile]
+    network_command = {
+        "generic": "bootstrap-publication-network",
+        "machine": "bootstrap-machine-publication-network",
+        "stable": "bootstrap-stable-publication-network",
+    }[profile]
+    channel = {
+        "generic": "network",
+        "machine": "machine",
+        "stable": "stable",
+    }[profile]
+
+    catalog_collection_dir = tmp_path / f"{profile}_catalog_workspace_collection"
+    stack_collection_dir = tmp_path / f"{profile}_publication_stack_collection"
+    network_dir = tmp_path / f"{profile}_nested_collection_backed_publication_network"
+    stack_alpha_preset_path = tmp_path / f"{profile}_stack_alpha_collection_backed.json"
+    stack_beta_preset_path = tmp_path / f"{profile}_stack_beta_collection_backed.json"
+    stack_alpha_dir = tmp_path / f"{profile}_publication_stack_alpha"
+    stack_beta_dir = tmp_path / f"{profile}_publication_stack_beta"
+    network_preset_path = tmp_path / f"{profile}_nested_collection_backed_publication_network.json"
+
+    bootstrap_example_demo_catalog_workspace_collection(tmp_path, profile=profile, output_dir=catalog_collection_dir)
+
+    write_json(
+        stack_alpha_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_workspace_collection_dir": str(catalog_collection_dir.relative_to(tmp_path)),
+            "release_catalog": {
+                "channel": channel,
+                "label": f"{profile.title()} Collection Stack Alpha",
+                "published_at": "2026-07-29T02:00:00Z",
+            },
+        },
+    )
+    write_json(
+        stack_beta_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-STACK-PRESET",
+            "version": "0.1",
+            "catalog_workspace_collection_dir": str(catalog_collection_dir.relative_to(tmp_path)),
+            "release_catalog": {
+                "channel": channel,
+                "label": f"{profile.title()} Collection Stack Beta",
+                "published_at": "2026-07-29T02:10:00Z",
+            },
+        },
+    )
+
+    assert main(
+        [
+            stack_command,
+            "--stack-preset-json",
+            str(stack_alpha_preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_alpha_dir),
+            "--label",
+            f"{profile.title()} Collection Stack Alpha Override",
+        ]
+    ) == 0
+    assert main(
+        [
+            stack_command,
+            "--stack-preset-json",
+            str(stack_beta_preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--output-dir",
+            str(stack_beta_dir),
+            "--label",
+            f"{profile.title()} Collection Stack Beta Override",
+        ]
+    ) == 0
+
+    assert main(
+        [
+            stack_collection_command,
+            str(stack_alpha_dir),
+            str(stack_beta_dir),
+            "--output-dir",
+            str(stack_collection_dir),
+        ]
+    ) == 0
+
+    write_json(
+        network_preset_path,
+        {
+            "type": "SATROOT-PUBLICATION-NETWORK-PRESET",
+            "version": "0.1",
+            "publication_stack_collection_dir": str(stack_collection_dir.relative_to(tmp_path)),
+            "release_catalog_index": {
+                "channel": channel,
+                "label": f"{profile.title()} Nested Collection Network",
+                "published_at": "2026-07-29T02:20:00Z",
+            },
+        },
+    )
+
+    assert main(
+        [
+            network_command,
+            "--network-preset-json",
+            str(network_preset_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(network_dir),
+            "--label",
+            f"{profile.title()} Nested Collection Network Override",
+        ]
+    ) == 0
+
+    return network_dir, stack_collection_dir, catalog_collection_dir
+
+
 def bootstrap_example_publication_metadata_bundle_collection(
     tmp_path: Path, *, profile: str, output_dir: Path
 ) -> Path:
@@ -16143,6 +16287,41 @@ def test_cli_export_publication_network_preset_preserves_publication_stack_colle
     assert len(loaded["stack_preset_paths"]) == 2
 
 
+def test_cli_export_publication_network_preset_preserves_nested_catalog_workspace_collection_reference(
+    tmp_path,
+    capsys,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="generic",
+    )
+    export_path = tmp_path / "exported_nested_collection_network.json"
+    stack_preset_dir = tmp_path / "exported_nested_collection_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_nested_collection_catalog_presets"
+    capsys.readouterr()
+
+    assert main(
+        [
+            "export-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(export_path),
+        ]
+    ) == 0
+
+    loaded = load_publication_network_preset(export_path)
+    assert loaded["publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    nested_stack_presets = [load_publication_stack_preset(path) for path in loaded["stack_preset_paths"]]
+    assert len(nested_stack_presets) == 2
+    assert all(preset["catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve()) for preset in nested_stack_presets)
+    assert all(preset["catalog_workspace_dirs"] == [] for preset in nested_stack_presets)
+    assert all(len(preset["catalog_preset_paths"]) >= 1 for preset in nested_stack_presets)
+
+
 def test_cli_bootstrap_publication_network_from_exported_collection_backed_nested_preset_round_trip(tmp_path, capsys):
     collection_dir = tmp_path / "publication_stack_collection"
     preset_path = tmp_path / "publication_network_collection_source.json"
@@ -16454,6 +16633,41 @@ def test_cli_export_machine_publication_network_preset_preserves_publication_sta
     assert loaded["publication_stack_collection_dir"] == str(collection_dir.resolve())
     assert loaded["publication_stack_dirs"] == []
     assert len(loaded["stack_preset_paths"]) == 2
+
+
+def test_cli_export_machine_publication_network_preset_preserves_nested_catalog_workspace_collection_reference(
+    tmp_path,
+    capsys,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="machine",
+    )
+    export_path = tmp_path / "exported_nested_machine_collection_network.json"
+    stack_preset_dir = tmp_path / "exported_nested_machine_collection_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_nested_machine_collection_catalog_presets"
+    capsys.readouterr()
+
+    assert main(
+        [
+            "export-machine-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(export_path),
+        ]
+    ) == 0
+
+    loaded = load_machine_publication_network_preset(export_path)
+    assert loaded["publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    nested_stack_presets = [load_machine_publication_stack_preset(path) for path in loaded["stack_preset_paths"]]
+    assert len(nested_stack_presets) == 2
+    assert all(preset["catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve()) for preset in nested_stack_presets)
+    assert all(preset["catalog_workspace_dirs"] == [] for preset in nested_stack_presets)
+    assert all(len(preset["catalog_preset_paths"]) == 2 for preset in nested_stack_presets)
 
 
 def test_cli_bootstrap_machine_publication_network_from_exported_collection_backed_nested_preset_round_trip(
@@ -16806,6 +17020,41 @@ def test_cli_export_stable_publication_network_preset_preserves_publication_stac
     assert loaded["publication_stack_collection_dir"] == str(collection_dir.resolve())
     assert loaded["publication_stack_dirs"] == []
     assert len(loaded["stack_preset_paths"]) == 2
+
+
+def test_cli_export_stable_publication_network_preset_preserves_nested_catalog_workspace_collection_reference(
+    tmp_path,
+    capsys,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="stable",
+    )
+    export_path = tmp_path / "exported_nested_stable_collection_network.json"
+    stack_preset_dir = tmp_path / "exported_nested_stable_collection_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_nested_stable_collection_catalog_presets"
+    capsys.readouterr()
+
+    assert main(
+        [
+            "export-stable-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(export_path),
+        ]
+    ) == 0
+
+    loaded = load_stable_publication_network_preset(export_path)
+    assert loaded["publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    nested_stack_presets = [load_stable_publication_stack_preset(path) for path in loaded["stack_preset_paths"]]
+    assert len(nested_stack_presets) == 2
+    assert all(preset["catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve()) for preset in nested_stack_presets)
+    assert all(preset["catalog_workspace_dirs"] == [] for preset in nested_stack_presets)
+    assert all(len(preset["catalog_preset_paths"]) == 2 for preset in nested_stack_presets)
 
 
 def test_cli_bootstrap_stable_publication_network_from_exported_collection_backed_nested_preset_round_trip(
