@@ -16322,6 +16322,71 @@ def test_cli_export_publication_network_preset_preserves_nested_catalog_workspac
     assert all(len(preset["catalog_preset_paths"]) >= 1 for preset in nested_stack_presets)
 
 
+def test_cli_bootstrap_publication_network_from_exported_preset_preserves_nested_catalog_workspace_collection_reference_round_trip(
+    tmp_path,
+    capsys,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="generic",
+    )
+    export_path = tmp_path / "exported_nested_collection_network.json"
+    stack_preset_dir = tmp_path / "exported_nested_collection_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_nested_collection_catalog_presets"
+    capsys.readouterr()
+
+    assert main(
+        [
+            "export-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(export_path),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    roundtrip_dir = tmp_path / "publication_network_deep_nested_collection_roundtrip"
+    assert main(
+        [
+            "bootstrap-publication-network",
+            "--network-preset-json",
+            str(export_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Deep Nested Collection Network",
+        ]
+    ) == 0
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["network_preset_path"] == str(export_path.resolve())
+    assert summary["source_publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    assert summary["stack_count"] == 2
+    nested_stack_summaries = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted((roundtrip_dir / "stack_workspaces").glob("*/summary.json"))
+    ]
+    assert len(nested_stack_summaries) == 2
+    assert all(
+        stack_summary["source_catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve())
+        for stack_summary in nested_stack_summaries
+    )
+    assert main(["publication-network-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
+
+
 def test_cli_bootstrap_publication_network_from_exported_collection_backed_nested_preset_round_trip(tmp_path, capsys):
     collection_dir = tmp_path / "publication_stack_collection"
     preset_path = tmp_path / "publication_network_collection_source.json"
@@ -16668,6 +16733,71 @@ def test_cli_export_machine_publication_network_preset_preserves_nested_catalog_
     assert all(preset["catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve()) for preset in nested_stack_presets)
     assert all(preset["catalog_workspace_dirs"] == [] for preset in nested_stack_presets)
     assert all(len(preset["catalog_preset_paths"]) == 2 for preset in nested_stack_presets)
+
+
+def test_cli_bootstrap_machine_publication_network_from_exported_preset_preserves_nested_catalog_workspace_collection_reference_round_trip(
+    tmp_path,
+    capsys,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="machine",
+    )
+    export_path = tmp_path / "exported_nested_machine_collection_network.json"
+    stack_preset_dir = tmp_path / "exported_nested_machine_collection_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_nested_machine_collection_catalog_presets"
+    capsys.readouterr()
+
+    assert main(
+        [
+            "export-machine-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(export_path),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    roundtrip_dir = tmp_path / "machine_publication_network_deep_nested_collection_roundtrip"
+    assert main(
+        [
+            "bootstrap-machine-publication-network",
+            "--network-preset-json",
+            str(export_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Machine Deep Nested Collection Network",
+        ]
+    ) == 0
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["network_preset_path"] == str(export_path.resolve())
+    assert summary["source_publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    assert summary["stack_count"] == 2
+    nested_stack_summaries = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted((roundtrip_dir / "stack_workspaces").glob("*/summary.json"))
+    ]
+    assert len(nested_stack_summaries) == 2
+    assert all(
+        stack_summary["source_catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve())
+        for stack_summary in nested_stack_summaries
+    )
+    assert main(["publication-network-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_bootstrap_machine_publication_network_from_exported_collection_backed_nested_preset_round_trip(
@@ -17055,6 +17185,71 @@ def test_cli_export_stable_publication_network_preset_preserves_nested_catalog_w
     assert all(preset["catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve()) for preset in nested_stack_presets)
     assert all(preset["catalog_workspace_dirs"] == [] for preset in nested_stack_presets)
     assert all(len(preset["catalog_preset_paths"]) == 2 for preset in nested_stack_presets)
+
+
+def test_cli_bootstrap_stable_publication_network_from_exported_preset_preserves_nested_catalog_workspace_collection_reference_round_trip(
+    tmp_path,
+    capsys,
+):
+    network_dir, stack_collection_dir, catalog_collection_dir = bootstrap_example_nested_collection_backed_publication_network(
+        tmp_path,
+        profile="stable",
+    )
+    export_path = tmp_path / "exported_nested_stable_collection_network.json"
+    stack_preset_dir = tmp_path / "exported_nested_stable_collection_stack_presets"
+    catalog_preset_dir = tmp_path / "exported_nested_stable_collection_catalog_presets"
+    capsys.readouterr()
+
+    assert main(
+        [
+            "export-stable-publication-network-preset",
+            str(network_dir),
+            "--stack-preset-dir",
+            str(stack_preset_dir),
+            "--catalog-preset-dir",
+            str(catalog_preset_dir),
+            "--output",
+            str(export_path),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    roundtrip_dir = tmp_path / "stable_publication_network_deep_nested_collection_roundtrip"
+    assert main(
+        [
+            "bootstrap-stable-publication-network",
+            "--network-preset-json",
+            str(export_path),
+            "--scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--release-catalog-key-id",
+            "catalog-key",
+            "--release-catalog-index-key-id",
+            "index-key",
+            "--output-dir",
+            str(roundtrip_dir),
+            "--label",
+            "Roundtrip Stable Deep Nested Collection Network",
+        ]
+    ) == 0
+
+    summary = json.loads((roundtrip_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["network_preset_path"] == str(export_path.resolve())
+    assert summary["source_publication_stack_collection_dir"] == str(stack_collection_dir.resolve())
+    assert summary["stack_count"] == 2
+    nested_stack_summaries = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted((roundtrip_dir / "stack_workspaces").glob("*/summary.json"))
+    ]
+    assert len(nested_stack_summaries) == 2
+    assert all(
+        stack_summary["source_catalog_workspace_collection_dir"] == str(catalog_collection_dir.resolve())
+        for stack_summary in nested_stack_summaries
+    )
+    assert main(["publication-network-lint", str(roundtrip_dir)]) == 0
+    capsys.readouterr()
 
 
 def test_cli_bootstrap_stable_publication_network_from_exported_collection_backed_nested_preset_round_trip(
