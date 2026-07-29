@@ -1728,6 +1728,14 @@ satroot1 bootstrap-machine-publication-registry-publication --preset-json exampl
 satroot1 bootstrap-stable-publication-registry-publication --preset-json examples/registry_presets/stable_reference_publication_registry_workspace_backed.json --output-dir stable_publication_registry_publication_workspace_backed --label "SATROOT Stable Workspace-Backed Registry Override" --scheme hmac-sha256 --key-id registry-key
 ```
 
+There are matching collection-backed companions when you want the top-level registry publication preset to preserve lineage to one generated collection-backed `publication_registry_workspace` root:
+
+```bash
+satroot1 bootstrap-publication-registry-publication --preset-json examples/registry_presets/ai_compute_publication_registry_collection_backed.json --output-dir publication_registry_publication_collection_backed --label "SATROOT Collection-Backed Publication Registry Override" --scheme hmac-sha256 --key-id registry-key
+satroot1 bootstrap-machine-publication-registry-publication --preset-json examples/registry_presets/machine_compute_publication_registry_collection_backed.json --output-dir machine_publication_registry_publication_collection_backed --label "SATROOT Machine Collection-Backed Registry Override" --scheme hmac-sha256 --key-id registry-key
+satroot1 bootstrap-stable-publication-registry-publication --preset-json examples/registry_presets/stable_reference_publication_registry_collection_backed.json --output-dir stable_publication_registry_publication_collection_backed --label "SATROOT Stable Collection-Backed Registry Override" --scheme hmac-sha256 --key-id registry-key
+```
+
 To verify that registry later:
 
 ```bash
