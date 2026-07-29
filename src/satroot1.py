@@ -12358,6 +12358,7 @@ def write_publication_network_workspace(
             output_dir=workspace_dir,
             catalog_preset_paths=catalog_preset_paths,
             catalog_workspace_dirs=catalog_workspace_dirs,
+            catalog_workspace_collection_dir=stack_preset.get("catalog_workspace_collection_dir"),
             release_catalog_metadata=stack_preset.get("release_catalog_metadata"),
             key_prefix=key_prefix,
             key_suffix=key_suffix,
