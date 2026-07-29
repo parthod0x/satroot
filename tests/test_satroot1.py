@@ -5695,6 +5695,110 @@ def test_cli_bootstrap_machine_release_catalog_publication(tmp_path, capsys):
     assert verified["catalog"] == catalog["catalog"]
 
 
+def test_cli_bootstrap_machine_demo_release_catalog_publication_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "machine_catalog_alpha.json"
+    preset_beta = tmp_path / "machine_catalog_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MCATREL01"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Catalog Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "alpha-render",
+                    "billing_unit": "job",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "alpha-catalog-credit",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Machine Catalog Alpha Release",
+                "published_at": "2026-07-21T04:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-MACHINE-1"],
+            "symbol_overrides": {"SATROOT-MACHINE-1": "MCATREL02"},
+            "name_overrides": {"SATROOT-MACHINE-1": "Machine Catalog Beta"},
+            "profile_field_overrides": {
+                "SATROOT-MACHINE-1": {
+                    "service_scope": "beta-render",
+                    "billing_unit": "minute",
+                    "consumption_model": "burn-on-use",
+                    "intended_use": "beta-catalog-credit",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Machine Catalog Beta Release",
+                "published_at": "2026-07-22T04:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "machine_demo_release_catalog_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-machine-demo-release-catalog-publication",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--bundle-scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--release-label",
+            "Machine Collection Override",
+            "--label",
+            "Machine Demo Release Catalog",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-MACHINE-1 demo release catalog publication to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    catalog = json.loads(
+        (output_dir / "release_catalog_publication" / "release_catalog.json").read_text(encoding="utf-8")
+    )
+    secrets = json.loads(
+        (output_dir / "release_catalog_publication" / "release_catalog_secrets.json").read_text(encoding="utf-8")
+    )
+    assert summary["profile"] == "SATROOT-MACHINE-1"
+    assert summary["generated_release_count"] == 2
+    assert summary["release_collection"]["release_count"] == 2
+    assert summary["release_catalog"]["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Machine Demo Release Catalog"
+    assert catalog["source_release_collection_dir"] == str(
+        (output_dir / "release_collection_workspace" / "release_collection").resolve()
+    )
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"MCATREL01", "MCATREL02"}
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_publication" / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"] == catalog["catalog"]
+
+
 def test_cli_bootstrap_machine_release_catalog_publication_from_release_json_inputs(tmp_path, capsys):
     machine_release_alpha_dir, machine_release_beta_dir = make_machine_release_dirs(tmp_path)
     output_dir = tmp_path / "machine_release_catalog_publication_json_inputs"
@@ -5877,6 +5981,106 @@ def test_cli_bootstrap_stable_release_catalog_publication(tmp_path, capsys):
 
     verified = verify_signed_release_catalog_manifest(
         output_dir / "release_catalog_manifest.json",
+        verifier=make_hmac_sha256_verifier(secrets),
+    )
+    assert verified["release_count"] == 2
+    assert verified["catalog"] == catalog["catalog"]
+
+
+def test_cli_bootstrap_stable_demo_release_catalog_publication_from_presets(tmp_path, capsys):
+    preset_alpha = tmp_path / "stable_catalog_alpha.json"
+    preset_beta = tmp_path / "stable_catalog_beta.json"
+    write_json(
+        preset_alpha,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SCATREL01"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Catalog Alpha"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "EUR",
+                    "intended_use": "alpha-catalog-ledger",
+                }
+            },
+            "release": {
+                "channel": "alpha",
+                "label": "Stable Catalog Alpha Release",
+                "published_at": "2026-07-23T04:00:00Z",
+            },
+        },
+    )
+    write_json(
+        preset_beta,
+        {
+            "type": "SATROOT-DEMO-CATALOG-PRESET",
+            "version": "0.1",
+            "profiles": ["SATROOT-STABLE-1"],
+            "symbol_overrides": {"SATROOT-STABLE-1": "SCATREL02"},
+            "name_overrides": {"SATROOT-STABLE-1": "Stable Catalog Beta"},
+            "profile_field_overrides": {
+                "SATROOT-STABLE-1": {
+                    "reference_unit": "GBP",
+                    "intended_use": "beta-catalog-ledger",
+                }
+            },
+            "release": {
+                "channel": "beta",
+                "label": "Stable Catalog Beta Release",
+                "published_at": "2026-07-24T04:00:00Z",
+            },
+        },
+    )
+    output_dir = tmp_path / "stable_demo_release_catalog_publication"
+
+    exit_code = main(
+        [
+            "bootstrap-stable-demo-release-catalog-publication",
+            "--preset-json",
+            str(preset_alpha),
+            "--preset-json",
+            str(preset_beta),
+            "--bundle-scheme",
+            "hmac-sha256",
+            "--release-key-id",
+            "release-key",
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+            "--release-label",
+            "Stable Collection Override",
+            "--label",
+            "Stable Demo Release Catalog",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "wrote bootstrapped SATROOT-STABLE-1 demo release catalog publication to" in captured.out
+
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    catalog = json.loads(
+        (output_dir / "release_catalog_publication" / "release_catalog.json").read_text(encoding="utf-8")
+    )
+    secrets = json.loads(
+        (output_dir / "release_catalog_publication" / "release_catalog_secrets.json").read_text(encoding="utf-8")
+    )
+    assert summary["profile"] == "SATROOT-STABLE-1"
+    assert summary["generated_release_count"] == 2
+    assert summary["release_collection"]["release_count"] == 2
+    assert summary["release_catalog"]["release_count"] == 2
+    assert catalog["catalog"]["label"] == "Stable Demo Release Catalog"
+    assert catalog["source_release_collection_dir"] == str(
+        (output_dir / "release_collection_workspace" / "release_collection").resolve()
+    )
+    assert {symbol for entry in catalog["releases"] for symbol in entry["bundle_symbols"]} == {"SCATREL01", "SCATREL02"}
+
+    verified = verify_signed_release_catalog_manifest(
+        output_dir / "release_catalog_publication" / "release_catalog_manifest.json",
         verifier=make_hmac_sha256_verifier(secrets),
     )
     assert verified["release_count"] == 2

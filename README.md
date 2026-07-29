@@ -243,6 +243,7 @@ This repo now includes the first stable-value profile draft:
 - `satroot1 bootstrap-stable-demo-bundle` for generating signed stable demo bundles directly from profile parameters or a stable-only preset,
 - `satroot1 bootstrap-stable-demo-release` for generating signed stable demo bundles plus release directories in one step, with optional stable-only preset defaults,
 - `satroot1 bootstrap-stable-demo-release-collection` for generating multiple stable-only demo release workspaces from repeated stable presets and packaging them into one reusable release collection,
+- `satroot1 bootstrap-stable-demo-release-catalog-publication` for generating multiple stable-only demo release workspaces from repeated stable presets, snapshotting them into a release collection, and bootstrapping a signed stable release catalog publication in one step,
 - `satroot1 bootstrap-stable-demo-catalog` for generating a reusable single-stable demo catalog workspace that can feed the broader catalog and publication flows, with optional stable-only preset support,
 - `satroot1 bootstrap-stable-publication-stack` for generating one or more stable-only demo catalog workspaces and publishing them as a release-catalog stack,
 - `satroot1 bootstrap-stable-publication-network` for generating one or more stable-only publication stacks and publishing them as a release-catalog index,
@@ -338,6 +339,7 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-demo-bundle` for generating signed machine-credit demo bundles directly from profile parameters or a machine-only preset,
 - `satroot1 bootstrap-machine-demo-release` for generating signed machine-credit demo bundles plus release directories in one step, with optional machine-only preset defaults,
 - `satroot1 bootstrap-machine-demo-release-collection` for generating multiple machine-only demo release workspaces from repeated machine presets and packaging them into one reusable release collection,
+- `satroot1 bootstrap-machine-demo-release-catalog-publication` for generating multiple machine-only demo release workspaces from repeated machine presets, snapshotting them into a release collection, and bootstrapping a signed machine release catalog publication in one step,
 - `satroot1 bootstrap-machine-demo-catalog` for generating a reusable single-machine demo catalog workspace that can feed the stack, network, and publication flows, now with optional generic demo-catalog preset support,
 - `satroot1 bootstrap-machine-publication-stack` for generating one or more machine-only demo catalog workspaces and publishing them as a release-catalog stack,
 - `satroot1 publish-machine-publication-stack` for consolidating existing machine-only demo catalog workspaces into the same SATROOT-MACHINE-1 publication stack shape,
@@ -540,6 +542,12 @@ If you want to generate multiple stable demo releases from one or more stable pr
 satroot1 bootstrap-stable-demo-release-collection --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir stable_release_collection_workspace --label "SATROOT Stable Collection Override"
 ```
 
+And if you want the next layer up in the same shot, there is a stable wrapper that generates those releases, snapshots the release collection, and bootstraps a signed release catalog publication:
+
+```bash
+satroot1 bootstrap-stable-demo-release-catalog-publication --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --release-label "Stable Collection Override" --label "Stable Demo Release Catalog" --output-dir stable_demo_release_catalog_publication
+```
+
 Generate a reusable SATROOT-STABLE-1 reference-only demo catalog workspace:
 
 ```bash
@@ -580,6 +588,12 @@ If you want to generate multiple machine demo releases from one or more machine 
 
 ```bash
 satroot1 bootstrap-machine-demo-release-collection --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir machine_release_collection_workspace --label "SATROOT Machine Collection Override"
+```
+
+And if you want the next layer up in the same shot, there is a machine wrapper that generates those releases, snapshots the release collection, and bootstraps a signed release catalog publication:
+
+```bash
+satroot1 bootstrap-machine-demo-release-catalog-publication --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --release-label "Machine Collection Override" --label "Machine Demo Release Catalog" --output-dir machine_demo_release_catalog_publication
 ```
 
 Generate a reusable SATROOT-MACHINE-1 machine-credit demo catalog workspace:
@@ -1024,6 +1038,13 @@ The stable and machine lanes now also have one-shot wrappers that generate multi
 ```bash
 satroot1 bootstrap-stable-demo-release-collection --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir stable_release_collection_workspace --label "SATROOT Stable Collection Override"
 satroot1 bootstrap-machine-demo-release-collection --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir machine_release_collection_workspace --label "SATROOT Machine Collection Override"
+```
+
+If you also want to bootstrap the signed release catalog publication immediately on top of those generated release collections, there are matching one-shot wrappers for that layer too:
+
+```bash
+satroot1 bootstrap-stable-demo-release-catalog-publication --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --release-label "Stable Collection Override" --label "Stable Demo Release Catalog" --output-dir stable_demo_release_catalog_publication
+satroot1 bootstrap-machine-demo-release-catalog-publication --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --release-label "Machine Collection Override" --label "Machine Demo Release Catalog" --output-dir machine_demo_release_catalog_publication
 ```
 
 Those release-catalog flows also accept the generated release files directly, so you can mix `release_manifest.json` and `bundle_index.json` inputs when that is what you already have on hand:

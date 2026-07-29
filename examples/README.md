@@ -150,6 +150,18 @@ Bootstrap a machine demo release collection from repeated machine preset inputs:
 satroot1 bootstrap-machine-demo-release-collection --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir machine_release_collection_workspace --label "SATROOT Machine Collection Override"
 ```
 
+Bootstrap a stable demo release catalog publication from repeated stable preset inputs:
+
+```bash
+satroot1 bootstrap-stable-demo-release-catalog-publication --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --release-label "Stable Collection Override" --label "Stable Demo Release Catalog" --output-dir stable_demo_release_catalog_publication
+```
+
+Bootstrap a machine demo release catalog publication from repeated machine preset inputs:
+
+```bash
+satroot1 bootstrap-machine-demo-release-catalog-publication --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --release-label "Machine Collection Override" --label "Machine Demo Release Catalog" --output-dir machine_demo_release_catalog_publication
+```
+
 Bootstrap a machine collection-backed release catalog publication:
 
 ```bash
