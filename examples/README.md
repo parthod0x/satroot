@@ -138,6 +138,18 @@ Build a generic collection-backed bundle index:
 satroot1 build-bundle-index --preset-json examples/bundle_index_presets/ai_compute_bundle_index_collection_backed.json --output bundle_index_collection_backed.json
 ```
 
+Bootstrap a stable demo release collection from repeated stable preset inputs:
+
+```bash
+satroot1 bootstrap-stable-demo-release-collection --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir stable_release_collection_workspace --label "SATROOT Stable Collection Override"
+```
+
+Bootstrap a machine demo release collection from repeated machine preset inputs:
+
+```bash
+satroot1 bootstrap-machine-demo-release-collection --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir machine_release_collection_workspace --label "SATROOT Machine Collection Override"
+```
+
 Bootstrap a machine collection-backed release catalog publication:
 
 ```bash
