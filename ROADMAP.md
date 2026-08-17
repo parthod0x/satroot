@@ -114,6 +114,12 @@ The success condition should be narrow:
 - profile-specific semantics remain explicit instead of being blurred into a generic registry abstraction,
 - the docs keep separating protocol state from legal and economic claims as strictly as the current base, stable, and namespace-expansion lanes.
 
+Current status:
+
+- A first `satroot_profile_federation_smoke` wrapper now reuses the released profile matrix as source material.
+- That wrapper freezes the resulting per-profile demo catalog, publication network, publication catalog workspace, and publication registry workspace outputs into explicit collections.
+- It also proves that those released profile demo catalogs can be republished through one mixed-profile publication stack and publication network without changing the base kernel.
+
 ## Core architectural rule
 
 SATROOT does not merely mint tokens from one satoshi.

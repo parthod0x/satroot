@@ -1,6 +1,7 @@
 __pycache__/
 .pytest_cache/
 .pytest_*.log
+.tmp_profile_federation_smoke*/
 .tmp_pytest_*/
 .tmp_profile_matrix_smoke*/
 .tmp_identity_profile_smoke*/

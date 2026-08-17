@@ -496,6 +496,20 @@ satroot-profile-matrix-smoke
 
 That one writes into `.tmp_profile_matrix_smoke_run/` by default and runs the stable, machine, receipt, identity, and license profile smoke workflows into one consolidated report.
 
+For the first operator-facing federation check above those released lanes, there is also:
+
+```bash
+python -m satroot_profile_federation_smoke
+```
+
+or:
+
+```bash
+satroot-profile-federation-smoke
+```
+
+That one writes into `.tmp_profile_federation_smoke_run/` by default, reuses the released profile matrix, freezes the resulting per-profile workspaces into explicit collections, and publishes one mixed-profile stack plus network as the first `v0.4-publication-federation` proof surface.
+
 There is also a packaged stable-profile smoke entrypoint:
 
 ```bash
