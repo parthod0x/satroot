@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v0.1` is the genesis proof artifact for `SATROOT-1`.
+`v0.2` is the stable-profile proof artifact for `SATROOT-1`.
 
-It proves that one native satoshi can anchor an arbitrary semantic ledger without claiming subdivision below one satoshi.
+It proves that one native satoshi can anchor an arbitrary semantic ledger without claiming subdivision below one satoshi, and that the first reference-only stable profile can be replayed and published end to end without changing the base primitive.
 
 Current scope:
 
@@ -28,11 +28,15 @@ Current scope:
 - deterministic replay
 - supply invariants
 - example token `FLOOR1`
+- example stable token `USDROOT1`
+- stable-only smoke verification from replay through publication registry workspace
 
 Release status:
 
 - `v0.1-genesis` has been tagged and pushed from this repository.
 - The reference CLI, example preset tree, collection summary/lint surface, chunked test runner, and CI verification flow are now part of the frozen base deliverable.
+- `v0.2-stable-profile` has been tagged and pushed from this repository.
+- The `SATROOT-STABLE-1` reference-only lane now has a dedicated smoke workflow, packaged entrypoint, CI coverage, and a tagged publication-path milestone.
 
 ## Near-term build order
 
@@ -51,6 +55,7 @@ Current status:
 - `SATROOT-STABLE-1` draft exists in this repo.
 - `USDROOT1` reference-only examples are included as the first profile implementation artifact.
 - A dedicated stable-profile smoke workflow now replays the checked-in `USDROOT1` ledger and generates, summarizes, and lints a full `SATROOT-STABLE-1` publication registry workspace through the direct stable builder lane.
+- This milestone has now been tagged as `v0.2-stable-profile`.
 
 Recommended concrete deliverables for `v0.2`:
 
@@ -91,14 +96,14 @@ That order keeps the project close to machine-native accounting and operational 
 
 If work resumes right away, the best next milestone is:
 
-`v0.2-stable-profile`
+`v0.3-namespace-expansion`
 
 The success condition should be narrow:
 
 - the base `SATROOT-1` kernel remains unchanged in principle,
-- `SATROOT-STABLE-1` stays explicitly reference-only,
-- one stable example can be built, published, summarized, linted, and replayed through the same tooling style already established for `v0.1`,
-- the docs keep the legal/economic boundary language as strict as the current base protocol.
+- `SATROOT-MACHINE-1` becomes the first post-stable expansion lane to get the same crisp replay-to-publication verification story,
+- namespace expansion stays machine-accounting-first before drifting into heavier legal or rights semantics,
+- the docs keep separating protocol state from legal and economic claims as strictly as the current base and stable-profile lanes.
 
 ## Core architectural rule
 
