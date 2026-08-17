@@ -76,6 +76,7 @@ Current status:
 
 - `SATROOT-MACHINE-1` draft exists in this repo.
 - `APICREDIT1` examples are included as the first machine-credit implementation artifact.
+- A dedicated machine-profile smoke workflow now replays the checked-in `APICREDIT1` ledger and generates, summarizes, and lints a full `SATROOT-MACHINE-1` publication registry workspace through the direct machine builder lane.
 - `SATROOT-RECEIPT-1` draft exists in this repo.
 - `RECEIPT1` examples are included as the first receipt-object implementation artifact.
 - `SATROOT-IDENTITY-1` draft exists in this repo.

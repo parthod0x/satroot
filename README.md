@@ -438,6 +438,14 @@ python scripts/run_stable_profile_smoke.py
 
 By default that writes into `.tmp_stable_profile_smoke_run/` so the generated workspace stays clearly disposable.
 
+For the matching machine-credit lane, there is now an end-to-end smoke pass that replays `APICREDIT1` and generates a full `SATROOT-MACHINE-1` publication registry workspace:
+
+```bash
+python scripts/run_machine_profile_smoke.py
+```
+
+That one writes into `.tmp_machine_profile_smoke_run/` by default.
+
 After `pip install -e .`, the packaged entrypoints are available too:
 
 ```bash
@@ -460,6 +468,18 @@ or:
 
 ```bash
 satroot-stable-profile-smoke
+```
+
+And the machine-credit lane has the same packaged entrypoints:
+
+```bash
+python -m satroot_machine_profile_smoke
+```
+
+or:
+
+```bash
+satroot-machine-profile-smoke
 ```
 
 All three forms collect from the full `tests/` tree by default.
