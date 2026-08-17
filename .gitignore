@@ -3,6 +3,7 @@ __pycache__/
 .pytest_*.log
 .tmp_pytest_*/
 .tmp_machine_profile_smoke*/
+.tmp_receipt_profile_smoke*/
 .tmp_stable_profile_smoke*/
 *.pyc
 *.pyo

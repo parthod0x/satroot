@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Tightens the roadmap around the post-`v0.2-stable-profile` state by recording the released stable-profile deliverable and naming `v0.3-namespace-expansion` as the next concrete milestone.
+- Adds `python -m satroot_receipt_profile_smoke`, `satroot-receipt-profile-smoke`, and `scripts/run_receipt_profile_smoke.py` for an explicit SATROOT-RECEIPT-1 end-to-end smoke pass that replays the checked-in `RECEIPT1` example and generates, summarizes, and lints a full singleton publication registry workspace from the checked-in receipt preset.
+- Runs the receipt-profile smoke workflow in CI, adds the packaged receipt smoke module to the installed-import check, and ignores generated `.tmp_receipt_profile_smoke*/` workspaces so local verification stays tidy by default.
 - Adds `python -m satroot_machine_profile_smoke`, `satroot-machine-profile-smoke`, and `scripts/run_machine_profile_smoke.py` for an explicit SATROOT-MACHINE-1 end-to-end smoke pass that replays the checked-in `APICREDIT1` example and generates, summarizes, and lints a full machine publication registry workspace through the direct machine builder lane.
 - Runs the machine-profile smoke workflow in CI, adds the packaged machine smoke module to the installed-import check, and ignores generated `.tmp_machine_profile_smoke*/` workspaces so local verification stays tidy by default.
 - Adds `python -m satroot_stable_profile_smoke`, `satroot-stable-profile-smoke`, and `scripts/run_stable_profile_smoke.py` for an explicit SATROOT-STABLE-1 end-to-end smoke pass that replays the checked-in `USDROOT1` example and generates, summarizes, and lints a full stable publication registry workspace through the direct stable builder lane.

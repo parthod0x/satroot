@@ -79,6 +79,7 @@ Current status:
 - A dedicated machine-profile smoke workflow now replays the checked-in `APICREDIT1` ledger and generates, summarizes, and lints a full `SATROOT-MACHINE-1` publication registry workspace through the direct machine builder lane.
 - `SATROOT-RECEIPT-1` draft exists in this repo.
 - `RECEIPT1` examples are included as the first receipt-object implementation artifact.
+- A dedicated receipt-profile smoke workflow now replays the checked-in `RECEIPT1` ledger and generates, summarizes, and lints a full `SATROOT-RECEIPT-1` singleton publication registry workspace from the checked-in receipt preset.
 - `SATROOT-IDENTITY-1` draft exists in this repo.
 - `IDENTITY1` examples are included as the first identity-object implementation artifact.
 - `SATROOT-LICENSE-1` draft exists in this repo.
