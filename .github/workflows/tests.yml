@@ -35,27 +35,11 @@ jobs:
 
       - name: Smoke test installed modules
         run: |
-          python -c "import satroot1, satroot_collection_lint, satroot_test, satroot_stable_profile_smoke, satroot_machine_profile_smoke, satroot_receipt_profile_smoke, satroot_identity_profile_smoke, satroot_license_profile_smoke; print('imports-ok')"
+          python -c "import satroot1, satroot_collection_lint, satroot_test, satroot_profile_matrix_smoke, satroot_stable_profile_smoke, satroot_machine_profile_smoke, satroot_receipt_profile_smoke, satroot_identity_profile_smoke, satroot_license_profile_smoke; print('imports-ok')"
 
-      - name: Run stable-profile smoke workflow
+      - name: Run released profile-matrix smoke workflow
         run: |
-          python -m satroot_stable_profile_smoke --output-dir .tmp_stable_profile_smoke_ci
-
-      - name: Run machine-profile smoke workflow
-        run: |
-          python -m satroot_machine_profile_smoke --output-dir .tmp_machine_profile_smoke_ci
-
-      - name: Run receipt-profile smoke workflow
-        run: |
-          python -m satroot_receipt_profile_smoke --output-dir .tmp_receipt_profile_smoke_ci
-
-      - name: Run identity-profile smoke workflow
-        run: |
-          python -m satroot_identity_profile_smoke --output-dir .tmp_identity_profile_smoke_ci
-
-      - name: Run license-profile smoke workflow
-        run: |
-          python -m satroot_license_profile_smoke --output-dir .tmp_license_profile_smoke_ci
+          python -m satroot_profile_matrix_smoke --output-dir .tmp_profile_matrix_smoke_ci
 
       - name: Run chunked pytest suite
         run: |

@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v0.2` is the stable-profile proof artifact for `SATROOT-1`.
+`v0.3` is the namespace-expansion proof artifact for `SATROOT-1`.
 
-It proves that one native satoshi can anchor an arbitrary semantic ledger without claiming subdivision below one satoshi, and that the first reference-only stable profile can be replayed and published end to end without changing the base primitive.
+It proves that one native satoshi can anchor multiple deterministic semantic asset profiles without claiming subdivision below one satoshi, and that stable, machine, receipt, identity, and license lanes can all be replayed and published end to end without changing the base primitive.
 
 Current scope:
 
@@ -29,7 +29,7 @@ Current scope:
 - supply invariants
 - example token `FLOOR1`
 - example stable token `USDROOT1`
-- stable-only smoke verification from replay through publication registry workspace
+- released profile-matrix smoke verification across stable, machine, receipt, identity, and license publication registry workspaces
 
 Release status:
 
@@ -37,6 +37,8 @@ Release status:
 - The reference CLI, example preset tree, collection summary/lint surface, chunked test runner, and CI verification flow are now part of the frozen base deliverable.
 - `v0.2-stable-profile` has been tagged and pushed from this repository.
 - The `SATROOT-STABLE-1` reference-only lane now has a dedicated smoke workflow, packaged entrypoint, CI coverage, and a tagged publication-path milestone.
+- `v0.3-namespace-expansion` has been tagged and pushed from this repository.
+- The machine, receipt, identity, and license lanes now join the stable lane under one released profile-matrix smoke surface with dedicated per-profile publication-path verification.
 
 ## Near-term build order
 
@@ -86,6 +88,8 @@ Current status:
 - `SATROOT-LICENSE-1` draft exists in this repo.
 - `LICENSE1` examples are included as the first license-object implementation artifact.
 - A dedicated license-profile smoke workflow now replays the checked-in `LICENSE1` ledger and generates, summarizes, and lints a full `SATROOT-LICENSE-1` singleton publication registry workspace from the checked-in license preset.
+- A released profile-matrix smoke workflow now runs the stable, machine, receipt, identity, and license lanes together and emits one consolidated verification report.
+- This milestone has now been tagged as `v0.3-namespace-expansion`.
 
 Recommended order inside `v0.3`:
 
@@ -100,14 +104,15 @@ That order keeps the project close to machine-native accounting and operational 
 
 If work resumes right away, the best next milestone is:
 
-`v0.3-namespace-expansion`
+`v0.4-publication-federation`
 
 The success condition should be narrow:
 
 - the base `SATROOT-1` kernel remains unchanged in principle,
-- `SATROOT-MACHINE-1` becomes the first post-stable expansion lane to get the same crisp replay-to-publication verification story,
-- namespace expansion stays machine-accounting-first before drifting into heavier legal or rights semantics,
-- the docs keep separating protocol state from legal and economic claims as strictly as the current base and stable-profile lanes.
+- multiple generated profile artifacts can be consolidated into reusable higher-level publication collections without flattening their profile-specific provenance,
+- operator-facing workflows stay deterministic, inspectable, and lintable at every aggregation layer,
+- profile-specific semantics remain explicit instead of being blurred into a generic registry abstraction,
+- the docs keep separating protocol state from legal and economic claims as strictly as the current base, stable, and namespace-expansion lanes.
 
 ## Core architectural rule
 

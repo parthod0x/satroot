@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Adds `python -m satroot_profile_matrix_smoke`, `satroot-profile-matrix-smoke`, and `scripts/run_profile_matrix_smoke.py` for a single end-to-end verification surface that runs the released stable, machine, receipt, identity, and license lanes and writes one consolidated report.
+- Replaces the five separate CI profile-smoke execution steps with one released profile-matrix smoke step, adds the packaged matrix smoke module to installed-import verification, and ignores generated `.tmp_profile_matrix_smoke*/` workspaces by default.
+- Marks `v0.3-namespace-expansion` as the completed namespace milestone and points the roadmap at `v0.4-publication-federation` as the next operator-focused build target.
 - Tightens the roadmap around the post-`v0.2-stable-profile` state by recording the released stable-profile deliverable and naming `v0.3-namespace-expansion` as the next concrete milestone.
 - Adds `python -m satroot_license_profile_smoke`, `satroot-license-profile-smoke`, and `scripts/run_license_profile_smoke.py` for an explicit SATROOT-LICENSE-1 end-to-end smoke pass that replays the checked-in `LICENSE1` example and generates, summarizes, and lints a full singleton publication registry workspace from the checked-in license preset.
 - Runs the license-profile smoke workflow in CI, adds the packaged license smoke module to the installed-import check, and ignores generated `.tmp_license_profile_smoke*/` workspaces so local verification stays tidy by default.

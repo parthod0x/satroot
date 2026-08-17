@@ -482,6 +482,20 @@ or:
 satroot-test
 ```
 
+The preferred umbrella verification for all currently released profile lanes is:
+
+```bash
+python -m satroot_profile_matrix_smoke
+```
+
+or:
+
+```bash
+satroot-profile-matrix-smoke
+```
+
+That one writes into `.tmp_profile_matrix_smoke_run/` by default and runs the stable, machine, receipt, identity, and license profile smoke workflows into one consolidated report.
+
 There is also a packaged stable-profile smoke entrypoint:
 
 ```bash
