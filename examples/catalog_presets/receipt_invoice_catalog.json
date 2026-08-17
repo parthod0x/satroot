@@ -1,0 +1,35 @@
+{
+  "type": "SATROOT-DEMO-CATALOG-PRESET",
+  "version": "0.1",
+  "profiles": [
+    "SATROOT-RECEIPT-1"
+  ],
+  "symbol_overrides": {
+    "SATROOT-RECEIPT-1": "RECOPS1"
+  },
+  "name_overrides": {
+    "SATROOT-RECEIPT-1": "SATROOT Receipt Operations Object"
+  },
+  "profile_field_overrides": {
+    "SATROOT-RECEIPT-1": {
+      "document_type": "invoice-receipt",
+      "reference_id": "INV-2026-OPS-001",
+      "issuer_entity": "ops-ledger",
+      "counterparty_entity": "vendor-ops",
+      "settlement_unit": "USD",
+      "intended_use": "invoice-receipt-ledger"
+    }
+  },
+  "profile_structure_overrides": {
+    "SATROOT-RECEIPT-1": {
+      "holder_account": "ap_team",
+      "archive_account": "receipt_archive",
+      "retire": false
+    }
+  },
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT Receipt Operations Catalog",
+    "published_at": "2026-08-10T00:00:00Z"
+  }
+}

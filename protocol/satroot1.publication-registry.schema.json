@@ -16,6 +16,10 @@
       "type": "string",
       "minLength": 1
     },
+    "source_publication_registry_workspace_collection_dir": {
+      "type": "string",
+      "minLength": 1
+    },
     "index": {
       "type": "object",
       "properties": {

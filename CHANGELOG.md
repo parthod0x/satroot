@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Adds `python -m satroot_test`, `satroot-test`, and `scripts/run_pytest_chunked.py` for deterministic chunked pytest execution across the full `tests/` tree, keeps the repo-local wrapper usable from a fresh checkout by wiring `src/` directly, and adds a matching GitHub Actions workflow for repository verification without a single long-lived pytest process.
+- Clarifies the README and release guidance so plain `pytest` is framed as a smoke path while chunked execution is the preferred full-suite verification route.
+- Expands the GitHub Actions test workflow to cover both `ubuntu-latest` and `windows-latest`, and adds `workflow_dispatch` plus non-fail-fast matrix behavior for easier cross-platform verification and reruns.
+- Adds an explicit installed-module import smoke check in CI and the release checklist so packaging regressions are caught even when repo-local pytest `pythonpath` injection would otherwise hide them.
+- Adds first-class CLI summary commands for reusable collection layers such as bundle, release, release-catalog, publication-metadata-bundle, demo-catalog-workspace, publication-stack, publication-network, publication-catalog-workspace, and publication-registry-workspace collections.
+- Adds matching first-class CLI lint commands for those reusable collection layers so copied bundle, release, catalog, metadata-bundle, demo-catalog, publication-stack, publication-network, publication-catalog-workspace, and publication-registry-workspace collections can be validated directly from their frozen `summary.json` roots.
 - Adds `bootstrap-publication-stack-collection`, `bootstrap-machine-publication-stack-collection`, and `bootstrap-stable-publication-stack-collection` for copying publication stack workspaces into reusable higher-level collections.
 - Extends publication-network presets plus `bootstrap-publication-network`, `bootstrap-machine-publication-network`, `bootstrap-stable-publication-network`, `publish-publication-network`, `publish-machine-publication-network`, and `publish-stable-publication-network` so they can consume a saved `publication_stack_collection_dir`.
 - Adds `bootstrap-publication-network-collection`, `bootstrap-machine-publication-network-collection`, and `bootstrap-stable-publication-network-collection` for copying publication network workspaces into reusable higher-level collections.

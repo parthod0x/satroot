@@ -1,0 +1,35 @@
+{
+  "type": "SATROOT-DEMO-CATALOG-PRESET",
+  "version": "0.1",
+  "profiles": [
+    "SATROOT-LICENSE-1"
+  ],
+  "symbol_overrides": {
+    "SATROOT-LICENSE-1": "LICOPS1"
+  },
+  "name_overrides": {
+    "SATROOT-LICENSE-1": "SATROOT Software Usage License"
+  },
+  "profile_field_overrides": {
+    "SATROOT-LICENSE-1": {
+      "license_type": "software-license",
+      "asset_id": "ops-suite",
+      "licensor_entity": "satroot-labs",
+      "licensee_entity": "customer-co",
+      "usage_scope": "internal-operations",
+      "intended_use": "software-license-ledger"
+    }
+  },
+  "profile_structure_overrides": {
+    "SATROOT-LICENSE-1": {
+      "holder_account": "procurement_ops",
+      "archive_account": "license_archive",
+      "retire": false
+    }
+  },
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT License Usage Catalog",
+    "published_at": "2026-08-12T00:00:00Z"
+  }
+}

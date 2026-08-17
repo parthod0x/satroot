@@ -107,6 +107,9 @@ The v0.1 kernel defines:
 - a one-shot SATROOT-STABLE-1 signed demo-bundle bootstrap for release-ready stable-profile artifacts,
 - a one-shot SATROOT-STABLE-1 demo-release bootstrap for bundle plus release publication generation,
 - a one-shot multi-profile demo catalog workspace bootstrap for bundles plus signed catalog release generation,
+- repeated-preset multi-profile demo release collection bootstraps for packaging mixed generated releases into reusable release collections,
+- repeated-preset multi-profile demo release catalog publication bootstraps for turning mixed generated releases into signed release catalogs in one step,
+- repeated-preset multi-profile demo release catalog index publication bootstraps for turning mixed generated releases into signed release-catalog index publications in one step,
 - a `satroot1` CLI entry point for replay and signing workflows,
 - verifier-aware CLI replay for `demo`, `hmac-sha256`, and `ed25519` ledgers,
 - schema-aware CLI validation for raw SATROOT-1 JSON files,
@@ -246,6 +249,10 @@ This repo now includes the first stable-value profile draft:
 - `satroot1 bootstrap-stable-demo-release-catalog-publication` for generating multiple stable-only demo release workspaces from repeated stable presets, snapshotting them into a release collection, and bootstrapping a signed stable release catalog publication in one step,
 - `satroot1 bootstrap-stable-demo-release-catalog-index-publication` for generating multiple stable-only demo release workspaces from repeated stable presets, bootstrapping a stable release catalog publication, and then bootstrapping a signed stable release catalog index publication in one step,
 - `satroot1 bootstrap-stable-demo-catalog` for generating a reusable single-stable demo catalog workspace that can feed the broader catalog and publication flows, with optional stable-only preset support,
+- `satroot1 bootstrap-demo-publication-stack` for generating one or more mixed-profile demo catalog workspaces from repeated generic presets and publishing them as a signed release-catalog stack in one step,
+- `satroot1 bootstrap-demo-publication-network` for generating one or more mixed-profile demo catalog workspaces from repeated generic presets, bootstrapping a publication stack, and then publishing that stack as a signed release-catalog index in one step,
+- `satroot1 bootstrap-demo-publication-catalog-workspace` for generating multiple mixed-profile demo catalog workspaces from repeated generic presets and deriving shared descriptor-index and metadata publication lanes in one reusable publication catalog workspace,
+- `satroot1 bootstrap-demo-publication-registry-workspace` for generating multiple mixed-profile demo catalog workspaces from repeated generic presets, deriving shared publication lanes, and binding them to a generated publication network in one signed registry workspace,
 - `satroot1 bootstrap-stable-demo-publication-stack` for generating multiple stable-only demo catalog workspaces from repeated stable presets and publishing them as a signed release-catalog stack in one step,
 - `satroot1 bootstrap-stable-demo-publication-network` for generating multiple stable-only demo catalog workspaces from repeated stable presets, bootstrapping a stable publication stack, and then publishing that stack as a signed release-catalog index in one step,
 - `satroot1 bootstrap-stable-demo-publication-catalog-workspace` for generating multiple stable-only demo catalog workspaces from repeated stable presets and deriving shared descriptor-index and metadata publication lanes in one reusable publication catalog workspace,
@@ -255,7 +262,7 @@ This repo now includes the first stable-value profile draft:
 - `satroot1 bootstrap-stable-publication-catalog-workspace` for generating a stable demo catalog workspace plus descriptor-index and metadata publication lanes in one step, with optional nested demo-catalog and publication-catalog-workspace presets,
 - `satroot1 publish-stable-publication-catalog-workspace` for re-wrapping existing stable descriptor and metadata lanes back into a stable-validated publication catalog workspace,
 - `satroot1 export-stable-publication-catalog-workspace-preset` for exporting that stable publication catalog workspace shape back into a validated reusable preset,
-- `satroot1 bootstrap-stable-publication-registry-workspace` for generating a stable publication catalog workspace and binding it to a stable release-catalog-index source in one signed registry workspace, with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets,
+- `satroot1 bootstrap-stable-publication-registry-workspace` for generating a stable publication catalog workspace and binding it to a stable release-catalog-index source in one signed registry workspace, with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets, including frozen `release_collection_dir`-backed nested catalog presets where `--release-key-id` is only needed when a nested publication-network preset is being generated,
 - `satroot1 publish-stable-publication-registry-workspace` for binding an existing stable publication catalog workspace to a stable release-catalog-index source while preserving stable provenance,
 - `satroot1 export-stable-publication-registry-workspace-preset` for exporting that stable publication registry workspace shape back into a validated reusable preset,
 - `satroot1 export-stable-publication-descriptor-index-preset`, `satroot1 export-stable-publication-metadata-catalog-preset`, and `satroot1 export-stable-publication-registry-preset` for exporting stable component publications back into validated reusable presets.
@@ -267,6 +274,7 @@ This repo now includes the first stable-value profile draft:
 If you want the shortest path into the checked-in reusable SATROOT preset tree, start here:
 
 - Generic lower release layers:
+  `examples/catalog_presets/ai_compute_catalog.json`
   `examples/bundle_index_presets/ai_compute_bundle_index.json`
   `examples/release_catalog_presets/ai_compute_release_stack.json`
   `examples/release_catalog_index_presets/ai_compute_catalog_network.json`
@@ -277,6 +285,7 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/network_presets/ai_compute_publication_network.json`
   `examples/registry_workspace_presets/ai_compute_publication_registry_workspace.json`
 - Generic collection-backed lower release layers:
+  `examples/catalog_presets/ai_compute_catalog_collection_backed.json`
   `examples/bundle_index_presets/ai_compute_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/ai_compute_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/ai_compute_catalog_network_collection_backed.json`
@@ -286,7 +295,9 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/stack_presets/ai_compute_publication_stack_collection_backed.json`
   `examples/network_presets/ai_compute_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/ai_compute_publication_registry_workspace_collection_backed.json`
+  `examples/registry_workspace_presets/ai_compute_publication_registry_workspace_catalog_release_collection_backed.json`
 - Machine lower release layers:
+  `examples/catalog_presets/machine_compute_catalog.json`
   `examples/bundle_index_presets/machine_compute_bundle_index.json`
   `examples/release_catalog_presets/machine_compute_release_stack.json`
   `examples/release_catalog_index_presets/machine_compute_catalog_network.json`
@@ -297,6 +308,7 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/network_presets/machine_compute_publication_network.json`
   `examples/registry_workspace_presets/machine_compute_publication_registry_workspace.json`
 - Machine collection-backed lower release layers:
+  `examples/catalog_presets/machine_compute_catalog_collection_backed.json`
   `examples/bundle_index_presets/machine_compute_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/machine_compute_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/machine_compute_catalog_network_collection_backed.json`
@@ -306,7 +318,9 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/stack_presets/machine_compute_publication_stack_collection_backed.json`
   `examples/network_presets/machine_compute_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/machine_compute_publication_registry_workspace_collection_backed.json`
+  `examples/registry_workspace_presets/machine_compute_publication_registry_workspace_catalog_release_collection_backed.json`
 - Stable lower release layers:
+  `examples/catalog_presets/stable_reference_catalog.json`
   `examples/bundle_index_presets/stable_reference_bundle_index.json`
   `examples/release_catalog_presets/stable_reference_release_stack.json`
   `examples/release_catalog_index_presets/stable_reference_catalog_network.json`
@@ -317,6 +331,7 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/network_presets/stable_reference_publication_network.json`
   `examples/registry_workspace_presets/stable_reference_publication_registry_workspace.json`
 - Stable collection-backed lower release layers:
+  `examples/catalog_presets/stable_reference_catalog_collection_backed.json`
   `examples/bundle_index_presets/stable_reference_bundle_index_collection_backed.json`
   `examples/release_catalog_presets/stable_reference_release_stack_collection_backed.json`
   `examples/release_catalog_index_presets/stable_reference_catalog_network_collection_backed.json`
@@ -326,10 +341,15 @@ If you want the shortest path into the checked-in reusable SATROOT preset tree, 
   `examples/stack_presets/stable_reference_publication_stack_collection_backed.json`
   `examples/network_presets/stable_reference_publication_network_collection_backed.json`
   `examples/registry_workspace_presets/stable_reference_publication_registry_workspace_collection_backed.json`
+  `examples/registry_workspace_presets/stable_reference_publication_registry_workspace_catalog_release_collection_backed.json`
 - Collection-backed top-level registry publications:
   `examples/registry_presets/ai_compute_publication_registry_collection_backed.json`
   `examples/registry_presets/machine_compute_publication_registry_collection_backed.json`
   `examples/registry_presets/stable_reference_publication_registry_collection_backed.json`
+- Frozen-release self-contained top-level registry publications:
+  `examples/registry_presets/ai_compute_publication_registry_workspace_catalog_release_collection_backed.json`
+  `examples/registry_presets/machine_compute_publication_registry_workspace_catalog_release_collection_backed.json`
+  `examples/registry_presets/stable_reference_publication_registry_workspace_catalog_release_collection_backed.json`
 - Workspace-backed top-level registry publications:
   `examples/registry_presets/ai_compute_publication_registry_workspace_backed.json`
   `examples/registry_presets/machine_compute_publication_registry_workspace_backed.json`
@@ -358,7 +378,7 @@ This repo also now includes the first machine-credit profile draft:
 - `satroot1 bootstrap-machine-publication-catalog-workspace` for generating a machine demo catalog workspace plus descriptor-index and metadata publication lanes in one step, now with optional nested demo-catalog and publication-catalog-workspace presets,
 - `satroot1 publish-machine-publication-catalog-workspace` for re-wrapping existing publication descriptor and metadata lanes back into a machine-validated publication catalog workspace,
 - `satroot1 export-machine-publication-catalog-workspace-preset` for exporting that machine publication catalog workspace shape back into a validated reusable preset,
-- `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets,
+- `satroot1 bootstrap-machine-publication-registry-workspace` for generating a machine publication catalog workspace and binding it to a release-catalog-index source in one signed registry workspace, now with optional nested demo-catalog, publication-catalog-workspace, and publication-registry-workspace presets, including frozen `release_collection_dir`-backed nested catalog presets where `--release-key-id` is only needed when a nested publication-network preset is being generated,
 - `satroot1 publish-machine-publication-registry-workspace` for binding an existing machine publication catalog workspace to a release-catalog-index source while preserving machine provenance,
 - `satroot1 export-machine-publication-registry-workspace-preset` for exporting that machine publication registry workspace shape back into a validated reusable preset.
 
@@ -369,7 +389,15 @@ This repo also now includes the first receipt-object profile draft:
 - `examples/events_receipt1.json` for a runnable receipt lifecycle ledger flow,
 - `satroot1 bootstrap-singleton-demo --profile SATROOT-RECEIPT-1` for generating new receipt/identity/license singleton demo ledgers on demand,
 - `satroot1 bootstrap-singleton-demo-bundle --profile SATROOT-RECEIPT-1` for generating signed receipt/identity/license demo bundles on demand,
-- `satroot1 bootstrap-singleton-demo-release --profile SATROOT-RECEIPT-1` for generating signed receipt/identity/license demo bundles plus release directories in one step.
+- `satroot1 bootstrap-singleton-demo-release --profile SATROOT-RECEIPT-1` for generating signed receipt/identity/license demo bundles plus release directories in one step,
+- `satroot1 bootstrap-singleton-demo-bundle-index --profile SATROOT-RECEIPT-1` for generating repeated receipt/identity/license demo bundles from presets and packaging them into a reusable bundle index,
+- `satroot1 bootstrap-singleton-demo-release-collection --profile SATROOT-RECEIPT-1` for generating repeated receipt/identity/license demo releases from presets and packaging them into a reusable release collection,
+- `satroot1 bootstrap-singleton-demo-release-catalog-publication --profile SATROOT-RECEIPT-1` for generating repeated receipt/identity/license demo releases from presets and bootstrapping a signed release catalog publication in one step,
+- `satroot1 bootstrap-singleton-demo-release-catalog-index-publication --profile SATROOT-RECEIPT-1` for generating repeated receipt/identity/license demo releases from presets and bootstrapping a signed release-catalog index publication in one step,
+- `satroot1 bootstrap-singleton-demo-publication-stack --profile SATROOT-RECEIPT-1` for generating repeated receipt/identity/license singleton demo catalog workspaces from presets and publishing them as a signed release-catalog stack in one step,
+- `satroot1 bootstrap-singleton-demo-publication-network --profile SATROOT-RECEIPT-1` for generating repeated receipt/identity/license singleton demo catalog workspaces from presets, bootstrapping a singleton publication stack, and then publishing that stack as a signed release-catalog index in one step,
+- `satroot1 bootstrap-singleton-demo-publication-catalog-workspace --profile SATROOT-RECEIPT-1` for generating repeated receipt/identity/license singleton demo catalog workspaces from presets and deriving shared descriptor and metadata publication lanes in one reusable publication catalog workspace,
+- `satroot1 bootstrap-singleton-demo-publication-registry-workspace --profile SATROOT-RECEIPT-1` for generating repeated receipt/identity/license singleton demo catalog workspaces from presets, deriving shared publication lanes, and binding them to a generated singleton publication network in one signed registry workspace.
 
 This repo also now includes the first identity-object profile draft:
 
@@ -390,14 +418,54 @@ Future profile work can extend that pattern for:
 
 ## Run tests
 
+For a quick local smoke run:
+
 ```bash
 python -m pytest
 ```
 
-Expected result:
+For the full suite, prefer the chunked helper:
+
+```bash
+python scripts/run_pytest_chunked.py
+```
+
+After `pip install -e .`, the packaged entrypoints are available too:
+
+```bash
+python -m satroot_test
+```
+
+or:
+
+```bash
+satroot-test
+```
+
+All three forms collect from the full `tests/` tree by default.
+
+You can also resume from a later point or reduce chunk size:
+
+```bash
+python scripts/run_pytest_chunked.py --chunk-size 50 --start 1001
+```
+
+or:
+
+```bash
+python -m satroot_test --chunk-size 50 --start 1001
+```
+
+or:
+
+```bash
+satroot-test --chunk-size 50 --start 1001
+```
+
+Current suite note:
 
 ```text
-343 passed
+the tests/ tree is large enough that chunked execution is the preferred full-suite path
 ```
 
 ## Signing utilities
@@ -516,6 +584,55 @@ Generate a signed receipt, identity, or license singleton demo bundle plus relea
 satroot1 bootstrap-singleton-demo-release --profile SATROOT-LICENSE-1 --symbol LICRELCLI1 --name "License Release CLI" --scheme hmac-sha256 --release-key-id release-key --channel stable --label "SATROOT License Release" --published-at 2026-06-28T12:00:00Z --output-dir singleton_release
 ```
 
+If you want the reusable packaging layer just below releases for a single receipt, identity, or license profile, there is now a singleton wrapper that filters repeated demo presets down to one singleton profile, snapshots the generated bundles into a bundle collection, and writes a reusable bundle index in one step:
+
+```bash
+satroot1 bootstrap-singleton-demo-bundle-index --profile SATROOT-RECEIPT-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --label "Receipt Bundle Index" --output-dir singleton_bundle_index
+```
+
+If you want the next packaging layer up, there is also a singleton release-collection wrapper that keeps one singleton profile from repeated presets and packages the generated releases into a reusable collection:
+
+```bash
+satroot1 bootstrap-singleton-demo-release-collection --profile SATROOT-LICENSE-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --label "License Release Collection" --output-dir singleton_release_collection
+```
+
+And if you want a signed catalog on top of those repeated singleton releases, the singleton release-catalog wrapper bootstraps the collection workspace and catalog publication together:
+
+```bash
+satroot1 bootstrap-singleton-demo-release-catalog-publication --profile SATROOT-IDENTITY-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --label "Identity Release Catalog" --output-dir singleton_release_catalog
+```
+
+And if you want the singleton lane all the way up at the top publication index layer, there is now a singleton release-catalog-index wrapper too:
+
+```bash
+satroot1 bootstrap-singleton-demo-release-catalog-index-publication --profile SATROOT-RECEIPT-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --bundle-scheme hmac-sha256 --release-key-id release-key --catalog-scheme hmac-sha256 --catalog-key-id catalog-key --scheme hmac-sha256 --key-id index-key --label "Receipt Release Catalog Index" --output-dir singleton_release_catalog_index
+```
+
+And if you want those repeated singleton presets to continue upward into the publication workspace lanes, there are now singleton publication-stack and publication-network wrappers as well:
+
+```bash
+satroot1 bootstrap-singleton-demo-publication-stack --profile SATROOT-RECEIPT-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --label "Receipt Publication Stack" --output-dir singleton_publication_stack
+satroot1 bootstrap-singleton-demo-publication-network --profile SATROOT-IDENTITY-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --catalog-label "Identity Publication Stack" --label "Identity Publication Network" --output-dir singleton_publication_network
+```
+
+And if you want the singleton lane to keep going through descriptor/metadata and top-level registry packaging, there are matching workspace wrappers there too:
+
+```bash
+satroot1 bootstrap-singleton-demo-publication-catalog-workspace --profile SATROOT-LICENSE-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --descriptor-index-label "License Workspace Descriptor Index" --publication-metadata-catalog-label "License Workspace Metadata Catalog" --output-dir singleton_publication_catalog_workspace
+satroot1 bootstrap-singleton-demo-publication-registry-workspace --profile SATROOT-RECEIPT-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --publication-registry-label "Receipt Publication Registry" --output-dir singleton_publication_registry_workspace
+```
+
+Once you have frozen one of those singleton release collections, the checked-in singleton registry-workspace and top-level registry presets in `examples/registry_workspace_presets/` and `examples/registry_presets/` can also be reused directly:
+
+```bash
+satroot1 bootstrap-singleton-demo-release-collection --profile SATROOT-RECEIPT-1 --preset-json examples/catalog_presets/receipt_invoice_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir examples/generated_receipt_release_collection_workspace
+cp -r examples/generated_receipt_release_collection_workspace/release_collection examples/generated_receipt_release_collection
+satroot1 bootstrap-demo-publication-network --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --output-dir generated_publication_network
+satroot1 bootstrap-publication-network-collection generated_publication_network --output-dir generated_publication_network_collection
+satroot1 bootstrap-publication-registry-workspace --preset-json examples/registry_workspace_presets/receipt_invoice_publication_registry_workspace_catalog_release_collection_backed.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir receipt_frozen_registry_workspace
+satroot1 bootstrap-publication-registry-publication --preset-json examples/registry_presets/receipt_invoice_publication_registry_workspace_catalog_release_collection_backed.json --scheme hmac-sha256 --key-id registry-key --output-dir receipt_frozen_registry
+```
+
 Generate a signed SATROOT-STABLE-1 reference-only demo bundle:
 
 ```bash
@@ -550,6 +667,12 @@ If you want to generate multiple stable demo releases from one or more stable pr
 
 ```bash
 satroot1 bootstrap-stable-demo-release-collection --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir stable_release_collection_workspace --label "SATROOT Stable Collection Override"
+```
+
+If you want the reusable packaging layer just below releases, there is also a stable wrapper that generates repeated bundles, snapshots them into a stable bundle collection, and writes a reusable bundle index in one step:
+
+```bash
+satroot1 bootstrap-stable-demo-bundle-index --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --label "Stable Demo Bundle Index" --output-dir stable_bundle_index_workspace
 ```
 
 And if you want the next layer up in the same shot, there is a stable wrapper that generates those releases, snapshots the release collection, and bootstraps a signed release catalog publication:
@@ -606,6 +729,12 @@ If you want to generate multiple machine demo releases from one or more machine 
 satroot1 bootstrap-machine-demo-release-collection --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir machine_release_collection_workspace --label "SATROOT Machine Collection Override"
 ```
 
+If you want the reusable packaging layer just below releases, there is also a machine wrapper that generates repeated bundles, snapshots them into a machine bundle collection, and writes a reusable bundle index in one step:
+
+```bash
+satroot1 bootstrap-machine-demo-bundle-index --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --label "Machine Demo Bundle Index" --output-dir machine_bundle_index_workspace
+```
+
 And if you want the next layer up in the same shot, there is a machine wrapper that generates those releases, snapshots the release collection, and bootstraps a signed release catalog publication:
 
 ```bash
@@ -616,6 +745,12 @@ And if you want the next publication layer above that as well, there is a machin
 
 ```bash
 satroot1 bootstrap-machine-demo-release-catalog-index-publication --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --catalog-scheme hmac-sha256 --catalog-key-id catalog-key --scheme hmac-sha256 --key-id index-key --catalog-label "Machine Demo Release Catalog" --label "Machine Demo Release Catalog Index" --output-dir machine_demo_release_catalog_index_publication
+```
+
+If you want the reusable packaging layer directly at the mixed-profile bundle level, there is also a generic wrapper that generates repeated preset-based bundles, snapshots them into one bundle collection, and writes a reusable top-level bundle index:
+
+```bash
+satroot1 bootstrap-demo-bundle-index --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/ai_compute_catalog.json --scheme hmac-sha256 --label "SATROOT Demo Bundle Index" --output-dir demo_bundle_index_workspace
 ```
 
 Generate a reusable SATROOT-MACHINE-1 machine-credit demo catalog workspace:
@@ -740,6 +875,12 @@ That registry wrapper can also compose the stable catalog preset, a publication-
 satroot1 bootstrap-stable-publication-registry-workspace --catalog-preset-json examples/catalog_presets/stable_reference_catalog.json --publication-catalog-workspace-preset-json examples/publication_catalog_workspace_presets/stable_reference_publication_catalog_workspace.json --preset-json examples/registry_workspace_presets/stable_reference_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir stable_publication_registry_workspace_preset --publication-registry-label "SATROOT Stable Registry Override"
 ```
 
+If the nested stable catalog comes from a frozen one-release collection, that same command can skip `--release-key-id` unless `--publication-network-preset-json` is generating a nested network. A self-contained registry-workspace preset can now carry that nested stable catalog preset for you:
+
+```bash
+satroot1 bootstrap-stable-publication-registry-workspace --preset-json examples/registry_workspace_presets/stable_reference_publication_registry_workspace_catalog_release_collection_backed.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir stable_publication_registry_workspace_frozen_catalog
+```
+
 Generate a reusable SATROOT-MACHINE-1 publication catalog workspace directly from machine-profile inputs:
 
 ```bash
@@ -762,6 +903,12 @@ That registry wrapper can also compose the machine catalog preset, a publication
 
 ```bash
 satroot1 bootstrap-machine-publication-registry-workspace --catalog-preset-json examples/catalog_presets/machine_compute_catalog.json --publication-catalog-workspace-preset-json examples/publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json --preset-json examples/registry_workspace_presets/machine_compute_publication_registry_workspace.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir machine_publication_registry_workspace_preset --publication-registry-label "SATROOT Machine Registry Override"
+```
+
+If the nested machine catalog comes from a frozen one-release collection, that same command can skip `--release-key-id` unless `--publication-network-preset-json` is generating a nested network. A self-contained registry-workspace preset can now carry that nested machine catalog preset for you:
+
+```bash
+satroot1 bootstrap-machine-publication-registry-workspace --preset-json examples/registry_workspace_presets/machine_compute_publication_registry_workspace_catalog_release_collection_backed.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir machine_publication_registry_workspace_frozen_catalog
 ```
 
 Generate a full multi-profile demo catalog workspace with `bundles/`, `release/`, and a root `summary.json` in one step:
@@ -792,6 +939,24 @@ For repeatable scenario generation, `bootstrap-demo-catalog` can also load a che
 
 ```bash
 satroot1 bootstrap-demo-catalog --scheme hmac-sha256 --release-key-id release-key --output-dir catalog_workspace_preset --preset-json examples/catalog_presets/ai_compute_catalog.json --label "SATROOT AI Compute Catalog Override"
+```
+
+For higher-level mixed-profile release packaging, the generic lane can also generate repeated releases directly from repeated demo-catalog presets and snapshot them into one reusable release collection:
+
+```bash
+satroot1 bootstrap-demo-release-collection --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/ai_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --output-dir demo_release_collection_workspace --label "SATROOT Demo Collection Override"
+```
+
+That same repeated-preset mixed-profile lane can bootstrap a signed release catalog publication in one step:
+
+```bash
+satroot1 bootstrap-demo-release-catalog-publication --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/ai_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --scheme hmac-sha256 --key-id catalog-key --release-label "SATROOT Demo Collection Override" --label "SATROOT Demo Release Catalog" --output-dir demo_release_catalog_publication
+```
+
+And one layer higher, it can bootstrap a signed release catalog index publication without separately invoking the collection or catalog steps:
+
+```bash
+satroot1 bootstrap-demo-release-catalog-index-publication --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/ai_compute_catalog.json --bundle-scheme hmac-sha256 --release-key-id release-key --catalog-scheme hmac-sha256 --catalog-key-id catalog-key --scheme hmac-sha256 --key-id index-key --catalog-label "SATROOT Demo Release Catalog" --label "SATROOT Demo Release Catalog Index" --output-dir demo_release_catalog_index_publication
 ```
 
 Consume burn-on-use machine credit from a `SATROOT-MACHINE-1` ledger:
@@ -1079,6 +1244,12 @@ satroot1 bootstrap-machine-demo-release-catalog-index-publication --preset-json 
 That same repeated-preset pattern now extends through the publication stack and publication network layers too:
 
 ```bash
+satroot1 bootstrap-demo-publication-stack --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --label "SATROOT Demo Publication Stack" --output-dir demo_publication_stack
+satroot1 bootstrap-demo-publication-network --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --catalog-label "SATROOT Demo Publication Stack" --label "SATROOT Demo Publication Network" --output-dir demo_publication_network
+satroot1 bootstrap-singleton-demo-publication-stack --profile SATROOT-RECEIPT-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --label "Singleton Receipt Publication Stack" --output-dir singleton_demo_publication_stack
+satroot1 bootstrap-singleton-demo-publication-network --profile SATROOT-IDENTITY-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --catalog-label "Singleton Identity Publication Stack" --label "Singleton Identity Publication Network" --output-dir singleton_demo_publication_network
+satroot1 bootstrap-singleton-demo-publication-catalog-workspace --profile SATROOT-LICENSE-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --descriptor-index-label "Singleton License Workspace Descriptor Index" --publication-metadata-catalog-label "Singleton License Workspace Metadata Catalog" --output-dir singleton_demo_publication_catalog_workspace
+satroot1 bootstrap-singleton-demo-publication-registry-workspace --profile SATROOT-RECEIPT-1 --preset-json singleton_alpha.json --preset-json singleton_beta.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --publication-registry-label "Singleton Receipt Publication Registry" --output-dir singleton_demo_publication_registry_workspace
 satroot1 bootstrap-stable-demo-publication-stack --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --label "Stable Demo Publication Stack" --output-dir stable_demo_publication_stack
 satroot1 bootstrap-machine-demo-publication-stack --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --label "Machine Demo Publication Stack" --output-dir machine_demo_publication_stack
 satroot1 bootstrap-stable-demo-publication-network --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --catalog-label "Stable Demo Publication Stack" --label "Stable Demo Publication Network" --output-dir stable_demo_publication_network
@@ -1088,6 +1259,7 @@ satroot1 bootstrap-machine-demo-publication-network --preset-json examples/catal
 And the same repeated demo presets can now feed directly into reusable publication catalog workspaces as well:
 
 ```bash
+satroot1 bootstrap-demo-publication-catalog-workspace --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --release-label "SATROOT Demo Catalog Release Override" --descriptor-index-label "SATROOT Demo Workspace Descriptor Index" --publication-metadata-catalog-label "SATROOT Demo Workspace Metadata Catalog" --output-dir demo_publication_catalog_workspace
 satroot1 bootstrap-stable-demo-publication-catalog-workspace --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --release-label "Stable Demo Catalog Release Override" --descriptor-index-label "Stable Demo Workspace Descriptor Index" --publication-metadata-catalog-label "Stable Demo Workspace Metadata Catalog" --output-dir stable_demo_publication_catalog_workspace
 satroot1 bootstrap-machine-demo-publication-catalog-workspace --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --release-label "Machine Demo Catalog Release Override" --descriptor-index-label "Machine Demo Workspace Descriptor Index" --publication-metadata-catalog-label "Machine Demo Workspace Metadata Catalog" --output-dir machine_demo_publication_catalog_workspace
 ```
@@ -1095,6 +1267,7 @@ satroot1 bootstrap-machine-demo-publication-catalog-workspace --preset-json exam
 And that same repeated-preset path now reaches the registry workspace layer too:
 
 ```bash
+satroot1 bootstrap-demo-publication-registry-workspace --preset-json examples/catalog_presets/ai_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --release-label "SATROOT Demo Registry Release Override" --release-catalog-label "SATROOT Demo Registry Publication Stack" --release-catalog-index-label "SATROOT Demo Registry Publication Network" --descriptor-index-label "SATROOT Demo Registry Descriptor Index" --publication-metadata-catalog-label "SATROOT Demo Registry Metadata Catalog" --publication-registry-label "SATROOT Demo Publication Registry" --output-dir demo_publication_registry_workspace
 satroot1 bootstrap-stable-demo-publication-registry-workspace --preset-json examples/catalog_presets/stable_reference_catalog.json --preset-json examples/catalog_presets/stable_reference_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --release-label "Stable Demo Registry Release Override" --release-catalog-label "Stable Demo Registry Publication Stack" --release-catalog-index-label "Stable Demo Registry Publication Network" --descriptor-index-label "Stable Demo Registry Descriptor Index" --publication-metadata-catalog-label "Stable Demo Registry Metadata Catalog" --publication-registry-label "Stable Demo Publication Registry" --output-dir stable_demo_publication_registry_workspace
 satroot1 bootstrap-machine-demo-publication-registry-workspace --preset-json examples/catalog_presets/machine_compute_catalog.json --preset-json examples/catalog_presets/machine_compute_catalog.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --release-label "Machine Demo Registry Release Override" --release-catalog-label "Machine Demo Registry Publication Stack" --release-catalog-index-label "Machine Demo Registry Publication Network" --descriptor-index-label "Machine Demo Registry Descriptor Index" --publication-metadata-catalog-label "Machine Demo Registry Metadata Catalog" --publication-registry-label "Machine Demo Publication Registry" --output-dir machine_demo_publication_registry_workspace
 ```
@@ -1243,6 +1416,8 @@ satroot1 publish-publication-stack --inventory-json artifact_inventory.json --sc
 satroot1 publish-publication-stack --catalog-workspace-collection-dir generated_catalog_workspace_collection --scheme hmac-sha256 --release-catalog-key-id catalog-key --output-dir publication_stack_from_collection --label "Collection Published Stack"
 ```
 
+That collection flag also accepts `generated_catalog_workspace_collection/summary.json` directly, and exported stack presets normalize the preserved provenance back to the collection root.
+
 That same publish lane can now also load a stack preset that preserves source `catalog_workspace_dirs`, which makes exported stack presets reusable for both bootstrap and publish workflows:
 
 ```bash
@@ -1275,6 +1450,18 @@ One layer lower, if you want to freeze a reusable set of generated demo catalog 
 satroot1 bootstrap-demo-catalog-workspace-collection generated_catalogs/stable_workspace generated_catalogs/machine_workspace --output-dir generated_catalog_workspace_collection
 ```
 
+Once you start deriving publication catalog workspaces themselves, you can freeze those higher-level descriptor-plus-metadata assemblies for later reuse with `bootstrap-publication-catalog-workspace-collection`:
+
+```bash
+satroot1 bootstrap-publication-catalog-workspace-collection generated_publication_catalogs/catalog_alpha generated_publication_catalogs/catalog_beta --output-dir publication_catalog_workspace_collection
+```
+
+At the top workspace layer, `bootstrap-publication-registry-workspace-collection` does the same for fully assembled registry workspaces when you want to preserve reusable end-to-end publication roots:
+
+```bash
+satroot1 bootstrap-publication-registry-workspace-collection generated_publication_registries/registry_alpha generated_publication_registries/registry_beta --output-dir publication_registry_workspace_collection
+```
+
 If you already have generated publication stack workspaces and want a top-level signed network without regenerating the nested stacks, use `publish-publication-network`:
 
 ```bash
@@ -1288,6 +1475,8 @@ satroot1 publish-publication-network --inventory-json artifact_inventory.json --
 ```bash
 satroot1 publish-publication-network --publication-stack-collection-dir publication_stack_collection --scheme hmac-sha256 --release-catalog-index-key-id index-key --output-dir publication_network_from_collection --label "Collection Published Network"
 ```
+
+The `--publication-stack-collection-dir` flag likewise accepts `publication_stack_collection/summary.json`, while exported network presets continue to preserve the collection root rather than the summary file path.
 
 And because exported network presets now preserve source `publication_stack_dirs`, the same checked-in preset can also drive a publish-only consolidation flow:
 
@@ -1347,6 +1536,12 @@ satroot1 publish-publication-registry-workspace publication_catalog_workspace --
 satroot1 publish-publication-registry-workspace --inventory-json artifact_inventory.json --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir publication_registry_workspace_from_existing --label "Inventory Published Registry Workspace"
 ```
 
+```bash
+satroot1 publish-publication-registry-workspace --publication-catalog-workspace-collection-dir publication_catalog_workspace_collection/summary.json --publication-network-collection-dir publication_network_collection/summary.json --scheme hmac-sha256 --publication-registry-key-id registry-key --output-dir publication_registry_workspace_from_collection --label "Collection Published Registry Workspace"
+```
+
+Both collection flags also accept the collection directory itself, and any later exported registry-workspace preset preserves the collection root rather than the nested `summary.json` path.
+
 That publish wrapper can also load an exported registry-workspace preset for the source catalog workspace, optional network/index source, and publication-registry metadata defaults:
 
 ```bash
@@ -1391,11 +1586,15 @@ To derive a reusable preset back from a generated demo catalog workspace:
 satroot1 export-demo-catalog-preset catalog_workspace --output exported_catalog.json
 ```
 
+This export also accepts `catalog_workspace/summary.json` directly.
+
 To derive a reusable bundle-index preset back from either a release directory or an existing `bundle_index.json`:
 
 ```bash
 satroot1 export-bundle-index-preset release_bootstrap --output exported_bundle_index.json
 ```
+
+That export also accepts `release_manifest.json` directly.
 
 If that bundle index was originally built from `--bundle-collection-dir`, the exported preset now preserves that `bundle_collection_dir` reference instead of expanding back to explicit `bundle_dirs`.
 
@@ -1406,12 +1605,16 @@ satroot1 export-release-catalog-preset publication_stack/release_catalog --outpu
 satroot1 export-release-catalog-index-preset publication_network/release_catalog_index/release_catalog_index.json --output exported_release_catalog_index.json
 ```
 
+The release catalog and release catalog index preset exports also accept their matching `*_manifest.json` files directly.
+
 The machine-only release lanes have matching preset-export wrappers:
 
 ```bash
 satroot1 export-machine-bundle-index-preset machine_release_bootstrap --output exported_machine_bundle_index.json
 satroot1 export-machine-release-catalog-preset machine_release_catalog_alpha/release_catalog.json --output exported_machine_release_catalog.json
 ```
+
+Those machine-only bundle-index exports also accept `release_manifest.json` directly, and the machine release-catalog export accepts `release_catalog_manifest.json`.
 
 The stable-only release lanes now have matching preset-export wrappers too:
 
@@ -1421,6 +1624,8 @@ satroot1 export-stable-release-catalog-preset stable_release_catalog_alpha/relea
 satroot1 export-stable-release-catalog-index-preset stable_release_catalog_index_publication --output exported_stable_release_catalog_index.json
 ```
 
+The same manifest-backed shortcut works for the stable wrappers: `release_manifest.json`, `release_catalog_manifest.json`, and `release_catalog_index_manifest.json`.
+
 The publication-registry and publication-index exports follow the same pattern, so you can point them at either the publication directory or the generated JSON payload:
 
 ```bash
@@ -1429,11 +1634,15 @@ satroot1 export-publication-metadata-catalog-preset publication_metadata_catalog
 satroot1 export-publication-descriptor-index-preset publication_descriptor_index_publication/publication_descriptor_index.json --output exported_publication_descriptor_index.json
 ```
 
+Those publication-layer export commands also accept their matching manifest files directly: `publication_registry_manifest.json`, `publication_metadata_catalog_manifest.json`, and `publication_descriptor_index_manifest.json`.
+
 To derive a publication stack preset and also emit nested demo catalog preset files alongside it:
 
 ```bash
 satroot1 export-publication-stack-preset publication_stack --catalog-preset-dir exported_catalog_presets --output exported_stack.json
 ```
+
+Every workspace-backed export command in this lane also accepts the workspace `summary.json` path instead of the workspace directory itself, so `publication_stack/summary.json` works here too.
 
 Exported stack presets now also preserve source `catalog_workspace_dirs`, so the same preset can be fed back into `publish-publication-stack` without needing the nested demo-catalog preset files at runtime.
 
@@ -1454,6 +1663,8 @@ To derive a publication network preset and recursively emit nested stack and cat
 ```bash
 satroot1 export-publication-network-preset publication_network --stack-preset-dir exported_stack_presets --catalog-preset-dir exported_catalog_presets --output exported_network.json
 ```
+
+The same export command also accepts `publication_network/summary.json` directly.
 
 Those exported network presets also preserve source `publication_stack_dirs`, which makes them reusable for `publish-publication-network` in addition to the bootstrap lane.
 
@@ -1770,16 +1981,24 @@ If you already have a reusable publication catalog workspace, the registry works
 satroot1 bootstrap-publication-registry-workspace --publication-network-dir publication_network --publication-catalog-workspace-dir publication_catalog_workspace --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --publication-registry-label "Workspace Publication Registry"
 ```
 
-That same registry-workspace layer can also consume a previously frozen `publication_network_collection_dir` as long as it contains exactly one publication network workspace. Exported registry-workspace presets preserve that network-collection provenance, and generated nested network presets can in turn preserve their underlying `publication_stack_collection_dir` provenance too:
+That same registry-workspace layer can also consume a previously frozen `publication_network_collection_dir` as long as it contains exactly one publication network workspace. If you also freeze a reusable publication catalog workspace collection, the registry-workspace preset layer can now preserve `publication_catalog_workspace_collection_dir` alongside the network collection provenance, and generated nested network presets can in turn preserve their underlying `publication_stack_collection_dir` provenance too:
 
 ```bash
 satroot1 bootstrap-publication-registry-workspace --publication-network-collection-dir publication_network_collection --publication-catalog-workspace-dir publication_catalog_workspace --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace --publication-registry-label "Workspace Publication Registry"
 ```
 
-There is also a checked-in collection-backed companion preset for the same registry-workspace shape:
+Those collection flags also accept `publication_network_collection/summary.json` and `publication_catalog_workspace_collection/summary.json` directly when you want to point at the frozen collection summaries instead of the collection roots.
+
+There is also a checked-in collection-backed companion preset for the same registry-workspace shape. That checked-in example now resolves both a frozen `publication_network_collection_dir` and a frozen `publication_catalog_workspace_collection_dir` directly from the preset:
 
 ```bash
-satroot1 bootstrap-publication-registry-workspace --preset-json examples/registry_workspace_presets/ai_compute_publication_registry_workspace_collection_backed.json --scheme hmac-sha256 --release-key-id release-key --release-catalog-key-id catalog-key --release-catalog-index-key-id index-key --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace_collection_backed --publication-registry-label "SATROOT Collection-Backed Registry Override"
+satroot1 bootstrap-publication-registry-workspace --preset-json examples/registry_workspace_presets/ai_compute_publication_registry_workspace_collection_backed.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace_collection_backed
+```
+
+If the nested generic demo catalog comes from a frozen one-release collection, the same top-level registry workspace can now round-trip from a self-contained preset that carries both the nested catalog preset and the frozen publication network collection reference:
+
+```bash
+satroot1 bootstrap-publication-registry-workspace --preset-json examples/registry_workspace_presets/ai_compute_publication_registry_workspace_catalog_release_collection_backed.json --scheme hmac-sha256 --publication-descriptor-index-key-id descriptor-key --publication-metadata-key-id metadata-key --publication-metadata-catalog-key-id catalog-key --publication-registry-key-id registry-key --output-dir publication_registry_workspace_frozen_catalog
 ```
 
 To generate just the reusable descriptor-index plus metadata-catalog workspace without the top-level registry lane:
@@ -1822,12 +2041,20 @@ satroot1 bootstrap-machine-publication-registry-publication --preset-json exampl
 satroot1 bootstrap-stable-publication-registry-publication --preset-json examples/registry_presets/stable_reference_publication_registry_workspace_backed.json --output-dir stable_publication_registry_publication_workspace_backed --label "SATROOT Stable Workspace-Backed Registry Override" --scheme hmac-sha256 --key-id registry-key
 ```
 
-There are matching collection-backed companions when you want the top-level registry publication preset to preserve lineage to one generated collection-backed `publication_registry_workspace` root:
+There are matching collection-backed companions when you want the top-level registry publication preset to preserve lineage to one generated `publication_registry_workspace_collection_dir`, with the nested workspace member resolved automatically at load time:
 
 ```bash
 satroot1 bootstrap-publication-registry-publication --preset-json examples/registry_presets/ai_compute_publication_registry_collection_backed.json --output-dir publication_registry_publication_collection_backed --label "SATROOT Collection-Backed Publication Registry Override" --scheme hmac-sha256 --key-id registry-key
 satroot1 bootstrap-machine-publication-registry-publication --preset-json examples/registry_presets/machine_compute_publication_registry_collection_backed.json --output-dir machine_publication_registry_publication_collection_backed --label "SATROOT Machine Collection-Backed Registry Override" --scheme hmac-sha256 --key-id registry-key
 satroot1 bootstrap-stable-publication-registry-publication --preset-json examples/registry_presets/stable_reference_publication_registry_collection_backed.json --output-dir stable_publication_registry_publication_collection_backed --label "SATROOT Stable Collection-Backed Registry Override" --scheme hmac-sha256 --key-id registry-key
+```
+
+If you want that top-level registry publication preset to be fully self-contained for the frozen one-release catalog path, there are checked-in companions that point at a nested `publication_registry_workspace_preset`, which in turn carries a nested collection-backed catalog preset and a single-member publication-network collection reference:
+
+```bash
+satroot1 bootstrap-publication-registry-publication --preset-json examples/registry_presets/ai_compute_publication_registry_workspace_catalog_release_collection_backed.json --output-dir publication_registry_publication_frozen_catalog --label "SATROOT Frozen Catalog Publication Registry Override" --scheme hmac-sha256 --key-id registry-key
+satroot1 bootstrap-machine-publication-registry-publication --preset-json examples/registry_presets/machine_compute_publication_registry_workspace_catalog_release_collection_backed.json --output-dir machine_publication_registry_publication_frozen_catalog --label "SATROOT Machine Frozen Catalog Registry Override" --scheme hmac-sha256 --key-id registry-key
+satroot1 bootstrap-stable-publication-registry-publication --preset-json examples/registry_presets/stable_reference_publication_registry_workspace_catalog_release_collection_backed.json --output-dir stable_publication_registry_publication_frozen_catalog --label "SATROOT Stable Frozen Catalog Registry Override" --scheme hmac-sha256 --key-id registry-key
 ```
 
 To verify that registry later:
@@ -1843,6 +2070,14 @@ satroot1 export-publication-registry-preset publication_registry_publication --o
 ```
 
 If that registry was built from one `publication_registry_workspace` root or `summary.json`, the exported preset keeps that workspace reference so later bootstrap and publish flows can resolve the nested component publications automatically.
+
+If you want that exported top-level registry preset to be self-contained for the frozen one-release catalog flow, the export command can also emit a nested registry-workspace preset and nested catalog preset in one pass:
+
+```bash
+satroot1 export-publication-registry-preset publication_registry_publication_frozen_catalog --publication-registry-workspace-preset-path exported_registry_workspace.json --catalog-preset-path exported_catalog.json --output exported_registry.json
+```
+
+The machine and stable wrappers expose the same nested export flags on `export-machine-publication-registry-preset` and `export-stable-publication-registry-preset`.
 
 The checked-in `examples/registry_presets/` directory now includes companion workspace-backed registry presets for the generic, machine, and stable lanes when you want a reusable registry preset to point at one generated `publication_registry_workspace` root instead of three separate publication component directories.
 
@@ -1884,24 +2119,32 @@ To derive a reusable preset back from a generated registry workspace:
 satroot1 export-publication-registry-workspace-preset publication_registry_workspace --output exported_registry_workspace.json
 ```
 
+That export also accepts `publication_registry_workspace/summary.json` directly, and the same summary-path shortcut works for the machine-only and stable-only registry workspace export wrappers.
+
 That registry-workspace export can also emit nested publication-catalog-workspace and publication-registry preset files, and the nested catalog preset can in turn emit descriptor-index and metadata-catalog presets:
 
 ```bash
 satroot1 export-publication-registry-workspace-preset publication_registry_workspace --publication-catalog-workspace-preset-path exported_catalog_workspace.json --publication-descriptor-index-preset-path exported_descriptor_index.json --publication-metadata-catalog-preset-path exported_metadata_catalog.json --publication-registry-preset-path exported_registry.json --output exported_registry_workspace.json
 ```
 
-Published machine registry-workspace exports are a little stricter: when the original source network is not SATROOT-MACHINE-1-only, the exported machine preset falls back to `release_catalog_index_dir` instead of preserving a generic `publication_network_dir`, so the preset stays reusable by machine-only publish/bootstrap flows.
-
-For the machine-only registry lane, the matching export wrapper validates that the workspace still carries machine provenance:
+If that nested generic catalog came from a frozen one-release collection, `--catalog-preset-path` can also emit the nested SATROOT demo catalog preset so the exported registry-workspace preset can rebuild its nested catalog lane from `--preset-json` alone:
 
 ```bash
-satroot1 export-machine-publication-registry-workspace-preset machine_publication_registry_workspace --output exported_machine_registry_workspace.json
+satroot1 export-publication-registry-workspace-preset publication_registry_workspace --catalog-preset-path exported_catalog.json --publication-catalog-workspace-preset-path exported_catalog_workspace.json --output exported_registry_workspace.json
 ```
 
-The stable-only registry lane has the same provenance guard, but validates `SATROOT-STABLE-1` sources instead:
+Published machine registry-workspace exports are a little stricter: when the original source network is not SATROOT-MACHINE-1-only, the exported machine preset falls back to `release_catalog_index_dir` instead of preserving a generic `publication_network_dir`, so the preset stays reusable by machine-only publish/bootstrap flows.
+
+For the machine-only registry lane, the matching export wrapper validates that the workspace still carries machine provenance. If the nested machine catalog came from a frozen one-release collection, `--catalog-preset-path` can also emit that nested machine catalog preset for a self-contained round-trip:
 
 ```bash
-satroot1 export-stable-publication-registry-workspace-preset stable_publication_registry_workspace --output exported_stable_registry_workspace.json
+satroot1 export-machine-publication-registry-workspace-preset machine_publication_registry_workspace --catalog-preset-path exported_machine_catalog.json --publication-catalog-workspace-preset-path exported_machine_catalog_workspace.json --output exported_machine_registry_workspace.json
+```
+
+The stable-only registry lane has the same provenance guard, but validates `SATROOT-STABLE-1` sources instead. The same `--catalog-preset-path` flow works there for frozen one-release stable catalogs:
+
+```bash
+satroot1 export-stable-publication-registry-workspace-preset stable_publication_registry_workspace --catalog-preset-path exported_stable_catalog.json --publication-catalog-workspace-preset-path exported_stable_catalog_workspace.json --output exported_stable_registry_workspace.json
 ```
 
 To derive a reusable preset back from a generated publication catalog workspace:
@@ -1909,6 +2152,8 @@ To derive a reusable preset back from a generated publication catalog workspace:
 ```bash
 satroot1 export-publication-catalog-workspace-preset publication_catalog_workspace --output exported_catalog_workspace.json
 ```
+
+Like the stack, network, and registry-workspace exports, this command also accepts `publication_catalog_workspace/summary.json` instead of the workspace directory.
 
 If you want the component publications captured as reusable presets at the same time, the catalog-workspace export can also emit nested descriptor-index and metadata-catalog preset files:
 
@@ -2043,6 +2288,34 @@ satroot1 publication-stack-lint publication_stack/summary.json
 satroot1 publication-network-summary publication_network/summary.json
 satroot1 publication-catalog-workspace-lint publication_catalog_workspace/summary.json
 satroot1 publication-registry-workspace-summary publication_registry_workspace/summary.json
+```
+
+The reusable collection layers now have matching summary commands too, so frozen bundle/release/workspace sets can be inspected without manually opening `summary.json`:
+
+```bash
+satroot1 bundle-collection-summary bundle_collection
+satroot1 release-collection-summary release_collection/summary.json
+satroot1 release-catalog-collection-summary release_catalog_collection
+satroot1 demo-catalog-workspace-collection-summary catalog_workspace_collection
+satroot1 publication-stack-collection-summary publication_stack_collection
+satroot1 publication-network-collection-summary publication_network_collection/summary.json
+satroot1 publication-metadata-bundle-collection-summary publication_metadata_bundle_collection
+satroot1 publication-catalog-workspace-collection-summary publication_catalog_workspace_collection
+satroot1 publication-registry-workspace-collection-summary publication_registry_workspace_collection/summary.json
+```
+
+Those same reusable collection layers now expose matching lint commands too, so copied collection members can be checked in place without dropping down into each directory one-by-one:
+
+```bash
+satroot1 bundle-collection-lint bundle_collection
+satroot1 release-collection-lint release_collection/summary.json
+satroot1 release-catalog-collection-lint release_catalog_collection
+satroot1 demo-catalog-workspace-collection-lint catalog_workspace_collection
+satroot1 publication-stack-collection-lint publication_stack_collection
+satroot1 publication-network-collection-lint publication_network_collection/summary.json
+satroot1 publication-metadata-bundle-collection-lint publication_metadata_bundle_collection
+satroot1 publication-catalog-workspace-collection-lint publication_catalog_workspace_collection
+satroot1 publication-registry-workspace-collection-lint publication_registry_workspace_collection/summary.json
 ```
 
 Inspect a publication stack workspace without signature verification:

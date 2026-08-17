@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
+  "version": "0.1",
+  "publication_registry_workspace_preset": "../registry_workspace_presets/receipt_invoice_publication_registry_workspace_catalog_release_collection_backed.json",
+  "registry": {
+    "channel": "network",
+    "label": "SATROOT Receipt Frozen Catalog Publication Registry",
+    "published_at": "2026-08-11T04:30:00Z"
+  }
+}

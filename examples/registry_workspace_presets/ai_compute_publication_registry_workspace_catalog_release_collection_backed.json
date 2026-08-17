@@ -1,0 +1,21 @@
+{
+  "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
+  "version": "0.1",
+  "catalog_preset": "../catalog_presets/ai_compute_catalog_collection_backed.json",
+  "publication_network_collection_dir": "../../generated_publication_network_collection",
+  "publication_descriptor_index": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Frozen Catalog Descriptor Index",
+    "published_at": "2026-07-16T04:00:00Z"
+  },
+  "publication_metadata_catalog": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Frozen Catalog Metadata Catalog",
+    "published_at": "2026-07-16T04:10:00Z"
+  },
+  "publication_registry": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Frozen Catalog Publication Registry Workspace",
+    "published_at": "2026-07-16T04:20:00Z"
+  }
+}

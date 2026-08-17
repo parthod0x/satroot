@@ -1,0 +1,10 @@
+{
+  "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
+  "version": "0.1",
+  "publication_registry_workspace_preset": "../registry_workspace_presets/ai_compute_publication_registry_workspace_catalog_release_collection_backed.json",
+  "registry": {
+    "channel": "network",
+    "label": "SATROOT AI Compute Frozen Catalog Publication Registry",
+    "published_at": "2026-07-16T04:30:00Z"
+  }
+}

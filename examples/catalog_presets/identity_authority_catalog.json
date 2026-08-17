@@ -1,0 +1,34 @@
+{
+  "type": "SATROOT-DEMO-CATALOG-PRESET",
+  "version": "0.1",
+  "profiles": [
+    "SATROOT-IDENTITY-1"
+  ],
+  "symbol_overrides": {
+    "SATROOT-IDENTITY-1": "AUTHID1"
+  },
+  "name_overrides": {
+    "SATROOT-IDENTITY-1": "SATROOT Operator Authority Identity"
+  },
+  "profile_field_overrides": {
+    "SATROOT-IDENTITY-1": {
+      "identity_type": "service-identity",
+      "subject_id": "ops-root",
+      "controller_entity": "operations",
+      "authority_scope": "platform-admin",
+      "intended_use": "operator-auth-ledger"
+    }
+  },
+  "profile_structure_overrides": {
+    "SATROOT-IDENTITY-1": {
+      "holder_account": "operator_alpha",
+      "next_holder": "operator_beta",
+      "retire": false
+    }
+  },
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT Identity Authority Catalog",
+    "published_at": "2026-08-11T00:00:00Z"
+  }
+}

@@ -741,7 +741,8 @@ def _validate_string_sequence(values: Any, *, label: str) -> list[str]:
 
 
 def load_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
-    preset = _load_json_object_file(str(path), label="demo catalog preset")
+    preset_path = Path(path).resolve()
+    preset = _load_json_object_file(str(preset_path), label="demo catalog preset")
     if preset.get("type") != "SATROOT-DEMO-CATALOG-PRESET":
         raise SatRootError("unsupported demo catalog preset type")
     if preset.get("version") != "0.1":
@@ -755,6 +756,7 @@ def load_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
         "name_overrides",
         "profile_field_overrides",
         "profile_structure_overrides",
+        "release_collection_dir",
         "release",
     }
     unexpected = set(preset) - allowed_keys
@@ -767,6 +769,17 @@ def load_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
             raise SatRootError("demo catalog preset profiles must contain an array of strings")
         if len(set(profiles)) != len(profiles):
             raise SatRootError("demo catalog preset profiles must not contain duplicates")
+
+    release_collection_dir = None
+    release_collection_dir_entry = preset.get("release_collection_dir")
+    if release_collection_dir_entry is not None:
+        if not isinstance(release_collection_dir_entry, str) or not release_collection_dir_entry.strip():
+            raise SatRootError("demo catalog preset release_collection_dir must be a non-empty string when provided")
+        release_collection_dir = _normalize_release_collection_input(
+            preset_path.parent / release_collection_dir_entry,
+            label="demo catalog preset release_collection_dir",
+        )
+        summarize_release_collection(release_collection_dir)
 
     return {
         "profiles": profiles,
@@ -788,6 +801,7 @@ def load_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
             preset.get("profile_structure_overrides"),
             allowed_profiles=DEMO_CATALOG_PROFILES,
         ),
+        "release_collection_dir": release_collection_dir,
         "release_metadata": validate_release_metadata_mapping(preset.get("release")),
     }
 
@@ -816,6 +830,7 @@ def load_machine_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
         "name": (preset.get("name_overrides") or {}).get(MACHINE_DEMO_CATALOG_PROFILE),
         "profile_fields": dict((preset.get("profile_field_overrides") or {}).get(MACHINE_DEMO_CATALOG_PROFILE, {})),
         "profile_structure": dict((preset.get("profile_structure_overrides") or {}).get(MACHINE_DEMO_CATALOG_PROFILE, {})),
+        "release_collection_dir": preset.get("release_collection_dir"),
         "release_metadata": dict(preset.get("release_metadata") or {}),
     }
 
@@ -844,6 +859,7 @@ def load_stable_demo_catalog_preset(path: str | Path) -> Dict[str, Any]:
         "name": (preset.get("name_overrides") or {}).get(STABLE_DEMO_CATALOG_PROFILE),
         "profile_fields": dict((preset.get("profile_field_overrides") or {}).get(STABLE_DEMO_CATALOG_PROFILE, {})),
         "profile_structure": dict((preset.get("profile_structure_overrides") or {}).get(STABLE_DEMO_CATALOG_PROFILE, {})),
+        "release_collection_dir": preset.get("release_collection_dir"),
         "release_metadata": dict(preset.get("release_metadata") or {}),
     }
 
@@ -952,8 +968,10 @@ def load_publication_stack_preset(path: str | Path) -> Dict[str, Any]:
             raise SatRootError(
                 "publication stack preset catalog_workspace_collection_dir must be a non-empty string when provided"
             )
-        catalog_workspace_collection_dir = str((preset_path.parent / catalog_workspace_collection_dir_entry).resolve())
-        summarize_demo_catalog_workspace_collection(catalog_workspace_collection_dir)
+        catalog_workspace_collection_dir = _normalize_demo_catalog_workspace_collection_input(
+            (preset_path.parent / catalog_workspace_collection_dir_entry).resolve(),
+            label="publication stack preset catalog workspace collection",
+        )
     if catalog_workspace_collection_dir is not None and catalog_workspace_dirs:
         raise SatRootError(
             "publication stack preset accepts either catalog_workspace_dirs or catalog_workspace_collection_dir, not both"
@@ -1051,8 +1069,10 @@ def load_publication_network_preset(path: str | Path) -> Dict[str, Any]:
             raise SatRootError(
                 "publication network preset publication_stack_collection_dir must be a non-empty string when provided"
             )
-        publication_stack_collection_dir = str((preset_path.parent / publication_stack_collection_dir_entry).resolve())
-        summarize_publication_stack_collection(publication_stack_collection_dir)
+        publication_stack_collection_dir = _normalize_publication_stack_collection_input(
+            (preset_path.parent / publication_stack_collection_dir_entry).resolve(),
+            label="publication network preset publication stack collection",
+        )
     if publication_stack_collection_dir is not None and publication_stack_dirs:
         raise SatRootError(
             "publication network preset accepts either publication_stack_dirs or publication_stack_collection_dir, not both"
@@ -1651,6 +1671,8 @@ def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
         "type",
         "version",
         "publication_registry_workspace_dir",
+        "publication_registry_workspace_collection_dir",
+        "publication_registry_workspace_preset",
         "release_catalog_index_dir",
         "publication_descriptor_index_dir",
         "publication_metadata_catalog_dir",
@@ -1669,9 +1691,26 @@ def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
         return str((preset_path.parent / value).resolve())
 
     publication_registry_workspace_dir = resolve_optional_path("publication_registry_workspace_dir")
+    publication_registry_workspace_collection_dir = resolve_optional_path("publication_registry_workspace_collection_dir")
+    publication_registry_workspace_preset_path = resolve_optional_path("publication_registry_workspace_preset")
     release_catalog_index_dir = resolve_optional_path("release_catalog_index_dir")
     publication_descriptor_index_dir = resolve_optional_path("publication_descriptor_index_dir")
     publication_metadata_catalog_dir = resolve_optional_path("publication_metadata_catalog_dir")
+    if publication_registry_workspace_preset_path is not None:
+        load_publication_registry_workspace_preset(publication_registry_workspace_preset_path)
+    if publication_registry_workspace_collection_dir is not None and publication_registry_workspace_dir is not None:
+        raise SatRootError(
+            "publication registry preset accepts either publication_registry_workspace_dir or publication_registry_workspace_collection_dir, not both"
+        )
+    if publication_registry_workspace_preset_path is not None and any(
+        (
+            publication_registry_workspace_dir,
+            publication_registry_workspace_collection_dir,
+        )
+    ):
+        raise SatRootError(
+            "publication registry preset accepts either publication_registry_workspace_preset, publication_registry_workspace_dir, or publication_registry_workspace_collection_dir, not more than one"
+        )
     if publication_registry_workspace_dir is not None and any(
         (
             release_catalog_index_dir,
@@ -1682,6 +1721,33 @@ def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
         raise SatRootError(
             "publication registry preset accepts either publication_registry_workspace_dir or explicit publication component directories, not both"
         )
+    if publication_registry_workspace_collection_dir is not None and any(
+        (
+            release_catalog_index_dir,
+            publication_descriptor_index_dir,
+            publication_metadata_catalog_dir,
+        )
+    ):
+        raise SatRootError(
+            "publication registry preset accepts either publication_registry_workspace_collection_dir or explicit publication component directories, not both"
+        )
+    if publication_registry_workspace_preset_path is not None and any(
+        (
+            release_catalog_index_dir,
+            publication_descriptor_index_dir,
+            publication_metadata_catalog_dir,
+        )
+    ):
+        raise SatRootError(
+            "publication registry preset accepts either publication_registry_workspace_preset or explicit publication component directories, not both"
+        )
+    if publication_registry_workspace_collection_dir is not None:
+        publication_registry_workspace_dir, publication_registry_workspace_collection_dir = (
+            _resolve_exactly_one_publication_registry_workspace_from_collection(
+                publication_registry_workspace_collection_dir,
+                label="publication registry preset publication_registry_workspace_collection_dir",
+            )
+        )
     if publication_registry_workspace_dir is not None:
         summarize_publication_registry_workspace(publication_registry_workspace_dir)
         release_catalog_index_dir = _normalize_release_catalog_index_publication_input(publication_registry_workspace_dir)
@@ -1691,11 +1757,20 @@ def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
         publication_metadata_catalog_dir = _normalize_publication_metadata_catalog_publication_input(
             publication_registry_workspace_dir
         )
-    if not any((release_catalog_index_dir, publication_descriptor_index_dir, publication_metadata_catalog_dir)):
+    if not any(
+        (
+            publication_registry_workspace_preset_path,
+            release_catalog_index_dir,
+            publication_descriptor_index_dir,
+            publication_metadata_catalog_dir,
+        )
+    ):
         raise SatRootError("publication registry preset must contain at least one publication component directory")
 
     return {
         "publication_registry_workspace_dir": publication_registry_workspace_dir,
+        "publication_registry_workspace_collection_dir": publication_registry_workspace_collection_dir,
+        "publication_registry_workspace_preset_path": publication_registry_workspace_preset_path,
         "release_catalog_index_dir": release_catalog_index_dir,
         "publication_descriptor_index_dir": publication_descriptor_index_dir,
         "publication_metadata_catalog_dir": publication_metadata_catalog_dir,
@@ -1705,6 +1780,17 @@ def load_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
 
 def load_machine_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
     preset = load_publication_registry_preset(path)
+    publication_registry_workspace_preset_path = preset.get("publication_registry_workspace_preset_path")
+    if publication_registry_workspace_preset_path is not None:
+        load_machine_publication_registry_workspace_preset(publication_registry_workspace_preset_path)
+    publication_registry_workspace_collection_dir = preset.get("publication_registry_workspace_collection_dir")
+    if publication_registry_workspace_collection_dir is not None:
+        collection_summary = summarize_publication_registry_workspace_collection(publication_registry_workspace_collection_dir)
+        for publication_registry_workspace_dir in collection_summary.get("publication_registry_workspace_dirs", []):
+            _require_machine_publication_registry_workspace(
+                publication_registry_workspace_dir,
+                label="machine publication registry preset publication registry workspace collection",
+            )
     release_catalog_index_dir = preset.get("release_catalog_index_dir")
     if release_catalog_index_dir is not None:
         _require_machine_release_catalog_index_publication(
@@ -1728,6 +1814,17 @@ def load_machine_publication_registry_preset(path: str | Path) -> Dict[str, Any]
 
 def load_stable_publication_registry_preset(path: str | Path) -> Dict[str, Any]:
     preset = load_publication_registry_preset(path)
+    publication_registry_workspace_preset_path = preset.get("publication_registry_workspace_preset_path")
+    if publication_registry_workspace_preset_path is not None:
+        load_stable_publication_registry_workspace_preset(publication_registry_workspace_preset_path)
+    publication_registry_workspace_collection_dir = preset.get("publication_registry_workspace_collection_dir")
+    if publication_registry_workspace_collection_dir is not None:
+        collection_summary = summarize_publication_registry_workspace_collection(publication_registry_workspace_collection_dir)
+        for publication_registry_workspace_dir in collection_summary.get("publication_registry_workspace_dirs", []):
+            _require_stable_publication_registry_workspace(
+                publication_registry_workspace_dir,
+                label="stable publication registry preset publication registry workspace collection",
+            )
     release_catalog_index_dir = preset.get("release_catalog_index_dir")
     if release_catalog_index_dir is not None:
         _require_stable_release_catalog_index_publication(
@@ -1763,7 +1860,9 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
         "artifact_paths",
         "discover_under",
         "recursive",
+        "catalog_preset",
         "publication_catalog_workspace_dir",
+        "publication_catalog_workspace_collection_dir",
         "publication_catalog_workspace_preset",
         "publication_network_preset",
         "publication_network_dir",
@@ -1805,17 +1904,36 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
         return str((preset_path.parent / value).resolve())
 
     publication_catalog_workspace_dir = resolve_optional_path("publication_catalog_workspace_dir")
+    publication_catalog_workspace_collection_dir = resolve_optional_path("publication_catalog_workspace_collection_dir")
+    catalog_preset_path = resolve_optional_path("catalog_preset")
     publication_catalog_workspace_preset_path = resolve_optional_path("publication_catalog_workspace_preset")
     publication_network_preset_path = resolve_optional_path("publication_network_preset")
     publication_network_dir = resolve_optional_path("publication_network_dir")
     publication_network_collection_dir = resolve_optional_path("publication_network_collection_dir")
     release_catalog_index_dir = resolve_optional_path("release_catalog_index_dir")
     publication_registry_preset_path = resolve_optional_path("publication_registry_preset")
+    if catalog_preset_path is not None:
+        load_demo_catalog_preset(catalog_preset_path)
     if publication_catalog_workspace_preset_path is not None:
         load_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
     if publication_network_preset_path is not None:
         load_publication_network_preset(publication_network_preset_path)
+    if publication_catalog_workspace_collection_dir is not None:
+        if publication_catalog_workspace_dir is not None or publication_catalog_workspace_preset_path is not None:
+            raise SatRootError(
+                "publication registry workspace preset accepts either publication_catalog_workspace_dir/publication_catalog_workspace_preset or publication_catalog_workspace_collection_dir, not both"
+            )
+        publication_catalog_workspace_dir, publication_catalog_workspace_collection_dir = (
+            _resolve_exactly_one_publication_catalog_workspace_from_collection(
+                publication_catalog_workspace_collection_dir,
+                label="publication registry workspace preset publication_catalog_workspace_collection_dir",
+            )
+        )
     if publication_network_collection_dir is not None:
+        publication_network_collection_dir = _normalize_publication_network_collection_input(
+            publication_network_collection_dir,
+            label="publication registry workspace preset publication_network_collection_dir",
+        )
         collection_summary = summarize_publication_network_collection(publication_network_collection_dir)
         if collection_summary.get("network_count") != 1:
             raise SatRootError(
@@ -1855,7 +1973,9 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
         "artifact_paths": artifact_paths,
         "discover_under": discover_under,
         "recursive": recursive,
+        "catalog_preset_path": catalog_preset_path,
         "publication_catalog_workspace_dir": publication_catalog_workspace_dir,
+        "publication_catalog_workspace_collection_dir": publication_catalog_workspace_collection_dir,
         "publication_catalog_workspace_preset_path": publication_catalog_workspace_preset_path,
         "publication_network_preset_path": publication_network_preset_path,
         "publication_network_dir": publication_network_dir,
@@ -1870,6 +1990,9 @@ def load_publication_registry_workspace_preset(path: str | Path) -> Dict[str, An
 
 def load_machine_publication_registry_workspace_preset(path: str | Path) -> Dict[str, Any]:
     preset = load_publication_registry_workspace_preset(path)
+    catalog_preset_path = preset.get("catalog_preset_path")
+    if catalog_preset_path is not None:
+        load_machine_demo_catalog_preset(catalog_preset_path)
     publication_catalog_workspace_preset_path = preset.get("publication_catalog_workspace_preset_path")
     if publication_catalog_workspace_preset_path is not None:
         load_machine_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
@@ -1878,13 +2001,21 @@ def load_machine_publication_registry_workspace_preset(path: str | Path) -> Dict
         load_machine_publication_network_preset(publication_network_preset_path)
     publication_registry_preset_path = preset.get("publication_registry_preset_path")
     if publication_registry_preset_path is not None:
-        load_publication_registry_preset(publication_registry_preset_path)
+        load_machine_publication_registry_preset(publication_registry_preset_path)
     publication_catalog_workspace_dir = preset.get("publication_catalog_workspace_dir")
     if publication_catalog_workspace_dir is not None:
         _require_machine_publication_catalog_workspace(
             publication_catalog_workspace_dir,
             label="machine publication registry workspace preset publication catalog workspace",
         )
+    publication_catalog_workspace_collection_dir = preset.get("publication_catalog_workspace_collection_dir")
+    if publication_catalog_workspace_collection_dir is not None:
+        collection_summary = summarize_publication_catalog_workspace_collection(publication_catalog_workspace_collection_dir)
+        for publication_catalog_workspace_dir in collection_summary.get("publication_catalog_workspace_dirs", []):
+            _require_machine_publication_catalog_workspace(
+                publication_catalog_workspace_dir,
+                label="machine publication registry workspace preset publication catalog workspace collection",
+            )
     publication_network_dir = preset.get("publication_network_dir")
     if publication_network_dir is not None:
         _require_machine_publication_network_workspace(
@@ -1909,6 +2040,9 @@ def load_machine_publication_registry_workspace_preset(path: str | Path) -> Dict
 
 def load_stable_publication_registry_workspace_preset(path: str | Path) -> Dict[str, Any]:
     preset = load_publication_registry_workspace_preset(path)
+    catalog_preset_path = preset.get("catalog_preset_path")
+    if catalog_preset_path is not None:
+        load_stable_demo_catalog_preset(catalog_preset_path)
     publication_catalog_workspace_preset_path = preset.get("publication_catalog_workspace_preset_path")
     if publication_catalog_workspace_preset_path is not None:
         load_stable_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
@@ -1917,13 +2051,21 @@ def load_stable_publication_registry_workspace_preset(path: str | Path) -> Dict[
         load_stable_publication_network_preset(publication_network_preset_path)
     publication_registry_preset_path = preset.get("publication_registry_preset_path")
     if publication_registry_preset_path is not None:
-        load_publication_registry_preset(publication_registry_preset_path)
+        load_stable_publication_registry_preset(publication_registry_preset_path)
     publication_catalog_workspace_dir = preset.get("publication_catalog_workspace_dir")
     if publication_catalog_workspace_dir is not None:
         _require_stable_publication_catalog_workspace(
             publication_catalog_workspace_dir,
             label="stable publication registry workspace preset publication catalog workspace",
         )
+    publication_catalog_workspace_collection_dir = preset.get("publication_catalog_workspace_collection_dir")
+    if publication_catalog_workspace_collection_dir is not None:
+        collection_summary = summarize_publication_catalog_workspace_collection(publication_catalog_workspace_collection_dir)
+        for publication_catalog_workspace_dir in collection_summary.get("publication_catalog_workspace_dirs", []):
+            _require_stable_publication_catalog_workspace(
+                publication_catalog_workspace_dir,
+                label="stable publication registry workspace preset publication catalog workspace collection",
+            )
     publication_network_dir = preset.get("publication_network_dir")
     if publication_network_dir is not None:
         _require_stable_publication_network_workspace(
@@ -3085,6 +3227,864 @@ def bootstrap_singleton_object_demo_release(
     }
 
 
+def bootstrap_singleton_demo_bundle_index_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    bundle_index_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
+        raise SatRootError("singleton demo bundle index bootstrap requires a SATROOT receipt, identity, or license profile")
+
+    structure_overrides: Dict[str, Any] = {}
+    if root_id is not None:
+        structure_overrides["root_id"] = root_id
+    if issuer is not None:
+        structure_overrides["issuer"] = issuer
+    if holder_account is not None:
+        structure_overrides["holder_account"] = holder_account
+    if next_holder is not None:
+        structure_overrides["next_holder"] = next_holder
+    if no_archive:
+        structure_overrides["archive_account"] = None
+    elif archive_account is not None:
+        structure_overrides["archive_account"] = archive_account
+    if rules_hash is not None:
+        structure_overrides["rules_hash"] = rules_hash
+    if nonce is not None:
+        structure_overrides["nonce"] = nonce
+    if retire is not None:
+        structure_overrides["retire"] = retire
+
+    return bootstrap_demo_bundle_index_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=output_dir,
+        profiles=[profile],
+        symbol_overrides=None if symbol is None else {profile: symbol},
+        name_overrides=None if name is None else {profile: name},
+        profile_field_overrides=None if not profile_fields else {profile: dict(profile_fields)},
+        profile_structure_overrides=None if not structure_overrides else {profile: structure_overrides},
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        bundle_index_metadata_overrides=bundle_index_metadata_overrides,
+    )
+
+
+def bootstrap_singleton_demo_release_collection_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
+        raise SatRootError("singleton demo release collection bootstrap requires a SATROOT receipt, identity, or license profile")
+
+    structure_overrides: Dict[str, Any] = {}
+    if root_id is not None:
+        structure_overrides["root_id"] = root_id
+    if issuer is not None:
+        structure_overrides["issuer"] = issuer
+    if holder_account is not None:
+        structure_overrides["holder_account"] = holder_account
+    if next_holder is not None:
+        structure_overrides["next_holder"] = next_holder
+    if no_archive:
+        structure_overrides["archive_account"] = None
+    elif archive_account is not None:
+        structure_overrides["archive_account"] = archive_account
+    if rules_hash is not None:
+        structure_overrides["rules_hash"] = rules_hash
+    if nonce is not None:
+        structure_overrides["nonce"] = nonce
+    if retire is not None:
+        structure_overrides["retire"] = retire
+
+    return bootstrap_demo_release_collection_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=output_dir,
+        release_key_id=release_key_id,
+        release_scheme=release_scheme,
+        profiles=[profile],
+        symbol_overrides=None if symbol is None else {profile: symbol},
+        name_overrides=None if name is None else {profile: name},
+        profile_field_overrides=None if not profile_fields else {profile: dict(profile_fields)},
+        profile_structure_overrides=None if not structure_overrides else {profile: structure_overrides},
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+    )
+
+
+def bootstrap_singleton_demo_release_catalog_publication_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    signature_scheme: str,
+    key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
+        raise SatRootError("singleton demo release catalog bootstrap requires a SATROOT receipt, identity, or license profile")
+
+    structure_overrides: Dict[str, Any] = {}
+    if root_id is not None:
+        structure_overrides["root_id"] = root_id
+    if issuer is not None:
+        structure_overrides["issuer"] = issuer
+    if holder_account is not None:
+        structure_overrides["holder_account"] = holder_account
+    if next_holder is not None:
+        structure_overrides["next_holder"] = next_holder
+    if no_archive:
+        structure_overrides["archive_account"] = None
+    elif archive_account is not None:
+        structure_overrides["archive_account"] = archive_account
+    if rules_hash is not None:
+        structure_overrides["rules_hash"] = rules_hash
+    if nonce is not None:
+        structure_overrides["nonce"] = nonce
+    if retire is not None:
+        structure_overrides["retire"] = retire
+
+    return bootstrap_demo_release_catalog_publication_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=output_dir,
+        release_key_id=release_key_id,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        release_scheme=release_scheme,
+        profiles=[profile],
+        symbol_overrides=None if symbol is None else {profile: symbol},
+        name_overrides=None if name is None else {profile: name},
+        profile_field_overrides=None if not profile_fields else {profile: dict(profile_fields)},
+        profile_structure_overrides=None if not structure_overrides else {profile: structure_overrides},
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        catalog_metadata=catalog_metadata,
+    )
+
+
+def bootstrap_singleton_demo_release_catalog_index_publication_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    catalog_signature_scheme: str,
+    catalog_key_id: str,
+    index_signature_scheme: str,
+    index_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
+        raise SatRootError("singleton demo release catalog index bootstrap requires a SATROOT receipt, identity, or license profile")
+
+    structure_overrides: Dict[str, Any] = {}
+    if root_id is not None:
+        structure_overrides["root_id"] = root_id
+    if issuer is not None:
+        structure_overrides["issuer"] = issuer
+    if holder_account is not None:
+        structure_overrides["holder_account"] = holder_account
+    if next_holder is not None:
+        structure_overrides["next_holder"] = next_holder
+    if no_archive:
+        structure_overrides["archive_account"] = None
+    elif archive_account is not None:
+        structure_overrides["archive_account"] = archive_account
+    if rules_hash is not None:
+        structure_overrides["rules_hash"] = rules_hash
+    if nonce is not None:
+        structure_overrides["nonce"] = nonce
+    if retire is not None:
+        structure_overrides["retire"] = retire
+
+    return bootstrap_demo_release_catalog_index_publication_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=output_dir,
+        release_key_id=release_key_id,
+        catalog_signature_scheme=catalog_signature_scheme,
+        catalog_key_id=catalog_key_id,
+        index_signature_scheme=index_signature_scheme,
+        index_key_id=index_key_id,
+        release_scheme=release_scheme,
+        profiles=[profile],
+        symbol_overrides=None if symbol is None else {profile: symbol},
+        name_overrides=None if name is None else {profile: name},
+        profile_field_overrides=None if not profile_fields else {profile: dict(profile_fields)},
+        profile_structure_overrides=None if not structure_overrides else {profile: structure_overrides},
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        catalog_metadata=catalog_metadata,
+        index_metadata=index_metadata,
+    )
+
+
+def _build_singleton_demo_structure_overrides(
+    *,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+) -> Dict[str, Any]:
+    structure_overrides: Dict[str, Any] = {}
+    if root_id is not None:
+        structure_overrides["root_id"] = root_id
+    if issuer is not None:
+        structure_overrides["issuer"] = issuer
+    if holder_account is not None:
+        structure_overrides["holder_account"] = holder_account
+    if next_holder is not None:
+        structure_overrides["next_holder"] = next_holder
+    if no_archive:
+        structure_overrides["archive_account"] = None
+    elif archive_account is not None:
+        structure_overrides["archive_account"] = archive_account
+    if rules_hash is not None:
+        structure_overrides["rules_hash"] = rules_hash
+    if nonce is not None:
+        structure_overrides["nonce"] = nonce
+    if retire is not None:
+        structure_overrides["retire"] = retire
+    return structure_overrides
+
+
+def _bootstrap_singleton_demo_catalog_workspaces_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
+        raise SatRootError("singleton demo catalog workspace bootstrap requires a SATROOT receipt, identity, or license profile")
+
+    root_output_dir = Path(output_dir).resolve()
+    generated_workspaces: List[Dict[str, Any]] = []
+    generated_workspace_dirs: List[str] = []
+    allocated_names: set[str] = set()
+    structure_overrides = _build_singleton_demo_structure_overrides(
+        root_id=root_id,
+        issuer=issuer,
+        holder_account=holder_account,
+        next_holder=next_holder,
+        archive_account=archive_account,
+        no_archive=no_archive,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        retire=retire,
+    )
+    shared_profile_field_overrides = None if not profile_fields else {profile: dict(profile_fields)}
+    shared_profile_structure_overrides = None if not structure_overrides else {profile: structure_overrides}
+
+    for index, preset_path_value in enumerate(preset_paths, start=1):
+        preset_path = Path(preset_path_value).resolve()
+        demo_preset = load_demo_catalog_preset(preset_path)
+        effective_profiles = _resolve_effective_demo_catalog_profiles(
+            profiles=[profile],
+            preset_profiles=demo_preset.get("profiles"),
+        )
+        release_metadata = _merge_release_metadata_defaults(
+            demo_preset.get("release_metadata"),
+            release_metadata_overrides,
+        )
+        member_name = _allocate_collection_member_dir_name(
+            preset_path,
+            allocated=allocated_names,
+            fallback_prefix=f"singleton-demo-catalog-{index}",
+        )
+        workspace_dir = root_output_dir / member_name
+        workspace = write_demo_catalog_workspace(
+            bundle_scheme=bundle_scheme,
+            release_scheme=release_scheme,
+            release_key_id=release_key_id,
+            output_dir=workspace_dir,
+            profiles=effective_profiles,
+            symbol_overrides={
+                **_filter_profile_string_map(
+                    demo_preset.get("symbol_overrides"),
+                    allowed_profiles=effective_profiles,
+                ),
+                **({profile: symbol} if symbol is not None else {}),
+            },
+            name_overrides={
+                **_filter_profile_string_map(
+                    demo_preset.get("name_overrides"),
+                    allowed_profiles=effective_profiles,
+                ),
+                **({profile: name} if name is not None else {}),
+            },
+            profile_field_overrides=_merge_nested_override_maps(
+                _filter_profile_nested_map(
+                    demo_preset.get("profile_field_overrides"),
+                    allowed_profiles=effective_profiles,
+                ),
+                shared_profile_field_overrides,
+            ),
+            profile_structure_overrides=_merge_nested_override_maps(
+                _filter_profile_nested_map(
+                    demo_preset.get("profile_structure_overrides"),
+                    allowed_profiles=effective_profiles,
+                ),
+                shared_profile_structure_overrides,
+            ),
+            release_collection_dir=demo_preset.get("release_collection_dir"),
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+            verifier_only=verifier_only,
+            release_metadata=release_metadata,
+            preset_path=preset_path,
+        )
+        workspace_summary = workspace["summary"]
+        bundle_entries = list(workspace_summary.get("bundles", []))
+        generated_workspace_dirs.append(str(workspace_dir.resolve()))
+        generated_workspaces.append(
+            {
+                "preset_path": str(preset_path),
+                "workspace_dir": str(workspace_dir.resolve()),
+                "release_dir": str(workspace_summary["release_dir"]),
+                "bundle_count": len(bundle_entries),
+                "profiles": [str(entry["profile"]) for entry in bundle_entries],
+                "bundle_symbols": [str(entry["symbol"]) for entry in bundle_entries],
+                "bundle_names": [str(entry["name"]) for entry in bundle_entries],
+                "release_metadata": release_metadata,
+            }
+        )
+
+    return {
+        "generated_workspaces_dir": str(root_output_dir),
+        "generated_workspaces": generated_workspaces,
+        "generated_workspace_dirs": generated_workspace_dirs,
+    }
+
+
+def bootstrap_singleton_demo_publication_stack_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_catalog_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    catalog_workspace_sources = _bootstrap_singleton_demo_catalog_workspaces_from_presets(
+        preset_paths,
+        profile=profile,
+        bundle_scheme=bundle_scheme,
+        output_dir=root_output_dir / "catalog_workspace_sources",
+        release_key_id=release_key_id,
+        release_scheme=release_scheme,
+        symbol=symbol,
+        name=name,
+        root_id=root_id,
+        issuer=issuer,
+        holder_account=holder_account,
+        next_holder=next_holder,
+        archive_account=archive_account,
+        no_archive=no_archive,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        retire=retire,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+    )
+    stack_workspace = write_publication_stack_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        release_catalog_scheme=release_catalog_scheme,
+        release_catalog_key_id=release_catalog_key_id,
+        output_dir=root_output_dir,
+        catalog_preset_paths=(),
+        catalog_workspace_dirs=catalog_workspace_sources["generated_workspace_dirs"],
+        catalog_workspace_collection_dir=None,
+        release_catalog_metadata=release_catalog_metadata,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+    )
+    return {
+        "generated_catalog_workspaces_dir": catalog_workspace_sources["generated_workspaces_dir"],
+        "generated_catalog_workspaces": catalog_workspace_sources["generated_workspaces"],
+        "generated_catalog_workspace_dirs": catalog_workspace_sources["generated_workspace_dirs"],
+        "publication_stack_workspace": stack_workspace,
+        "summary": stack_workspace["summary"],
+        "summary_path": stack_workspace["summary_path"],
+    }
+
+
+def bootstrap_singleton_demo_publication_network_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_catalog_index_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_catalog_scheme: Optional[str] = None,
+    release_catalog_index_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+    release_catalog_index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    stack_source_dir = root_output_dir / "publication_stack_source"
+    stack_workspace = bootstrap_singleton_demo_publication_stack_from_presets(
+        preset_paths,
+        profile=profile,
+        bundle_scheme=bundle_scheme,
+        output_dir=stack_source_dir,
+        release_key_id=release_key_id,
+        release_catalog_key_id=release_catalog_key_id,
+        release_scheme=release_scheme,
+        release_catalog_scheme=release_catalog_scheme,
+        symbol=symbol,
+        name=name,
+        root_id=root_id,
+        issuer=issuer,
+        holder_account=holder_account,
+        next_holder=next_holder,
+        archive_account=archive_account,
+        no_archive=no_archive,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        retire=retire,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        release_catalog_metadata=release_catalog_metadata,
+    )
+    network_workspace = write_publication_network_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        release_catalog_scheme=release_catalog_scheme,
+        release_catalog_key_id=release_catalog_key_id,
+        release_catalog_index_scheme=release_catalog_index_scheme,
+        release_catalog_index_key_id=release_catalog_index_key_id,
+        output_dir=root_output_dir,
+        stack_preset_paths=(),
+        publication_stack_dirs=[stack_source_dir],
+        release_catalog_index_metadata=release_catalog_index_metadata,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+    )
+    return {
+        "publication_stack_workspace": stack_workspace,
+        "publication_network_workspace": network_workspace,
+        "summary": network_workspace["summary"],
+        "summary_path": network_workspace["summary_path"],
+    }
+
+
+def bootstrap_singleton_demo_publication_catalog_workspace_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    source_workspaces_dir = root_output_dir / "catalog_workspace_sources"
+    collection_dir = root_output_dir / "catalog_workspaces"
+    generated_catalog_workspaces = _bootstrap_singleton_demo_catalog_workspaces_from_presets(
+        preset_paths,
+        profile=profile,
+        bundle_scheme=bundle_scheme,
+        output_dir=source_workspaces_dir,
+        release_key_id=release_key_id,
+        release_scheme=release_scheme,
+        symbol=symbol,
+        name=name,
+        root_id=root_id,
+        issuer=issuer,
+        holder_account=holder_account,
+        next_holder=next_holder,
+        archive_account=archive_account,
+        no_archive=no_archive,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        retire=retire,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+    )
+    catalog_workspace_collection = bootstrap_demo_catalog_workspace_collection(
+        generated_catalog_workspaces["generated_workspace_dirs"],
+        output_dir=collection_dir,
+    )
+    publication_catalog_workspace = write_publication_catalog_workspace(
+        artifact_paths=[],
+        discover_under=catalog_workspace_collection["catalog_workspace_dirs"],
+        recursive=True,
+        output_dir=root_output_dir,
+        signature_scheme=bundle_scheme,
+        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+        publication_metadata_key_id=publication_metadata_key_id,
+        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+        descriptor_index_metadata=descriptor_index_metadata,
+        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+    )
+
+    summary = copy.deepcopy(publication_catalog_workspace["summary"])
+    summary["source_singleton_catalog_workspace_collection_dir"] = str(collection_dir.resolve())
+    summary["source_singleton_catalog_workspace_collection_summary_path"] = catalog_workspace_collection["summary_path"]
+    summary["source_singleton_catalog_workspace_collection"] = copy.deepcopy(catalog_workspace_collection["summary"])
+    _write_json_file(root_output_dir / "summary.json", summary)
+
+    publication_catalog_workspace["summary"] = summary
+    publication_catalog_workspace["catalog_workspace_collection_dir"] = str(collection_dir.resolve())
+    publication_catalog_workspace["catalog_workspace_collection"] = catalog_workspace_collection
+    publication_catalog_workspace["generated_catalog_workspaces"] = generated_catalog_workspaces
+    return publication_catalog_workspace
+
+
+def bootstrap_singleton_demo_publication_registry_workspace_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    profile: str,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_catalog_index_key_id: str,
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    publication_registry_key_id: str,
+    release_scheme: Optional[str] = None,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    root_id: Optional[str] = None,
+    issuer: Optional[str] = None,
+    holder_account: Optional[str] = None,
+    next_holder: Optional[str] = None,
+    archive_account: Optional[str] = None,
+    no_archive: bool = False,
+    profile_fields: Optional[Mapping[str, str]] = None,
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    retire: Optional[bool] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+    release_catalog_index_metadata: Optional[Mapping[str, str]] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+    publication_registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    publication_catalog_workspace_source_dir = root_output_dir / "publication_catalog_workspace_source"
+    publication_network_source_dir = root_output_dir / "publication_network_source"
+
+    publication_catalog_workspace = bootstrap_singleton_demo_publication_catalog_workspace_from_presets(
+        preset_paths,
+        profile=profile,
+        bundle_scheme=bundle_scheme,
+        output_dir=publication_catalog_workspace_source_dir,
+        release_key_id=release_key_id,
+        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+        publication_metadata_key_id=publication_metadata_key_id,
+        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+        release_scheme=release_scheme,
+        symbol=symbol,
+        name=name,
+        root_id=root_id,
+        issuer=issuer,
+        holder_account=holder_account,
+        next_holder=next_holder,
+        archive_account=archive_account,
+        no_archive=no_archive,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        retire=retire,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        descriptor_index_metadata=descriptor_index_metadata,
+        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+    )
+    publication_network_workspace = bootstrap_singleton_demo_publication_network_from_presets(
+        preset_paths,
+        profile=profile,
+        bundle_scheme=bundle_scheme,
+        output_dir=publication_network_source_dir,
+        release_key_id=release_key_id,
+        release_catalog_key_id=release_catalog_key_id,
+        release_catalog_index_key_id=release_catalog_index_key_id,
+        release_scheme=release_scheme,
+        symbol=symbol,
+        name=name,
+        root_id=root_id,
+        issuer=issuer,
+        holder_account=holder_account,
+        next_holder=next_holder,
+        archive_account=archive_account,
+        no_archive=no_archive,
+        profile_fields=profile_fields,
+        rules_hash=rules_hash,
+        nonce=nonce,
+        retire=retire,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        release_catalog_metadata=release_catalog_metadata,
+        release_catalog_index_metadata=release_catalog_index_metadata,
+    )
+    registry_workspace = write_publication_registry_workspace(
+        artifact_paths=[],
+        discover_under=[],
+        recursive=True,
+        release_catalog_index_dir=publication_network_source_dir / "release_catalog_index",
+        publication_catalog_workspace_dir=publication_catalog_workspace_source_dir,
+        publication_network_dir=publication_network_source_dir,
+        output_dir=root_output_dir,
+        signature_scheme=bundle_scheme,
+        publication_registry_key_id=publication_registry_key_id,
+        publication_registry_metadata=publication_registry_metadata,
+    )
+
+    summary = copy.deepcopy(registry_workspace["summary"])
+    summary["source_singleton_publication_catalog_workspace_dir"] = str(publication_catalog_workspace_source_dir.resolve())
+    summary["source_singleton_publication_catalog_summary_path"] = publication_catalog_workspace["summary_path"]
+    summary["source_singleton_publication_network_dir"] = str(publication_network_source_dir.resolve())
+    summary["source_singleton_publication_network_summary_path"] = publication_network_workspace["summary_path"]
+    _write_json_file(root_output_dir / "summary.json", summary)
+
+    registry_workspace["summary"] = summary
+    return {
+        "publication_catalog_workspace": publication_catalog_workspace,
+        "publication_network_workspace": publication_network_workspace,
+        "publication_registry_workspace": registry_workspace,
+        "summary": summary,
+        "summary_path": str((root_output_dir / "summary.json").resolve()),
+    }
+
+
 def bootstrap_stable_reference_demo_bundle(
     *,
     symbol: str,
@@ -3554,6 +4554,19 @@ def summarize_bundle_collection(
     }
 
 
+def _normalize_bundle_collection_input(
+    bundle_collection_dir: str | Path,
+    *,
+    label: str = "bundle collection",
+) -> str:
+    collection_path, summary = _load_workspace_summary(
+        bundle_collection_dir,
+        label=label,
+    )
+    validate_bundle_collection_summary_consistency(summary)
+    return str(collection_path.resolve())
+
+
 def bootstrap_release_collection(
     release_dirs: Sequence[str | Path],
     *,
@@ -3775,6 +4788,19 @@ def summarize_release_collection(
         "release_dirs": release_dirs,
         "releases": relocated_releases,
     }
+
+
+def _normalize_release_collection_input(
+    release_collection_dir: str | Path,
+    *,
+    label: str = "release collection",
+) -> str:
+    collection_path, summary = _load_workspace_summary(
+        release_collection_dir,
+        label=label,
+    )
+    validate_release_collection_summary_consistency(summary)
+    return str(collection_path.resolve())
 
 
 def bootstrap_release_catalog_collection(
@@ -4012,6 +5038,19 @@ def summarize_release_catalog_collection(
     }
 
 
+def _normalize_release_catalog_collection_input(
+    release_catalog_collection_dir: str | Path,
+    *,
+    label: str = "release catalog collection",
+) -> str:
+    collection_path, summary = _load_workspace_summary(
+        release_catalog_collection_dir,
+        label=label,
+    )
+    validate_release_catalog_collection_summary_consistency(summary)
+    return str(collection_path.resolve())
+
+
 def build_signed_ledger_bundle_index(
     bundle_dirs: Sequence[str | Path],
     *,
@@ -4057,7 +5096,10 @@ def build_signed_ledger_bundle_index(
         "bundles": bundles,
     }
     if bundle_collection_dir is not None:
-        index["source_bundle_collection_dir"] = str(Path(bundle_collection_dir).resolve())
+        index["source_bundle_collection_dir"] = _normalize_bundle_collection_input(
+            bundle_collection_dir,
+            label="bundle index source bundle collection",
+        )
     if release_metadata:
         index["release"] = {key: value for key, value in release_metadata.items() if isinstance(value, str) and value.strip()}
     return index
@@ -4211,6 +5253,24 @@ def load_inventory_publication_network_dirs(inventory_json: str | Path) -> list[
         entry_key="publication_networks",
         path_key="workspace_dir",
         label="publication network workspace source",
+    )
+
+
+def load_inventory_publication_catalog_workspace_dirs(inventory_json: str | Path) -> list[str]:
+    return _inventory_entry_paths(
+        inventory_json,
+        entry_key="publication_catalog_workspaces",
+        path_key="workspace_dir",
+        label="publication catalog workspace source",
+    )
+
+
+def load_inventory_publication_registry_workspace_dirs(inventory_json: str | Path) -> list[str]:
+    return _inventory_entry_paths(
+        inventory_json,
+        entry_key="publication_registry_workspaces",
+        path_key="workspace_dir",
+        label="publication registry workspace source",
     )
 
 
@@ -4928,7 +5988,10 @@ def build_signed_release_catalog(
         "releases": releases,
     }
     if release_collection_dir is not None:
-        catalog["source_release_collection_dir"] = str(Path(release_collection_dir).resolve())
+        catalog["source_release_collection_dir"] = _normalize_release_collection_input(
+            release_collection_dir,
+            label="release catalog source release collection",
+        )
     if catalog_metadata:
         catalog["catalog"] = {
             key: value for key, value in catalog_metadata.items() if isinstance(value, str) and value.strip()
@@ -5219,15 +6282,7 @@ def bootstrap_release_catalog_publication(
 def _load_release_catalog_publication(
     release_catalog_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    candidate_path = Path(release_catalog_dir).resolve()
-    if candidate_path.is_dir():
-        catalog_path = candidate_path
-    else:
-        catalog_path = candidate_path.parent
-        if candidate_path.name not in {"release_catalog_manifest.json", "release_catalog.json"}:
-            raise SatRootError(
-                "release catalog publication operations require a release catalog directory or release_catalog_manifest.json/release_catalog.json"
-            )
+    catalog_path = Path(_normalize_release_catalog_publication_input(release_catalog_dir)).resolve()
 
     manifest_path = catalog_path / "release_catalog_manifest.json"
     if not manifest_path.is_file():
@@ -5476,7 +6531,10 @@ def build_signed_release_catalog_index(
         "release_catalogs": release_catalogs,
     }
     if release_catalog_collection_dir is not None:
-        index["source_release_catalog_collection_dir"] = str(Path(release_catalog_collection_dir).resolve())
+        index["source_release_catalog_collection_dir"] = _normalize_release_catalog_collection_input(
+            release_catalog_collection_dir,
+            label="release catalog index source release catalog collection",
+        )
     if index_metadata:
         index["index"] = {
             key: value for key, value in index_metadata.items() if isinstance(value, str) and value.strip()
@@ -5524,11 +6582,11 @@ def _normalize_release_catalog_publication_input(path: str | Path) -> str:
         if (nested_release_catalog_dir / "release_catalog_manifest.json").is_file():
             return str(nested_release_catalog_dir)
         raise SatRootError(
-            "release catalog index inputs must be release catalog directories, publication stack workspaces, or release_catalog_manifest.json/release_catalog.json files"
+            "release catalog inputs must be release catalog directories, publication stack workspaces, or release_catalog_manifest.json/release_catalog.json files"
         )
     if candidate_path.name not in {"release_catalog_manifest.json", "release_catalog.json"}:
         raise SatRootError(
-            "release catalog index inputs must be release catalog directories, publication stack workspaces, or release_catalog_manifest.json/release_catalog.json files"
+            "release catalog inputs must be release catalog directories, publication stack workspaces, or release_catalog_manifest.json/release_catalog.json files"
         )
     return str(candidate_path.parent)
 
@@ -5546,6 +6604,9 @@ def _normalize_release_catalog_index_publication_input(path: str | Path) -> str:
             return str(nested_network_release_catalog_index_dir)
         return str(candidate_path)
     if candidate_path.name == "summary.json":
+        same_dir_release_catalog_index_dir = candidate_path.parent.resolve()
+        if (same_dir_release_catalog_index_dir / "release_catalog_index_manifest.json").is_file():
+            return str(same_dir_release_catalog_index_dir)
         nested_release_catalog_index_dir = (candidate_path.parent / "release_catalog_index").resolve()
         if (nested_release_catalog_index_dir / "release_catalog_index_manifest.json").is_file():
             return str(nested_release_catalog_index_dir)
@@ -5564,6 +6625,34 @@ def _normalize_release_catalog_index_publication_input(path: str | Path) -> str:
             "publication registry release catalog index inputs must be release catalog index directories, "
             "publication network workspaces, publication registry workspaces, or "
             "release_catalog_index_manifest.json/release_catalog_index.json files"
+    )
+    return str(candidate_path.parent)
+
+
+def _normalize_publication_registry_publication_input(path: str | Path) -> str:
+    candidate_path = Path(path).resolve()
+    if candidate_path.is_dir():
+        if (candidate_path / "publication_registry_manifest.json").is_file():
+            return str(candidate_path)
+        nested_publication_registry_dir = (candidate_path / "publication_registry").resolve()
+        if (nested_publication_registry_dir / "publication_registry_manifest.json").is_file():
+            return str(nested_publication_registry_dir)
+        return str(candidate_path)
+    if candidate_path.name == "summary.json":
+        same_dir_publication_registry_dir = candidate_path.parent.resolve()
+        if (same_dir_publication_registry_dir / "publication_registry_manifest.json").is_file():
+            return str(same_dir_publication_registry_dir)
+        nested_publication_registry_dir = (candidate_path.parent / "publication_registry").resolve()
+        if (nested_publication_registry_dir / "publication_registry_manifest.json").is_file():
+            return str(nested_publication_registry_dir)
+        raise SatRootError(
+            "publication registry inputs must be publication registry directories, "
+            "publication registry workspaces, or publication_registry_manifest.json/publication_registry.json files"
+        )
+    if candidate_path.name not in {"publication_registry_manifest.json", "publication_registry.json"}:
+        raise SatRootError(
+            "publication registry inputs must be publication registry directories, "
+            "publication registry workspaces, or publication_registry_manifest.json/publication_registry.json files"
         )
     return str(candidate_path.parent)
 
@@ -5625,9 +6714,18 @@ def _normalize_publication_metadata_catalog_publication_input(path: str | Path) 
 def _resolve_publication_registry_workspace_source_dir(path: str | Path) -> Optional[str]:
     try:
         workspace_path, summary = _load_workspace_summary(path, label="publication registry workspace")
+        validate_publication_registry_workspace_summary_consistency(summary)
     except SatRootError:
         return None
-    validate_publication_registry_workspace_summary_consistency(summary)
+    return str(workspace_path.resolve())
+
+
+def _resolve_publication_stack_workspace_source_dir(path: str | Path) -> Optional[str]:
+    try:
+        workspace_path, summary = _load_workspace_summary(path, label="publication stack")
+        validate_publication_stack_summary_consistency(summary)
+    except SatRootError:
+        return None
     return str(workspace_path.resolve())
 
 
@@ -5766,6 +6864,114 @@ def _resolve_stable_publication_registry_component_inputs(
         resolved_publication_descriptor_index_dir,
         resolved_publication_metadata_catalog_dir,
     )
+
+
+def _resolve_publication_registry_component_inputs_from_workspace_preset(
+    preset_path: str | Path,
+    *,
+    loader: Callable[[str | Path], Dict[str, Any]],
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    preset = loader(preset_path)
+    release_catalog_index_dir = preset.get("release_catalog_index_dir")
+    if release_catalog_index_dir is None:
+        publication_network_dir = preset.get("publication_network_dir")
+        if publication_network_dir is not None:
+            release_catalog_index_dir = publication_network_dir
+        else:
+            publication_network_collection_dir = preset.get("publication_network_collection_dir")
+            if publication_network_collection_dir is not None:
+                collection_summary = summarize_publication_network_collection(publication_network_collection_dir)
+                networks = collection_summary.get("networks", [])
+                if networks:
+                    release_catalog_index_dir = str(
+                        Path(str(networks[0]["release_catalog_index_dir"])).resolve()
+                    )
+    publication_catalog_workspace_dir = preset.get("publication_catalog_workspace_dir")
+    return (
+        release_catalog_index_dir,
+        publication_catalog_workspace_dir,
+        publication_catalog_workspace_dir,
+    )
+
+
+def _reject_nested_publish_preset_without_existing_workspace_inputs(
+    *,
+    command_name: str,
+    direct_workspace_dirs: Sequence[str | Path],
+    collection_dir: Optional[str | Path],
+    nested_preset_values: Sequence[Any],
+    nested_label: str,
+    bootstrap_command: str,
+    existing_workspace_label: str,
+) -> None:
+    if collection_dir is not None:
+        return
+    if any(isinstance(value, str) and value.strip() for value in direct_workspace_dirs):
+        return
+    if not any(nested_preset_values):
+        return
+    raise SatRootError(
+        f"{command_name} requires existing {existing_workspace_label}; nested {nested_label} in --preset-json "
+        f"is unsupported here. Use {bootstrap_command} or provide existing workspace inputs directly."
+    )
+
+
+def _resolve_publication_stack_workspace_dir_from_stack_preset(
+    preset_path: str | Path,
+    *,
+    loader: Callable[[str | Path], Dict[str, Any]],
+    workspace_validator: Optional[Callable[[str | Path], None]] = None,
+) -> Optional[str]:
+    preset = loader(preset_path)
+    candidate_workspace_dirs: list[str] = []
+
+    catalog_workspace_collection_dir = preset.get("catalog_workspace_collection_dir")
+    if isinstance(catalog_workspace_collection_dir, str) and catalog_workspace_collection_dir.strip():
+        collection_path = Path(catalog_workspace_collection_dir).resolve()
+        if collection_path.name == "catalog_workspaces":
+            candidate_workspace_dir = _resolve_publication_stack_workspace_source_dir(collection_path.parent)
+            if candidate_workspace_dir is not None:
+                candidate_workspace_dirs.append(candidate_workspace_dir)
+
+    for catalog_workspace_dir in preset.get("catalog_workspace_dirs", []):
+        if not isinstance(catalog_workspace_dir, str) or not catalog_workspace_dir.strip():
+            continue
+        workspace_path = Path(catalog_workspace_dir).resolve()
+        if workspace_path.parent.name != "catalog_workspaces":
+            continue
+        candidate_workspace_dir = _resolve_publication_stack_workspace_source_dir(workspace_path.parent.parent)
+        if candidate_workspace_dir is not None:
+            candidate_workspace_dirs.append(candidate_workspace_dir)
+
+    unique_workspace_dirs = sorted(set(candidate_workspace_dirs))
+    if len(unique_workspace_dirs) != 1:
+        return None
+
+    resolved_workspace_dir = unique_workspace_dirs[0]
+    if workspace_validator is not None:
+        workspace_validator(resolved_workspace_dir)
+    return resolved_workspace_dir
+
+
+def _resolve_publication_stack_workspace_inputs_from_network_preset(
+    *,
+    preset: Mapping[str, Any],
+    stack_preset_loader: Callable[[str | Path], Dict[str, Any]],
+    stack_workspace_validator: Optional[Callable[[str | Path], None]] = None,
+) -> list[str]:
+    resolved_workspace_dirs: list[str] = []
+    for stack_preset_path in preset.get("stack_preset_paths", []):
+        if not isinstance(stack_preset_path, str) or not stack_preset_path.strip():
+            continue
+        resolved_workspace_dir = _resolve_publication_stack_workspace_dir_from_stack_preset(
+            stack_preset_path,
+            loader=stack_preset_loader,
+            workspace_validator=stack_workspace_validator,
+        )
+        if resolved_workspace_dir is None:
+            return []
+        resolved_workspace_dirs.append(resolved_workspace_dir)
+    return resolved_workspace_dirs
 
 
 def _expand_publication_metadata_bundle_input(path: str | Path) -> list[str]:
@@ -6042,6 +7248,15 @@ def discover_publication_registry_workspace_dirs(
     )
 
 
+def _normalize_workspace_summary_input(
+    workspace_dir: str | Path,
+    *,
+    label: str,
+) -> str:
+    workspace_path, _summary = _load_workspace_summary(workspace_dir, label=label)
+    return str(workspace_path.resolve())
+
+
 def resolve_demo_catalog_workspace_inputs(
     workspace_dirs: Sequence[str | Path],
     *,
@@ -6061,9 +7276,9 @@ def resolve_demo_catalog_workspace_inputs(
     seen: set[str] = set()
 
     for workspace_dir in workspace_dirs:
-        workspace_path = str(Path(workspace_dir).resolve())
+        workspace_path = _normalize_workspace_summary_input(workspace_dir, label="demo catalog workspace")
         if workspace_path not in seen:
-            resolved.append(workspace_dir)
+            resolved.append(workspace_path)
             seen.add(workspace_path)
 
     if discover_under:
@@ -6096,9 +7311,9 @@ def resolve_publication_stack_workspace_inputs(
     seen: set[str] = set()
 
     for workspace_dir in workspace_dirs:
-        workspace_path = str(Path(workspace_dir).resolve())
+        workspace_path = _normalize_workspace_summary_input(workspace_dir, label="publication stack workspace")
         if workspace_path not in seen:
-            resolved.append(workspace_dir)
+            resolved.append(workspace_path)
             seen.add(workspace_path)
 
     if discover_under:
@@ -6122,9 +7337,9 @@ def resolve_publication_network_workspace_inputs(
     seen: set[str] = set()
 
     for workspace_dir in workspace_dirs:
-        workspace_path = str(Path(workspace_dir).resolve())
+        workspace_path = _normalize_workspace_summary_input(workspace_dir, label="publication network workspace")
         if workspace_path not in seen:
-            resolved.append(workspace_dir)
+            resolved.append(workspace_path)
             seen.add(workspace_path)
 
     if discover_under:
@@ -6323,15 +7538,7 @@ def bootstrap_release_catalog_index_publication(
 def _load_release_catalog_index_publication(
     release_catalog_index_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    candidate_path = Path(release_catalog_index_dir).resolve()
-    if candidate_path.is_dir():
-        index_path = candidate_path
-    else:
-        index_path = candidate_path.parent
-        if candidate_path.name not in {"release_catalog_index_manifest.json", "release_catalog_index.json"}:
-            raise SatRootError(
-                "release catalog index publication operations require a release catalog index directory or release_catalog_index_manifest.json/release_catalog_index.json"
-            )
+    index_path = Path(_normalize_release_catalog_index_publication_input(release_catalog_index_dir)).resolve()
 
     manifest_path = index_path / "release_catalog_index_manifest.json"
     if not manifest_path.is_file():
@@ -6357,15 +7564,7 @@ def _load_release_catalog_index_publication(
 def _load_publication_registry_publication(
     publication_registry_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    candidate_path = Path(publication_registry_dir).resolve()
-    if candidate_path.is_dir():
-        registry_dir = candidate_path
-    else:
-        registry_dir = candidate_path.parent
-        if candidate_path.name not in {"publication_registry_manifest.json", "publication_registry.json"}:
-            raise SatRootError(
-                "publication registry operations require a publication registry directory or publication_registry_manifest.json/publication_registry.json"
-            )
+    registry_dir = Path(_normalize_publication_registry_publication_input(publication_registry_dir)).resolve()
 
     manifest_path = registry_dir / "publication_registry_manifest.json"
     if not manifest_path.is_file():
@@ -8214,11 +9413,31 @@ def _require_machine_publication_catalog_workspace(publication_catalog_workspace
     _, summary = _load_workspace_summary(publication_catalog_workspace_dir, label=label)
     validate_publication_catalog_workspace_summary_consistency(summary)
     source_machine_catalog_workspace_dir = summary.get("source_machine_catalog_workspace_dir")
-    if not isinstance(source_machine_catalog_workspace_dir, str) or not source_machine_catalog_workspace_dir.strip():
-        raise SatRootError(f"{label} requires source_machine_catalog_workspace_dir provenance")
-    _require_machine_catalog_provenance_source(
-        Path(source_machine_catalog_workspace_dir).resolve(),
-        label=f"{label} source machine catalog workspace",
+    if isinstance(source_machine_catalog_workspace_dir, str) and source_machine_catalog_workspace_dir.strip():
+        _require_machine_catalog_provenance_source(
+            Path(source_machine_catalog_workspace_dir).resolve(),
+            label=f"{label} source machine catalog workspace",
+        )
+        return
+
+    source_machine_catalog_workspace_collection_dir = summary.get("source_machine_catalog_workspace_collection_dir")
+    if (
+        isinstance(source_machine_catalog_workspace_collection_dir, str)
+        and source_machine_catalog_workspace_collection_dir.strip()
+    ):
+        collection_summary = summarize_demo_catalog_workspace_collection(
+            Path(source_machine_catalog_workspace_collection_dir).resolve()
+        )
+        for workspace_dir in collection_summary.get("catalog_workspace_dirs", []):
+            _require_machine_demo_catalog_workspace(
+                Path(workspace_dir).resolve(),
+                label=f"{label} source machine catalog workspace collection member",
+            )
+        return
+
+    raise SatRootError(
+        f"{label} requires source_machine_catalog_workspace_dir or "
+        "source_machine_catalog_workspace_collection_dir provenance"
     )
 
 
@@ -8226,11 +9445,31 @@ def _require_stable_publication_catalog_workspace(publication_catalog_workspace_
     _, summary = _load_workspace_summary(publication_catalog_workspace_dir, label=label)
     validate_publication_catalog_workspace_summary_consistency(summary)
     source_stable_catalog_workspace_dir = summary.get("source_stable_catalog_workspace_dir")
-    if not isinstance(source_stable_catalog_workspace_dir, str) or not source_stable_catalog_workspace_dir.strip():
-        raise SatRootError(f"{label} requires source_stable_catalog_workspace_dir provenance")
-    _require_stable_catalog_provenance_source(
-        Path(source_stable_catalog_workspace_dir).resolve(),
-        label=f"{label} source stable catalog workspace",
+    if isinstance(source_stable_catalog_workspace_dir, str) and source_stable_catalog_workspace_dir.strip():
+        _require_stable_catalog_provenance_source(
+            Path(source_stable_catalog_workspace_dir).resolve(),
+            label=f"{label} source stable catalog workspace",
+        )
+        return
+
+    source_stable_catalog_workspace_collection_dir = summary.get("source_stable_catalog_workspace_collection_dir")
+    if (
+        isinstance(source_stable_catalog_workspace_collection_dir, str)
+        and source_stable_catalog_workspace_collection_dir.strip()
+    ):
+        collection_summary = summarize_demo_catalog_workspace_collection(
+            Path(source_stable_catalog_workspace_collection_dir).resolve()
+        )
+        for workspace_dir in collection_summary.get("catalog_workspace_dirs", []):
+            _require_stable_demo_catalog_workspace(
+                Path(workspace_dir).resolve(),
+                label=f"{label} source stable catalog workspace collection member",
+            )
+        return
+
+    raise SatRootError(
+        f"{label} requires source_stable_catalog_workspace_dir or "
+        "source_stable_catalog_workspace_collection_dir provenance"
     )
 
 
@@ -8462,6 +9701,8 @@ def summarize_demo_catalog_workspace(demo_catalog_dir: str | Path) -> Dict[str, 
         "release_dir": summary.get("release_dir"),
         "preset_path": summary.get("preset_path"),
         "release": copy.deepcopy(summary.get("release")),
+        "source_release_collection_dir": summary.get("source_release_collection_dir"),
+        "source_release_dir": summary.get("source_release_dir"),
         "release_manifest_path": summary.get("release_manifest_path"),
         "bundle_index_path": summary.get("bundle_index_path"),
         "bundle_names": sorted(
@@ -8859,6 +10100,19 @@ def summarize_demo_catalog_workspace_collection(
     }
 
 
+def _normalize_demo_catalog_workspace_collection_input(
+    catalog_workspace_collection_dir: str | Path,
+    *,
+    label: str = "demo catalog workspace collection",
+) -> str:
+    collection_path, summary = _load_workspace_summary(
+        catalog_workspace_collection_dir,
+        label=label,
+    )
+    validate_demo_catalog_workspace_collection_summary_consistency(summary)
+    return str(collection_path.resolve())
+
+
 def summarize_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
     stack_path, summary = _load_workspace_summary(publication_stack_dir, label="publication stack")
     validate_publication_stack_summary_consistency(summary)
@@ -9120,6 +10374,19 @@ def summarize_publication_stack_collection(
         "publication_stack_dirs": publication_stack_dirs,
         "stacks": relocated_stacks,
     }
+
+
+def _normalize_publication_stack_collection_input(
+    publication_stack_collection_dir: str | Path,
+    *,
+    label: str = "publication stack collection",
+) -> str:
+    collection_path, summary = _load_workspace_summary(
+        publication_stack_collection_dir,
+        label=label,
+    )
+    validate_publication_stack_collection_summary_consistency(summary)
+    return str(collection_path.resolve())
 
 
 def lint_publication_stack_workspace(publication_stack_dir: str | Path) -> Dict[str, Any]:
@@ -9506,6 +10773,566 @@ def summarize_publication_network_collection(
         "publication_network_dirs": publication_network_dirs,
         "networks": relocated_networks,
     }
+
+
+def _normalize_publication_network_collection_input(
+    publication_network_collection_dir: str | Path,
+    *,
+    label: str = "publication network collection",
+) -> str:
+    collection_path, summary = _load_workspace_summary(
+        publication_network_collection_dir,
+        label=label,
+    )
+    validate_publication_network_collection_summary_consistency(summary)
+    return str(collection_path.resolve())
+
+
+def bootstrap_publication_catalog_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = discover_publication_catalog_workspace_dirs(discover_under, recursive=recursive) if not workspace_dirs and discover_under else []
+    if workspace_dirs:
+        normalized_workspace_dirs = [
+            _normalize_workspace_summary_input(workspace_dir, label="publication catalog workspace")
+            for workspace_dir in workspace_dirs
+        ]
+        resolved_workspace_dirs = [*normalized_workspace_dirs, *resolved_workspace_dirs]
+
+    deduped_workspace_dirs: list[str | Path] = []
+    seen_workspace_dirs: set[str] = set()
+    for workspace_dir in resolved_workspace_dirs:
+        workspace_path = str(Path(workspace_dir).resolve())
+        if workspace_path not in seen_workspace_dirs:
+            deduped_workspace_dirs.append(workspace_dir)
+            seen_workspace_dirs.add(workspace_path)
+    if not deduped_workspace_dirs:
+        raise SatRootError("at least one publication catalog workspace directory or --discover-under path is required")
+
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    workspace_names = _unique_workspace_names(deduped_workspace_dirs)
+    source_workspace_dir_entries: list[str] = []
+    copied_workspace_dir_entries: list[str] = []
+    catalog_workspaces: list[Dict[str, Any]] = []
+
+    for source_workspace_dir, workspace_name in zip(deduped_workspace_dirs, workspace_names):
+        source_path = Path(source_workspace_dir).resolve()
+        copied_workspace_dir = _copy_workspace_directory(
+            source_path,
+            output_path / workspace_name,
+            label="publication catalog workspace",
+        )
+        copied_summary = relocate_publication_catalog_workspace_summary(copied_workspace_dir)
+
+        source_workspace_dir_entries.append(str(source_path.resolve()))
+        copied_workspace_dir_entries.append(str(copied_workspace_dir.resolve()))
+        catalog_workspaces.append(
+            {
+                "workspace_name": workspace_name,
+                "source_publication_catalog_workspace_dir": str(source_path.resolve()),
+                "publication_catalog_workspace_dir": str(copied_workspace_dir.resolve()),
+                "summary_path": str((copied_workspace_dir / "summary.json").resolve()),
+                "signature_scheme": copied_summary.get("signature_scheme"),
+                "artifact_count": copied_summary.get("artifact_count"),
+                "publication_metadata_bundle_count": copied_summary.get("publication_metadata_bundle_count"),
+                "publication_descriptor_index_dir": copied_summary.get("publication_descriptor_index_dir"),
+                "publication_metadata_catalog_dir": copied_summary.get("publication_metadata_catalog_dir"),
+                "publication_descriptor_index_manifest_path": copied_summary.get("publication_descriptor_index_manifest_path"),
+                "publication_metadata_catalog_manifest_path": copied_summary.get("publication_metadata_catalog_manifest_path"),
+            }
+        )
+
+    summary = {
+        "workspace_count": len(copied_workspace_dir_entries),
+        "source_publication_catalog_workspace_dirs": source_workspace_dir_entries,
+        "publication_catalog_workspace_dirs": copied_workspace_dir_entries,
+        "catalog_workspaces": catalog_workspaces,
+    }
+    summary_path = output_path / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "publication_catalog_workspace_dirs": copied_workspace_dir_entries,
+        "catalog_workspaces": catalog_workspaces,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
+def bootstrap_machine_publication_catalog_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = discover_publication_catalog_workspace_dirs(discover_under, recursive=recursive) if not workspace_dirs and discover_under else []
+    if workspace_dirs:
+        resolved_workspace_dirs = [*workspace_dirs, *resolved_workspace_dirs]
+    if not resolved_workspace_dirs:
+        raise SatRootError("at least one publication catalog workspace directory or --discover-under path is required")
+    for workspace_dir in resolved_workspace_dirs:
+        _require_machine_publication_catalog_workspace(
+            workspace_dir,
+            label="machine publication catalog workspace collection source workspace",
+        )
+    return bootstrap_publication_catalog_workspace_collection(
+        resolved_workspace_dirs,
+        output_dir=output_dir,
+        discover_under=None,
+        recursive=True,
+    )
+
+
+def bootstrap_stable_publication_catalog_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = discover_publication_catalog_workspace_dirs(discover_under, recursive=recursive) if not workspace_dirs and discover_under else []
+    if workspace_dirs:
+        resolved_workspace_dirs = [*workspace_dirs, *resolved_workspace_dirs]
+    if not resolved_workspace_dirs:
+        raise SatRootError("at least one publication catalog workspace directory or --discover-under path is required")
+    for workspace_dir in resolved_workspace_dirs:
+        _require_stable_publication_catalog_workspace(
+            workspace_dir,
+            label="stable publication catalog workspace collection source workspace",
+        )
+    return bootstrap_publication_catalog_workspace_collection(
+        resolved_workspace_dirs,
+        output_dir=output_dir,
+        discover_under=None,
+        recursive=True,
+    )
+
+
+def validate_publication_catalog_workspace_collection_summary_consistency(summary: Mapping[str, Any]) -> None:
+    source_publication_catalog_workspace_dirs = summary.get("source_publication_catalog_workspace_dirs")
+    publication_catalog_workspace_dirs = summary.get("publication_catalog_workspace_dirs")
+    catalog_workspaces = summary.get("catalog_workspaces")
+    workspace_count = summary.get("workspace_count")
+
+    if not isinstance(source_publication_catalog_workspace_dirs, list):
+        raise SatRootError("publication catalog workspace collection summary source_publication_catalog_workspace_dirs must be an array")
+    if not isinstance(publication_catalog_workspace_dirs, list):
+        raise SatRootError("publication catalog workspace collection summary publication_catalog_workspace_dirs must be an array")
+    if not isinstance(catalog_workspaces, list):
+        raise SatRootError("publication catalog workspace collection summary catalog_workspaces must be an array")
+    if (
+        not isinstance(workspace_count, int)
+        or workspace_count != len(source_publication_catalog_workspace_dirs)
+        or workspace_count != len(publication_catalog_workspace_dirs)
+        or workspace_count != len(catalog_workspaces)
+    ):
+        raise SatRootError("publication catalog workspace collection summary workspace_count mismatch")
+    for source_publication_catalog_workspace_dir in source_publication_catalog_workspace_dirs:
+        if not isinstance(source_publication_catalog_workspace_dir, str) or not source_publication_catalog_workspace_dir.strip():
+            raise SatRootError(
+                "publication catalog workspace collection summary source_publication_catalog_workspace_dirs entries must be non-empty strings"
+            )
+    for publication_catalog_workspace_dir in publication_catalog_workspace_dirs:
+        if not isinstance(publication_catalog_workspace_dir, str) or not publication_catalog_workspace_dir.strip():
+            raise SatRootError(
+                "publication catalog workspace collection summary publication_catalog_workspace_dirs entries must be non-empty strings"
+            )
+
+
+def summarize_publication_catalog_workspace_collection(
+    publication_catalog_workspace_collection_dir: str | Path,
+) -> Dict[str, Any]:
+    collection_path, summary = _load_workspace_summary(
+        publication_catalog_workspace_collection_dir,
+        label="publication catalog workspace collection",
+    )
+    validate_publication_catalog_workspace_collection_summary_consistency(summary)
+
+    source_publication_catalog_workspace_dirs = [
+        str(Path(value).resolve())
+        for value in summary.get("source_publication_catalog_workspace_dirs", [])
+        if isinstance(value, str) and value.strip()
+    ]
+    catalog_workspaces = summary.get("catalog_workspaces")
+    assert isinstance(catalog_workspaces, list)
+
+    relocated_catalog_workspaces: list[Dict[str, Any]] = []
+    publication_catalog_workspace_dirs: list[str] = []
+    for entry in catalog_workspaces:
+        if not isinstance(entry, Mapping):
+            raise SatRootError("publication catalog workspace collection summary catalog_workspaces must contain objects")
+        workspace_name = entry.get("workspace_name")
+        entry_publication_catalog_workspace_dir = entry.get("publication_catalog_workspace_dir")
+        source_publication_catalog_workspace_dir = entry.get("source_publication_catalog_workspace_dir")
+
+        publication_catalog_workspace_dir: Optional[Path] = None
+        if isinstance(workspace_name, str) and workspace_name.strip():
+            expected_publication_catalog_workspace_dir = (collection_path / workspace_name).resolve()
+            if expected_publication_catalog_workspace_dir.is_dir():
+                publication_catalog_workspace_dir = expected_publication_catalog_workspace_dir
+        if (
+            publication_catalog_workspace_dir is None
+            and isinstance(entry_publication_catalog_workspace_dir, str)
+            and entry_publication_catalog_workspace_dir.strip()
+        ):
+            publication_catalog_workspace_dir = Path(entry_publication_catalog_workspace_dir).resolve()
+            if not publication_catalog_workspace_dir.is_dir():
+                raise SatRootError(
+                    "publication catalog workspace collection workspace directory not found: "
+                    f"{entry_publication_catalog_workspace_dir}"
+                )
+            if not isinstance(workspace_name, str) or not workspace_name.strip():
+                workspace_name = publication_catalog_workspace_dir.name
+        if (
+            publication_catalog_workspace_dir is None
+            or not isinstance(workspace_name, str)
+            or not workspace_name.strip()
+        ):
+            raise SatRootError(
+                "publication catalog workspace collection summary catalog_workspaces must contain workspace_name "
+                "or publication_catalog_workspace_dir metadata"
+            )
+
+        workspace_summary = summarize_publication_catalog_workspace(publication_catalog_workspace_dir)
+        resolved_source_publication_catalog_workspace_dir = (
+            str(Path(source_publication_catalog_workspace_dir).resolve())
+            if isinstance(source_publication_catalog_workspace_dir, str) and source_publication_catalog_workspace_dir.strip()
+            else None
+        )
+        publication_catalog_workspace_dirs.append(str(publication_catalog_workspace_dir.resolve()))
+        relocated_catalog_workspaces.append(
+            {
+                "workspace_name": workspace_name,
+                "source_publication_catalog_workspace_dir": resolved_source_publication_catalog_workspace_dir,
+                "publication_catalog_workspace_dir": str(publication_catalog_workspace_dir.resolve()),
+                "summary_path": str((publication_catalog_workspace_dir / "summary.json").resolve()),
+                "signature_scheme": workspace_summary.get("signature_scheme"),
+                "artifact_count": workspace_summary.get("artifact_count"),
+                "publication_metadata_bundle_count": workspace_summary.get("publication_metadata_bundle_count"),
+                "publication_descriptor_index_dir": workspace_summary.get("publication_descriptor_index_dir"),
+                "publication_metadata_catalog_dir": workspace_summary.get("publication_metadata_catalog_dir"),
+                "publication_descriptor_index_manifest_path": workspace_summary.get("publication_descriptor_index_manifest_path"),
+                "publication_metadata_catalog_manifest_path": workspace_summary.get("publication_metadata_catalog_manifest_path"),
+            }
+        )
+
+    if len(publication_catalog_workspace_dirs) != summary.get("workspace_count"):
+        raise SatRootError(
+            "publication catalog workspace collection summary workspace_count does not match discovered publication catalog workspace directories"
+        )
+
+    return {
+        "collection_dir": str(collection_path.resolve()),
+        "summary_path": str((collection_path / "summary.json").resolve()),
+        "workspace_count": len(publication_catalog_workspace_dirs),
+        "source_publication_catalog_workspace_dirs": source_publication_catalog_workspace_dirs,
+        "publication_catalog_workspace_dirs": publication_catalog_workspace_dirs,
+        "catalog_workspaces": relocated_catalog_workspaces,
+    }
+
+
+def bootstrap_publication_registry_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = discover_publication_registry_workspace_dirs(discover_under, recursive=recursive) if not workspace_dirs and discover_under else []
+    if workspace_dirs:
+        normalized_workspace_dirs = [
+            _normalize_workspace_summary_input(workspace_dir, label="publication registry workspace")
+            for workspace_dir in workspace_dirs
+        ]
+        resolved_workspace_dirs = [*normalized_workspace_dirs, *resolved_workspace_dirs]
+
+    deduped_workspace_dirs: list[str | Path] = []
+    seen_workspace_dirs: set[str] = set()
+    for workspace_dir in resolved_workspace_dirs:
+        workspace_path = str(Path(workspace_dir).resolve())
+        if workspace_path not in seen_workspace_dirs:
+            deduped_workspace_dirs.append(workspace_dir)
+            seen_workspace_dirs.add(workspace_path)
+    if not deduped_workspace_dirs:
+        raise SatRootError("at least one publication registry workspace directory or --discover-under path is required")
+
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    workspace_names = _unique_workspace_names(deduped_workspace_dirs)
+    source_workspace_dir_entries: list[str] = []
+    copied_workspace_dir_entries: list[str] = []
+    registry_workspaces: list[Dict[str, Any]] = []
+
+    for source_workspace_dir, workspace_name in zip(deduped_workspace_dirs, workspace_names):
+        source_path = Path(source_workspace_dir).resolve()
+        copied_workspace_dir = _copy_workspace_directory(
+            source_path,
+            output_path / workspace_name,
+            label="publication registry workspace",
+        )
+        copied_summary = summarize_publication_registry_workspace(copied_workspace_dir)
+
+        source_workspace_dir_entries.append(str(source_path.resolve()))
+        copied_workspace_dir_entries.append(str(copied_workspace_dir.resolve()))
+        registry_workspaces.append(
+            {
+                "workspace_name": workspace_name,
+                "source_publication_registry_workspace_dir": str(source_path.resolve()),
+                "publication_registry_workspace_dir": str(copied_workspace_dir.resolve()),
+                "summary_path": str((copied_workspace_dir / "summary.json").resolve()),
+                "signature_scheme": copied_summary.get("signature_scheme"),
+                "artifact_count": copied_summary.get("artifact_count"),
+                "publication_metadata_bundle_count": copied_summary.get("publication_metadata_bundle_count"),
+                "release_catalog_index_dir": copied_summary.get("release_catalog_index_dir"),
+                "publication_descriptor_index_dir": copied_summary.get("publication_descriptor_index_dir"),
+                "publication_metadata_catalog_dir": copied_summary.get("publication_metadata_catalog_dir"),
+                "publication_registry_dir": copied_summary.get("publication_registry_dir"),
+                "publication_registry_manifest_path": copied_summary.get("publication_registry_manifest_path"),
+            }
+        )
+
+    summary = {
+        "workspace_count": len(copied_workspace_dir_entries),
+        "source_publication_registry_workspace_dirs": source_workspace_dir_entries,
+        "publication_registry_workspace_dirs": copied_workspace_dir_entries,
+        "registry_workspaces": registry_workspaces,
+    }
+    summary_path = output_path / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "publication_registry_workspace_dirs": copied_workspace_dir_entries,
+        "registry_workspaces": registry_workspaces,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
+def bootstrap_machine_publication_registry_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = discover_publication_registry_workspace_dirs(discover_under, recursive=recursive) if not workspace_dirs and discover_under else []
+    if workspace_dirs:
+        resolved_workspace_dirs = [*workspace_dirs, *resolved_workspace_dirs]
+    if not resolved_workspace_dirs:
+        raise SatRootError("at least one publication registry workspace directory or --discover-under path is required")
+    for workspace_dir in resolved_workspace_dirs:
+        _require_machine_publication_registry_workspace(
+            workspace_dir,
+            label="machine publication registry workspace collection source workspace",
+        )
+    return bootstrap_publication_registry_workspace_collection(
+        resolved_workspace_dirs,
+        output_dir=output_dir,
+        discover_under=None,
+        recursive=True,
+    )
+
+
+def bootstrap_stable_publication_registry_workspace_collection(
+    workspace_dirs: Sequence[str | Path],
+    *,
+    output_dir: str | Path,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    resolved_workspace_dirs = discover_publication_registry_workspace_dirs(discover_under, recursive=recursive) if not workspace_dirs and discover_under else []
+    if workspace_dirs:
+        resolved_workspace_dirs = [*workspace_dirs, *resolved_workspace_dirs]
+    if not resolved_workspace_dirs:
+        raise SatRootError("at least one publication registry workspace directory or --discover-under path is required")
+    for workspace_dir in resolved_workspace_dirs:
+        _require_stable_publication_registry_workspace(
+            workspace_dir,
+            label="stable publication registry workspace collection source workspace",
+        )
+    return bootstrap_publication_registry_workspace_collection(
+        resolved_workspace_dirs,
+        output_dir=output_dir,
+        discover_under=None,
+        recursive=True,
+    )
+
+
+def validate_publication_registry_workspace_collection_summary_consistency(summary: Mapping[str, Any]) -> None:
+    source_publication_registry_workspace_dirs = summary.get("source_publication_registry_workspace_dirs")
+    publication_registry_workspace_dirs = summary.get("publication_registry_workspace_dirs")
+    registry_workspaces = summary.get("registry_workspaces")
+    workspace_count = summary.get("workspace_count")
+
+    if not isinstance(source_publication_registry_workspace_dirs, list):
+        raise SatRootError("publication registry workspace collection summary source_publication_registry_workspace_dirs must be an array")
+    if not isinstance(publication_registry_workspace_dirs, list):
+        raise SatRootError("publication registry workspace collection summary publication_registry_workspace_dirs must be an array")
+    if not isinstance(registry_workspaces, list):
+        raise SatRootError("publication registry workspace collection summary registry_workspaces must be an array")
+    if (
+        not isinstance(workspace_count, int)
+        or workspace_count != len(source_publication_registry_workspace_dirs)
+        or workspace_count != len(publication_registry_workspace_dirs)
+        or workspace_count != len(registry_workspaces)
+    ):
+        raise SatRootError("publication registry workspace collection summary workspace_count mismatch")
+    for source_publication_registry_workspace_dir in source_publication_registry_workspace_dirs:
+        if not isinstance(source_publication_registry_workspace_dir, str) or not source_publication_registry_workspace_dir.strip():
+            raise SatRootError(
+                "publication registry workspace collection summary source_publication_registry_workspace_dirs entries must be non-empty strings"
+            )
+    for publication_registry_workspace_dir in publication_registry_workspace_dirs:
+        if not isinstance(publication_registry_workspace_dir, str) or not publication_registry_workspace_dir.strip():
+            raise SatRootError(
+                "publication registry workspace collection summary publication_registry_workspace_dirs entries must be non-empty strings"
+            )
+
+
+def summarize_publication_registry_workspace_collection(
+    publication_registry_workspace_collection_dir: str | Path,
+) -> Dict[str, Any]:
+    collection_path, summary = _load_workspace_summary(
+        publication_registry_workspace_collection_dir,
+        label="publication registry workspace collection",
+    )
+    validate_publication_registry_workspace_collection_summary_consistency(summary)
+
+    source_publication_registry_workspace_dirs = [
+        str(Path(value).resolve())
+        for value in summary.get("source_publication_registry_workspace_dirs", [])
+        if isinstance(value, str) and value.strip()
+    ]
+    registry_workspaces = summary.get("registry_workspaces")
+    assert isinstance(registry_workspaces, list)
+
+    relocated_registry_workspaces: list[Dict[str, Any]] = []
+    publication_registry_workspace_dirs: list[str] = []
+    for entry in registry_workspaces:
+        if not isinstance(entry, Mapping):
+            raise SatRootError("publication registry workspace collection summary registry_workspaces must contain objects")
+        workspace_name = entry.get("workspace_name")
+        entry_publication_registry_workspace_dir = entry.get("publication_registry_workspace_dir")
+        source_publication_registry_workspace_dir = entry.get("source_publication_registry_workspace_dir")
+
+        publication_registry_workspace_dir: Optional[Path] = None
+        if isinstance(workspace_name, str) and workspace_name.strip():
+            expected_publication_registry_workspace_dir = (collection_path / workspace_name).resolve()
+            if expected_publication_registry_workspace_dir.is_dir():
+                publication_registry_workspace_dir = expected_publication_registry_workspace_dir
+        if (
+            publication_registry_workspace_dir is None
+            and isinstance(entry_publication_registry_workspace_dir, str)
+            and entry_publication_registry_workspace_dir.strip()
+        ):
+            publication_registry_workspace_dir = Path(entry_publication_registry_workspace_dir).resolve()
+            if not publication_registry_workspace_dir.is_dir():
+                raise SatRootError(
+                    "publication registry workspace collection workspace directory not found: "
+                    f"{entry_publication_registry_workspace_dir}"
+                )
+            if not isinstance(workspace_name, str) or not workspace_name.strip():
+                workspace_name = publication_registry_workspace_dir.name
+        if (
+            publication_registry_workspace_dir is None
+            or not isinstance(workspace_name, str)
+            or not workspace_name.strip()
+        ):
+            raise SatRootError(
+                "publication registry workspace collection summary registry_workspaces must contain workspace_name "
+                "or publication_registry_workspace_dir metadata"
+            )
+
+        workspace_summary = summarize_publication_registry_workspace(publication_registry_workspace_dir)
+        resolved_source_publication_registry_workspace_dir = (
+            str(Path(source_publication_registry_workspace_dir).resolve())
+            if isinstance(source_publication_registry_workspace_dir, str) and source_publication_registry_workspace_dir.strip()
+            else None
+        )
+        publication_registry_workspace_dirs.append(str(publication_registry_workspace_dir.resolve()))
+        relocated_registry_workspaces.append(
+            {
+                "workspace_name": workspace_name,
+                "source_publication_registry_workspace_dir": resolved_source_publication_registry_workspace_dir,
+                "publication_registry_workspace_dir": str(publication_registry_workspace_dir.resolve()),
+                "summary_path": str((publication_registry_workspace_dir / "summary.json").resolve()),
+                "signature_scheme": workspace_summary.get("signature_scheme"),
+                "artifact_count": workspace_summary.get("artifact_count"),
+                "publication_metadata_bundle_count": workspace_summary.get("publication_metadata_bundle_count"),
+                "release_catalog_index_dir": workspace_summary.get("release_catalog_index_dir"),
+                "publication_descriptor_index_dir": workspace_summary.get("publication_descriptor_index_dir"),
+                "publication_metadata_catalog_dir": workspace_summary.get("publication_metadata_catalog_dir"),
+                "publication_registry_dir": workspace_summary.get("publication_registry_dir"),
+                "publication_registry_manifest_path": workspace_summary.get("publication_registry_manifest_path"),
+            }
+        )
+
+    if len(publication_registry_workspace_dirs) != summary.get("workspace_count"):
+        raise SatRootError(
+            "publication registry workspace collection summary workspace_count does not match discovered publication registry workspace directories"
+        )
+
+    return {
+        "collection_dir": str(collection_path.resolve()),
+        "summary_path": str((collection_path / "summary.json").resolve()),
+        "workspace_count": len(publication_registry_workspace_dirs),
+        "source_publication_registry_workspace_dirs": source_publication_registry_workspace_dirs,
+        "publication_registry_workspace_dirs": publication_registry_workspace_dirs,
+        "registry_workspaces": relocated_registry_workspaces,
+    }
+
+
+def _normalize_publication_registry_workspace_collection_input(
+    publication_registry_workspace_collection_dir: str | Path,
+    *,
+    label: str = "publication registry workspace collection",
+) -> str:
+    collection_path, summary = _load_workspace_summary(
+        publication_registry_workspace_collection_dir,
+        label=label,
+    )
+    validate_publication_registry_workspace_collection_summary_consistency(summary)
+    return str(collection_path.resolve())
+
+
+def _resolve_exactly_one_publication_catalog_workspace_from_collection(
+    publication_catalog_workspace_collection_dir: str | Path,
+    *,
+    label: str,
+) -> tuple[str, str]:
+    collection_summary = summarize_publication_catalog_workspace_collection(publication_catalog_workspace_collection_dir)
+    if collection_summary.get("workspace_count") != 1:
+        raise SatRootError(f"{label} must contain exactly one publication catalog workspace")
+    workspace_dirs = collection_summary.get("publication_catalog_workspace_dirs", [])
+    if not isinstance(workspace_dirs, list) or len(workspace_dirs) != 1:
+        raise SatRootError(f"{label} must expose exactly one publication_catalog_workspace_dir entry")
+    workspace_dir = workspace_dirs[0]
+    if not isinstance(workspace_dir, str) or not workspace_dir.strip():
+        raise SatRootError(f"{label} must expose a non-empty publication catalog workspace directory")
+    return str(Path(workspace_dir).resolve()), str(Path(collection_summary["collection_dir"]).resolve())
+
+
+def _resolve_exactly_one_publication_registry_workspace_from_collection(
+    publication_registry_workspace_collection_dir: str | Path,
+    *,
+    label: str,
+) -> tuple[str, str]:
+    collection_summary = summarize_publication_registry_workspace_collection(publication_registry_workspace_collection_dir)
+    if collection_summary.get("workspace_count") != 1:
+        raise SatRootError(f"{label} must contain exactly one publication registry workspace")
+    workspace_dirs = collection_summary.get("publication_registry_workspace_dirs", [])
+    if not isinstance(workspace_dirs, list) or len(workspace_dirs) != 1:
+        raise SatRootError(f"{label} must expose exactly one publication_registry_workspace_dir entry")
+    workspace_dir = workspace_dirs[0]
+    if not isinstance(workspace_dir, str) or not workspace_dir.strip():
+        raise SatRootError(f"{label} must expose a non-empty publication registry workspace directory")
+    return str(Path(workspace_dir).resolve()), str(Path(collection_summary["collection_dir"]).resolve())
 
 
 def lint_publication_network_workspace(publication_network_dir: str | Path) -> Dict[str, Any]:
@@ -11074,6 +12901,429 @@ def _allocate_collection_member_dir_name(
     return candidate
 
 
+def _resolve_effective_demo_catalog_profiles(
+    *,
+    profiles: Optional[Sequence[str]],
+    preset_profiles: Optional[Sequence[str]],
+) -> list[str]:
+    if profiles is not None:
+        return list(profiles)
+    if preset_profiles is not None:
+        return list(preset_profiles)
+    return list(DEMO_CATALOG_PROFILES)
+
+
+def _filter_profile_string_map(
+    values: Optional[Mapping[str, str]],
+    *,
+    allowed_profiles: Collection[str],
+) -> Dict[str, str]:
+    allowed_profile_set = set(allowed_profiles)
+    return {
+        str(profile): str(value)
+        for profile, value in (values or {}).items()
+        if profile in allowed_profile_set
+    }
+
+
+def _filter_profile_nested_map(
+    values: Optional[Mapping[str, Mapping[str, Any]]],
+    *,
+    allowed_profiles: Collection[str],
+) -> Dict[str, Dict[str, Any]]:
+    allowed_profile_set = set(allowed_profiles)
+    return {
+        str(profile): dict(fields)
+        for profile, fields in (values or {}).items()
+        if profile in allowed_profile_set
+    }
+
+
+def bootstrap_demo_release_collection_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_scheme: Optional[str] = None,
+    profiles: Optional[Sequence[str]] = None,
+    symbol_overrides: Optional[Mapping[str, str]] = None,
+    name_overrides: Optional[Mapping[str, str]] = None,
+    profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
+    profile_structure_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    generated_releases_dir = root_output_dir / "generated_releases"
+    collection_output_dir = root_output_dir / "release_collection"
+    generated_releases: List[Dict[str, Any]] = []
+    generated_release_dirs: List[str] = []
+    allocated_names: set[str] = set()
+    shared_symbol_overrides = dict(symbol_overrides or {})
+    shared_name_overrides = dict(name_overrides or {})
+    shared_profile_field_overrides = {
+        profile: dict(fields) for profile, fields in (profile_field_overrides or {}).items()
+    }
+    shared_profile_structure_overrides = {
+        profile: dict(fields) for profile, fields in (profile_structure_overrides or {}).items()
+    }
+
+    for index, preset_path_value in enumerate(preset_paths, start=1):
+        preset_path = Path(preset_path_value).resolve()
+        demo_preset = load_demo_catalog_preset(preset_path)
+        effective_profiles = _resolve_effective_demo_catalog_profiles(
+            profiles=profiles,
+            preset_profiles=demo_preset.get("profiles"),
+        )
+        release_metadata = _merge_release_metadata_defaults(
+            demo_preset.get("release_metadata"),
+            release_metadata_overrides,
+        )
+        member_name = _allocate_collection_member_dir_name(
+            preset_path,
+            allocated=allocated_names,
+            fallback_prefix=f"demo-release-{index}",
+        )
+        release_workspace_dir = generated_releases_dir / member_name
+        workspace = write_demo_catalog_workspace(
+            bundle_scheme=bundle_scheme,
+            release_scheme=release_scheme,
+            release_key_id=release_key_id,
+            output_dir=release_workspace_dir,
+            profiles=effective_profiles,
+            symbol_overrides={
+                **_filter_profile_string_map(
+                    demo_preset.get("symbol_overrides"),
+                    allowed_profiles=effective_profiles,
+                ),
+                **_filter_profile_string_map(
+                    shared_symbol_overrides,
+                    allowed_profiles=effective_profiles,
+                ),
+            },
+            name_overrides={
+                **_filter_profile_string_map(
+                    demo_preset.get("name_overrides"),
+                    allowed_profiles=effective_profiles,
+                ),
+                **_filter_profile_string_map(
+                    shared_name_overrides,
+                    allowed_profiles=effective_profiles,
+                ),
+            },
+            profile_field_overrides=_merge_nested_override_maps(
+                _filter_profile_nested_map(
+                    demo_preset.get("profile_field_overrides"),
+                    allowed_profiles=effective_profiles,
+                ),
+                _filter_profile_nested_map(
+                    shared_profile_field_overrides,
+                    allowed_profiles=effective_profiles,
+                ),
+            ),
+            profile_structure_overrides=_merge_nested_override_maps(
+                _filter_profile_nested_map(
+                    demo_preset.get("profile_structure_overrides"),
+                    allowed_profiles=effective_profiles,
+                ),
+                _filter_profile_nested_map(
+                    shared_profile_structure_overrides,
+                    allowed_profiles=effective_profiles,
+                ),
+            ),
+            release_collection_dir=demo_preset.get("release_collection_dir"),
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+            verifier_only=verifier_only,
+            release_metadata=release_metadata,
+            preset_path=preset_path,
+        )
+        workspace_summary = workspace["summary"]
+        bundle_entries = list(workspace_summary.get("bundles", []))
+        generated_release_dirs.append(str(workspace_summary["release_dir"]))
+        generated_releases.append(
+            {
+                "preset_path": str(preset_path),
+                "workspace_dir": str(release_workspace_dir.resolve()),
+                "release_dir": str(workspace_summary["release_dir"]),
+                "bundle_count": len(bundle_entries),
+                "profiles": [str(entry["profile"]) for entry in bundle_entries],
+                "bundle_symbols": [str(entry["symbol"]) for entry in bundle_entries],
+                "bundle_names": [str(entry["name"]) for entry in bundle_entries],
+                "release_metadata": release_metadata,
+            }
+        )
+
+    collection = bootstrap_release_collection(
+        generated_release_dirs,
+        output_dir=collection_output_dir,
+    )
+    summary = {
+        "generated_release_count": len(generated_releases),
+        "generated_profiles": sorted(
+            {
+                profile
+                for generated_release in generated_releases
+                for profile in generated_release["profiles"]
+            }
+        ),
+        "generated_releases_dir": str(generated_releases_dir.resolve()),
+        "generated_releases": generated_releases,
+        "release_collection_dir": str(collection_output_dir.resolve()),
+        "release_collection_summary_path": collection["summary_path"],
+        "release_collection": copy.deepcopy(collection["summary"]),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "generated_releases": generated_releases,
+        "generated_release_dirs": generated_release_dirs,
+        "release_collection_dir": str(collection_output_dir.resolve()),
+        "collection": collection,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
+def bootstrap_demo_bundle_index_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    profiles: Optional[Sequence[str]] = None,
+    symbol_overrides: Optional[Mapping[str, str]] = None,
+    name_overrides: Optional[Mapping[str, str]] = None,
+    profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
+    profile_structure_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    bundle_index_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    if verifier_only and bundle_scheme != "ed25519":
+        raise SatRootError("--verifier-only is only supported for ed25519 bundles")
+
+    root_output_dir = Path(output_dir).resolve()
+    generated_workspaces_dir = root_output_dir / "generated_bundle_workspaces"
+    collection_output_dir = root_output_dir / "bundle_collection"
+    bundle_index_path = root_output_dir / "bundle_index.json"
+    generated_workspaces: List[Dict[str, Any]] = []
+    generated_bundle_dirs: List[str] = []
+    allocated_names: set[str] = set()
+    shared_symbol_overrides = dict(symbol_overrides or {})
+    shared_name_overrides = dict(name_overrides or {})
+    shared_profile_field_overrides = {
+        profile: dict(fields) for profile, fields in (profile_field_overrides or {}).items()
+    }
+    shared_profile_structure_overrides = {
+        profile: dict(fields) for profile, fields in (profile_structure_overrides or {}).items()
+    }
+    spec_map = {spec["profile"]: copy.deepcopy(spec) for spec in DEMO_CATALOG_BUNDLE_SPECS}
+
+    for index, preset_path_value in enumerate(preset_paths, start=1):
+        preset_path = Path(preset_path_value).resolve()
+        demo_preset = load_demo_catalog_preset(preset_path)
+        effective_profiles = _resolve_effective_demo_catalog_profiles(
+            profiles=profiles,
+            preset_profiles=demo_preset.get("profiles"),
+        )
+        selected_profile_set: set[str] = set()
+        ordered_profiles: list[str] = []
+        for profile in effective_profiles:
+            if profile not in spec_map:
+                raise SatRootError(f"unsupported demo catalog profile: {profile}")
+            if profile in selected_profile_set:
+                raise SatRootError(f"duplicate demo catalog profile: {profile}")
+            selected_profile_set.add(profile)
+            ordered_profiles.append(profile)
+
+        member_name = _allocate_collection_member_dir_name(
+            preset_path,
+            allocated=allocated_names,
+            fallback_prefix=f"demo-bundle-{index}",
+        )
+        workspace_dir = generated_workspaces_dir / member_name
+        bundles_dir = workspace_dir / "bundles"
+        bundle_entries: list[Dict[str, Any]] = []
+
+        resolved_symbol_overrides = {
+            **_filter_profile_string_map(
+                demo_preset.get("symbol_overrides"),
+                allowed_profiles=ordered_profiles,
+            ),
+            **_filter_profile_string_map(
+                shared_symbol_overrides,
+                allowed_profiles=ordered_profiles,
+            ),
+        }
+        resolved_name_overrides = {
+            **_filter_profile_string_map(
+                demo_preset.get("name_overrides"),
+                allowed_profiles=ordered_profiles,
+            ),
+            **_filter_profile_string_map(
+                shared_name_overrides,
+                allowed_profiles=ordered_profiles,
+            ),
+        }
+        resolved_profile_field_overrides = _merge_nested_override_maps(
+            _filter_profile_nested_map(
+                demo_preset.get("profile_field_overrides"),
+                allowed_profiles=ordered_profiles,
+            ),
+            _filter_profile_nested_map(
+                shared_profile_field_overrides,
+                allowed_profiles=ordered_profiles,
+            ),
+        )
+        resolved_profile_structure_overrides = _merge_nested_override_maps(
+            _filter_profile_nested_map(
+                demo_preset.get("profile_structure_overrides"),
+                allowed_profiles=ordered_profiles,
+            ),
+            _filter_profile_nested_map(
+                shared_profile_structure_overrides,
+                allowed_profiles=ordered_profiles,
+            ),
+        )
+
+        for profile in ordered_profiles:
+            spec = spec_map[profile]
+            bundle_name = spec["bundle_name"]
+            symbol = resolved_symbol_overrides.get(profile, spec["symbol"])
+            name = resolved_name_overrides.get(profile, spec["name"])
+            profile_fields = resolved_profile_field_overrides.get(profile)
+            structure_overrides = resolved_profile_structure_overrides.get(profile, {})
+            bundle_dir = bundles_dir / bundle_name
+
+            if profile == "SATROOT-STABLE-1":
+                bundle = bootstrap_stable_reference_demo_bundle(
+                    symbol=symbol,
+                    name=name,
+                    scheme=bundle_scheme,
+                    profile_fields=profile_fields,
+                    **structure_overrides,
+                    key_prefix=key_prefix,
+                    key_suffix=key_suffix,
+                    include_state_hash=include_state_hash,
+                    include_annotation=include_annotation,
+                )
+            elif profile == "SATROOT-MACHINE-1":
+                bundle = bootstrap_machine_credit_demo_bundle(
+                    symbol=symbol,
+                    name=name,
+                    scheme=bundle_scheme,
+                    profile_fields=profile_fields,
+                    **structure_overrides,
+                    key_prefix=key_prefix,
+                    key_suffix=key_suffix,
+                    include_state_hash=include_state_hash,
+                    include_annotation=include_annotation,
+                )
+            else:
+                holder_account, next_holder, archive_account = _resolve_singleton_demo_accounts(profile)
+                bundle = bootstrap_singleton_object_demo_bundle(
+                    profile=profile,
+                    symbol=symbol,
+                    name=name,
+                    scheme=bundle_scheme,
+                    root_id=structure_overrides.get("root_id"),
+                    issuer=structure_overrides.get("issuer", "issuer"),
+                    holder_account=structure_overrides.get("holder_account", holder_account),
+                    next_holder=structure_overrides.get("next_holder", next_holder),
+                    archive_account=structure_overrides.get("archive_account", archive_account),
+                    profile_fields=profile_fields,
+                    rules_hash=structure_overrides.get("rules_hash"),
+                    nonce=structure_overrides.get("nonce"),
+                    retire=structure_overrides.get("retire", True),
+                    key_prefix=key_prefix,
+                    key_suffix=key_suffix,
+                    include_state_hash=include_state_hash,
+                    include_annotation=include_annotation,
+                )
+
+            bundle_output = _write_bundle_output_dir(
+                bundle,
+                output_dir=bundle_dir,
+                include_private_keys=not verifier_only,
+                genesis=bundle["genesis"],
+            )
+            generated_bundle_dirs.append(str(bundle_dir.resolve()))
+            bundle_entries.append(
+                {
+                    "bundle_name": bundle_name,
+                    "profile": profile,
+                    "symbol": symbol,
+                    "name": name,
+                    "bundle_dir": str(bundle_dir.resolve()),
+                    "bundle_manifest_path": bundle_output["bundle_manifest_path"],
+                }
+            )
+
+        generated_workspaces.append(
+            {
+                "preset_path": str(preset_path),
+                "workspace_dir": str(workspace_dir.resolve()),
+                "bundle_count": len(bundle_entries),
+                "profiles": [str(entry["profile"]) for entry in bundle_entries],
+                "bundle_symbols": [str(entry["symbol"]) for entry in bundle_entries],
+                "bundle_names": [str(entry["name"]) for entry in bundle_entries],
+                "bundle_dirs": [str(entry["bundle_dir"]) for entry in bundle_entries],
+            }
+        )
+
+    collection = bootstrap_bundle_collection(
+        generated_bundle_dirs,
+        output_dir=collection_output_dir,
+    )
+    bundle_index = build_signed_ledger_bundle_index(
+        collection["bundle_dirs"],
+        base_dir=root_output_dir,
+        bundle_collection_dir=collection_output_dir,
+        release_metadata=_merge_release_metadata_defaults(None, bundle_index_metadata_overrides),
+    )
+    _write_json_file(bundle_index_path, bundle_index)
+    summary = {
+        "generated_workspace_count": len(generated_workspaces),
+        "generated_bundle_count": len(generated_bundle_dirs),
+        "generated_profiles": sorted(
+            {
+                profile
+                for generated_workspace in generated_workspaces
+                for profile in generated_workspace["profiles"]
+            }
+        ),
+        "generated_bundle_workspaces_dir": str(generated_workspaces_dir.resolve()),
+        "generated_workspaces": generated_workspaces,
+        "bundle_collection_dir": str(collection_output_dir.resolve()),
+        "bundle_collection_summary_path": collection["summary_path"],
+        "bundle_collection": copy.deepcopy(collection["summary"]),
+        "bundle_index_path": str(bundle_index_path.resolve()),
+        "bundle_index": copy.deepcopy(bundle_index),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "generated_bundle_dirs": generated_bundle_dirs,
+        "generated_workspaces": generated_workspaces,
+        "bundle_collection_dir": str(collection_output_dir.resolve()),
+        "collection": collection,
+        "bundle_index": bundle_index,
+        "bundle_index_path": str(bundle_index_path.resolve()),
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
 def bootstrap_machine_demo_release_collection_from_presets(
     preset_paths: Sequence[str | Path],
     *,
@@ -11349,6 +13599,297 @@ def bootstrap_stable_demo_release_collection_from_presets(
     }
 
 
+def bootstrap_machine_demo_bundle_index_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    service_scope: str = "api-compute",
+    billing_unit: str = "request",
+    consumption_model: str = "burn-on-use",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    tenant_account: str = "tenant_a",
+    worker_account: str = "worker_node",
+    max_supply: Optional[str] = None,
+    initial_balance: str = "100000000",
+    tenant_amount: str = "5000000",
+    worker_amount: str = "1200000",
+    worker_burn_amount: str = "200000",
+    intended_use: str = "machine-api-credit",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    bundle_index_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    if verifier_only and bundle_scheme != "ed25519":
+        raise SatRootError("--verifier-only is only supported for ed25519 bundles")
+
+    root_output_dir = Path(output_dir).resolve()
+    generated_bundles_dir = root_output_dir / "generated_bundles"
+    collection_output_dir = root_output_dir / "bundle_collection"
+    bundle_index_path = root_output_dir / "bundle_index.json"
+    generated_bundles: List[Dict[str, Any]] = []
+    generated_bundle_dirs: List[str] = []
+    allocated_names: set[str] = set()
+
+    for index, preset_path_value in enumerate(preset_paths, start=1):
+        preset_path = Path(preset_path_value).resolve()
+        machine_preset = load_machine_demo_catalog_preset(preset_path)
+        machine_inputs = resolve_machine_demo_bootstrap_inputs(
+            command_name="bootstrap-machine-demo-bundle-index",
+            preset_option_name="--preset-json",
+            machine_preset=machine_preset,
+            symbol=symbol,
+            name=name,
+            service_scope=service_scope,
+            billing_unit=billing_unit,
+            consumption_model=consumption_model,
+            root_id=root_id,
+            issuer=issuer,
+            tenant_account=tenant_account,
+            worker_account=worker_account,
+            max_supply=max_supply,
+            initial_balance=initial_balance,
+            tenant_amount=tenant_amount,
+            worker_amount=worker_amount,
+            worker_burn_amount=worker_burn_amount,
+            intended_use=intended_use,
+            profile_fields=None,
+            rules_hash=rules_hash,
+            nonce=nonce,
+        )
+        member_name = _allocate_collection_member_dir_name(
+            preset_path,
+            allocated=allocated_names,
+            fallback_prefix=f"machine-demo-bundle-{index}",
+        )
+        bundle_dir = generated_bundles_dir / member_name
+        bundle = bootstrap_machine_credit_demo_bundle(
+            symbol=machine_inputs["symbol"],
+            name=machine_inputs["name"],
+            scheme=bundle_scheme,
+            service_scope=str(machine_inputs["service_scope"]),
+            billing_unit=str(machine_inputs["billing_unit"]),
+            consumption_model=str(machine_inputs["consumption_model"]),
+            root_id=machine_inputs["root_id"],
+            issuer=str(machine_inputs["issuer"]),
+            tenant_account=str(machine_inputs["tenant_account"]),
+            worker_account=str(machine_inputs["worker_account"]),
+            max_supply=machine_inputs["max_supply"],
+            initial_balance=str(machine_inputs["initial_balance"]),
+            tenant_amount=str(machine_inputs["tenant_amount"]),
+            worker_amount=str(machine_inputs["worker_amount"]),
+            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+            intended_use=str(machine_inputs["intended_use"]),
+            profile_fields=machine_inputs["profile_fields"],
+            rules_hash=machine_inputs["rules_hash"],
+            nonce=machine_inputs["nonce"],
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+        )
+        bundle_output = _write_bundle_output_dir(
+            bundle,
+            output_dir=bundle_dir,
+            include_private_keys=not verifier_only,
+            genesis=bundle["genesis"],
+        )
+        generated_bundle_dirs.append(str(bundle_dir.resolve()))
+        generated_bundles.append(
+            {
+                "preset_path": str(preset_path),
+                "bundle_dir": str(bundle_dir.resolve()),
+                "bundle_manifest_path": bundle_output["bundle_manifest_path"],
+                "symbol": machine_inputs["symbol"],
+                "name": machine_inputs["name"],
+            }
+        )
+
+    collection = bootstrap_machine_bundle_collection(
+        generated_bundle_dirs,
+        output_dir=collection_output_dir,
+    )
+    bundle_index = build_signed_ledger_bundle_index(
+        collection["bundle_dirs"],
+        base_dir=root_output_dir,
+        bundle_collection_dir=collection_output_dir,
+        release_metadata=_merge_release_metadata_defaults(None, bundle_index_metadata_overrides),
+    )
+    _write_json_file(bundle_index_path, bundle_index)
+    summary = {
+        "profile": MACHINE_DEMO_CATALOG_PROFILE,
+        "generated_bundle_count": len(generated_bundles),
+        "generated_bundles_dir": str(generated_bundles_dir.resolve()),
+        "generated_bundles": generated_bundles,
+        "bundle_collection_dir": str(collection_output_dir.resolve()),
+        "bundle_collection_summary_path": collection["summary_path"],
+        "bundle_collection": copy.deepcopy(collection["summary"]),
+        "bundle_index_path": str(bundle_index_path.resolve()),
+        "bundle_index": copy.deepcopy(bundle_index),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "generated_bundles": generated_bundles,
+        "generated_bundle_dirs": generated_bundle_dirs,
+        "bundle_collection_dir": str(collection_output_dir.resolve()),
+        "collection": collection,
+        "bundle_index": bundle_index,
+        "bundle_index_path": str(bundle_index_path.resolve()),
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
+def bootstrap_stable_demo_bundle_index_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    symbol: Optional[str] = None,
+    name: Optional[str] = None,
+    reference_unit: str = "USD",
+    root_id: Optional[str] = None,
+    issuer: str = "issuer",
+    merchant_account: str = "merchant",
+    service_account: str = "api_node",
+    initial_balance: str = "25000000",
+    merchant_amount: str = "1250000",
+    service_amount: str = "250000",
+    merchant_burn_amount: str = "5000",
+    intended_use: str = "invoice-credit-accounting",
+    rules_hash: Optional[str] = None,
+    nonce: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    bundle_index_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+) -> Dict[str, Any]:
+    if verifier_only and bundle_scheme != "ed25519":
+        raise SatRootError("--verifier-only is only supported for ed25519 bundles")
+
+    root_output_dir = Path(output_dir).resolve()
+    generated_bundles_dir = root_output_dir / "generated_bundles"
+    collection_output_dir = root_output_dir / "bundle_collection"
+    bundle_index_path = root_output_dir / "bundle_index.json"
+    generated_bundles: List[Dict[str, Any]] = []
+    generated_bundle_dirs: List[str] = []
+    allocated_names: set[str] = set()
+
+    for index, preset_path_value in enumerate(preset_paths, start=1):
+        preset_path = Path(preset_path_value).resolve()
+        stable_preset = load_stable_demo_catalog_preset(preset_path)
+        stable_inputs = resolve_stable_demo_bootstrap_inputs(
+            command_name="bootstrap-stable-demo-bundle-index",
+            preset_option_name="--preset-json",
+            stable_preset=stable_preset,
+            symbol=symbol,
+            name=name,
+            reference_unit=reference_unit,
+            root_id=root_id,
+            issuer=issuer,
+            merchant_account=merchant_account,
+            service_account=service_account,
+            initial_balance=initial_balance,
+            merchant_amount=merchant_amount,
+            service_amount=service_amount,
+            merchant_burn_amount=merchant_burn_amount,
+            intended_use=intended_use,
+            profile_fields=None,
+            rules_hash=rules_hash,
+            nonce=nonce,
+        )
+        member_name = _allocate_collection_member_dir_name(
+            preset_path,
+            allocated=allocated_names,
+            fallback_prefix=f"stable-demo-bundle-{index}",
+        )
+        bundle_dir = generated_bundles_dir / member_name
+        bundle = bootstrap_stable_reference_demo_bundle(
+            symbol=stable_inputs["symbol"],
+            name=stable_inputs["name"],
+            scheme=bundle_scheme,
+            reference_unit=str(stable_inputs["reference_unit"]),
+            root_id=stable_inputs["root_id"],
+            issuer=str(stable_inputs["issuer"]),
+            merchant_account=str(stable_inputs["merchant_account"]),
+            service_account=str(stable_inputs["service_account"]),
+            initial_balance=str(stable_inputs["initial_balance"]),
+            merchant_amount=str(stable_inputs["merchant_amount"]),
+            service_amount=str(stable_inputs["service_amount"]),
+            merchant_burn_amount=str(stable_inputs["merchant_burn_amount"]),
+            intended_use=str(stable_inputs["intended_use"]),
+            profile_fields=stable_inputs["profile_fields"],
+            rules_hash=stable_inputs["rules_hash"],
+            nonce=stable_inputs["nonce"],
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+        )
+        bundle_output = _write_bundle_output_dir(
+            bundle,
+            output_dir=bundle_dir,
+            include_private_keys=not verifier_only,
+            genesis=bundle["genesis"],
+        )
+        generated_bundle_dirs.append(str(bundle_dir.resolve()))
+        generated_bundles.append(
+            {
+                "preset_path": str(preset_path),
+                "bundle_dir": str(bundle_dir.resolve()),
+                "bundle_manifest_path": bundle_output["bundle_manifest_path"],
+                "symbol": stable_inputs["symbol"],
+                "name": stable_inputs["name"],
+            }
+        )
+
+    collection = bootstrap_stable_bundle_collection(
+        generated_bundle_dirs,
+        output_dir=collection_output_dir,
+    )
+    bundle_index = build_signed_ledger_bundle_index(
+        collection["bundle_dirs"],
+        base_dir=root_output_dir,
+        bundle_collection_dir=collection_output_dir,
+        release_metadata=_merge_release_metadata_defaults(None, bundle_index_metadata_overrides),
+    )
+    _write_json_file(bundle_index_path, bundle_index)
+    summary = {
+        "profile": STABLE_DEMO_CATALOG_PROFILE,
+        "generated_bundle_count": len(generated_bundles),
+        "generated_bundles_dir": str(generated_bundles_dir.resolve()),
+        "generated_bundles": generated_bundles,
+        "bundle_collection_dir": str(collection_output_dir.resolve()),
+        "bundle_collection_summary_path": collection["summary_path"],
+        "bundle_collection": copy.deepcopy(collection["summary"]),
+        "bundle_index_path": str(bundle_index_path.resolve()),
+        "bundle_index": copy.deepcopy(bundle_index),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "generated_bundles": generated_bundles,
+        "generated_bundle_dirs": generated_bundle_dirs,
+        "bundle_collection_dir": str(collection_output_dir.resolve()),
+        "collection": collection,
+        "bundle_index": bundle_index,
+        "bundle_index_path": str(bundle_index_path.resolve()),
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
+
+
 def bootstrap_machine_credit_demo_catalog_workspace(
     *,
     symbol: str,
@@ -11499,15 +14040,16 @@ def bootstrap_stable_reference_demo_catalog_workspace(
 
 def bootstrap_stable_reference_publication_catalog_workspace(
     *,
-    symbol: str,
-    name: str,
+    symbol: Optional[str],
+    name: Optional[str],
     bundle_scheme: str,
     output_dir: str | Path,
-    release_key_id: str,
+    release_key_id: Optional[str],
     publication_descriptor_index_key_id: str,
     publication_metadata_key_id: str,
     publication_metadata_catalog_key_id: str,
     release_scheme: Optional[str] = None,
+    release_collection_dir: Optional[str | Path] = None,
     reference_unit: str = "USD",
     root_id: Optional[str] = None,
     issuer: str = "issuer",
@@ -11533,37 +14075,73 @@ def bootstrap_stable_reference_publication_catalog_workspace(
     discover_under: Optional[Sequence[str | Path]] = None,
     publication_metadata_bundle_collection_dir: Optional[str | Path] = None,
     recursive: bool = True,
+    catalog_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     root_output_dir = Path(output_dir).resolve()
     root_output_dir.mkdir(parents=True, exist_ok=True)
     stable_catalog_workspace_dir = root_output_dir / "stable_catalog_workspace"
 
-    stable_catalog_workspace = bootstrap_stable_reference_demo_catalog_workspace(
-        symbol=symbol,
-        name=name,
+    stable_catalog_workspace = write_demo_catalog_workspace(
         bundle_scheme=bundle_scheme,
         release_scheme=release_scheme,
         release_key_id=release_key_id,
         output_dir=stable_catalog_workspace_dir,
-        reference_unit=reference_unit,
-        root_id=root_id,
-        issuer=issuer,
-        merchant_account=merchant_account,
-        service_account=service_account,
-        initial_balance=initial_balance,
-        merchant_amount=merchant_amount,
-        service_amount=service_amount,
-        merchant_burn_amount=merchant_burn_amount,
-        intended_use=intended_use,
-        profile_fields=profile_fields,
-        rules_hash=rules_hash,
-        nonce=nonce,
+        profiles=None if release_collection_dir is not None else [STABLE_DEMO_CATALOG_PROFILE],
+        symbol_overrides=(
+            None
+            if release_collection_dir is not None
+            else {STABLE_DEMO_CATALOG_PROFILE: symbol or ""}
+        ),
+        name_overrides=(
+            None
+            if release_collection_dir is not None
+            else {STABLE_DEMO_CATALOG_PROFILE: name or ""}
+        ),
+        profile_field_overrides=(
+            None
+            if release_collection_dir is not None
+            else {
+                STABLE_DEMO_CATALOG_PROFILE: {
+                    "reference_unit": reference_unit,
+                    "intended_use": intended_use,
+                    **(profile_fields or {}),
+                }
+            }
+        ),
+        profile_structure_overrides=(
+            None
+            if release_collection_dir is not None
+            else {
+                STABLE_DEMO_CATALOG_PROFILE: {
+                    key: value
+                    for key, value in {
+                        "root_id": root_id,
+                        "issuer": issuer,
+                        "merchant_account": merchant_account,
+                        "service_account": service_account,
+                        "initial_balance": initial_balance,
+                        "merchant_amount": merchant_amount,
+                        "service_amount": service_amount,
+                        "merchant_burn_amount": merchant_burn_amount,
+                        "rules_hash": rules_hash,
+                        "nonce": nonce,
+                    }.items()
+                    if value is not None
+                }
+            }
+        ),
+        release_collection_dir=release_collection_dir,
         key_prefix=key_prefix,
         key_suffix=key_suffix,
         include_state_hash=include_state_hash,
         include_annotation=include_annotation,
         verifier_only=verifier_only,
         release_metadata=release_metadata,
+        preset_path=catalog_preset_path,
+    )
+    _require_stable_demo_catalog_workspace(
+        stable_catalog_workspace_dir,
+        label="stable publication catalog workspace nested catalog workspace",
     )
     publication_catalog_workspace = write_publication_catalog_workspace(
         artifact_paths=[*(artifact_paths or [])],
@@ -11595,17 +14173,100 @@ def bootstrap_stable_reference_publication_catalog_workspace(
     return publication_catalog_workspace
 
 
-def bootstrap_machine_credit_publication_catalog_workspace(
+def bootstrap_publication_catalog_workspace_from_demo_catalog(
     *,
-    symbol: str,
-    name: str,
     bundle_scheme: str,
     output_dir: str | Path,
-    release_key_id: str,
+    release_key_id: Optional[str],
     publication_descriptor_index_key_id: str,
     publication_metadata_key_id: str,
     publication_metadata_catalog_key_id: str,
     release_scheme: Optional[str] = None,
+    profiles: Optional[Sequence[str]] = None,
+    symbol_overrides: Optional[Mapping[str, str]] = None,
+    name_overrides: Optional[Mapping[str, str]] = None,
+    profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
+    profile_structure_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    release_collection_dir: Optional[str | Path] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata: Optional[Mapping[str, str]] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+    artifact_paths: Optional[Sequence[str | Path]] = None,
+    discover_under: Optional[Sequence[str | Path]] = None,
+    publication_metadata_bundle_collection_dir: Optional[str | Path] = None,
+    recursive: bool = True,
+    catalog_preset_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    catalog_workspace_dir = root_output_dir / "catalog_workspace"
+
+    catalog_workspace = write_demo_catalog_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        output_dir=catalog_workspace_dir,
+        profiles=profiles,
+        symbol_overrides=symbol_overrides,
+        name_overrides=name_overrides,
+        profile_field_overrides=profile_field_overrides,
+        profile_structure_overrides=profile_structure_overrides,
+        release_collection_dir=release_collection_dir,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata=release_metadata,
+        preset_path=catalog_preset_path,
+    )
+    publication_catalog_workspace = write_publication_catalog_workspace(
+        artifact_paths=[*(artifact_paths or [])],
+        discover_under=[
+            *(() if publication_metadata_bundle_collection_dir is not None else [catalog_workspace_dir]),
+            *((discover_under or [])),
+        ],
+        recursive=recursive,
+        output_dir=root_output_dir,
+        signature_scheme=bundle_scheme,
+        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+        publication_metadata_key_id=publication_metadata_key_id,
+        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+        publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
+        descriptor_index_metadata=descriptor_index_metadata,
+        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+    )
+
+    summary = copy.deepcopy(publication_catalog_workspace["summary"])
+    summary["source_catalog_workspace_dir"] = str(catalog_workspace_dir.resolve())
+    summary["source_catalog_summary_path"] = catalog_workspace["summary_path"]
+    summary["source_catalog_release_dir"] = catalog_workspace["summary"]["release_dir"]
+    summary["source_catalog_release_manifest_path"] = catalog_workspace["summary"]["release_manifest_path"]
+    _write_json_file(root_output_dir / "summary.json", summary)
+
+    publication_catalog_workspace["summary"] = summary
+    publication_catalog_workspace["catalog_workspace_dir"] = str(catalog_workspace_dir.resolve())
+    publication_catalog_workspace["catalog_workspace"] = catalog_workspace
+    return publication_catalog_workspace
+
+
+def bootstrap_machine_credit_publication_catalog_workspace(
+    *,
+    symbol: Optional[str],
+    name: Optional[str],
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: Optional[str],
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_collection_dir: Optional[str | Path] = None,
     service_scope: str = "api-compute",
     billing_unit: str = "request",
     consumption_model: str = "burn-on-use",
@@ -11634,40 +14295,76 @@ def bootstrap_machine_credit_publication_catalog_workspace(
     discover_under: Optional[Sequence[str | Path]] = None,
     publication_metadata_bundle_collection_dir: Optional[str | Path] = None,
     recursive: bool = True,
+    catalog_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     root_output_dir = Path(output_dir).resolve()
     root_output_dir.mkdir(parents=True, exist_ok=True)
     machine_catalog_workspace_dir = root_output_dir / "machine_catalog_workspace"
 
-    machine_catalog_workspace = bootstrap_machine_credit_demo_catalog_workspace(
-        symbol=symbol,
-        name=name,
+    machine_catalog_workspace = write_demo_catalog_workspace(
         bundle_scheme=bundle_scheme,
         release_scheme=release_scheme,
         release_key_id=release_key_id,
         output_dir=machine_catalog_workspace_dir,
-        service_scope=service_scope,
-        billing_unit=billing_unit,
-        consumption_model=consumption_model,
-        root_id=root_id,
-        issuer=issuer,
-        tenant_account=tenant_account,
-        worker_account=worker_account,
-        max_supply=max_supply,
-        initial_balance=initial_balance,
-        tenant_amount=tenant_amount,
-        worker_amount=worker_amount,
-        worker_burn_amount=worker_burn_amount,
-        intended_use=intended_use,
-        profile_fields=profile_fields,
-        rules_hash=rules_hash,
-        nonce=nonce,
+        profiles=None if release_collection_dir is not None else [MACHINE_DEMO_CATALOG_PROFILE],
+        symbol_overrides=(
+            None
+            if release_collection_dir is not None
+            else {MACHINE_DEMO_CATALOG_PROFILE: symbol or ""}
+        ),
+        name_overrides=(
+            None
+            if release_collection_dir is not None
+            else {MACHINE_DEMO_CATALOG_PROFILE: name or ""}
+        ),
+        profile_field_overrides=(
+            None
+            if release_collection_dir is not None
+            else {
+                MACHINE_DEMO_CATALOG_PROFILE: {
+                    "service_scope": service_scope,
+                    "billing_unit": billing_unit,
+                    "consumption_model": consumption_model,
+                    "intended_use": intended_use,
+                    **(profile_fields or {}),
+                }
+            }
+        ),
+        profile_structure_overrides=(
+            None
+            if release_collection_dir is not None
+            else {
+                MACHINE_DEMO_CATALOG_PROFILE: {
+                    key: value
+                    for key, value in {
+                        "root_id": root_id,
+                        "issuer": issuer,
+                        "tenant_account": tenant_account,
+                        "worker_account": worker_account,
+                        "max_supply": max_supply,
+                        "initial_balance": initial_balance,
+                        "tenant_amount": tenant_amount,
+                        "worker_amount": worker_amount,
+                        "worker_burn_amount": worker_burn_amount,
+                        "rules_hash": rules_hash,
+                        "nonce": nonce,
+                    }.items()
+                    if value is not None
+                }
+            }
+        ),
+        release_collection_dir=release_collection_dir,
         key_prefix=key_prefix,
         key_suffix=key_suffix,
         include_state_hash=include_state_hash,
         include_annotation=include_annotation,
         verifier_only=verifier_only,
         release_metadata=release_metadata,
+        preset_path=catalog_preset_path,
+    )
+    _require_machine_demo_catalog_workspace(
+        machine_catalog_workspace_dir,
+        label="machine publication catalog workspace nested catalog workspace",
     )
     publication_catalog_workspace = write_publication_catalog_workspace(
         artifact_paths=[*(artifact_paths or [])],
@@ -11701,17 +14398,18 @@ def bootstrap_machine_credit_publication_catalog_workspace(
 
 def bootstrap_machine_credit_publication_registry_workspace(
     *,
-    symbol: str,
-    name: str,
+    symbol: Optional[str],
+    name: Optional[str],
     bundle_scheme: str,
     output_dir: str | Path,
     release_catalog_index_dir: str | Path,
-    release_key_id: str,
+    release_key_id: Optional[str],
     publication_descriptor_index_key_id: str,
     publication_metadata_key_id: str,
     publication_metadata_catalog_key_id: str,
     publication_registry_key_id: str,
     release_scheme: Optional[str] = None,
+    release_collection_dir: Optional[str | Path] = None,
     service_scope: str = "api-compute",
     billing_unit: str = "request",
     consumption_model: str = "burn-on-use",
@@ -11746,6 +14444,7 @@ def bootstrap_machine_credit_publication_registry_workspace(
     discover_under: Optional[Sequence[str | Path]] = None,
     publication_metadata_bundle_collection_dir: Optional[str | Path] = None,
     recursive: bool = True,
+    catalog_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     root_output_dir = Path(output_dir).resolve()
     root_output_dir.mkdir(parents=True, exist_ok=True)
@@ -11757,6 +14456,7 @@ def bootstrap_machine_credit_publication_registry_workspace(
         bundle_scheme=bundle_scheme,
         release_scheme=release_scheme,
         release_key_id=release_key_id,
+        release_collection_dir=release_collection_dir,
         publication_descriptor_index_key_id=publication_descriptor_index_key_id,
         publication_metadata_key_id=publication_metadata_key_id,
         publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
@@ -11789,6 +14489,7 @@ def bootstrap_machine_credit_publication_registry_workspace(
         discover_under=discover_under,
         publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
         recursive=recursive,
+        catalog_preset_path=catalog_preset_path,
     )
     registry_workspace = write_publication_registry_workspace(
         artifact_paths=[],
@@ -11830,17 +14531,18 @@ def bootstrap_machine_credit_publication_registry_workspace(
 
 def bootstrap_stable_reference_publication_registry_workspace(
     *,
-    symbol: str,
-    name: str,
+    symbol: Optional[str],
+    name: Optional[str],
     bundle_scheme: str,
     output_dir: str | Path,
     release_catalog_index_dir: str | Path,
-    release_key_id: str,
+    release_key_id: Optional[str],
     publication_descriptor_index_key_id: str,
     publication_metadata_key_id: str,
     publication_metadata_catalog_key_id: str,
     publication_registry_key_id: str,
     release_scheme: Optional[str] = None,
+    release_collection_dir: Optional[str | Path] = None,
     reference_unit: str = "USD",
     root_id: Optional[str] = None,
     issuer: str = "issuer",
@@ -11872,6 +14574,7 @@ def bootstrap_stable_reference_publication_registry_workspace(
     discover_under: Optional[Sequence[str | Path]] = None,
     publication_metadata_bundle_collection_dir: Optional[str | Path] = None,
     recursive: bool = True,
+    catalog_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     root_output_dir = Path(output_dir).resolve()
     root_output_dir.mkdir(parents=True, exist_ok=True)
@@ -11883,6 +14586,7 @@ def bootstrap_stable_reference_publication_registry_workspace(
         bundle_scheme=bundle_scheme,
         release_scheme=release_scheme,
         release_key_id=release_key_id,
+        release_collection_dir=release_collection_dir,
         publication_descriptor_index_key_id=publication_descriptor_index_key_id,
         publication_metadata_key_id=publication_metadata_key_id,
         publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
@@ -11912,6 +14616,7 @@ def bootstrap_stable_reference_publication_registry_workspace(
         discover_under=discover_under,
         publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
         recursive=recursive,
+        catalog_preset_path=catalog_preset_path,
     )
     registry_workspace = write_publication_registry_workspace(
         artifact_paths=[],
@@ -12346,15 +15051,16 @@ def resolve_machine_demo_bootstrap_inputs(
 
 def write_demo_catalog_workspace(
     *,
-    bundle_scheme: str,
+    bundle_scheme: Optional[str],
     output_dir: str | Path,
-    release_key_id: str,
+    release_key_id: Optional[str],
     release_scheme: Optional[str] = None,
     profiles: Optional[Sequence[str]] = None,
     symbol_overrides: Optional[Mapping[str, str]] = None,
     name_overrides: Optional[Mapping[str, str]] = None,
     profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
     profile_structure_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    release_collection_dir: Optional[str | Path] = None,
     key_prefix: str = "",
     key_suffix: str = "-key",
     include_state_hash: bool = True,
@@ -12363,6 +15069,16 @@ def write_demo_catalog_workspace(
     release_metadata: Optional[Mapping[str, str]] = None,
     preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
+    if release_collection_dir is not None:
+        return _write_demo_catalog_workspace_from_release_collection(
+            output_dir=output_dir,
+            release_collection_dir=release_collection_dir,
+            preset_path=preset_path,
+        )
+    if bundle_scheme is None:
+        raise SatRootError("demo catalog workspace generation requires bundle_scheme")
+    if release_key_id is None:
+        raise SatRootError("demo catalog workspace generation requires release_key_id")
     catalog = bootstrap_demo_catalog_release(
         bundle_scheme=bundle_scheme,
         release_scheme=release_scheme,
@@ -12411,6 +15127,141 @@ def write_demo_catalog_workspace(
         "catalog": catalog,
         "summary": summary,
         "summary_path": str(summary_path.resolve()),
+    }
+
+
+def _load_single_release_collection_entry(
+    release_collection_dir: str | Path,
+    *,
+    label: str,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    collection_summary = summarize_release_collection(release_collection_dir)
+    releases = collection_summary.get("releases")
+    assert isinstance(releases, list)
+    if collection_summary.get("release_count") != 1 or len(releases) != 1:
+        raise SatRootError(f"{label} requires release_collection_dir to contain exactly one release")
+    release_entry = releases[0]
+    if not isinstance(release_entry, dict):
+        raise SatRootError(f"{label} has an invalid release collection summary entry")
+    return collection_summary, release_entry
+
+
+def _build_demo_catalog_bundle_summary_entry(bundle_dir: str | Path) -> tuple[Dict[str, Any], str]:
+    resolved_bundle_dir = Path(bundle_dir).resolve()
+    bundle_summary = summarize_signed_ledger_bundle(resolved_bundle_dir)
+    final_snapshot = bundle_summary.get("final_state_snapshot")
+    if not isinstance(final_snapshot, Mapping):
+        raise SatRootError("demo catalog bundle summary requires final_state_snapshot metadata")
+
+    profile = final_snapshot.get("profile")
+    symbol = bundle_summary.get("symbol")
+    name = final_snapshot.get("name")
+    if not isinstance(profile, str) or profile not in DEMO_CATALOG_PROFILES:
+        raise SatRootError(f"unsupported demo catalog profile in copied release bundle: {profile!r}")
+    if not isinstance(symbol, str) or not symbol.strip():
+        raise SatRootError("copied demo catalog bundle is missing symbol metadata")
+    if not isinstance(name, str) or not name.strip():
+        raise SatRootError("copied demo catalog bundle is missing name metadata")
+
+    genesis_metadata = final_snapshot.get("genesis_metadata")
+    if not isinstance(genesis_metadata, Mapping):
+        genesis_metadata = {}
+    reserved_field_names = {"profile", "profile_mode", *DEMO_CATALOG_STRUCTURE_OVERRIDE_SPECS.get(profile, {})}
+    profile_fields = {
+        key: copy.deepcopy(value)
+        for key, value in genesis_metadata.items()
+        if isinstance(key, str) and key not in reserved_field_names
+    }
+
+    return (
+        {
+            "bundle_name": resolved_bundle_dir.name,
+            "profile": profile,
+            "symbol": symbol,
+            "name": name,
+            "profile_fields": profile_fields,
+            "structure_overrides": {},
+            "bundle_dir": str(resolved_bundle_dir),
+        },
+        str(bundle_summary.get("scheme")),
+    )
+
+
+def _write_demo_catalog_workspace_from_release_collection(
+    *,
+    output_dir: str | Path,
+    release_collection_dir: str | Path,
+    preset_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    normalized_release_collection_dir = _normalize_release_collection_input(
+        release_collection_dir,
+        label="demo catalog workspace release collection",
+    )
+    collection_summary, release_entry = _load_single_release_collection_entry(
+        release_collection_dir,
+        label="demo catalog workspace",
+    )
+    source_release_dir = release_entry.get("release_dir")
+    if not isinstance(source_release_dir, str) or not source_release_dir.strip():
+        raise SatRootError("demo catalog workspace release collection entry is missing release_dir")
+
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+    release_dir = output_path / "release"
+    copied_dirs: Dict[str, str] = {}
+    _relocate_release_publication_dependencies(
+        source_release_dir,
+        release_dir,
+        copied_dirs=copied_dirs,
+    )
+
+    _manifest_path, bundle_index_path, release_manifest, bundle_index = _load_release_publication(release_dir)
+    bundles = bundle_index.get("bundles")
+    assert isinstance(bundles, list)
+
+    bundle_entries: list[Dict[str, Any]] = []
+    bundle_schemes: set[str] = set()
+    seen_profiles: set[str] = set()
+    for entry in bundles:
+        if not isinstance(entry, Mapping):
+            raise SatRootError("copied demo catalog release bundle index must contain objects")
+        bundle_ref = entry.get("bundle_path")
+        if not isinstance(bundle_ref, str) or not bundle_ref.strip():
+            raise SatRootError("copied demo catalog release bundle index is missing bundle_path metadata")
+        bundle_dir = (bundle_index_path.parent / bundle_ref).resolve()
+        bundle_entry, bundle_scheme = _build_demo_catalog_bundle_summary_entry(bundle_dir)
+        if bundle_entry["profile"] in seen_profiles:
+            raise SatRootError(f"copied demo catalog release contains duplicate profile {bundle_entry['profile']!r}")
+        seen_profiles.add(str(bundle_entry["profile"]))
+        bundle_entries.append(bundle_entry)
+        bundle_schemes.add(bundle_scheme)
+
+    if not bundle_entries:
+        raise SatRootError("copied demo catalog release must contain at least one bundle")
+    if len(bundle_schemes) != 1:
+        raise SatRootError("copied demo catalog release must use a consistent bundle signing scheme")
+
+    summary = {
+        "bundle_scheme": next(iter(bundle_schemes)),
+        "release_scheme": release_manifest.get("signature_scheme"),
+        "bundle_count": len(bundle_entries),
+        "bundles_dir": str((output_path / "bundles").resolve()),
+        "release_dir": str(release_dir.resolve()),
+        "preset_path": None if preset_path is None else str(Path(preset_path).resolve()),
+        "release": copy.deepcopy(release_entry.get("release") or {}),
+        "source_release_collection_dir": normalized_release_collection_dir,
+        "source_release_dir": str(Path(source_release_dir).resolve()),
+        "bundles": bundle_entries,
+        "release_manifest_path": str((release_dir / "release_manifest.json").resolve()),
+        "bundle_index_path": str((release_dir / "bundle_index.json").resolve()),
+    }
+    summary_path = output_path / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "catalog": None,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+        "source_release_collection_summary": collection_summary,
     }
 
 
@@ -12486,6 +15337,7 @@ def write_publication_stack_workspace(
             name_overrides=preset.get("name_overrides"),
             profile_field_overrides=preset.get("profile_field_overrides"),
             profile_structure_overrides=preset.get("profile_structure_overrides"),
+            release_collection_dir=preset.get("release_collection_dir"),
             key_prefix=key_prefix,
             key_suffix=key_suffix,
             include_state_hash=include_state_hash,
@@ -12541,12 +15393,24 @@ def write_publication_stack_workspace(
         field_name="release_scheme",
         label="publication stack workspace",
     )
+    source_release_collection_dirs = {
+        str(Path(str(summary.get("source_release_collection_dir"))).resolve())
+        for summary in source_summaries
+        if isinstance(summary.get("source_release_collection_dir"), str)
+        and str(summary.get("source_release_collection_dir")).strip()
+    }
+    source_release_collection_dir = (
+        next(iter(source_release_collection_dirs))
+        if len(source_release_collection_dirs) == 1
+        else None
+    )
 
     published = bootstrap_release_catalog_publication(
         release_dirs,
         output_dir=release_catalog_dir,
         signature_scheme=release_catalog_scheme or bundle_scheme,
         key_id=release_catalog_key_id,
+        release_collection_dir=source_release_collection_dir,
         catalog_metadata=release_catalog_metadata,
     )
     summary = {
@@ -12556,7 +15420,10 @@ def write_publication_stack_workspace(
         "source_catalog_workspace_collection_dir": (
             None
             if catalog_workspace_collection_dir is None
-            else str(Path(catalog_workspace_collection_dir).resolve())
+            else _normalize_demo_catalog_workspace_collection_input(
+                catalog_workspace_collection_dir,
+                label="publication stack source catalog workspace collection",
+            )
         ),
         "workspace_count": len(workspace_entries),
         "catalog_workspaces_dir": str(catalog_workspaces_dir.resolve()),
@@ -12737,7 +15604,10 @@ def write_publication_network_workspace(
         "source_publication_stack_collection_dir": (
             None
             if publication_stack_collection_dir is None
-            else str(Path(publication_stack_collection_dir).resolve())
+            else _normalize_publication_stack_collection_input(
+                publication_stack_collection_dir,
+                label="publication network source publication stack collection",
+            )
         ),
         "stack_count": len(workspace_entries),
         "stack_workspaces_dir": str(stack_workspaces_dir.resolve()),
@@ -12758,6 +15628,46 @@ def write_publication_network_workspace(
         "release_catalog_index_dir": str(release_catalog_index_dir.resolve()),
         "release_catalog_index_publication": published,
     }
+
+
+def bootstrap_demo_publication_stack_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_catalog_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_preset_paths = [Path(value).resolve() for value in preset_paths]
+    if not resolved_preset_paths:
+        raise SatRootError("demo publication stack bootstrap requires at least one SATROOT demo preset")
+    for preset_path in resolved_preset_paths:
+        load_demo_catalog_preset(preset_path)
+    return write_publication_stack_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        release_catalog_scheme=release_catalog_scheme,
+        release_catalog_key_id=release_catalog_key_id,
+        output_dir=output_dir,
+        catalog_preset_paths=resolved_preset_paths,
+        catalog_workspace_dirs=(),
+        catalog_workspace_collection_dir=None,
+        release_catalog_metadata=release_catalog_metadata,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+    )
 
 
 def bootstrap_machine_demo_publication_stack_from_presets(
@@ -12838,6 +15748,68 @@ def bootstrap_stable_demo_publication_stack_from_presets(
         include_annotation=include_annotation,
         verifier_only=verifier_only,
     )
+
+
+def bootstrap_demo_publication_network_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_catalog_index_key_id: str,
+    release_scheme: Optional[str] = None,
+    release_catalog_scheme: Optional[str] = None,
+    release_catalog_index_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+    release_catalog_index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    stack_source_dir = root_output_dir / "publication_stack_source"
+    stack_workspace = bootstrap_demo_publication_stack_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=stack_source_dir,
+        release_key_id=release_key_id,
+        release_catalog_key_id=release_catalog_key_id,
+        release_scheme=release_scheme,
+        release_catalog_scheme=release_catalog_scheme,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_catalog_metadata=release_catalog_metadata,
+    )
+    network_workspace = write_publication_network_workspace(
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        release_catalog_scheme=release_catalog_scheme,
+        release_catalog_key_id=release_catalog_key_id,
+        release_catalog_index_scheme=release_catalog_index_scheme,
+        release_catalog_index_key_id=release_catalog_index_key_id,
+        output_dir=root_output_dir,
+        stack_preset_paths=(),
+        publication_stack_dirs=[stack_source_dir],
+        release_catalog_index_metadata=release_catalog_index_metadata,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+    )
+    return {
+        "publication_stack_workspace": stack_workspace,
+        "publication_network_workspace": network_workspace,
+        "summary": network_workspace["summary"],
+        "summary_path": network_workspace["summary_path"],
+    }
 
 
 def bootstrap_machine_demo_publication_network_from_presets(
@@ -12964,6 +15936,113 @@ def bootstrap_stable_demo_publication_network_from_presets(
     }
 
 
+def bootstrap_demo_publication_catalog_workspace_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    release_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    resolved_preset_paths = [Path(value).resolve() for value in preset_paths]
+    if not resolved_preset_paths:
+        raise SatRootError("demo publication catalog workspace bootstrapping requires at least one preset")
+
+    root_output_dir = Path(output_dir).resolve()
+    root_output_dir.mkdir(parents=True, exist_ok=True)
+    source_workspaces_dir = root_output_dir / "catalog_workspace_sources"
+    collection_dir = root_output_dir / "catalog_workspaces"
+    generated_workspace_dirs: list[str] = []
+    allocated_names: set[str] = set()
+
+    for index, preset_path in enumerate(resolved_preset_paths, start=1):
+        demo_preset = load_demo_catalog_preset(preset_path)
+        effective_profiles = _resolve_effective_demo_catalog_profiles(
+            profiles=None,
+            preset_profiles=demo_preset.get("profiles"),
+        )
+        release_metadata = _merge_release_metadata_defaults(
+            demo_preset.get("release_metadata"),
+            release_metadata_overrides,
+        )
+        workspace_name = _allocate_collection_member_dir_name(
+            preset_path,
+            allocated=allocated_names,
+            fallback_prefix=f"demo-publication-catalog-{index}",
+        )
+        workspace = write_demo_catalog_workspace(
+            bundle_scheme=bundle_scheme,
+            release_scheme=release_scheme,
+            release_key_id=release_key_id,
+            output_dir=source_workspaces_dir / workspace_name,
+            profiles=effective_profiles,
+            symbol_overrides=_filter_profile_string_map(
+                demo_preset.get("symbol_overrides"),
+                allowed_profiles=effective_profiles,
+            ),
+            name_overrides=_filter_profile_string_map(
+                demo_preset.get("name_overrides"),
+                allowed_profiles=effective_profiles,
+            ),
+            profile_field_overrides=_filter_profile_nested_map(
+                demo_preset.get("profile_field_overrides"),
+                allowed_profiles=effective_profiles,
+            ),
+            profile_structure_overrides=_filter_profile_nested_map(
+                demo_preset.get("profile_structure_overrides"),
+                allowed_profiles=effective_profiles,
+            ),
+            release_collection_dir=demo_preset.get("release_collection_dir"),
+            key_prefix=key_prefix,
+            key_suffix=key_suffix,
+            include_state_hash=include_state_hash,
+            include_annotation=include_annotation,
+            verifier_only=verifier_only,
+            release_metadata=release_metadata,
+            preset_path=preset_path,
+        )
+        generated_workspace_dirs.append(str(Path(workspace["summary_path"]).parent.resolve()))
+
+    catalog_workspace_collection = bootstrap_demo_catalog_workspace_collection(
+        generated_workspace_dirs,
+        output_dir=collection_dir,
+    )
+    publication_catalog_workspace = write_publication_catalog_workspace(
+        artifact_paths=[],
+        discover_under=catalog_workspace_collection["catalog_workspace_dirs"],
+        recursive=True,
+        output_dir=root_output_dir,
+        signature_scheme=bundle_scheme,
+        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+        publication_metadata_key_id=publication_metadata_key_id,
+        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+        descriptor_index_metadata=descriptor_index_metadata,
+        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+    )
+
+    summary = copy.deepcopy(publication_catalog_workspace["summary"])
+    summary["source_catalog_workspace_collection_dir"] = str(collection_dir.resolve())
+    summary["source_catalog_workspace_collection_summary_path"] = catalog_workspace_collection["summary_path"]
+    summary["source_catalog_workspace_collection"] = copy.deepcopy(catalog_workspace_collection["summary"])
+    _write_json_file(root_output_dir / "summary.json", summary)
+
+    publication_catalog_workspace["summary"] = summary
+    publication_catalog_workspace["catalog_workspace_collection_dir"] = str(collection_dir.resolve())
+    publication_catalog_workspace["catalog_workspace_collection"] = catalog_workspace_collection
+    return publication_catalog_workspace
+
+
 def bootstrap_machine_demo_publication_catalog_workspace_from_presets(
     preset_paths: Sequence[str | Path],
     *,
@@ -12995,63 +16074,85 @@ def bootstrap_machine_demo_publication_catalog_workspace_from_presets(
 
     for preset_path, workspace_name in zip(resolved_preset_paths, _unique_workspace_names(resolved_preset_paths)):
         machine_preset = load_machine_demo_catalog_preset(preset_path)
-        machine_inputs = resolve_machine_demo_bootstrap_inputs(
-            command_name="bootstrap-machine-demo-publication-catalog-workspace",
-            preset_option_name="--preset-json",
-            machine_preset=machine_preset,
-            symbol=None,
-            name=None,
-            service_scope="api-compute",
-            billing_unit="request",
-            consumption_model="burn-on-use",
-            root_id=None,
-            issuer="issuer",
-            tenant_account="tenant_a",
-            worker_account="worker_node",
-            max_supply=None,
-            initial_balance="100000000",
-            tenant_amount="5000000",
-            worker_amount="1200000",
-            worker_burn_amount="200000",
-            intended_use="machine-api-credit",
-            profile_fields=None,
-            rules_hash=None,
-            nonce=None,
-        )
         release_metadata = _merge_release_metadata_defaults(
             machine_preset.get("release_metadata"),
             release_metadata_overrides,
         )
-        workspace = bootstrap_machine_credit_demo_catalog_workspace(
-            symbol=machine_inputs["symbol"],
-            name=machine_inputs["name"],
-            bundle_scheme=bundle_scheme,
-            release_scheme=release_scheme,
-            release_key_id=release_key_id,
-            output_dir=source_workspaces_dir / workspace_name,
-            service_scope=str(machine_inputs["service_scope"]),
-            billing_unit=str(machine_inputs["billing_unit"]),
-            consumption_model=str(machine_inputs["consumption_model"]),
-            root_id=machine_inputs["root_id"],
-            issuer=str(machine_inputs["issuer"]),
-            tenant_account=str(machine_inputs["tenant_account"]),
-            worker_account=str(machine_inputs["worker_account"]),
-            max_supply=machine_inputs["max_supply"],
-            initial_balance=str(machine_inputs["initial_balance"]),
-            tenant_amount=str(machine_inputs["tenant_amount"]),
-            worker_amount=str(machine_inputs["worker_amount"]),
-            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
-            intended_use=str(machine_inputs["intended_use"]),
-            profile_fields=machine_inputs["profile_fields"],
-            rules_hash=machine_inputs["rules_hash"],
-            nonce=machine_inputs["nonce"],
-            key_prefix=key_prefix,
-            key_suffix=key_suffix,
-            include_state_hash=include_state_hash,
-            include_annotation=include_annotation,
-            verifier_only=verifier_only,
-            release_metadata=release_metadata,
-        )
+        release_collection_dir = machine_preset.get("release_collection_dir")
+        if release_collection_dir is not None:
+            workspace = write_demo_catalog_workspace(
+                bundle_scheme=bundle_scheme,
+                release_scheme=release_scheme,
+                release_key_id=release_key_id,
+                output_dir=source_workspaces_dir / workspace_name,
+                profiles=[MACHINE_DEMO_CATALOG_PROFILE],
+                release_collection_dir=release_collection_dir,
+                key_prefix=key_prefix,
+                key_suffix=key_suffix,
+                include_state_hash=include_state_hash,
+                include_annotation=include_annotation,
+                verifier_only=verifier_only,
+                release_metadata=release_metadata,
+                preset_path=preset_path,
+            )
+            _require_machine_demo_catalog_workspace(
+                Path(workspace["summary_path"]).parent.resolve(),
+                label="bootstrap-machine-demo-publication-catalog-workspace release collection member",
+            )
+        else:
+            machine_inputs = resolve_machine_demo_bootstrap_inputs(
+                command_name="bootstrap-machine-demo-publication-catalog-workspace",
+                preset_option_name="--preset-json",
+                machine_preset=machine_preset,
+                symbol=None,
+                name=None,
+                service_scope="api-compute",
+                billing_unit="request",
+                consumption_model="burn-on-use",
+                root_id=None,
+                issuer="issuer",
+                tenant_account="tenant_a",
+                worker_account="worker_node",
+                max_supply=None,
+                initial_balance="100000000",
+                tenant_amount="5000000",
+                worker_amount="1200000",
+                worker_burn_amount="200000",
+                intended_use="machine-api-credit",
+                profile_fields=None,
+                rules_hash=None,
+                nonce=None,
+            )
+            workspace = bootstrap_machine_credit_demo_catalog_workspace(
+                symbol=machine_inputs["symbol"],
+                name=machine_inputs["name"],
+                bundle_scheme=bundle_scheme,
+                release_scheme=release_scheme,
+                release_key_id=release_key_id,
+                output_dir=source_workspaces_dir / workspace_name,
+                service_scope=str(machine_inputs["service_scope"]),
+                billing_unit=str(machine_inputs["billing_unit"]),
+                consumption_model=str(machine_inputs["consumption_model"]),
+                root_id=machine_inputs["root_id"],
+                issuer=str(machine_inputs["issuer"]),
+                tenant_account=str(machine_inputs["tenant_account"]),
+                worker_account=str(machine_inputs["worker_account"]),
+                max_supply=machine_inputs["max_supply"],
+                initial_balance=str(machine_inputs["initial_balance"]),
+                tenant_amount=str(machine_inputs["tenant_amount"]),
+                worker_amount=str(machine_inputs["worker_amount"]),
+                worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
+                intended_use=str(machine_inputs["intended_use"]),
+                profile_fields=machine_inputs["profile_fields"],
+                rules_hash=machine_inputs["rules_hash"],
+                nonce=machine_inputs["nonce"],
+                key_prefix=key_prefix,
+                key_suffix=key_suffix,
+                include_state_hash=include_state_hash,
+                include_annotation=include_annotation,
+                verifier_only=verifier_only,
+                release_metadata=release_metadata,
+            )
         generated_workspace_dirs.append(str(Path(workspace["summary_path"]).parent.resolve()))
 
     catalog_workspace_collection = bootstrap_machine_demo_catalog_workspace_collection(
@@ -13114,57 +16215,79 @@ def bootstrap_stable_demo_publication_catalog_workspace_from_presets(
 
     for preset_path, workspace_name in zip(resolved_preset_paths, _unique_workspace_names(resolved_preset_paths)):
         stable_preset = load_stable_demo_catalog_preset(preset_path)
-        stable_inputs = resolve_stable_demo_bootstrap_inputs(
-            command_name="bootstrap-stable-demo-publication-catalog-workspace",
-            preset_option_name="--preset-json",
-            stable_preset=stable_preset,
-            symbol=None,
-            name=None,
-            reference_unit="USD",
-            root_id=None,
-            issuer="issuer",
-            merchant_account="merchant",
-            service_account="api_node",
-            initial_balance="25000000",
-            merchant_amount="1250000",
-            service_amount="250000",
-            merchant_burn_amount="5000",
-            intended_use="invoice-credit-accounting",
-            profile_fields=None,
-            rules_hash=None,
-            nonce=None,
-        )
         release_metadata = _merge_release_metadata_defaults(
             stable_preset.get("release_metadata"),
             release_metadata_overrides,
         )
-        workspace = bootstrap_stable_reference_demo_catalog_workspace(
-            symbol=stable_inputs["symbol"],
-            name=stable_inputs["name"],
-            bundle_scheme=bundle_scheme,
-            release_scheme=release_scheme,
-            release_key_id=release_key_id,
-            output_dir=source_workspaces_dir / workspace_name,
-            reference_unit=str(stable_inputs["reference_unit"]),
-            root_id=stable_inputs["root_id"],
-            issuer=str(stable_inputs["issuer"]),
-            merchant_account=str(stable_inputs["merchant_account"]),
-            service_account=str(stable_inputs["service_account"]),
-            initial_balance=str(stable_inputs["initial_balance"]),
-            merchant_amount=str(stable_inputs["merchant_amount"]),
-            service_amount=str(stable_inputs["service_amount"]),
-            merchant_burn_amount=str(stable_inputs["merchant_burn_amount"]),
-            intended_use=str(stable_inputs["intended_use"]),
-            profile_fields=stable_inputs["profile_fields"],
-            rules_hash=stable_inputs["rules_hash"],
-            nonce=stable_inputs["nonce"],
-            key_prefix=key_prefix,
-            key_suffix=key_suffix,
-            include_state_hash=include_state_hash,
-            include_annotation=include_annotation,
-            verifier_only=verifier_only,
-            release_metadata=release_metadata,
-        )
+        release_collection_dir = stable_preset.get("release_collection_dir")
+        if release_collection_dir is not None:
+            workspace = write_demo_catalog_workspace(
+                bundle_scheme=bundle_scheme,
+                release_scheme=release_scheme,
+                release_key_id=release_key_id,
+                output_dir=source_workspaces_dir / workspace_name,
+                profiles=[STABLE_DEMO_CATALOG_PROFILE],
+                release_collection_dir=release_collection_dir,
+                key_prefix=key_prefix,
+                key_suffix=key_suffix,
+                include_state_hash=include_state_hash,
+                include_annotation=include_annotation,
+                verifier_only=verifier_only,
+                release_metadata=release_metadata,
+                preset_path=preset_path,
+            )
+            _require_stable_demo_catalog_workspace(
+                Path(workspace["summary_path"]).parent.resolve(),
+                label="bootstrap-stable-demo-publication-catalog-workspace release collection member",
+            )
+        else:
+            stable_inputs = resolve_stable_demo_bootstrap_inputs(
+                command_name="bootstrap-stable-demo-publication-catalog-workspace",
+                preset_option_name="--preset-json",
+                stable_preset=stable_preset,
+                symbol=None,
+                name=None,
+                reference_unit="USD",
+                root_id=None,
+                issuer="issuer",
+                merchant_account="merchant",
+                service_account="api_node",
+                initial_balance="25000000",
+                merchant_amount="1250000",
+                service_amount="250000",
+                merchant_burn_amount="5000",
+                intended_use="invoice-credit-accounting",
+                profile_fields=None,
+                rules_hash=None,
+                nonce=None,
+            )
+            workspace = bootstrap_stable_reference_demo_catalog_workspace(
+                symbol=stable_inputs["symbol"],
+                name=stable_inputs["name"],
+                bundle_scheme=bundle_scheme,
+                release_scheme=release_scheme,
+                release_key_id=release_key_id,
+                output_dir=source_workspaces_dir / workspace_name,
+                reference_unit=str(stable_inputs["reference_unit"]),
+                root_id=stable_inputs["root_id"],
+                issuer=str(stable_inputs["issuer"]),
+                merchant_account=str(stable_inputs["merchant_account"]),
+                service_account=str(stable_inputs["service_account"]),
+                initial_balance=str(stable_inputs["initial_balance"]),
+                merchant_amount=str(stable_inputs["merchant_amount"]),
+                service_amount=str(stable_inputs["service_amount"]),
+                merchant_burn_amount=str(stable_inputs["merchant_burn_amount"]),
+                intended_use=str(stable_inputs["intended_use"]),
+                profile_fields=stable_inputs["profile_fields"],
+                rules_hash=stable_inputs["rules_hash"],
+                nonce=stable_inputs["nonce"],
+                key_prefix=key_prefix,
+                key_suffix=key_suffix,
+                include_state_hash=include_state_hash,
+                include_annotation=include_annotation,
+                verifier_only=verifier_only,
+                release_metadata=release_metadata,
+            )
         generated_workspace_dirs.append(str(Path(workspace["summary_path"]).parent.resolve()))
 
     catalog_workspace_collection = bootstrap_stable_demo_catalog_workspace_collection(
@@ -13382,6 +16505,101 @@ def bootstrap_stable_demo_publication_registry_workspace_from_presets(
     }
 
 
+def bootstrap_demo_publication_registry_workspace_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    release_catalog_key_id: str,
+    release_catalog_index_key_id: str,
+    publication_descriptor_index_key_id: str,
+    publication_metadata_key_id: str,
+    publication_metadata_catalog_key_id: str,
+    publication_registry_key_id: str,
+    release_scheme: Optional[str] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    release_catalog_metadata: Optional[Mapping[str, str]] = None,
+    release_catalog_index_metadata: Optional[Mapping[str, str]] = None,
+    descriptor_index_metadata: Optional[Mapping[str, str]] = None,
+    publication_metadata_catalog_metadata: Optional[Mapping[str, str]] = None,
+    publication_registry_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    publication_catalog_workspace_source_dir = root_output_dir / "publication_catalog_workspace_source"
+    publication_network_source_dir = root_output_dir / "publication_network_source"
+
+    publication_catalog_workspace = bootstrap_demo_publication_catalog_workspace_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=publication_catalog_workspace_source_dir,
+        release_key_id=release_key_id,
+        publication_descriptor_index_key_id=publication_descriptor_index_key_id,
+        publication_metadata_key_id=publication_metadata_key_id,
+        publication_metadata_catalog_key_id=publication_metadata_catalog_key_id,
+        release_scheme=release_scheme,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        descriptor_index_metadata=descriptor_index_metadata,
+        publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+    )
+    publication_network_workspace = bootstrap_demo_publication_network_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=publication_network_source_dir,
+        release_key_id=release_key_id,
+        release_catalog_key_id=release_catalog_key_id,
+        release_catalog_index_key_id=release_catalog_index_key_id,
+        release_scheme=release_scheme,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_catalog_metadata=release_catalog_metadata,
+        release_catalog_index_metadata=release_catalog_index_metadata,
+    )
+    registry_workspace = write_publication_registry_workspace(
+        artifact_paths=[],
+        discover_under=[],
+        recursive=True,
+        release_catalog_index_dir=publication_network_source_dir / "release_catalog_index",
+        publication_catalog_workspace_dir=publication_catalog_workspace_source_dir,
+        publication_network_dir=publication_network_source_dir,
+        output_dir=root_output_dir,
+        signature_scheme=bundle_scheme,
+        publication_registry_key_id=publication_registry_key_id,
+        publication_registry_metadata=publication_registry_metadata,
+    )
+
+    summary = copy.deepcopy(registry_workspace["summary"])
+    source_catalog_workspace_collection_dir = publication_catalog_workspace["summary"].get("source_catalog_workspace_collection_dir")
+    summary["source_publication_catalog_workspace_dir"] = str(publication_catalog_workspace_source_dir.resolve())
+    summary["source_catalog_workspace_collection_dir"] = source_catalog_workspace_collection_dir
+    summary["source_publication_catalog_workspace_summary_path"] = publication_catalog_workspace["summary_path"]
+    summary["source_publication_network_dir"] = str(publication_network_source_dir.resolve())
+    summary["source_publication_network_summary_path"] = publication_network_workspace["summary_path"]
+    _write_json_file(root_output_dir / "summary.json", summary)
+
+    registry_workspace["summary"] = summary
+    return {
+        "publication_catalog_workspace": publication_catalog_workspace,
+        "publication_network_workspace": publication_network_workspace,
+        "publication_registry_workspace": registry_workspace,
+        "summary": summary,
+        "summary_path": str((root_output_dir / "summary.json").resolve()),
+    }
+
+
 def relocate_publication_network_workspace_summary(publication_network_dir: str | Path) -> Dict[str, Any]:
     network_path, summary = _load_workspace_summary(publication_network_dir, label="publication network")
     validate_publication_network_summary_consistency(summary)
@@ -13439,6 +16657,17 @@ def publish_publication_stack_workspace(
         field_name="release_scheme",
         label="publication stack publishing",
     )
+    source_release_collection_dirs = {
+        str(Path(str(summary.get("source_release_collection_dir"))).resolve())
+        for summary in source_summaries
+        if isinstance(summary.get("source_release_collection_dir"), str)
+        and str(summary.get("source_release_collection_dir")).strip()
+    }
+    source_release_collection_dir = (
+        next(iter(source_release_collection_dirs))
+        if len(source_release_collection_dirs) == 1
+        else None
+    )
 
     workspace_names = _unique_workspace_names(resolved_workspace_dirs)
     root_output_dir = Path(output_dir).resolve()
@@ -13472,6 +16701,7 @@ def publish_publication_stack_workspace(
         output_dir=release_catalog_dir,
         signature_scheme=signature_scheme,
         key_id=key_id,
+        release_collection_dir=source_release_collection_dir,
         catalog_metadata=release_catalog_metadata,
     )
     summary = {
@@ -13481,7 +16711,10 @@ def publish_publication_stack_workspace(
         "source_catalog_workspace_collection_dir": (
             None
             if catalog_workspace_collection_dir is None
-            else str(Path(catalog_workspace_collection_dir).resolve())
+            else _normalize_demo_catalog_workspace_collection_input(
+                catalog_workspace_collection_dir,
+                label="publication stack source catalog workspace collection",
+            )
         ),
         "workspace_count": len(workspace_entries),
         "catalog_workspaces_dir": str(catalog_workspaces_dir.resolve()),
@@ -13769,6 +17002,81 @@ def bootstrap_stable_release_catalog_publication(
         release_collection_dir=release_collection_dir,
         catalog_metadata=catalog_metadata,
     )
+
+
+def bootstrap_demo_release_catalog_publication_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    signature_scheme: str,
+    key_id: str,
+    release_scheme: Optional[str] = None,
+    profiles: Optional[Sequence[str]] = None,
+    symbol_overrides: Optional[Mapping[str, str]] = None,
+    name_overrides: Optional[Mapping[str, str]] = None,
+    profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
+    profile_structure_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    release_collection_workspace_dir = root_output_dir / "release_collection_workspace"
+    release_catalog_publication_dir = root_output_dir / "release_catalog_publication"
+    generated = bootstrap_demo_release_collection_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        release_scheme=release_scheme,
+        release_key_id=release_key_id,
+        output_dir=release_collection_workspace_dir,
+        profiles=profiles,
+        symbol_overrides=symbol_overrides,
+        name_overrides=name_overrides,
+        profile_field_overrides=profile_field_overrides,
+        profile_structure_overrides=profile_structure_overrides,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+    )
+    published = bootstrap_release_catalog_publication(
+        generated["generated_release_dirs"],
+        output_dir=release_catalog_publication_dir,
+        signature_scheme=signature_scheme,
+        key_id=key_id,
+        release_collection_dir=generated["release_collection_dir"],
+        catalog_metadata=catalog_metadata,
+    )
+    summary = {
+        "generated_release_count": len(generated["generated_releases"]),
+        "generated_profiles": list(generated["summary"]["generated_profiles"]),
+        "release_collection_workspace_dir": str(release_collection_workspace_dir.resolve()),
+        "release_collection_workspace_summary_path": generated["summary_path"],
+        "generated_releases": copy.deepcopy(generated["generated_releases"]),
+        "release_collection_dir": generated["release_collection_dir"],
+        "release_collection_summary_path": generated["collection"]["summary_path"],
+        "release_collection": copy.deepcopy(generated["collection"]["summary"]),
+        "release_catalog_publication_dir": str(release_catalog_publication_dir.resolve()),
+        "release_catalog_path": published["release_catalog_path"],
+        "release_catalog_manifest_path": published["release_catalog_manifest_path"],
+        "release_catalog": copy.deepcopy(published["release_catalog"]),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "release_collection_workspace": generated,
+        "release_catalog_publication": published,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
 
 
 def bootstrap_machine_demo_release_catalog_publication_from_presets(
@@ -14081,6 +17389,92 @@ def bootstrap_stable_release_catalog_index_publication(
         release_catalog_collection_dir=release_catalog_collection_dir,
         index_metadata=index_metadata,
     )
+
+
+def bootstrap_demo_release_catalog_index_publication_from_presets(
+    preset_paths: Sequence[str | Path],
+    *,
+    bundle_scheme: str,
+    output_dir: str | Path,
+    release_key_id: str,
+    catalog_signature_scheme: str,
+    catalog_key_id: str,
+    index_signature_scheme: str,
+    index_key_id: str,
+    release_scheme: Optional[str] = None,
+    profiles: Optional[Sequence[str]] = None,
+    symbol_overrides: Optional[Mapping[str, str]] = None,
+    name_overrides: Optional[Mapping[str, str]] = None,
+    profile_field_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
+    profile_structure_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    key_prefix: str = "",
+    key_suffix: str = "-key",
+    include_state_hash: bool = True,
+    include_annotation: bool = True,
+    verifier_only: bool = False,
+    release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
+    catalog_metadata: Optional[Mapping[str, str]] = None,
+    index_metadata: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    root_output_dir = Path(output_dir).resolve()
+    release_catalog_publication_workspace_dir = root_output_dir / "release_catalog_publication_workspace"
+    release_catalog_index_publication_dir = root_output_dir / "release_catalog_index_publication"
+    generated = bootstrap_demo_release_catalog_publication_from_presets(
+        preset_paths,
+        bundle_scheme=bundle_scheme,
+        output_dir=release_catalog_publication_workspace_dir,
+        release_key_id=release_key_id,
+        signature_scheme=catalog_signature_scheme,
+        key_id=catalog_key_id,
+        release_scheme=release_scheme,
+        profiles=profiles,
+        symbol_overrides=symbol_overrides,
+        name_overrides=name_overrides,
+        profile_field_overrides=profile_field_overrides,
+        profile_structure_overrides=profile_structure_overrides,
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        include_state_hash=include_state_hash,
+        include_annotation=include_annotation,
+        verifier_only=verifier_only,
+        release_metadata_overrides=release_metadata_overrides,
+        catalog_metadata=catalog_metadata,
+    )
+    catalog_publication = generated["release_catalog_publication"]
+    published = bootstrap_release_catalog_index_publication(
+        [catalog_publication["release_catalog_manifest_path"]],
+        output_dir=release_catalog_index_publication_dir,
+        signature_scheme=index_signature_scheme,
+        key_id=index_key_id,
+        release_catalog_collection_dir=None,
+        index_metadata=index_metadata,
+    )
+    summary = {
+        "generated_release_count": generated["summary"]["generated_release_count"],
+        "generated_profiles": list(generated["summary"]["generated_profiles"]),
+        "release_catalog_publication_workspace_dir": str(release_catalog_publication_workspace_dir.resolve()),
+        "release_catalog_publication_workspace_summary_path": generated["summary_path"],
+        "generated_releases": copy.deepcopy(generated["summary"]["generated_releases"]),
+        "release_collection_dir": generated["summary"]["release_collection_dir"],
+        "release_collection_summary_path": generated["summary"]["release_collection_summary_path"],
+        "release_collection": copy.deepcopy(generated["summary"]["release_collection"]),
+        "release_catalog_publication_dir": generated["summary"]["release_catalog_publication_dir"],
+        "release_catalog_path": generated["summary"]["release_catalog_path"],
+        "release_catalog_manifest_path": generated["summary"]["release_catalog_manifest_path"],
+        "release_catalog": copy.deepcopy(generated["summary"]["release_catalog"]),
+        "release_catalog_index_publication_dir": str(release_catalog_index_publication_dir.resolve()),
+        "release_catalog_index_path": published["release_catalog_index_path"],
+        "release_catalog_index_manifest_path": published["release_catalog_index_manifest_path"],
+        "release_catalog_index": copy.deepcopy(published["release_catalog_index"]),
+    }
+    summary_path = root_output_dir / "summary.json"
+    _write_json_file(summary_path, summary)
+    return {
+        "release_catalog_publication_workspace": generated,
+        "release_catalog_index_publication": published,
+        "summary": summary,
+        "summary_path": str(summary_path.resolve()),
+    }
 
 
 def bootstrap_machine_demo_release_catalog_index_publication_from_presets(
@@ -14405,7 +17799,10 @@ def publish_publication_network_workspace(
         "source_publication_stack_collection_dir": (
             None
             if publication_stack_collection_dir is None
-            else str(Path(publication_stack_collection_dir).resolve())
+            else _normalize_publication_stack_collection_input(
+                publication_stack_collection_dir,
+                label="publication network source publication stack collection",
+            )
         ),
         "stack_count": len(workspace_entries),
         "stack_workspaces_dir": str(stack_workspaces_dir.resolve()),
@@ -14437,6 +17834,7 @@ def publish_publication_registry_workspace(
     key_id: str,
     publication_network_dir: Optional[str | Path] = None,
     publication_network_collection_dir: Optional[str | Path] = None,
+    publication_catalog_workspace_collection_dir: Optional[str | Path] = None,
     publication_registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     return write_publication_registry_workspace(
@@ -14445,6 +17843,7 @@ def publish_publication_registry_workspace(
         recursive=True,
         release_catalog_index_dir=release_catalog_index_dir,
         publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+        publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
         publication_network_dir=publication_network_dir,
         publication_network_collection_dir=publication_network_collection_dir,
         output_dir=output_dir,
@@ -14522,6 +17921,7 @@ def publish_machine_publication_registry_workspace(
     key_id: str,
     publication_network_dir: Optional[str | Path] = None,
     publication_network_collection_dir: Optional[str | Path] = None,
+    publication_catalog_workspace_collection_dir: Optional[str | Path] = None,
     publication_registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     source_publication_catalog_workspace_dir = Path(publication_catalog_workspace_dir).resolve()
@@ -14530,6 +17930,13 @@ def publish_machine_publication_registry_workspace(
         source_publication_catalog_workspace_dir,
         label="machine publication registry publishing source publication catalog workspace",
     )
+    if publication_catalog_workspace_collection_dir is not None:
+        collection_summary = summarize_publication_catalog_workspace_collection(publication_catalog_workspace_collection_dir)
+        for publication_catalog_workspace_entry_dir in collection_summary.get("publication_catalog_workspace_dirs", []):
+            _require_machine_publication_catalog_workspace(
+                publication_catalog_workspace_entry_dir,
+                label="machine publication registry publishing source publication catalog workspace collection",
+            )
     _require_machine_release_catalog_index_json(
         resolved_release_catalog_index_dir / "release_catalog_index.json"
         if resolved_release_catalog_index_dir.is_dir()
@@ -14563,6 +17970,7 @@ def publish_machine_publication_registry_workspace(
         release_catalog_index_dir=resolved_release_catalog_index_dir,
         publication_network_dir=publication_network_dir,
         publication_network_collection_dir=publication_network_collection_dir,
+        publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
         output_dir=output_dir,
         signature_scheme=signature_scheme,
         key_id=key_id,
@@ -14589,6 +17997,7 @@ def publish_stable_publication_registry_workspace(
     key_id: str,
     publication_network_dir: Optional[str | Path] = None,
     publication_network_collection_dir: Optional[str | Path] = None,
+    publication_catalog_workspace_collection_dir: Optional[str | Path] = None,
     publication_registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     source_publication_catalog_workspace_dir = Path(publication_catalog_workspace_dir).resolve()
@@ -14597,6 +18006,13 @@ def publish_stable_publication_registry_workspace(
         source_publication_catalog_workspace_dir,
         label="stable publication registry publishing source publication catalog workspace",
     )
+    if publication_catalog_workspace_collection_dir is not None:
+        collection_summary = summarize_publication_catalog_workspace_collection(publication_catalog_workspace_collection_dir)
+        for publication_catalog_workspace_entry_dir in collection_summary.get("publication_catalog_workspace_dirs", []):
+            _require_stable_publication_catalog_workspace(
+                publication_catalog_workspace_entry_dir,
+                label="stable publication registry publishing source publication catalog workspace collection",
+            )
     _require_stable_release_catalog_index_json(
         resolved_release_catalog_index_dir / "release_catalog_index.json"
         if resolved_release_catalog_index_dir.is_dir()
@@ -14630,6 +18046,7 @@ def publish_stable_publication_registry_workspace(
         release_catalog_index_dir=resolved_release_catalog_index_dir,
         publication_network_dir=publication_network_dir,
         publication_network_collection_dir=publication_network_collection_dir,
+        publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
         output_dir=output_dir,
         signature_scheme=signature_scheme,
         key_id=key_id,
@@ -15066,6 +18483,7 @@ def write_publication_registry_workspace(
     discover_under: Optional[Sequence[str | Path]] = None,
     recursive: bool = True,
     publication_catalog_workspace_dir: Optional[str | Path] = None,
+    publication_catalog_workspace_collection_dir: Optional[str | Path] = None,
     publication_metadata_bundle_collection_dir: Optional[str | Path] = None,
     publication_network_preset_path: Optional[str | Path] = None,
     publication_network_dir: Optional[str | Path] = None,
@@ -15083,6 +18501,7 @@ def write_publication_registry_workspace(
     copied_publication_network_dir: Optional[Path] = None
     source_publication_network_preset_path: Optional[Path] = None
     source_publication_network_collection_dir: Optional[Path] = None
+    source_publication_catalog_workspace_collection_dir: Optional[Path] = None
     resolved_release_catalog_index_dir: Optional[Path] = None
     if publication_network_collection_dir is not None and (
         publication_network_preset_path is not None or publication_network_dir is not None
@@ -15166,7 +18585,12 @@ def write_publication_registry_workspace(
                 "publication registry workspace generation requires publication_network_collection_dir to expose publication_network_dir entries"
             )
         resolved_selected_network_dir = Path(selected_network_dir).resolve()
-        source_publication_network_collection_dir = Path(publication_network_collection_dir).resolve()
+        source_publication_network_collection_dir = Path(
+            _normalize_publication_network_collection_input(
+                publication_network_collection_dir,
+                label="publication registry workspace source publication network collection",
+            )
+        ).resolve()
         resolved_release_catalog_index_dir = (
             Path(release_catalog_index_dir).resolve()
             if release_catalog_index_dir is not None
@@ -15222,6 +18646,24 @@ def write_publication_registry_workspace(
                 resolved_release_catalog_index_dir,
                 root_output_dir / "release_catalog_index",
             )
+
+    if publication_catalog_workspace_collection_dir is not None:
+        resolved_publication_catalog_workspace_dir, resolved_publication_catalog_workspace_collection_dir = (
+            _resolve_exactly_one_publication_catalog_workspace_from_collection(
+                publication_catalog_workspace_collection_dir,
+                label="publication registry workspace generation publication_catalog_workspace_collection_dir",
+            )
+        )
+        if publication_catalog_workspace_dir is not None:
+            resolved_input_publication_catalog_workspace_dir = Path(publication_catalog_workspace_dir).resolve()
+            if resolved_input_publication_catalog_workspace_dir != Path(resolved_publication_catalog_workspace_dir).resolve():
+                raise SatRootError(
+                    "publication registry workspace generation accepts either publication_catalog_workspace_dir or publication_catalog_workspace_collection_dir, not both"
+                )
+        publication_catalog_workspace_dir = resolved_publication_catalog_workspace_dir
+        source_publication_catalog_workspace_collection_dir = Path(
+            resolved_publication_catalog_workspace_collection_dir
+        ).resolve()
 
     source_publication_catalog_workspace_dir: Optional[Path] = None
     if publication_catalog_workspace_dir is not None:
@@ -15308,6 +18750,11 @@ def write_publication_registry_workspace(
 
     summary["source_publication_catalog_workspace_dir"] = (
         None if source_publication_catalog_workspace_dir is None else str(source_publication_catalog_workspace_dir.resolve())
+    )
+    summary["source_publication_catalog_workspace_collection_dir"] = (
+        None
+        if source_publication_catalog_workspace_collection_dir is None
+        else str(source_publication_catalog_workspace_collection_dir.resolve())
     )
     summary["source_publication_network_preset_path"] = (
         None if source_publication_network_preset_path is None else str(source_publication_network_preset_path.resolve())
@@ -15652,12 +19099,17 @@ def _filtered_string_mapping(value: Any) -> Dict[str, str]:
     }
 
 
-def export_demo_catalog_preset_from_workspace(demo_catalog_dir: str | Path) -> Dict[str, Any]:
+def export_demo_catalog_preset_from_workspace(
+    demo_catalog_dir: str | Path,
+    *,
+    output_path: Optional[str | Path] = None,
+) -> Dict[str, Any]:
     _, summary = _load_workspace_summary(demo_catalog_dir, label="demo catalog workspace")
     validate_demo_catalog_summary_consistency(summary)
     bundles = summary.get("bundles")
     assert isinstance(bundles, list)
     spec_map = {spec["profile"]: spec for spec in DEMO_CATALOG_BUNDLE_SPECS}
+    profile_registry = load_profile_registry()
 
     profiles: list[str] = []
     symbol_overrides: Dict[str, str] = {}
@@ -15681,7 +19133,12 @@ def export_demo_catalog_preset_from_workspace(demo_catalog_dir: str | Path) -> D
         if isinstance(name, str) and name != spec_map[profile]["name"]:
             name_overrides[profile] = name
 
-        profile_fields = _filtered_string_mapping(entry.get("profile_fields"))
+        allowed_profile_fields = set((profile_registry.get(profile) or {}).get("required_fields", []))
+        profile_fields = {
+            key: value
+            for key, value in _filtered_string_mapping(entry.get("profile_fields")).items()
+            if key in allowed_profile_fields
+        }
         if profile_fields:
             profile_field_overrides[profile] = profile_fields
 
@@ -15701,6 +19158,13 @@ def export_demo_catalog_preset_from_workspace(demo_catalog_dir: str | Path) -> D
         "version": "0.1",
         "profiles": profiles,
     }
+    base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    source_release_collection_dir = summary.get("source_release_collection_dir")
+    if isinstance(source_release_collection_dir, str) and source_release_collection_dir.strip():
+        preset["release_collection_dir"] = _relative_output_path(
+            Path(source_release_collection_dir).resolve(),
+            base_dir=base_dir,
+        )
     if symbol_overrides:
         preset["symbol_overrides"] = symbol_overrides
     if name_overrides:
@@ -15758,7 +19222,10 @@ def export_publication_stack_preset_from_workspace(
             catalog_output_path.parent.mkdir(parents=True, exist_ok=True)
             _write_json_file(
                 catalog_output_path,
-                export_demo_catalog_preset_from_workspace(workspace_dir),
+                export_demo_catalog_preset_from_workspace(
+                    workspace_dir,
+                    output_path=catalog_output_path,
+                ),
             )
             catalog_preset_paths.append(_relative_output_path(catalog_output_path, base_dir=base_dir))
             continue
@@ -16097,10 +19564,63 @@ def export_stable_publication_catalog_workspace_preset_from_workspace(
     )
 
 
+def _resolve_export_demo_catalog_workspace_source(
+    summary: Mapping[str, Any],
+    *,
+    fallback_workspace_path: Optional[str | Path] = None,
+) -> Optional[str]:
+    direct_workspace_dir = summary.get("source_catalog_workspace_dir")
+    if isinstance(direct_workspace_dir, str) and direct_workspace_dir.strip():
+        return str(Path(direct_workspace_dir).resolve())
+
+    for collection_key in (
+        "source_catalog_workspace_collection",
+        "source_singleton_catalog_workspace_collection",
+    ):
+        collection_summary = summary.get(collection_key)
+        if not isinstance(collection_summary, Mapping):
+            continue
+        catalog_workspaces = collection_summary.get("catalog_workspaces")
+        if isinstance(catalog_workspaces, list):
+            for entry in catalog_workspaces:
+                if not isinstance(entry, Mapping):
+                    continue
+                catalog_workspace_dir = entry.get("catalog_workspace_dir")
+                if isinstance(catalog_workspace_dir, str) and catalog_workspace_dir.strip():
+                    return str(Path(catalog_workspace_dir).resolve())
+        catalog_workspace_dirs = collection_summary.get("catalog_workspace_dirs")
+        if isinstance(catalog_workspace_dirs, list):
+            for catalog_workspace_dir in catalog_workspace_dirs:
+                if isinstance(catalog_workspace_dir, str) and catalog_workspace_dir.strip():
+                    return str(Path(catalog_workspace_dir).resolve())
+
+    for collection_dir_key in (
+        "source_catalog_workspace_collection_dir",
+        "source_singleton_catalog_workspace_collection_dir",
+    ):
+        collection_dir = summary.get(collection_dir_key)
+        if not isinstance(collection_dir, str) or not collection_dir.strip():
+            continue
+        collection_summary = summarize_demo_catalog_workspace_collection(collection_dir)
+        catalog_workspace_dirs = collection_summary.get("catalog_workspace_dirs")
+        if isinstance(catalog_workspace_dirs, list):
+            for catalog_workspace_dir in catalog_workspace_dirs:
+                if isinstance(catalog_workspace_dir, str) and catalog_workspace_dir.strip():
+                    return str(Path(catalog_workspace_dir).resolve())
+
+    if fallback_workspace_path is None:
+        return None
+    fallback_catalog_workspace = (Path(fallback_workspace_path).resolve() / "catalog_workspace").resolve()
+    if fallback_catalog_workspace.is_dir():
+        return str(fallback_catalog_workspace)
+    return None
+
+
 def export_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    catalog_preset_path: Optional[str | Path] = None,
     publication_catalog_workspace_preset_path: Optional[str | Path] = None,
     publication_network_preset_path: Optional[str | Path] = None,
     stack_preset_dir: Optional[str | Path] = None,
@@ -16163,6 +19683,39 @@ def export_publication_registry_workspace_preset_from_workspace(
         if artifact_paths:
             preset["artifact_paths"] = artifact_paths
 
+    if catalog_preset_path is not None:
+        nested_catalog_workspace_source = _resolve_export_demo_catalog_workspace_source(summary)
+        if nested_catalog_workspace_source is None:
+            source_publication_catalog_workspace_dir = summary.get("source_publication_catalog_workspace_dir")
+            if isinstance(source_publication_catalog_workspace_dir, str) and source_publication_catalog_workspace_dir.strip():
+                _nested_workspace_path, nested_workspace_summary = _load_workspace_summary(
+                    Path(source_publication_catalog_workspace_dir).resolve(),
+                    label="publication registry workspace source publication catalog workspace",
+                )
+                nested_catalog_workspace_source = _resolve_export_demo_catalog_workspace_source(
+                    nested_workspace_summary,
+                    fallback_workspace_path=Path(source_publication_catalog_workspace_dir).resolve(),
+                )
+        if nested_catalog_workspace_source is None:
+            nested_catalog_workspace_source = _resolve_export_demo_catalog_workspace_source(
+                {},
+                fallback_workspace_path=(workspace_path / "publication_catalog_workspace").resolve(),
+            )
+        if nested_catalog_workspace_source is None:
+            raise SatRootError(
+                "publication registry workspace preset export requires source_catalog_workspace_dir provenance to generate a nested catalog preset"
+            )
+        catalog_output_path = Path(catalog_preset_path).resolve()
+        catalog_output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(
+            catalog_output_path,
+            export_demo_catalog_preset_from_workspace(
+                Path(nested_catalog_workspace_source).resolve(),
+                output_path=catalog_output_path,
+            ),
+        )
+        preset["catalog_preset"] = _relative_output_path(catalog_output_path, base_dir=base_dir)
+
     if publication_registry_preset_path is not None:
         registry_output_path = Path(publication_registry_preset_path).resolve()
         registry_output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -16179,7 +19732,21 @@ def export_publication_registry_workspace_preset_from_workspace(
     source_publication_network_preset_path = summary.get("source_publication_network_preset_path")
     source_publication_network_collection_dir = summary.get("source_publication_network_collection_dir")
     source_publication_catalog_workspace_dir = summary.get("source_publication_catalog_workspace_dir")
+    source_publication_catalog_workspace_collection_dir = summary.get("source_publication_catalog_workspace_collection_dir")
     if (
+        catalog_preset_path is None
+        and
+        publication_catalog_workspace_preset_path is None
+        and isinstance(source_publication_catalog_workspace_collection_dir, str)
+        and source_publication_catalog_workspace_collection_dir.strip()
+    ):
+        preset["publication_catalog_workspace_collection_dir"] = _relative_output_path(
+            Path(source_publication_catalog_workspace_collection_dir).resolve(),
+            base_dir=base_dir,
+        )
+    elif (
+        catalog_preset_path is None
+        and
         publication_catalog_workspace_preset_path is None
         and isinstance(source_publication_catalog_workspace_dir, str)
         and source_publication_catalog_workspace_dir.strip()
@@ -16263,15 +19830,7 @@ def export_publication_descriptor_index_preset_from_workspace(
     *,
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
-    candidate_path = Path(path).resolve()
-    if candidate_path.is_dir():
-        publication_descriptor_index_dir = candidate_path
-    else:
-        publication_descriptor_index_dir = candidate_path.parent
-        if candidate_path.name != "publication_descriptor_index.json":
-            raise SatRootError(
-                "publication descriptor index preset export requires publication_descriptor_index.json or a publication descriptor index directory containing it"
-            )
+    publication_descriptor_index_dir = Path(_normalize_publication_descriptor_index_publication_input(path)).resolve()
     _manifest_path, _descriptor_index_path, _manifest, index = _load_publication_descriptor_index_publication(
         publication_descriptor_index_dir
     )
@@ -16333,15 +19892,7 @@ def export_publication_metadata_catalog_preset_from_workspace(
     *,
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
-    candidate_path = Path(path).resolve()
-    if candidate_path.is_dir():
-        publication_metadata_catalog_dir = candidate_path
-    else:
-        publication_metadata_catalog_dir = candidate_path.parent
-        if candidate_path.name != "publication_metadata_catalog.json":
-            raise SatRootError(
-                "publication metadata catalog preset export requires publication_metadata_catalog.json or a publication metadata catalog directory containing it"
-            )
+    publication_metadata_catalog_dir = Path(_normalize_publication_metadata_catalog_publication_input(path)).resolve()
     _manifest_path, catalog_path, _manifest, catalog = _load_publication_metadata_catalog_publication(publication_metadata_catalog_dir)
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
     preset: Dict[str, Any] = {
@@ -16411,27 +19962,65 @@ def export_publication_registry_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_registry_workspace_preset_path: Optional[str | Path] = None,
+    catalog_preset_path: Optional[str | Path] = None,
+    publication_catalog_workspace_preset_path: Optional[str | Path] = None,
+    publication_network_preset_path: Optional[str | Path] = None,
+    stack_preset_dir: Optional[str | Path] = None,
+    catalog_preset_dir: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
+    publication_registry_workspace_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    candidate_path = Path(path).resolve()
-    if candidate_path.is_dir():
-        publication_registry_dir = candidate_path
-    else:
-        publication_registry_dir = candidate_path.parent
-        if candidate_path.name != "publication_registry.json":
-            raise SatRootError(
-                "publication registry preset export requires publication_registry.json or a publication registry directory containing it"
-            )
+    publication_registry_dir = Path(_normalize_publication_registry_publication_input(path)).resolve()
     _, registry_path, _manifest, registry = _load_publication_registry_publication(publication_registry_dir)
     validate_publication_registry_consistency(registry)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
+    workspace_preset_exporter = (
+        publication_registry_workspace_preset_exporter or export_publication_registry_workspace_preset_from_workspace
+    )
     preset: Dict[str, Any] = {
         "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
         "version": "0.1",
     }
 
     source_publication_registry_workspace_dir = registry.get("source_publication_registry_workspace_dir")
-    if isinstance(source_publication_registry_workspace_dir, str) and source_publication_registry_workspace_dir.strip():
+    source_publication_registry_workspace_collection_dir = registry.get("source_publication_registry_workspace_collection_dir")
+    if (
+        publication_registry_workspace_preset_path is not None
+        and isinstance(source_publication_registry_workspace_dir, str)
+        and source_publication_registry_workspace_dir.strip()
+    ):
+        workspace_preset_output_path = Path(publication_registry_workspace_preset_path).resolve()
+        workspace_preset_output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(
+            workspace_preset_output_path,
+            workspace_preset_exporter(
+                Path(source_publication_registry_workspace_dir).resolve(),
+                output_path=workspace_preset_output_path,
+                catalog_preset_path=catalog_preset_path,
+                publication_catalog_workspace_preset_path=publication_catalog_workspace_preset_path,
+                publication_network_preset_path=publication_network_preset_path,
+                stack_preset_dir=stack_preset_dir,
+                catalog_preset_dir=catalog_preset_dir,
+                publication_descriptor_index_preset_path=publication_descriptor_index_preset_path,
+                publication_metadata_catalog_preset_path=publication_metadata_catalog_preset_path,
+            ),
+        )
+        preset["publication_registry_workspace_preset"] = _relative_output_path(
+            workspace_preset_output_path,
+            base_dir=base_dir,
+        )
+    elif (
+        isinstance(source_publication_registry_workspace_collection_dir, str)
+        and source_publication_registry_workspace_collection_dir.strip()
+    ):
+        preset["publication_registry_workspace_collection_dir"] = _relative_output_path(
+            Path(source_publication_registry_workspace_collection_dir).resolve(),
+            base_dir=base_dir,
+        )
+    elif isinstance(source_publication_registry_workspace_dir, str) and source_publication_registry_workspace_dir.strip():
         preset["publication_registry_workspace_dir"] = _relative_output_path(
             Path(source_publication_registry_workspace_dir).resolve(),
             base_dir=base_dir,
@@ -16468,6 +20057,14 @@ def export_machine_publication_registry_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_registry_workspace_preset_path: Optional[str | Path] = None,
+    catalog_preset_path: Optional[str | Path] = None,
+    publication_catalog_workspace_preset_path: Optional[str | Path] = None,
+    publication_network_preset_path: Optional[str | Path] = None,
+    stack_preset_dir: Optional[str | Path] = None,
+    catalog_preset_dir: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _require_machine_publication_registry_publication(
         path,
@@ -16476,6 +20073,15 @@ def export_machine_publication_registry_preset_from_workspace(
     return export_publication_registry_preset_from_workspace(
         path,
         output_path=output_path,
+        publication_registry_workspace_preset_path=publication_registry_workspace_preset_path,
+        catalog_preset_path=catalog_preset_path,
+        publication_catalog_workspace_preset_path=publication_catalog_workspace_preset_path,
+        publication_network_preset_path=publication_network_preset_path,
+        stack_preset_dir=stack_preset_dir,
+        catalog_preset_dir=catalog_preset_dir,
+        publication_descriptor_index_preset_path=publication_descriptor_index_preset_path,
+        publication_metadata_catalog_preset_path=publication_metadata_catalog_preset_path,
+        publication_registry_workspace_preset_exporter=export_machine_publication_registry_workspace_preset_from_workspace,
     )
 
 
@@ -16483,6 +20089,14 @@ def export_stable_publication_registry_preset_from_workspace(
     path: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    publication_registry_workspace_preset_path: Optional[str | Path] = None,
+    catalog_preset_path: Optional[str | Path] = None,
+    publication_catalog_workspace_preset_path: Optional[str | Path] = None,
+    publication_network_preset_path: Optional[str | Path] = None,
+    stack_preset_dir: Optional[str | Path] = None,
+    catalog_preset_dir: Optional[str | Path] = None,
+    publication_descriptor_index_preset_path: Optional[str | Path] = None,
+    publication_metadata_catalog_preset_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     _require_stable_publication_registry_publication(
         path,
@@ -16491,7 +20105,57 @@ def export_stable_publication_registry_preset_from_workspace(
     return export_publication_registry_preset_from_workspace(
         path,
         output_path=output_path,
+        publication_registry_workspace_preset_path=publication_registry_workspace_preset_path,
+        catalog_preset_path=catalog_preset_path,
+        publication_catalog_workspace_preset_path=publication_catalog_workspace_preset_path,
+        publication_network_preset_path=publication_network_preset_path,
+        stack_preset_dir=stack_preset_dir,
+        catalog_preset_dir=catalog_preset_dir,
+        publication_descriptor_index_preset_path=publication_descriptor_index_preset_path,
+        publication_metadata_catalog_preset_path=publication_metadata_catalog_preset_path,
+        publication_registry_workspace_preset_exporter=export_stable_publication_registry_workspace_preset_from_workspace,
     )
+
+
+def bootstrap_publication_registry_workspace_from_nested_preset(
+    *,
+    command: str,
+    preset_path: str | Path,
+    output_dir: str | Path,
+    signature_scheme: str,
+    key_id: str,
+) -> Path:
+    nested_output_dir = Path(output_dir).resolve() / "publication_registry_workspace"
+    exit_code = main(
+        [
+            command,
+            "--preset-json",
+            str(Path(preset_path).resolve()),
+            "--output-dir",
+            str(nested_output_dir),
+            "--scheme",
+            signature_scheme,
+            "--release-key-id",
+            key_id,
+            "--release-catalog-key-id",
+            key_id,
+            "--release-catalog-index-key-id",
+            key_id,
+            "--publication-descriptor-index-key-id",
+            key_id,
+            "--publication-metadata-key-id",
+            key_id,
+            "--publication-metadata-catalog-key-id",
+            key_id,
+            "--publication-registry-key-id",
+            key_id,
+        ]
+    )
+    if exit_code != 0:
+        raise SatRootError(
+            f"{command} failed while bootstrapping nested publication registry workspace preset"
+        )
+    return nested_output_dir
 
 
 def export_release_catalog_preset_from_workspace(
@@ -16501,13 +20165,7 @@ def export_release_catalog_preset_from_workspace(
     bundle_index_preset_dir: Optional[str | Path] = None,
     bundle_index_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    candidate_path = Path(path).resolve()
-    if candidate_path.is_dir():
-        release_catalog_dir = candidate_path
-    else:
-        release_catalog_dir = candidate_path.parent
-        if candidate_path.name != "release_catalog.json":
-            raise SatRootError("release catalog preset export requires release_catalog.json or a release catalog directory containing it")
+    release_catalog_dir = Path(_normalize_release_catalog_publication_input(path)).resolve()
     _manifest_path, catalog_path, _manifest, catalog = _load_release_catalog_publication(release_catalog_dir)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
@@ -16602,18 +20260,20 @@ def export_bundle_index_preset_from_artifact(
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     candidate_path = Path(path).resolve()
-    if candidate_path.is_dir():
-        bundle_index_path = (candidate_path / "bundle_index.json").resolve()
+    if candidate_path.is_dir() or candidate_path.name == "release_manifest.json":
+        bundle_index_path, index = _load_bundle_index_artifact(path)
     else:
         bundle_index_path = candidate_path
-    if not bundle_index_path.is_file():
-        raise SatRootError("bundle index preset export requires bundle_index.json or a release directory containing it")
+        if not bundle_index_path.is_file():
+            raise SatRootError(
+                "bundle index preset export requires a bundle index JSON file, release directory, or release_manifest.json"
+            )
 
-    index = _load_json_file(str(bundle_index_path))
-    validate_instance_against_schema(index, load_bundle_index_schema())
-    if not isinstance(index, Mapping):
-        raise SatRootError("bundle index must contain an object")
-    validate_bundle_index_consistency(index)
+        index = _load_json_file(str(bundle_index_path))
+        validate_instance_against_schema(index, load_bundle_index_schema())
+        if not isinstance(index, Mapping):
+            raise SatRootError("bundle index must contain an object")
+        validate_bundle_index_consistency(index)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
     preset: Dict[str, Any] = {
@@ -16650,7 +20310,7 @@ def export_machine_bundle_index_preset_from_artifact(
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     candidate_path = Path(path).resolve()
-    if candidate_path.is_dir():
+    if candidate_path.is_dir() or candidate_path.name == "release_manifest.json":
         _require_machine_release_publication(
             candidate_path,
             label="machine bundle index preset export",
@@ -16672,7 +20332,7 @@ def export_stable_bundle_index_preset_from_artifact(
     output_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     candidate_path = Path(path).resolve()
-    if candidate_path.is_dir():
+    if candidate_path.is_dir() or candidate_path.name == "release_manifest.json":
         _require_stable_release_publication(
             candidate_path,
             label="stable bundle index preset export",
@@ -16696,15 +20356,7 @@ def export_release_catalog_index_preset_from_workspace(
     bundle_index_preset_dir: Optional[str | Path] = None,
     release_catalog_preset_exporter: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    candidate_path = Path(path).resolve()
-    if candidate_path.is_dir():
-        release_catalog_index_dir = candidate_path
-    else:
-        release_catalog_index_dir = candidate_path.parent
-        if candidate_path.name != "release_catalog_index.json":
-            raise SatRootError(
-                "release catalog index preset export requires release_catalog_index.json or a release catalog index directory containing it"
-            )
+    release_catalog_index_dir = Path(_normalize_release_catalog_index_publication_input(path)).resolve()
     _manifest_path, index_path, _manifest, index = _load_release_catalog_index_publication(release_catalog_index_dir)
 
     base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
@@ -16809,6 +20461,7 @@ def export_machine_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    catalog_preset_path: Optional[str | Path] = None,
     publication_catalog_workspace_preset_path: Optional[str | Path] = None,
     publication_network_preset_path: Optional[str | Path] = None,
     stack_preset_dir: Optional[str | Path] = None,
@@ -16880,6 +20533,25 @@ def export_machine_publication_registry_workspace_preset_from_workspace(
     )
     if not machine_release_catalog_index_valid:
         preset.pop("publication_catalog_workspace_dir", None)
+        preset.pop("publication_catalog_workspace_collection_dir", None)
+    if catalog_preset_path is not None:
+        source_machine_catalog_workspace_dir = summary.get("source_machine_catalog_workspace_dir")
+        if not isinstance(source_machine_catalog_workspace_dir, str) or not source_machine_catalog_workspace_dir.strip():
+            raise SatRootError(
+                "machine publication registry workspace preset export requires source_machine_catalog_workspace_dir provenance to generate a nested catalog preset"
+            )
+        catalog_output_path = Path(catalog_preset_path).resolve()
+        catalog_output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(
+            catalog_output_path,
+            export_demo_catalog_preset_from_workspace(
+                Path(source_machine_catalog_workspace_dir).resolve(),
+                output_path=catalog_output_path,
+            ),
+        )
+        preset["catalog_preset"] = _relative_output_path(catalog_output_path, base_dir=base_dir)
+        preset.pop("publication_catalog_workspace_dir", None)
+        preset.pop("publication_catalog_workspace_collection_dir", None)
 
     source_publication_network_dir = summary.get("source_publication_network_dir")
     source_publication_network_collection_dir = summary.get("source_publication_network_collection_dir")
@@ -16923,6 +20595,7 @@ def export_stable_publication_registry_workspace_preset_from_workspace(
     publication_registry_workspace_dir: str | Path,
     *,
     output_path: Optional[str | Path] = None,
+    catalog_preset_path: Optional[str | Path] = None,
     publication_catalog_workspace_preset_path: Optional[str | Path] = None,
     publication_network_preset_path: Optional[str | Path] = None,
     stack_preset_dir: Optional[str | Path] = None,
@@ -16994,6 +20667,25 @@ def export_stable_publication_registry_workspace_preset_from_workspace(
     )
     if not stable_release_catalog_index_valid:
         preset.pop("publication_catalog_workspace_dir", None)
+        preset.pop("publication_catalog_workspace_collection_dir", None)
+    if catalog_preset_path is not None:
+        source_stable_catalog_workspace_dir = summary.get("source_stable_catalog_workspace_dir")
+        if not isinstance(source_stable_catalog_workspace_dir, str) or not source_stable_catalog_workspace_dir.strip():
+            raise SatRootError(
+                "stable publication registry workspace preset export requires source_stable_catalog_workspace_dir provenance to generate a nested catalog preset"
+            )
+        catalog_output_path = Path(catalog_preset_path).resolve()
+        catalog_output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(
+            catalog_output_path,
+            export_demo_catalog_preset_from_workspace(
+                Path(source_stable_catalog_workspace_dir).resolve(),
+                output_path=catalog_output_path,
+            ),
+        )
+        preset["catalog_preset"] = _relative_output_path(catalog_output_path, base_dir=base_dir)
+        preset.pop("publication_catalog_workspace_dir", None)
+        preset.pop("publication_catalog_workspace_collection_dir", None)
 
     source_publication_network_dir = summary.get("source_publication_network_dir")
     source_publication_network_collection_dir = summary.get("source_publication_network_collection_dir")
@@ -17632,15 +21324,7 @@ def verify_signed_publication_descriptor_index_manifest(
 def _load_publication_descriptor_index_publication(
     publication_descriptor_index_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    candidate_path = Path(publication_descriptor_index_dir).resolve()
-    if candidate_path.is_dir():
-        index_path = candidate_path
-    else:
-        index_path = candidate_path.parent
-        if candidate_path.name not in {"publication_descriptor_index_manifest.json", "publication_descriptor_index.json"}:
-            raise SatRootError(
-                "publication descriptor index operations require a publication descriptor index directory or publication_descriptor_index_manifest.json/publication_descriptor_index.json"
-            )
+    index_path = Path(_normalize_publication_descriptor_index_publication_input(publication_descriptor_index_dir)).resolve()
 
     manifest_path = index_path / "publication_descriptor_index_manifest.json"
     if not manifest_path.is_file():
@@ -18544,6 +22228,331 @@ def lint_publication_metadata_bundle_publication(
     }
 
 
+from satroot_collection_lint import lint_reusable_collection
+
+
+def _bundle_collection_member_summary(member_dir: Path) -> Dict[str, Any]:
+    summary = summarize_signed_ledger_bundle(member_dir)
+    snapshot = summary.get("final_state_snapshot")
+    return {
+        "scheme": summary.get("scheme"),
+        "verification_material_scope": summary.get("verification_material_scope"),
+        "record_count": summary.get("record_count"),
+        "root_id": summary.get("root_id"),
+        "symbol": summary.get("symbol"),
+        "profile": snapshot.get("profile") if isinstance(snapshot, Mapping) else None,
+    }
+
+
+def _publication_metadata_bundle_collection_member_summary(member_dir: Path) -> Dict[str, Any]:
+    summary = summarize_publication_metadata_bundle_publication(member_dir)
+    return {
+        "artifact_kind": summary.get("packaged_artifact_kind"),
+        "artifact_path": summary.get("packaged_artifact_path"),
+        "signature_scheme": summary.get("signature_scheme"),
+        "signature_key_id": summary.get("signature_key_id"),
+    }
+
+
+def _collection_member_noop_lint(_member_dir: str | Path) -> Dict[str, Any]:
+    return {"ok": True}
+
+
+def lint_bundle_collection(bundle_collection_dir: str | Path) -> Dict[str, Any]:
+    return lint_reusable_collection(
+        bundle_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="bundle collection",
+        validate_summary=validate_bundle_collection_summary_consistency,
+        count_key="bundle_count",
+        source_dirs_key="source_bundle_dirs",
+        member_dirs_key="bundle_dirs",
+        members_key="bundles",
+        member_name_key="bundle_name",
+        member_dir_key="bundle_dir",
+        dir_name_key=None,
+        child_lint=lint_signed_ledger_bundle,
+        member_summary=_bundle_collection_member_summary,
+        metadata_fields=["scheme", "verification_material_scope", "record_count", "root_id", "symbol", "profile"],
+        path_specs=[("bundle_manifest_path", "bundle_manifest.json", "duplicate_bundle_manifest_paths", "missing_bundle_manifests")],
+        duplicate_source_key="duplicate_source_bundle_dirs",
+        duplicate_member_dirs_key="duplicate_bundle_dirs",
+        duplicate_names_key="duplicate_bundle_names",
+        dir_path_mismatches_key="bundle_dir_path_mismatches",
+        missing_member_dirs_key="missing_bundle_dirs",
+        metadata_mismatches_key="bundle_metadata_mismatches",
+        lint_failures_key="bundle_lint_failures",
+    )
+
+
+def lint_release_collection(release_collection_dir: str | Path) -> Dict[str, Any]:
+    return lint_reusable_collection(
+        release_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="release collection",
+        validate_summary=validate_release_collection_summary_consistency,
+        count_key="release_count",
+        source_dirs_key="source_release_dirs",
+        member_dirs_key="release_dirs",
+        members_key="releases",
+        member_name_key="release_name",
+        member_dir_key="release_dir",
+        dir_name_key="release_dir_name",
+        child_lint=lint_signed_release_publication,
+        member_summary=summarize_signed_release_publication,
+        metadata_fields=["signature_scheme", "signature_key_id", "bundle_count", "bundle_symbols", "release"],
+        path_specs=[
+            ("release_manifest_path", "release_manifest.json", "duplicate_release_manifest_paths", "missing_release_manifests"),
+            ("bundle_index_path", "bundle_index.json", "duplicate_bundle_index_paths", "missing_bundle_indexes"),
+        ],
+        duplicate_source_key="duplicate_source_release_dirs",
+        duplicate_member_dirs_key="duplicate_release_dirs",
+        duplicate_names_key="duplicate_release_names",
+        dir_path_mismatches_key="release_dir_path_mismatches",
+        missing_member_dirs_key="missing_release_dirs",
+        metadata_mismatches_key="release_metadata_mismatches",
+        lint_failures_key="release_lint_failures",
+    )
+
+
+def lint_release_catalog_collection(release_catalog_collection_dir: str | Path) -> Dict[str, Any]:
+    return lint_reusable_collection(
+        release_catalog_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="release catalog collection",
+        validate_summary=validate_release_catalog_collection_summary_consistency,
+        count_key="release_catalog_count",
+        source_dirs_key="source_release_catalog_dirs",
+        member_dirs_key="release_catalog_dirs",
+        members_key="release_catalogs",
+        member_name_key="release_catalog_name",
+        member_dir_key="release_catalog_dir",
+        dir_name_key="release_catalog_dir_name",
+        child_lint=lint_signed_release_catalog_publication,
+        member_summary=summarize_signed_release_catalog_publication,
+        metadata_fields=["signature_scheme", "signature_key_id", "release_count", "release_paths", "release_labels", "catalog"],
+        path_specs=[
+            ("release_catalog_manifest_path", "release_catalog_manifest.json", "duplicate_release_catalog_manifest_paths", "missing_release_catalog_manifests"),
+            ("release_catalog_json_path", "release_catalog.json", "duplicate_release_catalog_json_paths", "missing_release_catalog_json_files"),
+        ],
+        duplicate_source_key="duplicate_source_release_catalog_dirs",
+        duplicate_member_dirs_key="duplicate_release_catalog_dirs",
+        duplicate_names_key="duplicate_release_catalog_names",
+        dir_path_mismatches_key="release_catalog_dir_path_mismatches",
+        missing_member_dirs_key="missing_release_catalog_dirs",
+        metadata_mismatches_key="release_catalog_metadata_mismatches",
+        lint_failures_key="release_catalog_lint_failures",
+    )
+
+
+def lint_demo_catalog_workspace_collection(catalog_workspace_collection_dir: str | Path) -> Dict[str, Any]:
+    return lint_reusable_collection(
+        catalog_workspace_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="demo catalog workspace collection",
+        validate_summary=validate_demo_catalog_workspace_collection_summary_consistency,
+        count_key="workspace_count",
+        source_dirs_key="source_catalog_workspace_dirs",
+        member_dirs_key="catalog_workspace_dirs",
+        members_key="catalog_workspaces",
+        member_name_key="workspace_name",
+        member_dir_key="catalog_workspace_dir",
+        dir_name_key=None,
+        child_lint=lint_demo_catalog_workspace,
+        member_summary=relocate_demo_catalog_workspace_summary,
+        metadata_fields=["preset_path", "bundle_scheme", "release_scheme", "bundle_count"],
+        path_specs=[
+            ("summary_path", "summary.json", "duplicate_workspace_summary_paths", "missing_workspace_summaries"),
+            ("release_dir", "release", "duplicate_release_dirs", "missing_release_dirs"),
+            ("release_manifest_path", "release/release_manifest.json", "duplicate_release_manifest_paths", "missing_release_manifests"),
+            ("bundle_index_path", "release/bundle_index.json", "duplicate_bundle_index_paths", "missing_bundle_indexes"),
+        ],
+        duplicate_source_key="duplicate_source_catalog_workspace_dirs",
+        duplicate_member_dirs_key="duplicate_catalog_workspace_dirs",
+        duplicate_names_key="duplicate_workspace_names",
+        dir_path_mismatches_key="workspace_dir_path_mismatches",
+        missing_member_dirs_key="missing_workspace_dirs",
+        metadata_mismatches_key="workspace_metadata_mismatches",
+        lint_failures_key="workspace_lint_failures",
+    )
+
+
+def lint_publication_stack_collection(publication_stack_collection_dir: str | Path) -> Dict[str, Any]:
+    return lint_reusable_collection(
+        publication_stack_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="publication stack collection",
+        validate_summary=validate_publication_stack_collection_summary_consistency,
+        count_key="stack_count",
+        source_dirs_key="source_publication_stack_dirs",
+        member_dirs_key="publication_stack_dirs",
+        members_key="stacks",
+        member_name_key="stack_name",
+        member_dir_key="publication_stack_dir",
+        dir_name_key=None,
+        child_lint=lint_publication_stack_workspace,
+        member_summary=summarize_publication_stack_workspace,
+        metadata_fields=[
+            "stack_preset_path",
+            "release_catalog_preset_path",
+            "bundle_scheme",
+            "release_scheme",
+            "release_catalog_scheme",
+            "workspace_count",
+        ],
+        path_specs=[
+            ("summary_path", "summary.json", "duplicate_stack_summary_paths", "missing_stack_summaries"),
+            ("release_catalog_dir", "release_catalog", "duplicate_release_catalog_dirs", "missing_release_catalog_dirs"),
+            ("release_catalog_manifest_path", "release_catalog/release_catalog_manifest.json", "duplicate_release_catalog_manifest_paths", "missing_release_catalog_manifests"),
+        ],
+        duplicate_source_key="duplicate_source_publication_stack_dirs",
+        duplicate_member_dirs_key="duplicate_publication_stack_dirs",
+        duplicate_names_key="duplicate_stack_names",
+        dir_path_mismatches_key="stack_dir_path_mismatches",
+        missing_member_dirs_key="missing_stack_dirs",
+        metadata_mismatches_key="stack_metadata_mismatches",
+        lint_failures_key="stack_lint_failures",
+    )
+
+
+def lint_publication_network_collection(publication_network_collection_dir: str | Path) -> Dict[str, Any]:
+    return lint_reusable_collection(
+        publication_network_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="publication network collection",
+        validate_summary=validate_publication_network_collection_summary_consistency,
+        count_key="network_count",
+        source_dirs_key="source_publication_network_dirs",
+        member_dirs_key="publication_network_dirs",
+        members_key="networks",
+        member_name_key="network_name",
+        member_dir_key="publication_network_dir",
+        dir_name_key=None,
+        child_lint=lint_publication_network_workspace,
+        member_summary=summarize_publication_network_workspace,
+        metadata_fields=[
+            "network_preset_path",
+            "release_catalog_index_preset_path",
+            "bundle_scheme",
+            "release_scheme",
+            "release_catalog_scheme",
+            "release_catalog_index_scheme",
+            "stack_count",
+        ],
+        path_specs=[
+            ("summary_path", "summary.json", "duplicate_network_summary_paths", "missing_network_summaries"),
+            ("release_catalog_index_dir", "release_catalog_index", "duplicate_release_catalog_index_dirs", "missing_release_catalog_index_dirs"),
+            ("release_catalog_index_manifest_path", "release_catalog_index/release_catalog_index_manifest.json", "duplicate_release_catalog_index_manifest_paths", "missing_release_catalog_index_manifests"),
+        ],
+        duplicate_source_key="duplicate_source_publication_network_dirs",
+        duplicate_member_dirs_key="duplicate_publication_network_dirs",
+        duplicate_names_key="duplicate_network_names",
+        dir_path_mismatches_key="network_dir_path_mismatches",
+        missing_member_dirs_key="missing_network_dirs",
+        metadata_mismatches_key="network_metadata_mismatches",
+        lint_failures_key="network_lint_failures",
+    )
+
+
+def lint_publication_metadata_bundle_collection(publication_metadata_bundle_collection_dir: str | Path) -> Dict[str, Any]:
+    report = lint_reusable_collection(
+        publication_metadata_bundle_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="publication metadata bundle collection",
+        validate_summary=validate_publication_metadata_bundle_collection_summary_consistency,
+        count_key="bundle_count",
+        source_dirs_key="artifact_paths",
+        member_dirs_key="bundle_dirs",
+        members_key="bundles",
+        member_name_key="bundle_name",
+        member_dir_key="bundle_dir",
+        dir_name_key=None,
+        child_lint=lint_publication_metadata_bundle_publication,
+        member_summary=_publication_metadata_bundle_collection_member_summary,
+        metadata_fields=["artifact_kind", "artifact_path"],
+        path_specs=[
+            ("publication_metadata_manifest_path", "publication_metadata_manifest.json", "duplicate_publication_metadata_manifest_paths", "missing_publication_metadata_manifests"),
+            ("publication_report_path", "publication_report.md", "duplicate_publication_report_paths", "missing_publication_reports"),
+            ("publication_descriptor_path", "publication_descriptor.json", "duplicate_publication_descriptor_paths", "missing_publication_descriptors"),
+        ],
+        duplicate_source_key="duplicate_artifact_paths",
+        duplicate_member_dirs_key="duplicate_bundle_dirs",
+        duplicate_names_key="duplicate_bundle_names",
+        dir_path_mismatches_key="bundle_dir_path_mismatches",
+        missing_member_dirs_key="missing_bundle_dirs",
+        metadata_mismatches_key="bundle_metadata_mismatches",
+        lint_failures_key="bundle_lint_failures",
+    )
+    _, summary = _load_workspace_summary(publication_metadata_bundle_collection_dir, label="publication metadata bundle collection")
+    report["signature_scheme"] = summary.get("signature_scheme")
+    report["artifact_count"] = len(summary.get("artifact_paths", [])) if isinstance(summary.get("artifact_paths"), list) else 0
+    report["artifact_count_matches"] = isinstance(summary.get("artifact_count"), int) and summary.get("artifact_count") == report["artifact_count"]
+    report["ok"] = report["ok"] and report["artifact_count_matches"]
+    return report
+
+
+def lint_publication_catalog_workspace_collection(publication_catalog_workspace_collection_dir: str | Path) -> Dict[str, Any]:
+    return lint_reusable_collection(
+        publication_catalog_workspace_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="publication catalog workspace collection",
+        validate_summary=validate_publication_catalog_workspace_collection_summary_consistency,
+        count_key="workspace_count",
+        source_dirs_key="source_publication_catalog_workspace_dirs",
+        member_dirs_key="publication_catalog_workspace_dirs",
+        members_key="catalog_workspaces",
+        member_name_key="workspace_name",
+        member_dir_key="publication_catalog_workspace_dir",
+        dir_name_key=None,
+        child_lint=lint_publication_catalog_workspace,
+        member_summary=summarize_publication_catalog_workspace,
+        metadata_fields=["signature_scheme", "artifact_count", "publication_metadata_bundle_count"],
+        path_specs=[
+            ("summary_path", "summary.json", "duplicate_workspace_summary_paths", "missing_workspace_summaries"),
+            ("publication_descriptor_index_dir", "publication_descriptor_index", "duplicate_publication_descriptor_index_dirs", "missing_publication_descriptor_index_dirs"),
+            ("publication_metadata_catalog_dir", "publication_metadata_catalog", "duplicate_publication_metadata_catalog_dirs", "missing_publication_metadata_catalog_dirs"),
+            ("publication_descriptor_index_manifest_path", "publication_descriptor_index/publication_descriptor_index_manifest.json", "duplicate_publication_descriptor_index_manifest_paths", "missing_publication_descriptor_index_manifests"),
+            ("publication_metadata_catalog_manifest_path", "publication_metadata_catalog/publication_metadata_catalog_manifest.json", "duplicate_publication_metadata_catalog_manifest_paths", "missing_publication_metadata_catalog_manifests"),
+        ],
+        duplicate_source_key="duplicate_source_publication_catalog_workspace_dirs",
+        duplicate_member_dirs_key="duplicate_publication_catalog_workspace_dirs",
+        duplicate_names_key="duplicate_workspace_names",
+        dir_path_mismatches_key="workspace_dir_path_mismatches",
+        missing_member_dirs_key="missing_workspace_dirs",
+        metadata_mismatches_key="workspace_metadata_mismatches",
+        lint_failures_key="workspace_lint_failures",
+    )
+
+
+def lint_publication_registry_workspace_collection(publication_registry_workspace_collection_dir: str | Path) -> Dict[str, Any]:
+    return lint_reusable_collection(
+        publication_registry_workspace_collection_dir,
+        load_workspace_summary=_load_workspace_summary,
+        label="publication registry workspace collection",
+        validate_summary=validate_publication_registry_workspace_collection_summary_consistency,
+        count_key="workspace_count",
+        source_dirs_key="source_publication_registry_workspace_dirs",
+        member_dirs_key="publication_registry_workspace_dirs",
+        members_key="registry_workspaces",
+        member_name_key="workspace_name",
+        member_dir_key="publication_registry_workspace_dir",
+        dir_name_key=None,
+        child_lint=_collection_member_noop_lint,
+        member_summary=summarize_publication_registry_workspace,
+        metadata_fields=["signature_scheme", "artifact_count", "publication_metadata_bundle_count"],
+        path_specs=[
+            ("summary_path", "summary.json", "duplicate_workspace_summary_paths", "missing_workspace_summaries"),
+        ],
+        duplicate_source_key="duplicate_source_publication_registry_workspace_dirs",
+        duplicate_member_dirs_key="duplicate_publication_registry_workspace_dirs",
+        duplicate_names_key="duplicate_workspace_names",
+        dir_path_mismatches_key="workspace_dir_path_mismatches",
+        missing_member_dirs_key="missing_workspace_dirs",
+        metadata_mismatches_key="workspace_metadata_mismatches",
+        lint_failures_key="workspace_lint_failures",
+    )
+
+
 def build_publication_metadata_catalog(
     bundle_dirs: Sequence[str | Path],
     *,
@@ -19049,16 +23058,7 @@ def publish_stable_publication_metadata_catalog(
 def _load_publication_metadata_catalog_publication(
     publication_metadata_catalog_dir: str | Path,
 ) -> tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
-    candidate_path = Path(publication_metadata_catalog_dir).resolve()
-    if candidate_path.is_dir():
-        catalog_dir = candidate_path
-    else:
-        catalog_dir = candidate_path.parent
-        if candidate_path.name not in {"publication_metadata_catalog_manifest.json", "publication_metadata_catalog.json"}:
-            raise SatRootError(
-                "publication metadata catalog operations require a publication metadata catalog directory or "
-                "publication_metadata_catalog_manifest.json/publication_metadata_catalog.json"
-            )
+    catalog_dir = Path(_normalize_publication_metadata_catalog_publication_input(publication_metadata_catalog_dir)).resolve()
 
     manifest_path = catalog_dir / "publication_metadata_catalog_manifest.json"
     if not manifest_path.is_file():
@@ -19086,6 +23086,7 @@ def build_publication_registry(
     release_catalog_index_dir: Optional[str | Path] = None,
     publication_descriptor_index_dir: Optional[str | Path] = None,
     publication_metadata_catalog_dir: Optional[str | Path] = None,
+    publication_registry_workspace_collection_dir: Optional[str | Path] = None,
     base_dir: str | Path = ".",
     registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
@@ -19161,6 +23162,11 @@ def build_publication_registry(
         registry["index"] = cleaned_metadata
     if source_publication_registry_workspace_dir is not None:
         registry["source_publication_registry_workspace_dir"] = source_publication_registry_workspace_dir
+    if publication_registry_workspace_collection_dir is not None:
+        registry["source_publication_registry_workspace_collection_dir"] = _normalize_publication_registry_workspace_collection_input(
+            publication_registry_workspace_collection_dir,
+            label="publication registry source publication registry workspace collection",
+        )
     return registry
 
 
@@ -19376,6 +23382,7 @@ def publish_publication_registry(
     release_catalog_index_dir: Optional[str | Path] = None,
     publication_descriptor_index_dir: Optional[str | Path] = None,
     publication_metadata_catalog_dir: Optional[str | Path] = None,
+    publication_registry_workspace_collection_dir: Optional[str | Path] = None,
     registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     output_path = Path(output_dir).resolve()
@@ -19385,6 +23392,7 @@ def publish_publication_registry(
         release_catalog_index_dir=release_catalog_index_dir,
         publication_descriptor_index_dir=publication_descriptor_index_dir,
         publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        publication_registry_workspace_collection_dir=publication_registry_workspace_collection_dir,
         base_dir=output_path,
         registry_metadata=registry_metadata,
     )
@@ -19418,6 +23426,7 @@ def publish_machine_publication_registry(
     release_catalog_index_dir: Optional[str | Path] = None,
     publication_descriptor_index_dir: Optional[str | Path] = None,
     publication_metadata_catalog_dir: Optional[str | Path] = None,
+    publication_registry_workspace_collection_dir: Optional[str | Path] = None,
     registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     (
@@ -19437,6 +23446,7 @@ def publish_machine_publication_registry(
         release_catalog_index_dir=release_catalog_index_dir,
         publication_descriptor_index_dir=publication_descriptor_index_dir,
         publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        publication_registry_workspace_collection_dir=publication_registry_workspace_collection_dir,
         registry_metadata=registry_metadata,
     )
 
@@ -19450,6 +23460,7 @@ def publish_stable_publication_registry(
     release_catalog_index_dir: Optional[str | Path] = None,
     publication_descriptor_index_dir: Optional[str | Path] = None,
     publication_metadata_catalog_dir: Optional[str | Path] = None,
+    publication_registry_workspace_collection_dir: Optional[str | Path] = None,
     registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     (
@@ -19469,6 +23480,7 @@ def publish_stable_publication_registry(
         release_catalog_index_dir=release_catalog_index_dir,
         publication_descriptor_index_dir=publication_descriptor_index_dir,
         publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        publication_registry_workspace_collection_dir=publication_registry_workspace_collection_dir,
         registry_metadata=registry_metadata,
     )
 
@@ -19481,6 +23493,7 @@ def bootstrap_publication_registry_publication(
     release_catalog_index_dir: Optional[str | Path] = None,
     publication_descriptor_index_dir: Optional[str | Path] = None,
     publication_metadata_catalog_dir: Optional[str | Path] = None,
+    publication_registry_workspace_collection_dir: Optional[str | Path] = None,
     registry_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     output_path = Path(output_dir).resolve()
@@ -19502,6 +23515,7 @@ def bootstrap_publication_registry_publication(
         release_catalog_index_dir=release_catalog_index_dir,
         publication_descriptor_index_dir=publication_descriptor_index_dir,
         publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+        publication_registry_workspace_collection_dir=publication_registry_workspace_collection_dir,
         base_dir=output_path,
         registry_metadata=registry_metadata,
     )
@@ -20172,6 +24186,288 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bootstrap_singleton_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
+    bootstrap_singleton_demo_bundle_index_parser = subparsers.add_parser("bootstrap-singleton-demo-bundle-index", help="Generate multiple receipt, identity, or license singleton demo bundles from repeated presets, package them into a bundle collection, and build a reusable singleton bundle index")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo bundles")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--name", help="Optional shared singleton name override when a preset omits it")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated singleton demo bundles")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--output-dir", required=True, help="Directory where generated bundles, bundle_collection/, bundle_index.json, and summary.json will be written")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--root-id", help="Optional shared root_id override when presets omit it")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--issuer", help="Optional shared issuer override when presets omit it")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--holder-account", help="Optional shared initial non-issuer holder override")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--next-holder", help="Optional shared intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--archive-account", help="Optional shared archive destination override")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if presets define one")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Shared singleton profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--rules-hash", help="Optional shared rules_hash override")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--nonce", help="Optional shared nonce override")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--channel", help="Optional bundle-index channel metadata")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--label", help="Optional human-readable bundle-index label")
+    bootstrap_singleton_demo_bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+
+    bootstrap_singleton_demo_release_collection_parser = subparsers.add_parser("bootstrap-singleton-demo-release-collection", help="Generate multiple receipt, identity, or license singleton demo releases from repeated presets and package them into a reusable release collection")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo releases")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--name", help="Optional shared singleton name override when a preset omits it")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated singleton demo bundles")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--output-dir", required=True, help="Directory where generated releases, release_collection/, and summary.json will be written")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--root-id", help="Optional shared root_id override when presets omit it")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--issuer", help="Optional shared issuer override when presets omit it")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--holder-account", help="Optional shared initial non-issuer holder override")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--next-holder", help="Optional shared intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--archive-account", help="Optional shared archive destination override")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if presets define one")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Shared singleton profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--rules-hash", help="Optional shared rules_hash override")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--nonce", help="Optional shared nonce override")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_singleton_demo_release_collection_parser.add_argument("--published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+
+    bootstrap_singleton_demo_release_catalog_publication_parser = subparsers.add_parser("bootstrap-singleton-demo-release-catalog-publication", help="Generate multiple receipt, identity, or license singleton demo releases from repeated presets, package them into a release collection, and bootstrap a signed singleton release catalog publication")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo releases")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--name", help="Optional shared singleton name override when a preset omits it")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--bundle-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated singleton demo bundles")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --bundle-scheme")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--output-dir", required=True, help="Directory where the generated release collection workspace, release catalog publication, and summary.json will be written")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--root-id", help="Optional shared root_id override when presets omit it")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--issuer", help="Optional shared issuer override when presets omit it")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--holder-account", help="Optional shared initial non-issuer holder override")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--next-holder", help="Optional shared intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--archive-account", help="Optional shared archive destination override")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if presets define one")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Shared singleton profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--rules-hash", help="Optional shared rules_hash override")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--nonce", help="Optional shared nonce override")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--channel", help="Optional catalog channel metadata")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--label", help="Optional human-readable catalog label")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog manifest")
+    bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
+
+    bootstrap_singleton_demo_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-singleton-demo-release-catalog-index-publication", help="Generate multiple receipt, identity, or license singleton demo releases from repeated presets, bootstrap a singleton release catalog publication, and bootstrap a signed singleton release catalog index publication in one step")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo releases")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--name", help="Optional shared singleton name override when a preset omits it")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--bundle-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated singleton demo bundles")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --bundle-scheme")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--output-dir", required=True, help="Directory where the generated release catalog publication workspace, release catalog index publication, and summary.json will be written")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--root-id", help="Optional shared root_id override when presets omit it")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--issuer", help="Optional shared issuer override when presets omit it")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--holder-account", help="Optional shared initial non-issuer holder override")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--next-holder", help="Optional shared intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--archive-account", help="Optional shared archive destination override")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if presets define one")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Shared singleton profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--rules-hash", help="Optional shared rules_hash override")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--nonce", help="Optional shared nonce override")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--catalog-channel", help="Optional release catalog channel metadata")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--catalog-label", help="Optional human-readable release catalog label")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--catalog-published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--catalog-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog manifest")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--catalog-key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--channel", help="Optional index channel metadata")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--label", help="Optional human-readable index label")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog index manifest")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog index manifest")
+
+    bootstrap_singleton_demo_publication_stack_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-stack", help="Generate multiple receipt, identity, or license singleton demo catalog workspaces from repeated presets and publish them as a signed singleton release catalog stack")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo catalog workspaces")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--name", help="Optional shared singleton name override when a preset omits it")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated singleton demo bundles")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the top-level singleton release catalog manifest")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where generated catalog workspaces, release_catalog/, and summary.json will be written")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--root-id", help="Optional shared root_id override when presets omit it")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--issuer", help="Optional shared issuer override when presets omit it")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--holder-account", help="Optional shared initial non-issuer holder override")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--next-holder", help="Optional shared intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--archive-account", help="Optional shared archive destination override")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if presets define one")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Shared singleton profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--rules-hash", help="Optional shared rules_hash override")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--nonce", help="Optional shared nonce override")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--channel", help="Optional release catalog channel metadata")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label")
+    bootstrap_singleton_demo_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+
+    bootstrap_singleton_demo_publication_network_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-network", help="Generate multiple receipt, identity, or license singleton demo catalog workspaces from repeated presets, bootstrap a singleton publication stack, and publish it as a signed singleton release-catalog index")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo catalog workspaces")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--name", help="Optional shared singleton name override when a preset omits it")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated singleton demo bundles")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the singleton release catalog manifest")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-catalog-index-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-index-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-catalog-index-key-id", required=True, help="Signature key identifier to generate and use for the top-level singleton release-catalog index manifest")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--output-dir", required=True, help="Directory where publication_stack_source/, stack_workspaces/, release_catalog_index/, and summary.json will be written")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--root-id", help="Optional shared root_id override when presets omit it")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--issuer", help="Optional shared issuer override when presets omit it")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--holder-account", help="Optional shared initial non-issuer holder override")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--next-holder", help="Optional shared intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--archive-account", help="Optional shared archive destination override")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if presets define one")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Shared singleton profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--rules-hash", help="Optional shared rules_hash override")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--nonce", help="Optional shared nonce override")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--catalog-channel", help="Optional release catalog channel metadata for the generated publication stack")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--catalog-label", help="Optional human-readable release catalog label for the generated publication stack")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--catalog-published-at", help="Optional ISO-8601 style published-at metadata for the generated publication stack")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label")
+    bootstrap_singleton_demo_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+
+    bootstrap_singleton_demo_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-catalog-workspace", help="Generate multiple receipt, identity, or license singleton demo catalog workspaces from repeated presets and derive publication descriptor and metadata lanes in one reusable singleton publication catalog workspace")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo catalog workspaces")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--name", help="Optional shared singleton name override when a preset omits it")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated singleton demo bundles and publication manifests")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for nested release-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each nested singleton catalog release manifest")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--output-dir", required=True, help="Directory where catalog_workspaces/, publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, and summary.json will be written")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--root-id", help="Optional shared root_id override when presets omit it")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--issuer", help="Optional shared issuer override when presets omit it")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--holder-account", help="Optional shared initial non-issuer holder override")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--next-holder", help="Optional shared intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--archive-account", help="Optional shared archive destination override")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if presets define one")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Shared singleton profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--rules-hash", help="Optional shared rules_hash override")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--nonce", help="Optional shared nonce override")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated singleton catalog bundle indexes")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated singleton catalog bundle indexes")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated singleton catalog bundle indexes")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-published-at", help="Optional descriptor-index published_at metadata")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
+
+    bootstrap_singleton_demo_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-registry-workspace", help="Generate multiple receipt, identity, or license singleton demo catalog workspaces from repeated presets, derive shared publication lanes, and bind them to a generated singleton publication network in one signed registry workspace")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo catalog workspaces")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--name", help="Optional shared singleton name override when a preset omits it")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated singleton demo bundles and publication manifests")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for nested release-manifest signing; defaults to --scheme")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each nested singleton catalog release manifest")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the generated singleton release catalog manifest")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-catalog-index-key-id", required=True, help="Signature key identifier to generate and use for the generated singleton release-catalog index manifest")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-registry-key-id", required=True, help="Signature key identifier to generate and use for the publication registry manifest")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--output-dir", required=True, help="Directory where publication_catalog_workspace_source/, publication_network_source/, copied publication_network/, publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, publication_registry/, and summary.json will be written")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--root-id", help="Optional shared root_id override when presets omit it")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--issuer", help="Optional shared issuer override when presets omit it")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--holder-account", help="Optional shared initial non-issuer holder override")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--next-holder", help="Optional shared intermediate reassignment target before archival or retirement")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--archive-account", help="Optional shared archive destination override")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--no-archive", action="store_true", help="Skip the archive transfer step even if presets define one")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--no-retire", action="store_true", help="Skip the final burn retirement step")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--profile-field", action="append", dest="profile_fields", help="Shared singleton profile field override in key=value form; may be repeated")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--rules-hash", help="Optional shared rules_hash override")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--nonce", help="Optional shared nonce override")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated singleton catalog bundle indexes")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated singleton catalog bundle indexes")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated singleton catalog bundle indexes")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-catalog-channel", help="Optional release catalog channel metadata for the generated singleton publication network")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-catalog-label", help="Optional human-readable release catalog label for the generated singleton publication network")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-catalog-published-at", help="Optional release catalog published_at metadata for the generated singleton publication network")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-catalog-index-channel", help="Optional release-catalog-index channel metadata for the generated singleton publication network")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-catalog-index-label", help="Optional human-readable release-catalog-index label for the generated singleton publication network")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--release-catalog-index-published-at", help="Optional release-catalog-index published_at metadata for the generated singleton publication network")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--descriptor-index-published-at", help="Optional descriptor-index published_at metadata")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-registry-channel", help="Optional publication-registry channel metadata")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-registry-label", help="Optional human-readable publication-registry label")
+    bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--publication-registry-published-at", help="Optional publication-registry published_at metadata")
+
     bootstrap_stable_demo_bundle_parser = subparsers.add_parser("bootstrap-stable-demo-bundle", help="Generate a signed SATROOT-STABLE-1 reference-demo bundle from profile parameters")
     bootstrap_stable_demo_bundle_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-STABLE-1 only")
     bootstrap_stable_demo_bundle_parser.add_argument("--symbol", help="Asset symbol for the stable reference demo bundle; required when --preset-json does not provide it")
@@ -20253,6 +24549,33 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_release_collection_parser.add_argument("--channel", help="Optional shared release channel metadata for generated bundle indexes")
     bootstrap_stable_demo_release_collection_parser.add_argument("--label", help="Optional shared human-readable release label for generated bundle indexes")
     bootstrap_stable_demo_release_collection_parser.add_argument("--published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+
+    bootstrap_stable_demo_bundle_index_parser = subparsers.add_parser("bootstrap-stable-demo-bundle-index", help="Generate multiple SATROOT-STABLE-1 demo bundles from repeated presets, package them into a bundle collection, and build a reusable stable bundle index")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple stable demo bundles")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--symbol", help="Optional shared stable symbol override when a preset omits it")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--name", help="Optional shared stable name override when a preset omits it")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--output-dir", required=True, help="Directory where generated bundles, bundle_collection/, bundle_index.json, and summary.json will be written")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--reference-unit", default="USD", help="External reference unit; defaults to USD")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and distribution events")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--merchant-account", default="merchant", help="Merchant account for the first reference distribution leg")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--service-account", default="api_node", help="Service account for the second reference distribution leg")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--initial-balance", default="25000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--merchant-amount", default="1250000", help="Amount transferred from the issuer to the merchant account")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--service-amount", default="250000", help="Amount transferred from the issuer to the service account")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--merchant-burn-amount", default="5000", help="Optional merchant-side burn amount; use 0 to skip the burn event")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--intended-use", default="invoice-credit-accounting", help="Reference-only intended_use metadata")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--channel", help="Optional shared channel metadata for the generated bundle index")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--label", help="Optional human-readable label for the generated bundle index")
+    bootstrap_stable_demo_bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the generated bundle index")
 
     bootstrap_machine_demo_bundle_parser = subparsers.add_parser("bootstrap-machine-demo-bundle", help="Generate a signed SATROOT-MACHINE-1 machine-credit demo bundle from profile parameters")
     bootstrap_machine_demo_bundle_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-MACHINE-1 only")
@@ -20345,13 +24668,44 @@ def build_cli_parser() -> Any:
     bootstrap_machine_demo_release_collection_parser.add_argument("--label", help="Optional shared human-readable release label for generated bundle indexes")
     bootstrap_machine_demo_release_collection_parser.add_argument("--published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
 
+    bootstrap_machine_demo_bundle_index_parser = subparsers.add_parser("bootstrap-machine-demo-bundle-index", help="Generate multiple SATROOT-MACHINE-1 demo bundles from repeated presets, package them into a bundle collection, and build a reusable machine bundle index")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple machine demo bundles")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--symbol", help="Optional shared machine symbol override when a preset omits it")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--name", help="Optional shared machine name override when a preset omits it")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--output-dir", required=True, help="Directory where generated bundles, bundle_collection/, bundle_index.json, and summary.json will be written")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--service-scope", default="api-compute", help="Compact machine service scope metadata")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--billing-unit", default="request", help="Compact machine billing unit metadata")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--consumption-model", default="burn-on-use", help="Compact machine consumption model metadata")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--issuer", default="issuer", help="Issuer account name for genesis and tenant allocation events")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--tenant-account", default="tenant_a", help="Tenant account receiving the primary machine-credit allocation")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--worker-account", default="worker_node", help="Machine worker account receiving consumable execution credits")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--max-supply", help="Optional explicit max_supply override; defaults to the initial issued balance")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--initial-balance", default="100000000", help="Initial issued balance allocated to the issuer")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--tenant-amount", default="5000000", help="Amount transferred from the issuer to the tenant account")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--worker-amount", default="1200000", help="Amount transferred from the tenant account to the worker account")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--worker-burn-amount", default="200000", help="Optional worker-side burn amount; use 0 to skip the burn event")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--intended-use", default="machine-api-credit", help="Compact machine intended_use metadata")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--rules-hash", help="Optional rules_hash metadata")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--nonce", help="Optional nonce metadata")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--channel", help="Optional shared channel metadata for the generated bundle index")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--label", help="Optional human-readable label for the generated bundle index")
+    bootstrap_machine_demo_bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the generated bundle index")
+
     bootstrap_machine_demo_catalog_parser = subparsers.add_parser("bootstrap-machine-demo-catalog", help="Generate a SATROOT-MACHINE-1 machine-credit demo catalog workspace with one signed bundle plus signed release directory")
     bootstrap_machine_demo_catalog_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_demo_catalog_parser.add_argument("--release-collection-dir", help="Optional release collection directory containing exactly one SATROOT-MACHINE-1 release to copy instead of generating a new workspace")
     bootstrap_machine_demo_catalog_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --preset-json does not provide it")
     bootstrap_machine_demo_catalog_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --preset-json does not provide it")
-    bootstrap_machine_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine-credit demo bundle")
+    bootstrap_machine_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], help="Signing scheme for the machine-credit demo bundle")
     bootstrap_machine_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
-    bootstrap_machine_demo_catalog_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the catalog release manifest")
+    bootstrap_machine_demo_catalog_parser.add_argument("--release-key-id", help="Signature key identifier to generate and use for the catalog release manifest")
     bootstrap_machine_demo_catalog_parser.add_argument("--output-dir", required=True, help="Directory where bundles/, release/, and summary.json will be written")
     bootstrap_machine_demo_catalog_parser.add_argument("--service-scope", default="api-compute", help="Compact machine service scope metadata")
     bootstrap_machine_demo_catalog_parser.add_argument("--billing-unit", default="request", help="Compact machine billing unit metadata")
@@ -20380,11 +24734,12 @@ def build_cli_parser() -> Any:
 
     bootstrap_stable_demo_catalog_parser = subparsers.add_parser("bootstrap-stable-demo-catalog", help="Generate a SATROOT-STABLE-1 reference-only demo catalog workspace with one signed bundle plus signed release directory")
     bootstrap_stable_demo_catalog_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file; it must resolve to SATROOT-STABLE-1 only")
+    bootstrap_stable_demo_catalog_parser.add_argument("--release-collection-dir", help="Optional release collection directory containing exactly one SATROOT-STABLE-1 release to copy instead of generating a new workspace")
     bootstrap_stable_demo_catalog_parser.add_argument("--symbol", help="Asset symbol for the stable catalog bundle; required when --preset-json does not provide it")
     bootstrap_stable_demo_catalog_parser.add_argument("--name", help="Human-readable asset name for the stable catalog bundle; required when --preset-json does not provide it")
-    bootstrap_stable_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the stable demo bundle")
+    bootstrap_stable_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], help="Signing scheme for the stable demo bundle")
     bootstrap_stable_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
-    bootstrap_stable_demo_catalog_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the catalog release manifest")
+    bootstrap_stable_demo_catalog_parser.add_argument("--release-key-id", help="Signature key identifier to generate and use for the catalog release manifest")
     bootstrap_stable_demo_catalog_parser.add_argument("--output-dir", required=True, help="Directory where bundles/, release/, and summary.json will be written")
     bootstrap_stable_demo_catalog_parser.add_argument("--reference-unit", default="USD", help="External reference unit; defaults to USD")
     bootstrap_stable_demo_catalog_parser.add_argument("--root-id", help="Optional explicit root_id; defaults to a generated placeholder root")
@@ -20407,6 +24762,30 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_catalog_parser.add_argument("--channel", help="Optional release channel metadata for the bundle index")
     bootstrap_stable_demo_catalog_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bootstrap_stable_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+
+    bootstrap_demo_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-demo-publication-catalog-workspace", help="Generate multiple SATROOT demo catalog workspaces from repeated presets and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles and publication manifests")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for nested release-manifest signing; defaults to --scheme")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each nested catalog release manifest")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--output-dir", required=True, help="Directory where catalog_workspaces/, publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, and summary.json will be written")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated demo catalog bundle indexes")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated demo catalog bundle indexes")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated demo catalog bundle indexes")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--descriptor-index-published-at", help="Optional descriptor-index published_at metadata")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
+    bootstrap_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
 
     bootstrap_stable_demo_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-stable-demo-publication-catalog-workspace", help="Generate multiple SATROOT-STABLE-1 demo catalog workspaces from repeated stable-only presets and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
     bootstrap_stable_demo_publication_catalog_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="Stable-only SATROOT demo catalog preset JSON file; may be repeated")
@@ -20434,13 +24813,14 @@ def build_cli_parser() -> Any:
 
     bootstrap_stable_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-stable-publication-catalog-workspace", help="Generate a SATROOT-STABLE-1 stable demo catalog workspace and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested stable catalog; it must resolve to SATROOT-STABLE-1 only")
+    bootstrap_stable_publication_catalog_workspace_parser.add_argument("--release-collection-dir", help="Optional release collection directory containing exactly one SATROOT-STABLE-1 release to copy into the nested stable catalog workspace")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for descriptor and metadata defaults")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added to the generated publication catalog workspace sources")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--symbol", help="Asset symbol for the stable catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--name", help="Human-readable asset name for the stable catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the stable demo bundle and generated publication manifests")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for the nested release-manifest signing; defaults to --scheme")
-    bootstrap_stable_publication_catalog_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the nested stable catalog release manifest")
+    bootstrap_stable_publication_catalog_workspace_parser.add_argument("--release-key-id", help="Signature key identifier to generate and use for the nested stable catalog release manifest")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
@@ -20472,6 +24852,42 @@ def build_cli_parser() -> Any:
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
     bootstrap_stable_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
+
+    bootstrap_demo_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-demo-publication-registry-workspace", help="Generate multiple SATROOT demo catalog workspaces from repeated presets, derive shared publication lanes, and bind them to a generated publication network in one signed registry workspace")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles and publication manifests")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for nested release-manifest signing; defaults to --scheme")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each nested catalog release manifest")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the generated release catalog manifest")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-catalog-index-key-id", required=True, help="Signature key identifier to generate and use for the generated release-catalog index manifest")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-registry-key-id", required=True, help="Signature key identifier to generate and use for the publication registry manifest")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--output-dir", required=True, help="Directory where publication_catalog_workspace_source/, publication_network_source/, copied publication_network/, publication_descriptor_index/, publication_metadata_bundles/, publication_metadata_catalog/, publication_registry/, and summary.json will be written")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated demo catalog bundle indexes")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated demo catalog bundle indexes")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated demo catalog bundle indexes")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-catalog-channel", help="Optional release catalog channel metadata for the generated publication network")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-catalog-label", help="Optional human-readable release catalog label for the generated publication network")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-catalog-published-at", help="Optional release catalog published_at metadata for the generated publication network")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-catalog-index-channel", help="Optional release-catalog-index channel metadata for the generated publication network")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-catalog-index-label", help="Optional human-readable release-catalog-index label for the generated publication network")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--release-catalog-index-published-at", help="Optional release-catalog-index published_at metadata for the generated publication network")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--descriptor-index-channel", help="Optional descriptor-index channel metadata")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--descriptor-index-label", help="Optional human-readable descriptor-index label")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--descriptor-index-published-at", help="Optional descriptor-index published_at metadata")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-channel", help="Optional publication-metadata-catalog channel metadata")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-registry-channel", help="Optional publication-registry channel metadata")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-registry-label", help="Optional human-readable publication-registry label")
+    bootstrap_demo_publication_registry_workspace_parser.add_argument("--publication-registry-published-at", help="Optional publication-registry published_at metadata")
 
     bootstrap_stable_demo_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-stable-demo-publication-registry-workspace", help="Generate multiple SATROOT-STABLE-1 demo catalog workspaces from repeated stable-only presets, derive shared publication lanes, and bind them to a generated stable publication network in one signed registry workspace")
     bootstrap_stable_demo_publication_registry_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="Stable-only SATROOT demo catalog preset JSON file; may be repeated")
@@ -20511,16 +24927,18 @@ def build_cli_parser() -> Any:
 
     bootstrap_stable_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-stable-publication-registry-workspace", help="Generate a SATROOT-STABLE-1 stable publication catalog workspace and bind it to a release-catalog-index source in one signed publication registry workspace")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested stable catalog; it must resolve to SATROOT-STABLE-1 only")
+    bootstrap_stable_publication_registry_workspace_parser.add_argument("--release-collection-dir", help="Optional release collection directory containing exactly one SATROOT-STABLE-1 release to copy into the nested stable catalog workspace")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for the nested publication catalog workspace defaults")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file for registry defaults")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered artifact paths and unique publication component directories will be added to the registry workspace inputs")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-dir", help="Optional existing SATROOT-STABLE-1 publication catalog workspace directory to copy instead of generating a nested stable publication catalog workspace")
+    bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-collection-dir", help="Optional publication catalog workspace collection directory containing exactly one SATROOT-STABLE-1 publication catalog workspace to copy instead of generating a nested stable publication catalog workspace")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-network-preset-json", help="Optional SATROOT-STABLE-1 publication network preset JSON file to generate a nested publication network workspace when --publication-network-dir is not supplied")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--symbol", help="Asset symbol for the stable catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--name", help="Human-readable asset name for the stable catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the stable demo bundle and generated publication manifests")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for the nested release-manifest signing; defaults to --scheme")
-    bootstrap_stable_publication_registry_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the nested stable catalog release manifest")
+    bootstrap_stable_publication_registry_workspace_parser.add_argument("--release-key-id", help="Signature key identifier to generate and use for the nested stable catalog release manifest, or for a generated publication network when --publication-network-preset-json is used")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
     bootstrap_stable_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
@@ -20588,13 +25006,14 @@ def build_cli_parser() -> Any:
 
     bootstrap_machine_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-machine-publication-catalog-workspace", help="Generate a SATROOT-MACHINE-1 machine demo catalog workspace and derive publication descriptor and metadata lanes in one reusable publication catalog workspace")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested machine catalog; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--release-collection-dir", help="Optional release collection directory containing exactly one SATROOT-MACHINE-1 release to copy into the nested machine catalog workspace")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for descriptor and metadata defaults")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered SATROOT artifact paths will be added to the generated publication catalog workspace sources")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine demo bundle and generated publication manifests")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for the nested release-manifest signing; defaults to --scheme")
-    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the nested machine catalog release manifest")
+    bootstrap_machine_publication_catalog_workspace_parser.add_argument("--release-key-id", help="Signature key identifier to generate and use for the nested machine catalog release manifest")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
     bootstrap_machine_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
@@ -20668,16 +25087,18 @@ def build_cli_parser() -> Any:
 
     bootstrap_machine_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-machine-publication-registry-workspace", help="Generate a SATROOT-MACHINE-1 machine publication catalog workspace and bind it to a release-catalog-index source in one signed publication registry workspace")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--catalog-preset-json", help="Optional SATROOT demo catalog preset JSON file for the nested machine catalog; it must resolve to SATROOT-MACHINE-1 only")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-collection-dir", help="Optional release collection directory containing exactly one SATROOT-MACHINE-1 release to copy into the nested machine catalog workspace")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for the nested publication catalog workspace defaults")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file for registry defaults")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered artifact paths and unique publication component directories will be added to the registry workspace inputs")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-dir", help="Optional existing SATROOT-MACHINE-1 publication catalog workspace directory to copy instead of generating a nested machine publication catalog workspace")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-collection-dir", help="Optional publication catalog workspace collection directory containing exactly one SATROOT-MACHINE-1 publication catalog workspace to copy instead of generating a nested machine publication catalog workspace")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-network-preset-json", help="Optional SATROOT-MACHINE-1 publication network preset JSON file to generate a nested publication network workspace when --publication-network-dir is not supplied")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--symbol", help="Asset symbol for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--name", help="Human-readable asset name for the machine-credit catalog bundle; required when --catalog-preset-json does not provide it")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the machine demo bundle and generated publication manifests")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for the nested release-manifest signing; defaults to --scheme")
-    bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the nested machine catalog release manifest")
+    bootstrap_machine_publication_registry_workspace_parser.add_argument("--release-key-id", help="Signature key identifier to generate and use for the nested machine catalog release manifest, or for a generated publication network when --publication-network-preset-json is used")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-descriptor-index-key-id", required=True, help="Signature key identifier to generate and use for the publication descriptor index manifest")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-metadata-key-id", required=True, help="Signature key identifier to generate and use for each publication metadata manifest")
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-metadata-catalog-key-id", required=True, help="Signature key identifier to generate and use for the publication metadata catalog manifest")
@@ -20723,11 +25144,12 @@ def build_cli_parser() -> Any:
     bootstrap_machine_publication_registry_workspace_parser.add_argument("--publication-registry-published-at", help="Optional publication-registry published_at metadata")
 
     bootstrap_demo_catalog_parser = subparsers.add_parser("bootstrap-demo-catalog", help="Generate stable, machine, and singleton demo bundles plus a signed catalog release workspace")
-    bootstrap_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the generated demo bundles")
+    bootstrap_demo_catalog_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], help="Signing scheme for the generated demo bundles")
     bootstrap_demo_catalog_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
-    bootstrap_demo_catalog_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for the catalog release manifest")
+    bootstrap_demo_catalog_parser.add_argument("--release-key-id", help="Signature key identifier to generate and use for the catalog release manifest")
     bootstrap_demo_catalog_parser.add_argument("--output-dir", required=True, help="Directory where bundles/, release/, and summary.json will be written")
     bootstrap_demo_catalog_parser.add_argument("--preset-json", help="Optional SATROOT demo catalog preset JSON file with profiles, overrides, and release metadata defaults")
+    bootstrap_demo_catalog_parser.add_argument("--release-collection-dir", help="Optional release collection directory containing exactly one release to copy instead of generating a new demo catalog workspace")
     bootstrap_demo_catalog_parser.add_argument("--profile", action="append", choices=sorted(DEMO_CATALOG_PROFILES), help="Limit the workspace to selected demo catalog profiles; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
     bootstrap_demo_catalog_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
@@ -20741,6 +25163,61 @@ def build_cli_parser() -> Any:
     bootstrap_demo_catalog_parser.add_argument("--channel", help="Optional release channel metadata for the catalog bundle index")
     bootstrap_demo_catalog_parser.add_argument("--label", help="Optional human-readable release label for the catalog bundle index")
     bootstrap_demo_catalog_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the catalog bundle index")
+
+    bootstrap_demo_release_collection_parser = subparsers.add_parser("bootstrap-demo-release-collection", help="Generate multiple SATROOT demo releases from repeated presets and package them into a release collection")
+    bootstrap_demo_release_collection_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple demo releases")
+    bootstrap_demo_release_collection_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
+    bootstrap_demo_release_collection_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-manifest signing; defaults to --scheme")
+    bootstrap_demo_release_collection_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every release manifest")
+    bootstrap_demo_release_collection_parser.add_argument("--output-dir", required=True, help="Directory where generated releases, release_collection/, and summary.json will be written")
+    bootstrap_demo_release_collection_parser.add_argument("--profile", action="append", choices=sorted(DEMO_CATALOG_PROFILES), help="Limit every generated release to selected demo catalog profiles; may be repeated")
+    bootstrap_demo_release_collection_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
+    bootstrap_demo_release_collection_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
+    bootstrap_demo_release_collection_parser.add_argument("--profile-field-override", action="append", dest="profile_field_overrides", help="Per-profile metadata override in PROFILE:field=value form; may be repeated")
+    bootstrap_demo_release_collection_parser.add_argument("--profile-structure-override", action="append", dest="profile_structure_overrides", help="Per-profile structural override in PROFILE:key=value form; use none/null for optional singleton accounts")
+    bootstrap_demo_release_collection_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_demo_release_collection_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_demo_release_collection_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_release_collection_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_demo_release_collection_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_demo_release_collection_parser.add_argument("--channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_demo_release_collection_parser.add_argument("--label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_demo_release_collection_parser.add_argument("--published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+
+    bootstrap_demo_bundle_index_parser = subparsers.add_parser("bootstrap-demo-bundle-index", help="Generate multiple SATROOT demo bundle workspaces from repeated presets, package them into a bundle collection, and build a reusable bundle index")
+    bootstrap_demo_bundle_index_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple demo bundle workspaces")
+    bootstrap_demo_bundle_index_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
+    bootstrap_demo_bundle_index_parser.add_argument("--output-dir", required=True, help="Directory where generated bundle workspaces, bundle_collection/, bundle_index.json, and summary.json will be written")
+    bootstrap_demo_bundle_index_parser.add_argument("--profile", action="append", choices=sorted(DEMO_CATALOG_PROFILES), help="Limit every generated workspace to selected demo catalog profiles; may be repeated")
+    bootstrap_demo_bundle_index_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
+    bootstrap_demo_bundle_index_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
+    bootstrap_demo_bundle_index_parser.add_argument("--profile-field-override", action="append", dest="profile_field_overrides", help="Per-profile metadata override in PROFILE:field=value form; may be repeated")
+    bootstrap_demo_bundle_index_parser.add_argument("--profile-structure-override", action="append", dest="profile_structure_overrides", help="Per-profile structural override in PROFILE:key=value form; use none/null for optional singleton accounts")
+    bootstrap_demo_bundle_index_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_demo_bundle_index_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_demo_bundle_index_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_bundle_index_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_demo_bundle_index_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_demo_bundle_index_parser.add_argument("--channel", help="Optional bundle-index channel metadata")
+    bootstrap_demo_bundle_index_parser.add_argument("--label", help="Optional human-readable bundle-index label")
+    bootstrap_demo_bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
+
+    bootstrap_demo_publication_stack_parser = subparsers.add_parser("bootstrap-demo-publication-stack", help="Generate one or more SATROOT demo catalog workspaces from repeated presets and publish them as a signed release catalog stack")
+    bootstrap_demo_publication_stack_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_demo_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
+    bootstrap_demo_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
+    bootstrap_demo_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each workspace release manifest")
+    bootstrap_demo_publication_stack_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_demo_publication_stack_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the top-level release catalog manifest")
+    bootstrap_demo_publication_stack_parser.add_argument("--output-dir", required=True, help="Directory where catalog_workspaces/, release_catalog/, and summary.json will be written")
+    bootstrap_demo_publication_stack_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_demo_publication_stack_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_demo_publication_stack_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_publication_stack_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_demo_publication_stack_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_demo_publication_stack_parser.add_argument("--channel", help="Optional release catalog channel metadata override")
+    bootstrap_demo_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label override")
+    bootstrap_demo_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
 
     bootstrap_demo_catalog_workspace_collection_parser = subparsers.add_parser("bootstrap-demo-catalog-workspace-collection", help="Copy one or more SATROOT demo catalog workspaces into a reusable collection directory with summary.json")
     bootstrap_demo_catalog_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered demo_catalog_dir entries will be added as collection sources")
@@ -20825,6 +25302,8 @@ def build_cli_parser() -> Any:
 
     bootstrap_machine_demo_publication_stack_parser = subparsers.add_parser("bootstrap-machine-demo-publication-stack", help="Generate one or more SATROOT-MACHINE-1 demo catalog workspaces from repeated machine-only presets and publish them as a signed release catalog stack")
     bootstrap_machine_demo_publication_stack_parser.add_argument("--preset-json", action="append", dest="preset_jsons", help="Machine-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--symbol", help="Optional shared machine symbol override when a preset omits it")
+    bootstrap_machine_demo_publication_stack_parser.add_argument("--name", help="Optional shared machine name override when a preset omits it")
     bootstrap_machine_demo_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles")
     bootstrap_machine_demo_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
     bootstrap_machine_demo_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each machine workspace release manifest")
@@ -20842,6 +25321,8 @@ def build_cli_parser() -> Any:
 
     bootstrap_stable_demo_publication_stack_parser = subparsers.add_parser("bootstrap-stable-demo-publication-stack", help="Generate one or more SATROOT-STABLE-1 demo catalog workspaces from repeated stable-only presets and publish them as a signed release catalog stack")
     bootstrap_stable_demo_publication_stack_parser.add_argument("--preset-json", action="append", dest="preset_jsons", help="Stable-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--symbol", help="Optional shared stable symbol override when a preset omits it")
+    bootstrap_stable_demo_publication_stack_parser.add_argument("--name", help="Optional shared stable name override when a preset omits it")
     bootstrap_stable_demo_publication_stack_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles")
     bootstrap_stable_demo_publication_stack_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
     bootstrap_stable_demo_publication_stack_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each stable workspace release manifest")
@@ -20856,6 +25337,28 @@ def build_cli_parser() -> Any:
     bootstrap_stable_demo_publication_stack_parser.add_argument("--channel", help="Optional release catalog channel metadata override")
     bootstrap_stable_demo_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label override")
     bootstrap_stable_demo_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
+
+    bootstrap_demo_publication_network_parser = subparsers.add_parser("bootstrap-demo-publication-network", help="Generate a SATROOT demo publication stack from repeated catalog presets and publish it as a signed release-catalog index")
+    bootstrap_demo_publication_network_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_demo_publication_network_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
+    bootstrap_demo_publication_network_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
+    bootstrap_demo_publication_network_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each workspace release manifest")
+    bootstrap_demo_publication_network_parser.add_argument("--release-catalog-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-stack release-catalog-manifest signing; defaults to --scheme")
+    bootstrap_demo_publication_network_parser.add_argument("--release-catalog-key-id", required=True, help="Signature key identifier to generate and use for the demo release catalog manifest")
+    bootstrap_demo_publication_network_parser.add_argument("--release-catalog-index-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for release-catalog-index-manifest signing; defaults to --scheme")
+    bootstrap_demo_publication_network_parser.add_argument("--release-catalog-index-key-id", required=True, help="Signature key identifier to generate and use for the top-level demo release-catalog index manifest")
+    bootstrap_demo_publication_network_parser.add_argument("--output-dir", required=True, help="Directory where publication_stack_source/, stack_workspaces/, release_catalog_index/, and summary.json will be written")
+    bootstrap_demo_publication_network_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated bundle key IDs")
+    bootstrap_demo_publication_network_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated bundle key IDs")
+    bootstrap_demo_publication_network_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_publication_network_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json inside bundle directories")
+    bootstrap_demo_publication_network_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json inside bundle directories")
+    bootstrap_demo_publication_network_parser.add_argument("--catalog-channel", help="Optional release catalog channel metadata override for the generated publication stack")
+    bootstrap_demo_publication_network_parser.add_argument("--catalog-label", help="Optional human-readable release catalog label override for the generated publication stack")
+    bootstrap_demo_publication_network_parser.add_argument("--catalog-published-at", help="Optional ISO-8601 style published-at metadata override for the generated publication stack")
+    bootstrap_demo_publication_network_parser.add_argument("--channel", help="Optional release catalog index channel metadata override")
+    bootstrap_demo_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label override")
+    bootstrap_demo_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata override")
 
     bootstrap_publication_network_parser = subparsers.add_parser("bootstrap-publication-network", help="Generate one or more publication stacks from presets and publish them as a signed release-catalog index")
     bootstrap_publication_network_parser.add_argument("--network-preset-json", help="Optional SATROOT publication network preset JSON file with stack preset paths and release-catalog-index metadata defaults")
@@ -20922,6 +25425,8 @@ def build_cli_parser() -> Any:
 
     bootstrap_machine_demo_publication_network_parser = subparsers.add_parser("bootstrap-machine-demo-publication-network", help="Generate a SATROOT-MACHINE-1 publication stack from repeated machine-only catalog presets and publish it as a signed release-catalog index")
     bootstrap_machine_demo_publication_network_parser.add_argument("--preset-json", action="append", dest="preset_jsons", help="Machine-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--symbol", help="Optional shared machine symbol override when a preset omits it")
+    bootstrap_machine_demo_publication_network_parser.add_argument("--name", help="Optional shared machine name override when a preset omits it")
     bootstrap_machine_demo_publication_network_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated machine demo bundles")
     bootstrap_machine_demo_publication_network_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
     bootstrap_machine_demo_publication_network_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each machine workspace release manifest")
@@ -20944,6 +25449,8 @@ def build_cli_parser() -> Any:
 
     bootstrap_stable_demo_publication_network_parser = subparsers.add_parser("bootstrap-stable-demo-publication-network", help="Generate a SATROOT-STABLE-1 publication stack from repeated stable-only catalog presets and publish it as a signed release-catalog index")
     bootstrap_stable_demo_publication_network_parser.add_argument("--preset-json", action="append", dest="preset_jsons", help="Stable-only SATROOT demo catalog preset JSON file; may be repeated")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--symbol", help="Optional shared stable symbol override when a preset omits it")
+    bootstrap_stable_demo_publication_network_parser.add_argument("--name", help="Optional shared stable name override when a preset omits it")
     bootstrap_stable_demo_publication_network_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated stable demo bundles")
     bootstrap_stable_demo_publication_network_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for per-workspace release-manifest signing; defaults to --scheme")
     bootstrap_stable_demo_publication_network_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for each stable workspace release manifest")
@@ -21030,6 +25537,7 @@ def build_cli_parser() -> Any:
     bootstrap_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered artifact paths and unique publication component directories will be added to the registry workspace inputs")
     bootstrap_publication_registry_workspace_parser.add_argument("path", nargs="*", help="Path to a SATROOT artifact file or directory to include in the descriptor and metadata lanes")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-dir", help="Optional publication catalog workspace directory to copy instead of regenerating descriptor and metadata publication lanes")
+    bootstrap_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-collection-dir", help="Optional publication catalog workspace collection directory containing exactly one publication catalog workspace to copy instead of regenerating descriptor and metadata publication lanes")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-preset-json", help="Optional SATROOT publication catalog workspace preset JSON file for nested descriptor and metadata workspace defaults")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-network-preset-json", help="Optional SATROOT publication network preset JSON file to generate a nested publication network workspace when --publication-network-dir is not supplied")
     bootstrap_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to use as a default discovery root and release-catalog-index source")
@@ -21165,6 +25673,7 @@ def build_cli_parser() -> Any:
     publish_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file supplying publication_catalog_workspace_dir, publication_network_preset, publication_network_dir, release_catalog_index_dir, and publication_registry metadata defaults")
     publish_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered publication catalog workspace, publication network, and release catalog index directories will be used when explicit paths are omitted")
     publish_publication_registry_workspace_parser.add_argument("publication_catalog_workspace_dir", nargs="?", help="Path to an existing SATROOT publication catalog workspace directory")
+    publish_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-collection-dir", help="Optional publication catalog workspace collection directory containing exactly one publication catalog workspace to copy instead of an explicit publication catalog workspace directory")
     publish_publication_registry_workspace_parser.add_argument("--publication-network-preset-json", help="Optional SATROOT publication network preset JSON file used to materialize a nested publication_network/ when a direct publication network directory is not provided")
     publish_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
     publish_publication_registry_workspace_parser.add_argument("--publication-network-collection-dir", help="Optional publication network collection directory containing exactly one publication network workspace to copy alongside the registry workspace and to default the release-catalog-index source")
@@ -21183,6 +25692,7 @@ def build_cli_parser() -> Any:
     publish_machine_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file supplying publication_catalog_workspace_dir, publication_network_preset, publication_network_dir, release_catalog_index_dir, and publication_registry metadata defaults")
     publish_machine_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered machine publication catalog workspace, publication network, and release catalog index directories will be used when explicit paths are omitted")
     publish_machine_publication_registry_workspace_parser.add_argument("publication_catalog_workspace_dir", nargs="?", help="Path to an existing SATROOT-MACHINE-1 publication catalog workspace directory")
+    publish_machine_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-collection-dir", help="Optional publication catalog workspace collection directory containing exactly one SATROOT-MACHINE-1 publication catalog workspace to copy instead of an explicit publication catalog workspace directory")
     publish_machine_publication_registry_workspace_parser.add_argument("--publication-network-preset-json", help="Optional SATROOT-MACHINE-1 publication network preset JSON file used to materialize a nested publication_network/ when a direct publication network directory is not provided")
     publish_machine_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
     publish_machine_publication_registry_workspace_parser.add_argument("--publication-network-collection-dir", help="Optional publication network collection directory containing exactly one SATROOT-MACHINE-1 publication network workspace to copy alongside the registry workspace and to default the release-catalog-index source")
@@ -21201,6 +25711,7 @@ def build_cli_parser() -> Any:
     publish_stable_publication_registry_workspace_parser.add_argument("--preset-json", help="Optional SATROOT publication registry workspace preset JSON file supplying publication_catalog_workspace_dir, publication_network_preset, publication_network_dir, release_catalog_index_dir, and publication_registry metadata defaults")
     publish_stable_publication_registry_workspace_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; unique discovered stable publication catalog workspace, publication network, and release catalog index directories will be used when explicit paths are omitted")
     publish_stable_publication_registry_workspace_parser.add_argument("publication_catalog_workspace_dir", nargs="?", help="Path to an existing SATROOT-STABLE-1 publication catalog workspace directory")
+    publish_stable_publication_registry_workspace_parser.add_argument("--publication-catalog-workspace-collection-dir", help="Optional publication catalog workspace collection directory containing exactly one SATROOT-STABLE-1 publication catalog workspace to copy instead of an explicit publication catalog workspace directory")
     publish_stable_publication_registry_workspace_parser.add_argument("--publication-network-preset-json", help="Optional SATROOT-STABLE-1 publication network preset JSON file used to materialize a nested publication_network/ when a direct publication network directory is not provided")
     publish_stable_publication_registry_workspace_parser.add_argument("--publication-network-dir", help="Optional publication network workspace directory to copy alongside the registry workspace and to default the release-catalog-index source")
     publish_stable_publication_registry_workspace_parser.add_argument("--publication-network-collection-dir", help="Optional publication network collection directory containing exactly one SATROOT-STABLE-1 publication network workspace to copy alongside the registry workspace and to default the release-catalog-index source")
@@ -21221,62 +25732,63 @@ def build_cli_parser() -> Any:
     inventory_artifacts_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while scanning")
 
     export_demo_catalog_preset_parser = subparsers.add_parser("export-demo-catalog-preset", help="Export a SATROOT demo catalog workspace back into a reusable demo catalog preset")
-    export_demo_catalog_preset_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory")
+    export_demo_catalog_preset_parser.add_argument("demo_catalog_dir", help="Path to a SATROOT demo catalog workspace directory or summary.json file")
     export_demo_catalog_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_stack_preset_parser = subparsers.add_parser("export-publication-stack-preset", help="Export a SATROOT publication stack workspace back into a reusable publication stack preset")
-    export_publication_stack_preset_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack workspace directory")
+    export_publication_stack_preset_parser.add_argument("publication_stack_dir", help="Path to a SATROOT publication stack workspace directory or summary.json file")
     export_publication_stack_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported")
     export_publication_stack_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_publication_stack_preset_parser = subparsers.add_parser("export-machine-publication-stack-preset", help="Export a SATROOT-MACHINE-1 publication stack workspace back into a machine-only reusable publication stack preset")
-    export_machine_publication_stack_preset_parser.add_argument("publication_stack_dir", help="Path to a SATROOT-MACHINE-1 publication stack workspace directory")
+    export_machine_publication_stack_preset_parser.add_argument("publication_stack_dir", help="Path to a SATROOT-MACHINE-1 publication stack workspace directory or summary.json file")
     export_machine_publication_stack_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested machine demo catalog presets will also be exported")
     export_machine_publication_stack_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_publication_stack_preset_parser = subparsers.add_parser("export-stable-publication-stack-preset", help="Export a SATROOT-STABLE-1 publication stack workspace back into a stable-only reusable publication stack preset")
-    export_stable_publication_stack_preset_parser.add_argument("publication_stack_dir", help="Path to a SATROOT-STABLE-1 publication stack workspace directory")
+    export_stable_publication_stack_preset_parser.add_argument("publication_stack_dir", help="Path to a SATROOT-STABLE-1 publication stack workspace directory or summary.json file")
     export_stable_publication_stack_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested stable demo catalog presets will also be exported")
     export_stable_publication_stack_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_network_preset_parser = subparsers.add_parser("export-publication-network-preset", help="Export a SATROOT publication network workspace back into a reusable publication network preset")
-    export_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network workspace directory")
+    export_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT publication network workspace directory or summary.json file")
     export_publication_network_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested publication stack presets will also be exported")
     export_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested demo catalog presets will also be exported alongside generated stack presets")
     export_publication_network_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_publication_network_preset_parser = subparsers.add_parser("export-machine-publication-network-preset", help="Export a SATROOT-MACHINE-1 publication network workspace back into a machine-only reusable publication network preset")
-    export_machine_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT-MACHINE-1 publication network workspace directory")
+    export_machine_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT-MACHINE-1 publication network workspace directory or summary.json file")
     export_machine_publication_network_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested machine publication stack presets will also be exported")
     export_machine_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested machine demo catalog presets will also be exported alongside generated stack presets")
     export_machine_publication_network_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_publication_network_preset_parser = subparsers.add_parser("export-stable-publication-network-preset", help="Export a SATROOT-STABLE-1 publication network workspace back into a stable-only reusable publication network preset")
-    export_stable_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT-STABLE-1 publication network workspace directory")
+    export_stable_publication_network_preset_parser.add_argument("publication_network_dir", help="Path to a SATROOT-STABLE-1 publication network workspace directory or summary.json file")
     export_stable_publication_network_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested stable publication stack presets will also be exported")
     export_stable_publication_network_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested stable demo catalog presets will also be exported alongside generated stack presets")
     export_stable_publication_network_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-publication-catalog-workspace-preset", help="Export a SATROOT publication catalog workspace back into a reusable publication catalog workspace preset")
-    export_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory")
+    export_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT publication catalog workspace directory or summary.json file")
     export_publication_catalog_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested publication descriptor index preset should also be exported")
     export_publication_catalog_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested publication metadata catalog preset should also be exported")
     export_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-machine-publication-catalog-workspace-preset", help="Export a SATROOT-MACHINE-1 publication catalog workspace back into a machine-validated reusable publication catalog workspace preset")
-    export_machine_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT-MACHINE-1 publication catalog workspace directory")
+    export_machine_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT-MACHINE-1 publication catalog workspace directory or summary.json file")
     export_machine_publication_catalog_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested machine publication descriptor index preset should also be exported")
     export_machine_publication_catalog_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested machine publication metadata catalog preset should also be exported")
     export_machine_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_publication_catalog_workspace_preset_parser = subparsers.add_parser("export-stable-publication-catalog-workspace-preset", help="Export a SATROOT-STABLE-1 publication catalog workspace back into a stable-validated reusable publication catalog workspace preset")
-    export_stable_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT-STABLE-1 publication catalog workspace directory")
+    export_stable_publication_catalog_workspace_preset_parser.add_argument("publication_catalog_workspace_dir", help="Path to a SATROOT-STABLE-1 publication catalog workspace directory or summary.json file")
     export_stable_publication_catalog_workspace_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional file path where a nested stable publication descriptor index preset should also be exported")
     export_stable_publication_catalog_workspace_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional file path where a nested stable publication metadata catalog preset should also be exported")
     export_stable_publication_catalog_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_registry_workspace_preset_parser = subparsers.add_parser("export-publication-registry-workspace-preset", help="Export a SATROOT publication registry workspace back into a reusable publication registry workspace preset")
-    export_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory")
+    export_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT publication registry workspace directory or summary.json file")
+    export_publication_registry_workspace_preset_parser.add_argument("--catalog-preset-path", help="Optional file path where a nested SATROOT demo catalog preset should also be exported")
     export_publication_registry_workspace_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional file path where a nested publication catalog workspace preset should also be exported")
     export_publication_registry_workspace_preset_parser.add_argument("--publication-network-preset-path", help="Optional file path where a nested publication network preset should also be exported")
     export_publication_registry_workspace_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested publication stack presets should also be exported alongside a generated publication network preset")
@@ -21287,7 +25799,8 @@ def build_cli_parser() -> Any:
     export_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_publication_registry_workspace_preset_parser = subparsers.add_parser("export-machine-publication-registry-workspace-preset", help="Export a SATROOT-MACHINE-1 publication registry workspace back into a machine-validated reusable publication registry workspace preset")
-    export_machine_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT-MACHINE-1 publication registry workspace directory")
+    export_machine_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT-MACHINE-1 publication registry workspace directory or summary.json file")
+    export_machine_publication_registry_workspace_preset_parser.add_argument("--catalog-preset-path", help="Optional file path where a nested machine demo catalog preset should also be exported")
     export_machine_publication_registry_workspace_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional file path where a nested machine publication catalog workspace preset should also be exported")
     export_machine_publication_registry_workspace_preset_parser.add_argument("--publication-network-preset-path", help="Optional file path where a nested machine publication network preset should also be exported")
     export_machine_publication_registry_workspace_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested machine publication stack presets should also be exported alongside a generated publication network preset")
@@ -21298,7 +25811,8 @@ def build_cli_parser() -> Any:
     export_machine_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_publication_registry_workspace_preset_parser = subparsers.add_parser("export-stable-publication-registry-workspace-preset", help="Export a SATROOT-STABLE-1 publication registry workspace back into a stable-validated reusable publication registry workspace preset")
-    export_stable_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT-STABLE-1 publication registry workspace directory")
+    export_stable_publication_registry_workspace_preset_parser.add_argument("publication_registry_workspace_dir", help="Path to a SATROOT-STABLE-1 publication registry workspace directory or summary.json file")
+    export_stable_publication_registry_workspace_preset_parser.add_argument("--catalog-preset-path", help="Optional file path where a nested stable demo catalog preset should also be exported")
     export_stable_publication_registry_workspace_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional file path where a nested stable publication catalog workspace preset should also be exported")
     export_stable_publication_registry_workspace_preset_parser.add_argument("--publication-network-preset-path", help="Optional file path where a nested stable publication network preset should also be exported")
     export_stable_publication_registry_workspace_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested stable publication stack presets should also be exported alongside a generated publication network preset")
@@ -21309,82 +25823,106 @@ def build_cli_parser() -> Any:
     export_stable_publication_registry_workspace_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_descriptor_index_preset_parser = subparsers.add_parser("export-publication-descriptor-index-preset", help="Export a SATROOT publication descriptor index back into a reusable publication descriptor index preset")
-    export_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory or publication_descriptor_index.json file")
+    export_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a SATROOT publication descriptor index directory, publication catalog/registry workspace directory or summary.json file, or publication_descriptor_index_manifest.json/publication_descriptor_index.json file")
     export_publication_descriptor_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_publication_descriptor_index_preset_parser = subparsers.add_parser("export-machine-publication-descriptor-index-preset", help="Export a machine-only SATROOT publication descriptor index back into a machine-validated reusable publication descriptor index preset")
-    export_machine_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a machine-only publication descriptor index directory or publication_descriptor_index.json file")
+    export_machine_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a machine-only publication descriptor index directory, publication catalog/registry workspace directory or summary.json file, or publication_descriptor_index_manifest.json/publication_descriptor_index.json file")
     export_machine_publication_descriptor_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_publication_descriptor_index_preset_parser = subparsers.add_parser("export-stable-publication-descriptor-index-preset", help="Export a stable-only SATROOT publication descriptor index back into a stable-validated reusable publication descriptor index preset")
-    export_stable_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a stable-only publication descriptor index directory or publication_descriptor_index.json file")
+    export_stable_publication_descriptor_index_preset_parser.add_argument("publication_descriptor_index_dir", help="Path to a stable-only publication descriptor index directory, publication catalog/registry workspace directory or summary.json file, or publication_descriptor_index_manifest.json/publication_descriptor_index.json file")
     export_stable_publication_descriptor_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_metadata_catalog_preset_parser = subparsers.add_parser("export-publication-metadata-catalog-preset", help="Export a SATROOT publication metadata catalog back into a reusable publication metadata catalog preset")
-    export_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory or publication_metadata_catalog.json file")
+    export_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a SATROOT publication metadata catalog directory, publication catalog/registry workspace directory or summary.json file, or publication_metadata_catalog_manifest.json/publication_metadata_catalog.json file")
     export_publication_metadata_catalog_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_publication_metadata_catalog_preset_parser = subparsers.add_parser("export-machine-publication-metadata-catalog-preset", help="Export a machine-only SATROOT publication metadata catalog back into a machine-validated reusable publication metadata catalog preset")
-    export_machine_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a machine-only publication metadata catalog directory or publication_metadata_catalog.json file")
+    export_machine_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a machine-only publication metadata catalog directory, publication catalog/registry workspace directory or summary.json file, or publication_metadata_catalog_manifest.json/publication_metadata_catalog.json file")
     export_machine_publication_metadata_catalog_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_publication_metadata_catalog_preset_parser = subparsers.add_parser("export-stable-publication-metadata-catalog-preset", help="Export a stable-only SATROOT publication metadata catalog back into a stable-validated reusable publication metadata catalog preset")
-    export_stable_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a stable-only publication metadata catalog directory or publication_metadata_catalog.json file")
+    export_stable_publication_metadata_catalog_preset_parser.add_argument("publication_metadata_catalog_dir", help="Path to a stable-only publication metadata catalog directory, publication catalog/registry workspace directory or summary.json file, or publication_metadata_catalog_manifest.json/publication_metadata_catalog.json file")
     export_stable_publication_metadata_catalog_preset_parser.add_argument("--output", help="Optional output path")
 
     export_publication_registry_preset_parser = subparsers.add_parser("export-publication-registry-preset", help="Export a SATROOT publication registry back into a reusable publication registry preset")
-    export_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory or publication_registry.json file")
+    export_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a SATROOT publication registry directory, publication_registry.json file, or publication_registry_manifest.json file")
     export_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
+    export_publication_registry_preset_parser.add_argument("--publication-registry-workspace-preset-path", help="Optional output path for a nested exported publication registry workspace preset")
+    export_publication_registry_preset_parser.add_argument("--catalog-preset-path", help="Optional output path for a nested exported demo catalog preset when exporting a nested publication registry workspace preset")
+    export_publication_registry_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional output path for a nested exported publication catalog workspace preset when exporting a nested publication registry workspace preset")
+    export_publication_registry_preset_parser.add_argument("--publication-network-preset-path", help="Optional output path for a nested exported publication network preset when exporting a nested publication registry workspace preset")
+    export_publication_registry_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested stack presets should be written when exporting a nested publication network preset")
+    export_publication_registry_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested catalog presets should be written when exporting a nested publication stack preset")
+    export_publication_registry_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional output path for a nested exported publication descriptor index preset when exporting a nested publication catalog workspace preset")
+    export_publication_registry_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional output path for a nested exported publication metadata catalog preset when exporting a nested publication catalog workspace preset")
 
     export_machine_publication_registry_preset_parser = subparsers.add_parser("export-machine-publication-registry-preset", help="Export a machine-only SATROOT publication registry back into a machine-validated reusable publication registry preset")
-    export_machine_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a machine-only publication registry directory or publication_registry.json file")
+    export_machine_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a machine-only publication registry directory, publication_registry.json file, or publication_registry_manifest.json file")
     export_machine_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
+    export_machine_publication_registry_preset_parser.add_argument("--publication-registry-workspace-preset-path", help="Optional output path for a nested exported machine publication registry workspace preset")
+    export_machine_publication_registry_preset_parser.add_argument("--catalog-preset-path", help="Optional output path for a nested exported machine demo catalog preset when exporting a nested publication registry workspace preset")
+    export_machine_publication_registry_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional output path for a nested exported machine publication catalog workspace preset when exporting a nested publication registry workspace preset")
+    export_machine_publication_registry_preset_parser.add_argument("--publication-network-preset-path", help="Optional output path for a nested exported machine publication network preset when exporting a nested publication registry workspace preset")
+    export_machine_publication_registry_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested machine stack presets should be written when exporting a nested publication network preset")
+    export_machine_publication_registry_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested machine catalog presets should be written when exporting a nested publication stack preset")
+    export_machine_publication_registry_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional output path for a nested exported machine publication descriptor index preset when exporting a nested publication catalog workspace preset")
+    export_machine_publication_registry_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional output path for a nested exported machine publication metadata catalog preset when exporting a nested publication catalog workspace preset")
 
     export_stable_publication_registry_preset_parser = subparsers.add_parser("export-stable-publication-registry-preset", help="Export a stable-only SATROOT publication registry back into a stable-validated reusable publication registry preset")
-    export_stable_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a stable-only publication registry directory or publication_registry.json file")
+    export_stable_publication_registry_preset_parser.add_argument("publication_registry_dir", help="Path to a stable-only publication registry directory, publication_registry.json file, or publication_registry_manifest.json file")
     export_stable_publication_registry_preset_parser.add_argument("--output", help="Optional output path")
+    export_stable_publication_registry_preset_parser.add_argument("--publication-registry-workspace-preset-path", help="Optional output path for a nested exported stable publication registry workspace preset")
+    export_stable_publication_registry_preset_parser.add_argument("--catalog-preset-path", help="Optional output path for a nested exported stable demo catalog preset when exporting a nested publication registry workspace preset")
+    export_stable_publication_registry_preset_parser.add_argument("--publication-catalog-workspace-preset-path", help="Optional output path for a nested exported stable publication catalog workspace preset when exporting a nested publication registry workspace preset")
+    export_stable_publication_registry_preset_parser.add_argument("--publication-network-preset-path", help="Optional output path for a nested exported stable publication network preset when exporting a nested publication registry workspace preset")
+    export_stable_publication_registry_preset_parser.add_argument("--stack-preset-dir", help="Optional directory where nested stable stack presets should be written when exporting a nested publication network preset")
+    export_stable_publication_registry_preset_parser.add_argument("--catalog-preset-dir", help="Optional directory where nested stable catalog presets should be written when exporting a nested publication stack preset")
+    export_stable_publication_registry_preset_parser.add_argument("--publication-descriptor-index-preset-path", help="Optional output path for a nested exported stable publication descriptor index preset when exporting a nested publication catalog workspace preset")
+    export_stable_publication_registry_preset_parser.add_argument("--publication-metadata-catalog-preset-path", help="Optional output path for a nested exported stable publication metadata catalog preset when exporting a nested publication catalog workspace preset")
 
     export_bundle_index_preset_parser = subparsers.add_parser("export-bundle-index-preset", help="Export a SATROOT bundle index back into a reusable bundle index preset")
-    export_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a SATROOT bundle_index.json file or release directory")
+    export_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a SATROOT release directory, bundle_index.json file, or release_manifest.json file")
     export_bundle_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_machine_bundle_index_preset_parser = subparsers.add_parser("export-machine-bundle-index-preset", help="Export a machine-only SATROOT bundle index back into a machine-validated reusable bundle index preset")
-    export_machine_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a machine-only bundle_index.json file or release directory")
+    export_machine_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a machine-only release directory, bundle_index.json file, or release_manifest.json file")
     export_machine_bundle_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_stable_bundle_index_preset_parser = subparsers.add_parser("export-stable-bundle-index-preset", help="Export a stable-only SATROOT bundle index back into a stable-validated reusable bundle index preset")
-    export_stable_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a stable-only bundle_index.json file or release directory")
+    export_stable_bundle_index_preset_parser.add_argument("bundle_index_json", help="Path to a stable-only release directory, bundle_index.json file, or release_manifest.json file")
     export_stable_bundle_index_preset_parser.add_argument("--output", help="Optional output path")
 
     export_release_catalog_preset_parser = subparsers.add_parser("export-release-catalog-preset", help="Export a SATROOT release catalog back into a reusable release catalog preset")
-    export_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory or release_catalog.json file")
+    export_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory, publication stack summary.json file, release_catalog.json file, or release_catalog_manifest.json file")
     export_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
     export_release_catalog_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested bundle index presets should be exported")
 
     export_machine_release_catalog_preset_parser = subparsers.add_parser("export-machine-release-catalog-preset", help="Export a machine-only SATROOT release catalog back into a machine-validated reusable release catalog preset")
-    export_machine_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a machine-only release catalog directory or release_catalog.json file")
+    export_machine_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a machine-only release catalog directory, publication stack summary.json file, release_catalog.json file, or release_catalog_manifest.json file")
     export_machine_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
     export_machine_release_catalog_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested machine bundle index presets should be exported")
 
     export_stable_release_catalog_preset_parser = subparsers.add_parser("export-stable-release-catalog-preset", help="Export a stable-only SATROOT release catalog back into a stable-validated reusable release catalog preset")
-    export_stable_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a stable-only release catalog directory or release_catalog.json file")
+    export_stable_release_catalog_preset_parser.add_argument("release_catalog_dir", help="Path to a stable-only release catalog directory, publication stack summary.json file, release_catalog.json file, or release_catalog_manifest.json file")
     export_stable_release_catalog_preset_parser.add_argument("--output", help="Optional output path")
     export_stable_release_catalog_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested stable bundle index presets should be exported")
 
     export_release_catalog_index_preset_parser = subparsers.add_parser("export-release-catalog-index-preset", help="Export a SATROOT release catalog index back into a reusable release catalog index preset")
-    export_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory or release_catalog_index.json file")
+    export_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory, release_catalog_index.json file, or release_catalog_index_manifest.json file")
     export_release_catalog_index_preset_parser.add_argument("--output", help="Optional output path")
     export_release_catalog_index_preset_parser.add_argument("--release-catalog-preset-dir", help="Optional directory where nested release catalog presets should be exported")
     export_release_catalog_index_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested bundle index presets should be exported beneath nested release catalog preset names")
 
     export_machine_release_catalog_index_preset_parser = subparsers.add_parser("export-machine-release-catalog-index-preset", help="Export a machine-only SATROOT release catalog index back into a machine-validated reusable release catalog index preset")
-    export_machine_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a machine-only release catalog index directory or release_catalog_index.json file")
+    export_machine_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a machine-only release catalog index directory, release_catalog_index.json file, or release_catalog_index_manifest.json file")
     export_machine_release_catalog_index_preset_parser.add_argument("--output", help="Optional output path")
     export_machine_release_catalog_index_preset_parser.add_argument("--release-catalog-preset-dir", help="Optional directory where nested machine release catalog presets should be exported")
     export_machine_release_catalog_index_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested machine bundle index presets should be exported beneath nested release catalog preset names")
 
     export_stable_release_catalog_index_preset_parser = subparsers.add_parser("export-stable-release-catalog-index-preset", help="Export a stable-only SATROOT release catalog index back into a stable-validated reusable release catalog index preset")
-    export_stable_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a stable-only release catalog index directory or release_catalog_index.json file")
+    export_stable_release_catalog_index_preset_parser.add_argument("release_catalog_index_dir", help="Path to a stable-only release catalog index directory, release_catalog_index.json file, or release_catalog_index_manifest.json file")
     export_stable_release_catalog_index_preset_parser.add_argument("--output", help="Optional output path")
     export_stable_release_catalog_index_preset_parser.add_argument("--release-catalog-preset-dir", help="Optional directory where nested stable release catalog presets should be exported")
     export_stable_release_catalog_index_preset_parser.add_argument("--bundle-index-preset-dir", help="Optional directory where nested stable bundle index presets should be exported beneath nested release catalog preset names")
@@ -22178,6 +26716,102 @@ def build_cli_parser() -> Any:
     bootstrap_stable_release_catalog_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering release catalogs")
     bootstrap_stable_release_catalog_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied stable release catalog directories and collection summary.json will be written")
 
+    bootstrap_publication_catalog_workspace_collection_parser = subparsers.add_parser("bootstrap-publication-catalog-workspace-collection", help="Copy one or more publication catalog workspaces into a reusable collection directory with summary.json")
+    bootstrap_publication_catalog_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_catalog_workspace entries will be added as collection sources")
+    bootstrap_publication_catalog_workspace_collection_parser.add_argument("publication_catalog_workspace_dir", nargs="*", help="Path to a publication catalog workspace directory or summary.json file")
+    bootstrap_publication_catalog_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication catalog workspace summary.json files; may be repeated")
+    bootstrap_publication_catalog_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication catalog workspaces")
+    bootstrap_publication_catalog_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied publication catalog workspaces and collection summary.json will be written")
+
+    bootstrap_machine_publication_catalog_workspace_collection_parser = subparsers.add_parser("bootstrap-machine-publication-catalog-workspace-collection", help="Copy one or more SATROOT-MACHINE-1 publication catalog workspaces into a reusable machine-only collection directory with summary.json")
+    bootstrap_machine_publication_catalog_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_catalog_workspace entries will be added as machine collection sources")
+    bootstrap_machine_publication_catalog_workspace_collection_parser.add_argument("publication_catalog_workspace_dir", nargs="*", help="Path to a SATROOT-MACHINE-1 publication catalog workspace directory or summary.json file")
+    bootstrap_machine_publication_catalog_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 publication catalog workspace summary.json files; may be repeated")
+    bootstrap_machine_publication_catalog_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication catalog workspaces")
+    bootstrap_machine_publication_catalog_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied machine publication catalog workspaces and collection summary.json will be written")
+
+    bootstrap_stable_publication_catalog_workspace_collection_parser = subparsers.add_parser("bootstrap-stable-publication-catalog-workspace-collection", help="Copy one or more SATROOT-STABLE-1 publication catalog workspaces into a reusable stable-only collection directory with summary.json")
+    bootstrap_stable_publication_catalog_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_catalog_workspace entries will be added as stable collection sources")
+    bootstrap_stable_publication_catalog_workspace_collection_parser.add_argument("publication_catalog_workspace_dir", nargs="*", help="Path to a SATROOT-STABLE-1 publication catalog workspace directory or summary.json file")
+    bootstrap_stable_publication_catalog_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-STABLE-1 publication catalog workspace summary.json files; may be repeated")
+    bootstrap_stable_publication_catalog_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication catalog workspaces")
+    bootstrap_stable_publication_catalog_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied stable publication catalog workspaces and collection summary.json will be written")
+
+    bootstrap_publication_registry_workspace_collection_parser = subparsers.add_parser("bootstrap-publication-registry-workspace-collection", help="Copy one or more publication registry workspaces into a reusable collection directory with summary.json")
+    bootstrap_publication_registry_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_registry_workspace entries will be added as collection sources")
+    bootstrap_publication_registry_workspace_collection_parser.add_argument("publication_registry_workspace_dir", nargs="*", help="Path to a publication registry workspace directory or summary.json file")
+    bootstrap_publication_registry_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested publication registry workspace summary.json files; may be repeated")
+    bootstrap_publication_registry_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication registry workspaces")
+    bootstrap_publication_registry_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied publication registry workspaces and collection summary.json will be written")
+
+    bootstrap_machine_publication_registry_workspace_collection_parser = subparsers.add_parser("bootstrap-machine-publication-registry-workspace-collection", help="Copy one or more SATROOT-MACHINE-1 publication registry workspaces into a reusable machine-only collection directory with summary.json")
+    bootstrap_machine_publication_registry_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_registry_workspace entries will be added as machine collection sources")
+    bootstrap_machine_publication_registry_workspace_collection_parser.add_argument("publication_registry_workspace_dir", nargs="*", help="Path to a SATROOT-MACHINE-1 publication registry workspace directory or summary.json file")
+    bootstrap_machine_publication_registry_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-MACHINE-1 publication registry workspace summary.json files; may be repeated")
+    bootstrap_machine_publication_registry_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication registry workspaces")
+    bootstrap_machine_publication_registry_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied machine publication registry workspaces and collection summary.json will be written")
+
+    bootstrap_stable_publication_registry_workspace_collection_parser = subparsers.add_parser("bootstrap-stable-publication-registry-workspace-collection", help="Copy one or more SATROOT-STABLE-1 publication registry workspaces into a reusable stable-only collection directory with summary.json")
+    bootstrap_stable_publication_registry_workspace_collection_parser.add_argument("--inventory-json", help="Optional inventory-artifacts JSON file; discovered publication_registry_workspace entries will be added as stable collection sources")
+    bootstrap_stable_publication_registry_workspace_collection_parser.add_argument("publication_registry_workspace_dir", nargs="*", help="Path to a SATROOT-STABLE-1 publication registry workspace directory or summary.json file")
+    bootstrap_stable_publication_registry_workspace_collection_parser.add_argument("--discover-under", action="append", dest="discover_under", help="Directory to scan for nested SATROOT-STABLE-1 publication registry workspace summary.json files; may be repeated")
+    bootstrap_stable_publication_registry_workspace_collection_parser.add_argument("--non-recursive", action="store_true", help="Do not descend into nested directories while discovering publication registry workspaces")
+    bootstrap_stable_publication_registry_workspace_collection_parser.add_argument("--output-dir", required=True, help="Directory where copied stable publication registry workspaces and collection summary.json will be written")
+
+    bundle_collection_summary_parser = subparsers.add_parser("bundle-collection-summary", help="Read collection summary.json plus copied bundle directories and print a reusable bundle-collection summary without signature verification")
+    bundle_collection_summary_parser.add_argument("bundle_collection_dir", help="Path to a SATROOT bundle collection directory or summary.json file")
+
+    release_collection_summary_parser = subparsers.add_parser("release-collection-summary", help="Read collection summary.json plus copied release directories and print a reusable release-collection summary without signature verification")
+    release_collection_summary_parser.add_argument("release_collection_dir", help="Path to a SATROOT release collection directory or summary.json file")
+
+    release_catalog_collection_summary_parser = subparsers.add_parser("release-catalog-collection-summary", help="Read collection summary.json plus copied release catalog directories and print a reusable release-catalog-collection summary without signature verification")
+    release_catalog_collection_summary_parser.add_argument("release_catalog_collection_dir", help="Path to a SATROOT release catalog collection directory or summary.json file")
+
+    demo_catalog_workspace_collection_summary_parser = subparsers.add_parser("demo-catalog-workspace-collection-summary", help="Read collection summary.json plus copied demo catalog workspaces and print a reusable demo-catalog-workspace-collection summary without signature verification")
+    demo_catalog_workspace_collection_summary_parser.add_argument("catalog_workspace_collection_dir", help="Path to a demo catalog workspace collection directory or summary.json file")
+
+    publication_stack_collection_summary_parser = subparsers.add_parser("publication-stack-collection-summary", help="Read collection summary.json plus copied publication stack workspaces and print a reusable publication-stack-collection summary without signature verification")
+    publication_stack_collection_summary_parser.add_argument("publication_stack_collection_dir", help="Path to a publication stack collection directory or summary.json file")
+
+    publication_network_collection_summary_parser = subparsers.add_parser("publication-network-collection-summary", help="Read collection summary.json plus copied publication network workspaces and print a reusable publication-network-collection summary without signature verification")
+    publication_network_collection_summary_parser.add_argument("publication_network_collection_dir", help="Path to a publication network collection directory or summary.json file")
+
+    publication_metadata_bundle_collection_summary_parser = subparsers.add_parser("publication-metadata-bundle-collection-summary", help="Read collection summary.json plus copied publication metadata bundle directories and print a reusable publication-metadata-bundle-collection summary without signature verification")
+    publication_metadata_bundle_collection_summary_parser.add_argument("publication_metadata_bundle_collection_dir", help="Path to a publication metadata bundle collection directory or summary.json file")
+
+    publication_catalog_workspace_collection_summary_parser = subparsers.add_parser("publication-catalog-workspace-collection-summary", help="Read collection summary.json plus copied publication catalog workspaces and print a reusable publication-catalog-workspace-collection summary without signature verification")
+    publication_catalog_workspace_collection_summary_parser.add_argument("publication_catalog_workspace_collection_dir", help="Path to a publication catalog workspace collection directory or summary.json file")
+
+    publication_registry_workspace_collection_summary_parser = subparsers.add_parser("publication-registry-workspace-collection-summary", help="Read collection summary.json plus copied publication registry workspaces and print a reusable publication-registry-workspace-collection summary without signature verification")
+    publication_registry_workspace_collection_summary_parser.add_argument("publication_registry_workspace_collection_dir", help="Path to a publication registry workspace collection directory or summary.json file")
+
+    bundle_collection_lint_parser = subparsers.add_parser("bundle-collection-lint", help="Check collection summary.json plus copied bundle directories without signature verification")
+    bundle_collection_lint_parser.add_argument("bundle_collection_dir", help="Path to a SATROOT bundle collection directory or summary.json file")
+
+    release_collection_lint_parser = subparsers.add_parser("release-collection-lint", help="Check collection summary.json plus copied release directories without signature verification")
+    release_collection_lint_parser.add_argument("release_collection_dir", help="Path to a SATROOT release collection directory or summary.json file")
+
+    release_catalog_collection_lint_parser = subparsers.add_parser("release-catalog-collection-lint", help="Check collection summary.json plus copied release catalog directories without signature verification")
+    release_catalog_collection_lint_parser.add_argument("release_catalog_collection_dir", help="Path to a SATROOT release catalog collection directory or summary.json file")
+
+    demo_catalog_workspace_collection_lint_parser = subparsers.add_parser("demo-catalog-workspace-collection-lint", help="Check collection summary.json plus copied demo catalog workspaces without signature verification")
+    demo_catalog_workspace_collection_lint_parser.add_argument("catalog_workspace_collection_dir", help="Path to a demo catalog workspace collection directory or summary.json file")
+
+    publication_stack_collection_lint_parser = subparsers.add_parser("publication-stack-collection-lint", help="Check collection summary.json plus copied publication stack workspaces without signature verification")
+    publication_stack_collection_lint_parser.add_argument("publication_stack_collection_dir", help="Path to a publication stack collection directory or summary.json file")
+
+    publication_network_collection_lint_parser = subparsers.add_parser("publication-network-collection-lint", help="Check collection summary.json plus copied publication network workspaces without signature verification")
+    publication_network_collection_lint_parser.add_argument("publication_network_collection_dir", help="Path to a publication network collection directory or summary.json file")
+
+    publication_metadata_bundle_collection_lint_parser = subparsers.add_parser("publication-metadata-bundle-collection-lint", help="Check collection summary.json plus copied publication metadata bundle directories without signature verification")
+    publication_metadata_bundle_collection_lint_parser.add_argument("publication_metadata_bundle_collection_dir", help="Path to a publication metadata bundle collection directory or summary.json file")
+
+    publication_catalog_workspace_collection_lint_parser = subparsers.add_parser("publication-catalog-workspace-collection-lint", help="Check collection summary.json plus copied publication catalog workspaces without signature verification")
+    publication_catalog_workspace_collection_lint_parser.add_argument("publication_catalog_workspace_collection_dir", help="Path to a publication catalog workspace collection directory or summary.json file")
+
+    publication_registry_workspace_collection_lint_parser = subparsers.add_parser("publication-registry-workspace-collection-lint", help="Check collection summary.json plus copied publication registry workspaces without signature verification")
+    publication_registry_workspace_collection_lint_parser.add_argument("publication_registry_workspace_collection_dir", help="Path to a publication registry workspace collection directory or summary.json file")
+
     bundle_summary_parser = subparsers.add_parser("bundle-summary", help="Read bundle_manifest.json and print a manifest-level bundle summary without replaying")
     bundle_summary_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
 
@@ -22197,10 +26831,10 @@ def build_cli_parser() -> Any:
     release_lint_parser.add_argument("release_dir", help="Path to a SATROOT release directory or release_manifest.json/bundle_index.json file")
 
     release_catalog_summary_parser = subparsers.add_parser("release-catalog-summary", help="Read release_catalog_manifest.json plus release_catalog.json and print a catalog-level summary without signature verification")
-    release_catalog_summary_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory or release_catalog_manifest.json/release_catalog.json file")
+    release_catalog_summary_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory, publication stack summary.json file, or release_catalog_manifest.json/release_catalog.json file")
 
     release_catalog_lint_parser = subparsers.add_parser("release-catalog-lint", help="Check release_catalog_manifest.json, release_catalog.json, and referenced release publications without signature verification")
-    release_catalog_lint_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory or release_catalog_manifest.json/release_catalog.json file")
+    release_catalog_lint_parser.add_argument("release_catalog_dir", help="Path to a SATROOT release catalog directory, publication stack summary.json file, or release_catalog_manifest.json/release_catalog.json file")
 
     release_catalog_index_summary_parser = subparsers.add_parser("release-catalog-index-summary", help="Read release_catalog_index_manifest.json plus release_catalog_index.json and print an index-level summary without signature verification")
     release_catalog_index_summary_parser.add_argument("release_catalog_index_dir", help="Path to a SATROOT release catalog index directory or release_catalog_index_manifest.json/release_catalog_index.json file")
@@ -22660,6 +27294,31 @@ def build_cli_parser() -> Any:
     bootstrap_release_catalog_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_release_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
 
+    bootstrap_demo_release_catalog_publication_parser = subparsers.add_parser("bootstrap-demo-release-catalog-publication", help="Generate multiple SATROOT demo releases from repeated presets, package them into a release collection, and bootstrap a signed release catalog publication")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple demo releases")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--bundle-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --bundle-scheme")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--output-dir", required=True, help="Directory where the generated release collection workspace, release catalog publication, and summary.json will be written")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--profile", action="append", choices=sorted(DEMO_CATALOG_PROFILES), help="Limit every generated release to selected demo catalog profiles; may be repeated")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--profile-field-override", action="append", dest="profile_field_overrides", help="Per-profile metadata override in PROFILE:field=value form; may be repeated")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--profile-structure-override", action="append", dest="profile_structure_overrides", help="Per-profile structural override in PROFILE:key=value form; use none/null for optional singleton accounts")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--channel", help="Optional catalog channel metadata")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--label", help="Optional human-readable catalog label")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog manifest")
+    bootstrap_demo_release_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
+
     bootstrap_stable_release_catalog_publication_parser = subparsers.add_parser("bootstrap-stable-release-catalog-publication", help="Generate signing material and write a ready-to-verify stable-only SATROOT-STABLE-1 release catalog directory")
     bootstrap_stable_release_catalog_publication_parser.add_argument("release_dir", nargs="*", help="Path to a signed SATROOT-STABLE-1 release directory or release_manifest.json/bundle_index.json file")
     bootstrap_stable_release_catalog_publication_parser.add_argument("--preset-json", help="Optional SATROOT release catalog preset JSON file with stable release roots, optional release_collection_dir, and catalog metadata defaults")
@@ -22818,6 +27477,36 @@ def build_cli_parser() -> Any:
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True)
     bootstrap_machine_release_catalog_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog index manifest")
+
+    bootstrap_demo_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-demo-release-catalog-index-publication", help="Generate multiple SATROOT demo releases from repeated presets, bootstrap a release catalog publication, and bootstrap a signed release catalog index publication in one step")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple demo releases")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--bundle-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for generated demo bundles")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--release-scheme", choices=["hmac-sha256", "ed25519"], help="Optional override for generated release-manifest signing; defaults to --bundle-scheme")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--release-key-id", required=True, help="Signature key identifier to generate and use for every generated release manifest")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--output-dir", required=True, help="Directory where the generated release catalog publication workspace, release catalog index publication, and summary.json will be written")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--profile", action="append", choices=sorted(DEMO_CATALOG_PROFILES), help="Limit every generated release to selected demo catalog profiles; may be repeated")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--symbol-override", action="append", dest="symbol_overrides", help="Per-profile symbol override in PROFILE=SYMBOL form; may be repeated")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--name-override", action="append", dest="name_overrides", help="Per-profile name override in PROFILE=NAME form; may be repeated")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--profile-field-override", action="append", dest="profile_field_overrides", help="Per-profile metadata override in PROFILE:field=value form; may be repeated")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--profile-structure-override", action="append", dest="profile_structure_overrides", help="Per-profile structural override in PROFILE:key=value form; use none/null for optional singleton accounts")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--key-prefix", default="", help="Optional prefix for generated key IDs")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--key-suffix", default="-key", help="Optional suffix for generated key IDs")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--no-state-hash", action="store_true", help="Do not attach state_hash during bundle signing")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--release-channel", help="Optional shared release channel metadata for generated bundle indexes")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--release-label", help="Optional shared human-readable release label for generated bundle indexes")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--release-published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--catalog-channel", help="Optional release catalog channel metadata")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--catalog-label", help="Optional human-readable release catalog label")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--catalog-published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--catalog-scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog manifest")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--catalog-key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--channel", help="Optional index channel metadata")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--label", help="Optional human-readable index label")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog index manifest")
+    bootstrap_demo_release_catalog_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog index manifest")
 
     bootstrap_stable_demo_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-stable-demo-release-catalog-index-publication", help="Generate multiple SATROOT-STABLE-1 demo releases from repeated presets, bootstrap a stable release catalog publication, and bootstrap a signed stable release catalog index publication in one step")
     bootstrap_stable_demo_release_catalog_index_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple stable demo releases")
@@ -23339,6 +28028,417 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote {args.profile} singleton demo release to {Path(released['release_dir'])}")
         return 0
 
+    if args.command == "bootstrap-singleton-demo-bundle-index":
+        generated = bootstrap_singleton_demo_bundle_index_from_presets(
+            args.preset_jsons,
+            profile=args.profile,
+            bundle_scheme=args.scheme,
+            output_dir=args.output_dir,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=False if args.no_retire else None,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            bundle_index_metadata_overrides={
+                "channel": args.channel,
+                "label": args.label,
+                "published_at": args.published_at,
+            },
+        )
+        print(
+            f"wrote {args.profile} singleton demo bundle index to "
+            f"{Path(generated['bundle_index_path'])}"
+        )
+        return 0
+
+    if args.command == "bootstrap-singleton-demo-release-collection":
+        generated = bootstrap_singleton_demo_release_collection_from_presets(
+            args.preset_jsons,
+            profile=args.profile,
+            bundle_scheme=args.scheme,
+            output_dir=args.output_dir,
+            release_key_id=args.release_key_id,
+            release_scheme=args.release_scheme,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=False if args.no_retire else None,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.channel,
+                "label": args.label,
+                "published_at": args.published_at,
+            },
+        )
+        print(
+            f"wrote {args.profile} singleton demo release collection to "
+            f"{Path(generated['release_collection_dir'])}"
+        )
+        return 0
+
+    if args.command == "bootstrap-singleton-demo-release-catalog-publication":
+        generated = bootstrap_singleton_demo_release_catalog_publication_from_presets(
+            args.preset_jsons,
+            profile=args.profile,
+            bundle_scheme=args.bundle_scheme,
+            output_dir=args.output_dir,
+            release_key_id=args.release_key_id,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            release_scheme=args.release_scheme,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=False if args.no_retire else None,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            catalog_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.channel,
+                    "label": args.label,
+                    "published_at": args.published_at,
+                }.items()
+                if value is not None
+            },
+        )
+        print(
+            f"wrote {args.profile} singleton demo release catalog publication to "
+            f"{Path(generated['summary']['release_catalog_publication_dir'])}"
+        )
+        return 0
+
+    if args.command == "bootstrap-singleton-demo-release-catalog-index-publication":
+        generated = bootstrap_singleton_demo_release_catalog_index_publication_from_presets(
+            args.preset_jsons,
+            profile=args.profile,
+            bundle_scheme=args.bundle_scheme,
+            output_dir=args.output_dir,
+            release_key_id=args.release_key_id,
+            catalog_signature_scheme=args.catalog_scheme,
+            catalog_key_id=args.catalog_key_id,
+            index_signature_scheme=args.scheme,
+            index_key_id=args.key_id,
+            release_scheme=args.release_scheme,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=False if args.no_retire else None,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            catalog_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.catalog_channel,
+                    "label": args.catalog_label,
+                    "published_at": args.catalog_published_at,
+                }.items()
+                if value is not None
+            },
+            index_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.channel,
+                    "label": args.label,
+                    "published_at": args.published_at,
+                }.items()
+                if value is not None
+            },
+        )
+        print(
+            f"wrote bootstrapped {args.profile} singleton demo release catalog index publication to "
+            f"{Path(generated['summary']['release_catalog_index_publication_dir'])}"
+        )
+        return 0
+
+    if args.command == "bootstrap-singleton-demo-publication-stack":
+        generated = bootstrap_singleton_demo_publication_stack_from_presets(
+            args.preset_jsons,
+            profile=args.profile,
+            bundle_scheme=args.scheme,
+            output_dir=args.output_dir,
+            release_key_id=args.release_key_id,
+            release_catalog_key_id=args.release_catalog_key_id,
+            release_scheme=args.release_scheme,
+            release_catalog_scheme=args.release_catalog_scheme,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=False if args.no_retire else None,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            release_catalog_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.channel,
+                    "label": args.label,
+                    "published_at": args.published_at,
+                }.items()
+                if value is not None
+            },
+        )
+        print(
+            f"wrote {args.profile} singleton demo publication stack to "
+            f"{Path(generated['summary_path']).resolve().parent}"
+        )
+        return 0
+
+    if args.command == "bootstrap-singleton-demo-publication-network":
+        generated = bootstrap_singleton_demo_publication_network_from_presets(
+            args.preset_jsons,
+            profile=args.profile,
+            bundle_scheme=args.scheme,
+            output_dir=args.output_dir,
+            release_key_id=args.release_key_id,
+            release_catalog_key_id=args.release_catalog_key_id,
+            release_catalog_index_key_id=args.release_catalog_index_key_id,
+            release_scheme=args.release_scheme,
+            release_catalog_scheme=args.release_catalog_scheme,
+            release_catalog_index_scheme=args.release_catalog_index_scheme,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=False if args.no_retire else None,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            release_catalog_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.catalog_channel,
+                    "label": args.catalog_label,
+                    "published_at": args.catalog_published_at,
+                }.items()
+                if value is not None
+            },
+            release_catalog_index_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.channel,
+                    "label": args.label,
+                    "published_at": args.published_at,
+                }.items()
+                if value is not None
+            },
+        )
+        print(
+            f"wrote {args.profile} singleton demo publication network to "
+            f"{Path(generated['summary_path']).resolve().parent}"
+        )
+        return 0
+
+    if args.command == "bootstrap-singleton-demo-publication-catalog-workspace":
+        descriptor_index_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        })
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+        })
+        workspace = bootstrap_singleton_demo_publication_catalog_workspace_from_presets(
+            args.preset_jsons,
+            profile=args.profile,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            output_dir=args.output_dir,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=False if args.no_retire else None,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+        )
+        print(
+            f"wrote {args.profile} singleton demo publication catalog workspace to "
+            f"{Path(workspace['summary_path']).resolve().parent}"
+        )
+        return 0
+
+    if args.command == "bootstrap-singleton-demo-publication-registry-workspace":
+        release_catalog_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.release_catalog_channel,
+            "label": args.release_catalog_label,
+            "published_at": args.release_catalog_published_at,
+        })
+        release_catalog_index_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.release_catalog_index_channel,
+            "label": args.release_catalog_index_label,
+            "published_at": args.release_catalog_index_published_at,
+        })
+        descriptor_index_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        })
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+        })
+        publication_registry_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.publication_registry_channel,
+            "label": args.publication_registry_label,
+            "published_at": args.publication_registry_published_at,
+        })
+        workspace = bootstrap_singleton_demo_publication_registry_workspace_from_presets(
+            args.preset_jsons,
+            profile=args.profile,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            release_catalog_key_id=args.release_catalog_key_id,
+            release_catalog_index_key_id=args.release_catalog_index_key_id,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            publication_registry_key_id=args.publication_registry_key_id,
+            output_dir=args.output_dir,
+            symbol=args.symbol,
+            name=args.name,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            holder_account=args.holder_account,
+            next_holder=args.next_holder,
+            archive_account=args.archive_account,
+            no_archive=args.no_archive,
+            profile_fields=parse_profile_field_overrides(args.profile_fields),
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            retire=False if args.no_retire else None,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            release_catalog_metadata=release_catalog_metadata,
+            release_catalog_index_metadata=release_catalog_index_metadata,
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+            publication_registry_metadata=publication_registry_metadata,
+        )
+        print(
+            f"wrote {args.profile} singleton demo publication registry workspace to "
+            f"{Path(workspace['summary_path']).resolve().parent}"
+        )
+        return 0
+
     if args.command == "init-event":
         if args.events_json:
             events = _load_json_file(args.events_json)
@@ -23692,6 +28792,42 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 0
 
+    if args.command == "bootstrap-stable-demo-bundle-index":
+        generated = bootstrap_stable_demo_bundle_index_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            output_dir=args.output_dir,
+            symbol=args.symbol,
+            name=args.name,
+            reference_unit=args.reference_unit,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            merchant_account=args.merchant_account,
+            service_account=args.service_account,
+            initial_balance=args.initial_balance,
+            merchant_amount=args.merchant_amount,
+            service_amount=args.service_amount,
+            merchant_burn_amount=args.merchant_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            bundle_index_metadata_overrides={
+                "channel": args.channel,
+                "label": args.label,
+                "published_at": args.published_at,
+            },
+        )
+        print(
+            "wrote SATROOT-STABLE-1 demo bundle index to "
+            f"{Path(generated['bundle_index_path'])}"
+        )
+        return 0
+
     if args.command == "bootstrap-machine-demo-bundle":
         if args.verifier_only and args.scheme != "ed25519":
             raise SatRootError("--verifier-only is only supported for ed25519 bundles")
@@ -23859,9 +28995,76 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 0
 
+    if args.command == "bootstrap-machine-demo-bundle-index":
+        generated = bootstrap_machine_demo_bundle_index_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            output_dir=args.output_dir,
+            symbol=args.symbol,
+            name=args.name,
+            service_scope=args.service_scope,
+            billing_unit=args.billing_unit,
+            consumption_model=args.consumption_model,
+            root_id=args.root_id,
+            issuer=args.issuer,
+            tenant_account=args.tenant_account,
+            worker_account=args.worker_account,
+            max_supply=args.max_supply,
+            initial_balance=args.initial_balance,
+            tenant_amount=args.tenant_amount,
+            worker_amount=args.worker_amount,
+            worker_burn_amount=args.worker_burn_amount,
+            intended_use=args.intended_use,
+            rules_hash=args.rules_hash,
+            nonce=args.nonce,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            bundle_index_metadata_overrides={
+                "channel": args.channel,
+                "label": args.label,
+                "published_at": args.published_at,
+            },
+        )
+        print(
+            "wrote SATROOT-MACHINE-1 demo bundle index to "
+            f"{Path(generated['bundle_index_path'])}"
+        )
+        return 0
+
     if args.command == "bootstrap-machine-demo-catalog":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         machine_preset = load_machine_demo_catalog_preset(preset_path) if preset_path is not None else None
+        release_collection_dir = (
+            Path(args.release_collection_dir).resolve()
+            if args.release_collection_dir
+            else (
+                Path(str((machine_preset or {}).get("release_collection_dir"))).resolve()
+                if (machine_preset or {}).get("release_collection_dir")
+                else None
+            )
+        )
+        if release_collection_dir is not None:
+            workspace = write_demo_catalog_workspace(
+                bundle_scheme=args.scheme,
+                release_scheme=args.release_scheme,
+                release_key_id=args.release_key_id,
+                output_dir=args.output_dir,
+                release_collection_dir=release_collection_dir,
+                preset_path=preset_path,
+            )
+            _require_machine_demo_catalog_workspace(
+                Path(workspace["summary_path"]).parent,
+                label="bootstrap-machine-demo-catalog output workspace",
+            )
+            print(f"wrote SATROOT-MACHINE-1 demo catalog workspace to {Path(workspace['summary_path']).parent}")
+            return 0
+        if args.scheme is None:
+            raise SatRootError("bootstrap-machine-demo-catalog requires --scheme unless a release collection is supplied")
+        if args.release_key_id is None:
+            raise SatRootError("bootstrap-machine-demo-catalog requires --release-key-id unless a release collection is supplied")
         machine_inputs = resolve_machine_demo_bootstrap_inputs(
             command_name="bootstrap-machine-demo-catalog",
             preset_option_name="--preset-json",
@@ -23926,6 +29129,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-stable-demo-catalog":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         stable_preset = load_stable_demo_catalog_preset(preset_path) if preset_path is not None else None
+        release_collection_dir = (
+            Path(args.release_collection_dir).resolve()
+            if args.release_collection_dir
+            else (
+                Path(str((stable_preset or {}).get("release_collection_dir"))).resolve()
+                if (stable_preset or {}).get("release_collection_dir")
+                else None
+            )
+        )
+        if release_collection_dir is not None:
+            workspace = write_demo_catalog_workspace(
+                bundle_scheme=args.scheme,
+                release_scheme=args.release_scheme,
+                release_key_id=args.release_key_id,
+                output_dir=args.output_dir,
+                release_collection_dir=release_collection_dir,
+                preset_path=preset_path,
+            )
+            _require_stable_demo_catalog_workspace(
+                Path(workspace["summary_path"]).parent,
+                label="bootstrap-stable-demo-catalog output workspace",
+            )
+            print(f"wrote SATROOT-STABLE-1 demo catalog workspace to {Path(workspace['summary_path']).parent}")
+            return 0
+        if args.scheme is None:
+            raise SatRootError("bootstrap-stable-demo-catalog requires --scheme unless a release collection is supplied")
+        if args.release_key_id is None:
+            raise SatRootError("bootstrap-stable-demo-catalog requires --release-key-id unless a release collection is supplied")
         stable_inputs = resolve_stable_demo_bootstrap_inputs(
             command_name="bootstrap-stable-demo-catalog",
             preset_option_name="--preset-json",
@@ -23987,31 +29218,46 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_stable_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        release_collection_dir = (
+            Path(args.release_collection_dir).resolve()
+            if args.release_collection_dir
+            else (
+                Path(str((stable_preset or {}).get("release_collection_dir"))).resolve()
+                if (stable_preset or {}).get("release_collection_dir")
+                else None
+            )
+        )
         publication_metadata_bundle_collection_dir = (
             Path((preset or {}).get("publication_metadata_bundle_collection_dir")).resolve()
             if (preset or {}).get("publication_metadata_bundle_collection_dir")
             else None
         )
-        stable_inputs = resolve_stable_demo_bootstrap_inputs(
-            command_name="bootstrap-stable-publication-catalog-workspace",
-            preset_option_name="--catalog-preset-json",
-            stable_preset=stable_preset,
-            symbol=args.symbol,
-            name=args.name,
-            reference_unit=args.reference_unit,
-            root_id=args.root_id,
-            issuer=args.issuer,
-            merchant_account=args.merchant_account,
-            service_account=args.service_account,
-            initial_balance=args.initial_balance,
-            merchant_amount=args.merchant_amount,
-            service_amount=args.service_amount,
-            merchant_burn_amount=args.merchant_burn_amount,
-            intended_use=args.intended_use,
-            profile_fields=args.profile_fields,
-            rules_hash=args.rules_hash,
-            nonce=args.nonce,
-        )
+        stable_inputs = None
+        if release_collection_dir is None:
+            if args.release_key_id is None:
+                raise SatRootError(
+                    "bootstrap-stable-publication-catalog-workspace requires --release-key-id unless a release collection is supplied"
+                )
+            stable_inputs = resolve_stable_demo_bootstrap_inputs(
+                command_name="bootstrap-stable-publication-catalog-workspace",
+                preset_option_name="--catalog-preset-json",
+                stable_preset=stable_preset,
+                symbol=args.symbol,
+                name=args.name,
+                reference_unit=args.reference_unit,
+                root_id=args.root_id,
+                issuer=args.issuer,
+                merchant_account=args.merchant_account,
+                service_account=args.service_account,
+                initial_balance=args.initial_balance,
+                merchant_amount=args.merchant_amount,
+                service_amount=args.service_amount,
+                merchant_burn_amount=args.merchant_burn_amount,
+                intended_use=args.intended_use,
+                profile_fields=args.profile_fields,
+                rules_hash=args.rules_hash,
+                nonce=args.nonce,
+            )
         release_metadata = _merge_release_metadata_defaults((stable_preset or {}).get("release_metadata"), {
             "channel": args.channel,
             "label": args.label,
@@ -24031,8 +29277,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             },
         )
         workspace = bootstrap_stable_reference_publication_catalog_workspace(
-            symbol=stable_inputs["symbol"],
-            name=stable_inputs["name"],
+            symbol=None if stable_inputs is None else stable_inputs["symbol"],
+            name=None if stable_inputs is None else stable_inputs["name"],
             bundle_scheme=args.scheme,
             release_scheme=args.release_scheme,
             release_key_id=args.release_key_id,
@@ -24040,19 +29286,52 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_metadata_key_id=args.publication_metadata_key_id,
             publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
             output_dir=args.output_dir,
-            reference_unit=str(stable_inputs["reference_unit"]),
-            root_id=stable_inputs["root_id"],
-            issuer=str(stable_inputs["issuer"]),
-            merchant_account=str(stable_inputs["merchant_account"]),
-            service_account=str(stable_inputs["service_account"]),
-            initial_balance=str(stable_inputs["initial_balance"]),
-            merchant_amount=str(stable_inputs["merchant_amount"]),
-            service_amount=str(stable_inputs["service_amount"]),
-            merchant_burn_amount=str(stable_inputs["merchant_burn_amount"]),
-            intended_use=str(stable_inputs["intended_use"]),
-            profile_fields=stable_inputs["profile_fields"],
-            rules_hash=stable_inputs["rules_hash"],
-            nonce=stable_inputs["nonce"],
+            release_collection_dir=release_collection_dir,
+            reference_unit=(
+                args.reference_unit
+                if stable_inputs is None
+                else str(stable_inputs["reference_unit"])
+            ),
+            root_id=None if stable_inputs is None else stable_inputs["root_id"],
+            issuer=args.issuer if stable_inputs is None else str(stable_inputs["issuer"]),
+            merchant_account=(
+                args.merchant_account
+                if stable_inputs is None
+                else str(stable_inputs["merchant_account"])
+            ),
+            service_account=(
+                args.service_account
+                if stable_inputs is None
+                else str(stable_inputs["service_account"])
+            ),
+            initial_balance=(
+                args.initial_balance
+                if stable_inputs is None
+                else str(stable_inputs["initial_balance"])
+            ),
+            merchant_amount=(
+                args.merchant_amount
+                if stable_inputs is None
+                else str(stable_inputs["merchant_amount"])
+            ),
+            service_amount=(
+                args.service_amount
+                if stable_inputs is None
+                else str(stable_inputs["service_amount"])
+            ),
+            merchant_burn_amount=(
+                args.merchant_burn_amount
+                if stable_inputs is None
+                else str(stable_inputs["merchant_burn_amount"])
+            ),
+            intended_use=(
+                args.intended_use
+                if stable_inputs is None
+                else str(stable_inputs["intended_use"])
+            ),
+            profile_fields=None if stable_inputs is None else stable_inputs["profile_fields"],
+            rules_hash=None if stable_inputs is None else stable_inputs["rules_hash"],
+            nonce=None if stable_inputs is None else stable_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -24065,8 +29344,45 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             discover_under=(preset or {}).get("discover_under"),
             publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
             recursive=(preset or {}).get("recursive", True),
+            catalog_preset_path=catalog_preset_path,
         )
         print(f"wrote SATROOT-STABLE-1 publication catalog workspace to {Path(workspace['summary_path']).parent}")
+        return 0
+
+    if args.command == "bootstrap-demo-publication-catalog-workspace":
+        descriptor_index_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        })
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+        })
+        workspace = bootstrap_demo_publication_catalog_workspace_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            output_dir=args.output_dir,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+        )
+        print(f"wrote SATROOT demo publication catalog workspace to {Path(workspace['summary_path']).parent}")
         return 0
 
     if args.command == "bootstrap-stable-demo-publication-catalog-workspace":
@@ -24111,34 +29427,49 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_machine_publication_catalog_workspace_preset(preset_path) if preset_path is not None else None
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
+        release_collection_dir = (
+            Path(args.release_collection_dir).resolve()
+            if args.release_collection_dir
+            else (
+                Path(str((machine_preset or {}).get("release_collection_dir"))).resolve()
+                if (machine_preset or {}).get("release_collection_dir")
+                else None
+            )
+        )
         publication_metadata_bundle_collection_dir = (
             Path((preset or {}).get("publication_metadata_bundle_collection_dir")).resolve()
             if (preset or {}).get("publication_metadata_bundle_collection_dir")
             else None
         )
-        machine_inputs = resolve_machine_demo_bootstrap_inputs(
-            command_name="bootstrap-machine-publication-catalog-workspace",
-            preset_option_name="--catalog-preset-json",
-            machine_preset=machine_preset,
-            symbol=args.symbol,
-            name=args.name,
-            service_scope=args.service_scope,
-            billing_unit=args.billing_unit,
-            consumption_model=args.consumption_model,
-            root_id=args.root_id,
-            issuer=args.issuer,
-            tenant_account=args.tenant_account,
-            worker_account=args.worker_account,
-            max_supply=args.max_supply,
-            initial_balance=args.initial_balance,
-            tenant_amount=args.tenant_amount,
-            worker_amount=args.worker_amount,
-            worker_burn_amount=args.worker_burn_amount,
-            intended_use=args.intended_use,
-            profile_fields=args.profile_fields,
-            rules_hash=args.rules_hash,
-            nonce=args.nonce,
-        )
+        machine_inputs = None
+        if release_collection_dir is None:
+            if args.release_key_id is None:
+                raise SatRootError(
+                    "bootstrap-machine-publication-catalog-workspace requires --release-key-id unless a release collection is supplied"
+                )
+            machine_inputs = resolve_machine_demo_bootstrap_inputs(
+                command_name="bootstrap-machine-publication-catalog-workspace",
+                preset_option_name="--catalog-preset-json",
+                machine_preset=machine_preset,
+                symbol=args.symbol,
+                name=args.name,
+                service_scope=args.service_scope,
+                billing_unit=args.billing_unit,
+                consumption_model=args.consumption_model,
+                root_id=args.root_id,
+                issuer=args.issuer,
+                tenant_account=args.tenant_account,
+                worker_account=args.worker_account,
+                max_supply=args.max_supply,
+                initial_balance=args.initial_balance,
+                tenant_amount=args.tenant_amount,
+                worker_amount=args.worker_amount,
+                worker_burn_amount=args.worker_burn_amount,
+                intended_use=args.intended_use,
+                profile_fields=args.profile_fields,
+                rules_hash=args.rules_hash,
+                nonce=args.nonce,
+            )
         release_metadata = _merge_release_metadata_defaults((machine_preset or {}).get("release_metadata"), {
             "channel": args.channel,
             "label": args.label,
@@ -24158,8 +29489,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             },
         )
         workspace = bootstrap_machine_credit_publication_catalog_workspace(
-            symbol=machine_inputs["symbol"],
-            name=machine_inputs["name"],
+            symbol=None if machine_inputs is None else machine_inputs["symbol"],
+            name=None if machine_inputs is None else machine_inputs["name"],
             bundle_scheme=args.scheme,
             release_scheme=args.release_scheme,
             release_key_id=args.release_key_id,
@@ -24167,22 +29498,63 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_metadata_key_id=args.publication_metadata_key_id,
             publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
             output_dir=args.output_dir,
-            service_scope=str(machine_inputs["service_scope"]),
-            billing_unit=str(machine_inputs["billing_unit"]),
-            consumption_model=str(machine_inputs["consumption_model"]),
-            root_id=machine_inputs["root_id"],
-            issuer=str(machine_inputs["issuer"]),
-            tenant_account=str(machine_inputs["tenant_account"]),
-            worker_account=str(machine_inputs["worker_account"]),
-            max_supply=machine_inputs["max_supply"],
-            initial_balance=str(machine_inputs["initial_balance"]),
-            tenant_amount=str(machine_inputs["tenant_amount"]),
-            worker_amount=str(machine_inputs["worker_amount"]),
-            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
-            intended_use=str(machine_inputs["intended_use"]),
-            profile_fields=machine_inputs["profile_fields"],
-            rules_hash=machine_inputs["rules_hash"],
-            nonce=machine_inputs["nonce"],
+            release_collection_dir=release_collection_dir,
+            service_scope=(
+                args.service_scope
+                if machine_inputs is None
+                else str(machine_inputs["service_scope"])
+            ),
+            billing_unit=(
+                args.billing_unit
+                if machine_inputs is None
+                else str(machine_inputs["billing_unit"])
+            ),
+            consumption_model=(
+                args.consumption_model
+                if machine_inputs is None
+                else str(machine_inputs["consumption_model"])
+            ),
+            root_id=None if machine_inputs is None else machine_inputs["root_id"],
+            issuer=args.issuer if machine_inputs is None else str(machine_inputs["issuer"]),
+            tenant_account=(
+                args.tenant_account
+                if machine_inputs is None
+                else str(machine_inputs["tenant_account"])
+            ),
+            worker_account=(
+                args.worker_account
+                if machine_inputs is None
+                else str(machine_inputs["worker_account"])
+            ),
+            max_supply=None if machine_inputs is None else machine_inputs["max_supply"],
+            initial_balance=(
+                args.initial_balance
+                if machine_inputs is None
+                else str(machine_inputs["initial_balance"])
+            ),
+            tenant_amount=(
+                args.tenant_amount
+                if machine_inputs is None
+                else str(machine_inputs["tenant_amount"])
+            ),
+            worker_amount=(
+                args.worker_amount
+                if machine_inputs is None
+                else str(machine_inputs["worker_amount"])
+            ),
+            worker_burn_amount=(
+                args.worker_burn_amount
+                if machine_inputs is None
+                else str(machine_inputs["worker_burn_amount"])
+            ),
+            intended_use=(
+                args.intended_use
+                if machine_inputs is None
+                else str(machine_inputs["intended_use"])
+            ),
+            profile_fields=None if machine_inputs is None else machine_inputs["profile_fields"],
+            rules_hash=None if machine_inputs is None else machine_inputs["rules_hash"],
+            nonce=None if machine_inputs is None else machine_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -24195,6 +29567,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             discover_under=(preset or {}).get("discover_under"),
             publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
             recursive=(preset or {}).get("recursive", True),
+            catalog_preset_path=catalog_preset_path,
         )
         print(f"wrote SATROOT-MACHINE-1 publication catalog workspace to {Path(workspace['summary_path']).parent}")
         return 0
@@ -24233,6 +29606,63 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
         )
         print(f"wrote SATROOT-MACHINE-1 demo publication catalog workspace to {Path(workspace['summary_path']).parent}")
+        return 0
+
+    if args.command == "bootstrap-demo-publication-registry-workspace":
+        release_catalog_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.release_catalog_channel,
+            "label": args.release_catalog_label,
+            "published_at": args.release_catalog_published_at,
+        })
+        release_catalog_index_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.release_catalog_index_channel,
+            "label": args.release_catalog_index_label,
+            "published_at": args.release_catalog_index_published_at,
+        })
+        descriptor_index_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.descriptor_index_channel,
+            "label": args.descriptor_index_label,
+            "published_at": args.descriptor_index_published_at,
+        })
+        publication_metadata_catalog_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.publication_metadata_catalog_channel,
+            "label": args.publication_metadata_catalog_label,
+            "published_at": args.publication_metadata_catalog_published_at,
+        })
+        publication_registry_metadata = _merge_release_metadata_defaults(None, {
+            "channel": args.publication_registry_channel,
+            "label": args.publication_registry_label,
+            "published_at": args.publication_registry_published_at,
+        })
+        workspace = bootstrap_demo_publication_registry_workspace_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            release_catalog_key_id=args.release_catalog_key_id,
+            release_catalog_index_key_id=args.release_catalog_index_key_id,
+            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+            publication_metadata_key_id=args.publication_metadata_key_id,
+            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+            publication_registry_key_id=args.publication_registry_key_id,
+            output_dir=args.output_dir,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            release_catalog_metadata=release_catalog_metadata,
+            release_catalog_index_metadata=release_catalog_index_metadata,
+            descriptor_index_metadata=descriptor_index_metadata,
+            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+            publication_registry_metadata=publication_registry_metadata,
+        )
+        print(f"wrote SATROOT demo publication registry workspace to {Path(workspace['summary_path']).parent}")
         return 0
 
     if args.command == "bootstrap-stable-demo-publication-registry-workspace":
@@ -24362,6 +29792,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_stable_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        if stable_preset is None and (preset or {}).get("catalog_preset_path"):
+            catalog_preset_path = Path(str((preset or {}).get("catalog_preset_path"))).resolve()
+            stable_preset = load_stable_demo_catalog_preset(catalog_preset_path)
         if publication_catalog_workspace_preset is None and (preset or {}).get("publication_catalog_workspace_preset_path"):
             publication_catalog_workspace_preset_path = Path(
                 str((preset or {}).get("publication_catalog_workspace_preset_path"))
@@ -24374,6 +29807,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         if publication_network_preset_path is None and (preset or {}).get("publication_network_preset_path"):
             publication_network_preset_path = Path(str((preset or {}).get("publication_network_preset_path"))).resolve()
+        if publication_network_preset_path is not None:
+            load_stable_publication_network_preset(publication_network_preset_path)
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         inventory_publication_catalog_workspace_dir = (
             load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
@@ -24382,15 +29817,44 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
+        publication_catalog_workspace_collection_dir = (
+            Path(args.publication_catalog_workspace_collection_dir).resolve()
+            if args.publication_catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("publication_catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("publication_catalog_workspace_collection_dir")
+                else None
+            )
+        )
         publication_catalog_workspace_dir = (
-            Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
-            if (preset or {}).get("publication_catalog_workspace_dir")
-            else None
+            None
+            if publication_catalog_workspace_collection_dir is not None
+            else (
+                _normalize_workspace_summary_input(
+                    (preset or {}).get("publication_catalog_workspace_dir"),
+                    label="publication catalog workspace",
+                )
+                if (preset or {}).get("publication_catalog_workspace_dir")
+                else None
+            )
         )
         if args.publication_catalog_workspace_dir:
-            publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
-        elif inventory_publication_catalog_workspace_dir is not None:
-            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                args.publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        elif publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is None and inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                inventory_publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        if publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is not None:
+            publication_catalog_workspace_dir, publication_catalog_workspace_collection_dir = (
+                _resolve_exactly_one_publication_catalog_workspace_from_collection(
+                    publication_catalog_workspace_collection_dir,
+                    label="bootstrap-stable-publication-registry-workspace publication_catalog_workspace_collection_dir",
+                )
+            )
         publication_network_collection_dir = (
             None
             if publication_network_preset_path is not None
@@ -24405,21 +29869,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         publication_network_dir = (
-            Path(args.publication_network_dir).resolve()
+            _normalize_workspace_summary_input(
+                args.publication_network_dir,
+                label="publication network workspace",
+            )
             if args.publication_network_dir
             else (
                 None
                 if publication_network_preset_path is not None or publication_network_collection_dir is not None
                 else (
-                    Path((preset or {}).get("publication_network_dir")).resolve()
+                    _normalize_workspace_summary_input(
+                        (preset or {}).get("publication_network_dir"),
+                        label="publication network workspace",
+                    )
                     if (preset or {}).get("publication_network_dir")
-                    else (Path(inventory_publication_network_dir).resolve() if inventory_publication_network_dir is not None else None)
+                    else (
+                        _normalize_workspace_summary_input(
+                            inventory_publication_network_dir,
+                            label="publication network workspace",
+                        )
+                        if inventory_publication_network_dir is not None
+                        else None
+                    )
                 )
             )
         )
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
-            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+            release_catalog_index_dir = str((Path(str(publication_network_dir)) / "release_catalog_index").resolve())
         if release_catalog_index_dir is None and publication_network_collection_dir is not None:
             collection_summary = summarize_publication_network_collection(publication_network_collection_dir)
             release_catalog_index_dir = str(
@@ -24444,6 +29921,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if publication_network_preset_path is None:
                 publish_stable_publication_registry_workspace(
                     publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                    publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                     release_catalog_index_dir=release_catalog_index_dir,
                     publication_network_dir=publication_network_dir,
                     publication_network_collection_dir=publication_network_collection_dir,
@@ -24459,6 +29937,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     recursive=True,
                     release_catalog_index_dir=release_catalog_index_dir,
                     publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                    publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                     publication_network_preset_path=publication_network_preset_path,
                     publication_network_dir=publication_network_dir,
                     publication_network_collection_dir=publication_network_collection_dir,
@@ -24486,26 +29965,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"wrote SATROOT-STABLE-1 publication registry workspace to {Path(args.output_dir).resolve()}")
             return 0
 
-        stable_inputs = resolve_stable_demo_bootstrap_inputs(
-            command_name="bootstrap-stable-publication-registry-workspace",
-            preset_option_name="--catalog-preset-json",
-            stable_preset=stable_preset,
-            symbol=args.symbol,
-            name=args.name,
-            reference_unit=args.reference_unit,
-            root_id=args.root_id,
-            issuer=args.issuer,
-            merchant_account=args.merchant_account,
-            service_account=args.service_account,
-            initial_balance=args.initial_balance,
-            merchant_amount=args.merchant_amount,
-            service_amount=args.service_amount,
-            merchant_burn_amount=args.merchant_burn_amount,
-            intended_use=args.intended_use,
-            profile_fields=args.profile_fields,
-            rules_hash=args.rules_hash,
-            nonce=args.nonce,
+        release_collection_dir = (
+            Path(args.release_collection_dir).resolve()
+            if args.release_collection_dir
+            else (
+                Path(str((stable_preset or {}).get("release_collection_dir"))).resolve()
+                if (stable_preset or {}).get("release_collection_dir")
+                else None
+            )
         )
+        stable_inputs = None
+        if release_collection_dir is None:
+            stable_inputs = resolve_stable_demo_bootstrap_inputs(
+                command_name="bootstrap-stable-publication-registry-workspace",
+                preset_option_name="--catalog-preset-json",
+                stable_preset=stable_preset,
+                symbol=args.symbol,
+                name=args.name,
+                reference_unit=args.reference_unit,
+                root_id=args.root_id,
+                issuer=args.issuer,
+                merchant_account=args.merchant_account,
+                service_account=args.service_account,
+                initial_balance=args.initial_balance,
+                merchant_amount=args.merchant_amount,
+                service_amount=args.service_amount,
+                merchant_burn_amount=args.merchant_burn_amount,
+                intended_use=args.intended_use,
+                profile_fields=args.profile_fields,
+                rules_hash=args.rules_hash,
+                nonce=args.nonce,
+            )
         release_metadata = _merge_release_metadata_defaults((stable_preset or {}).get("release_metadata"), {
             "channel": args.channel,
             "label": args.label,
@@ -24533,8 +30023,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             },
         )
         workspace = bootstrap_stable_reference_publication_registry_workspace(
-            symbol=stable_inputs["symbol"],
-            name=stable_inputs["name"],
+            symbol=None if stable_inputs is None else stable_inputs["symbol"],
+            name=None if stable_inputs is None else stable_inputs["name"],
             bundle_scheme=args.scheme,
             release_scheme=args.release_scheme,
             release_catalog_index_dir=release_catalog_index_dir,
@@ -24544,19 +30034,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
             publication_registry_key_id=args.publication_registry_key_id,
             output_dir=args.output_dir,
-            reference_unit=str(stable_inputs["reference_unit"]),
-            root_id=stable_inputs["root_id"],
-            issuer=str(stable_inputs["issuer"]),
-            merchant_account=str(stable_inputs["merchant_account"]),
-            service_account=str(stable_inputs["service_account"]),
-            initial_balance=str(stable_inputs["initial_balance"]),
-            merchant_amount=str(stable_inputs["merchant_amount"]),
-            service_amount=str(stable_inputs["service_amount"]),
-            merchant_burn_amount=str(stable_inputs["merchant_burn_amount"]),
-            intended_use=str(stable_inputs["intended_use"]),
-            profile_fields=stable_inputs["profile_fields"],
-            rules_hash=stable_inputs["rules_hash"],
-            nonce=stable_inputs["nonce"],
+            release_collection_dir=release_collection_dir,
+            reference_unit=args.reference_unit if stable_inputs is None else str(stable_inputs["reference_unit"]),
+            root_id=args.root_id if stable_inputs is None else stable_inputs["root_id"],
+            issuer=args.issuer if stable_inputs is None else str(stable_inputs["issuer"]),
+            merchant_account=args.merchant_account if stable_inputs is None else str(stable_inputs["merchant_account"]),
+            service_account=args.service_account if stable_inputs is None else str(stable_inputs["service_account"]),
+            initial_balance=args.initial_balance if stable_inputs is None else str(stable_inputs["initial_balance"]),
+            merchant_amount=args.merchant_amount if stable_inputs is None else str(stable_inputs["merchant_amount"]),
+            service_amount=args.service_amount if stable_inputs is None else str(stable_inputs["service_amount"]),
+            merchant_burn_amount=args.merchant_burn_amount if stable_inputs is None else str(stable_inputs["merchant_burn_amount"]),
+            intended_use=args.intended_use if stable_inputs is None else str(stable_inputs["intended_use"]),
+            profile_fields=None if stable_inputs is None else stable_inputs["profile_fields"],
+            rules_hash=args.rules_hash if stable_inputs is None else stable_inputs["rules_hash"],
+            nonce=args.nonce if stable_inputs is None else stable_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -24585,6 +30076,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "recursive",
                 (publication_catalog_workspace_preset or {}).get("recursive", True),
             ),
+            catalog_preset_path=catalog_preset_path,
         )
         print(f"wrote SATROOT-STABLE-1 publication registry workspace to {Path(workspace['summary_path']).parent}")
         return 0
@@ -24602,6 +30094,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_machine_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        if machine_preset is None and (preset or {}).get("catalog_preset_path"):
+            catalog_preset_path = Path(str((preset or {}).get("catalog_preset_path"))).resolve()
+            machine_preset = load_machine_demo_catalog_preset(catalog_preset_path)
         if publication_catalog_workspace_preset is None and (preset or {}).get("publication_catalog_workspace_preset_path"):
             publication_catalog_workspace_preset_path = Path(
                 str((preset or {}).get("publication_catalog_workspace_preset_path"))
@@ -24614,6 +30109,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         if publication_network_preset_path is None and (preset or {}).get("publication_network_preset_path"):
             publication_network_preset_path = Path(str((preset or {}).get("publication_network_preset_path"))).resolve()
+        if publication_network_preset_path is not None:
+            load_machine_publication_network_preset(publication_network_preset_path)
         inventory_artifact_paths = load_inventory_satroot_artifact_paths(args.inventory_json) if args.inventory_json else []
         inventory_publication_catalog_workspace_dir = (
             load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
@@ -24622,15 +30119,44 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
+        publication_catalog_workspace_collection_dir = (
+            Path(args.publication_catalog_workspace_collection_dir).resolve()
+            if args.publication_catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("publication_catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("publication_catalog_workspace_collection_dir")
+                else None
+            )
+        )
         publication_catalog_workspace_dir = (
-            Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
-            if (preset or {}).get("publication_catalog_workspace_dir")
-            else None
+            None
+            if publication_catalog_workspace_collection_dir is not None
+            else (
+                _normalize_workspace_summary_input(
+                    (preset or {}).get("publication_catalog_workspace_dir"),
+                    label="publication catalog workspace",
+                )
+                if (preset or {}).get("publication_catalog_workspace_dir")
+                else None
+            )
         )
         if args.publication_catalog_workspace_dir:
-            publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
-        elif inventory_publication_catalog_workspace_dir is not None:
-            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                args.publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        elif publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is None and inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                inventory_publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        if publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is not None:
+            publication_catalog_workspace_dir, publication_catalog_workspace_collection_dir = (
+                _resolve_exactly_one_publication_catalog_workspace_from_collection(
+                    publication_catalog_workspace_collection_dir,
+                    label="bootstrap-machine-publication-registry-workspace publication_catalog_workspace_collection_dir",
+                )
+            )
         publication_network_collection_dir = (
             None
             if publication_network_preset_path is not None
@@ -24645,21 +30171,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         publication_network_dir = (
-            Path(args.publication_network_dir).resolve()
+            _normalize_workspace_summary_input(
+                args.publication_network_dir,
+                label="publication network workspace",
+            )
             if args.publication_network_dir
             else (
                 None
                 if publication_network_preset_path is not None or publication_network_collection_dir is not None
                 else (
-                    Path((preset or {}).get("publication_network_dir")).resolve()
+                    _normalize_workspace_summary_input(
+                        (preset or {}).get("publication_network_dir"),
+                        label="publication network workspace",
+                    )
                     if (preset or {}).get("publication_network_dir")
-                    else (Path(inventory_publication_network_dir).resolve() if inventory_publication_network_dir is not None else None)
+                    else (
+                        _normalize_workspace_summary_input(
+                            inventory_publication_network_dir,
+                            label="publication network workspace",
+                        )
+                        if inventory_publication_network_dir is not None
+                        else None
+                    )
                 )
             )
         )
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
-            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+            release_catalog_index_dir = str((Path(str(publication_network_dir)) / "release_catalog_index").resolve())
         if release_catalog_index_dir is None and publication_network_collection_dir is not None:
             collection_summary = summarize_publication_network_collection(publication_network_collection_dir)
             release_catalog_index_dir = str(
@@ -24684,6 +30223,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if publication_network_preset_path is None:
                 publish_machine_publication_registry_workspace(
                     publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                    publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                     release_catalog_index_dir=release_catalog_index_dir,
                     publication_network_dir=publication_network_dir,
                     publication_network_collection_dir=publication_network_collection_dir,
@@ -24699,6 +30239,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     recursive=True,
                     release_catalog_index_dir=release_catalog_index_dir,
                     publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                    publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                     publication_network_preset_path=publication_network_preset_path,
                     publication_network_dir=publication_network_dir,
                     publication_network_collection_dir=publication_network_collection_dir,
@@ -24726,29 +30267,40 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"wrote SATROOT-MACHINE-1 publication registry workspace to {Path(args.output_dir).resolve()}")
             return 0
 
-        machine_inputs = resolve_machine_demo_bootstrap_inputs(
-            command_name="bootstrap-machine-publication-registry-workspace",
-            preset_option_name="--catalog-preset-json",
-            machine_preset=machine_preset,
-            symbol=args.symbol,
-            name=args.name,
-            service_scope=args.service_scope,
-            billing_unit=args.billing_unit,
-            consumption_model=args.consumption_model,
-            root_id=args.root_id,
-            issuer=args.issuer,
-            tenant_account=args.tenant_account,
-            worker_account=args.worker_account,
-            max_supply=args.max_supply,
-            initial_balance=args.initial_balance,
-            tenant_amount=args.tenant_amount,
-            worker_amount=args.worker_amount,
-            worker_burn_amount=args.worker_burn_amount,
-            intended_use=args.intended_use,
-            profile_fields=args.profile_fields,
-            rules_hash=args.rules_hash,
-            nonce=args.nonce,
+        release_collection_dir = (
+            Path(args.release_collection_dir).resolve()
+            if args.release_collection_dir
+            else (
+                Path(str((machine_preset or {}).get("release_collection_dir"))).resolve()
+                if (machine_preset or {}).get("release_collection_dir")
+                else None
+            )
         )
+        machine_inputs = None
+        if release_collection_dir is None:
+            machine_inputs = resolve_machine_demo_bootstrap_inputs(
+                command_name="bootstrap-machine-publication-registry-workspace",
+                preset_option_name="--catalog-preset-json",
+                machine_preset=machine_preset,
+                symbol=args.symbol,
+                name=args.name,
+                service_scope=args.service_scope,
+                billing_unit=args.billing_unit,
+                consumption_model=args.consumption_model,
+                root_id=args.root_id,
+                issuer=args.issuer,
+                tenant_account=args.tenant_account,
+                worker_account=args.worker_account,
+                max_supply=args.max_supply,
+                initial_balance=args.initial_balance,
+                tenant_amount=args.tenant_amount,
+                worker_amount=args.worker_amount,
+                worker_burn_amount=args.worker_burn_amount,
+                intended_use=args.intended_use,
+                profile_fields=args.profile_fields,
+                rules_hash=args.rules_hash,
+                nonce=args.nonce,
+            )
         release_metadata = _merge_release_metadata_defaults((machine_preset or {}).get("release_metadata"), {
             "channel": args.channel,
             "label": args.label,
@@ -24776,8 +30328,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             },
         )
         workspace = bootstrap_machine_credit_publication_registry_workspace(
-            symbol=machine_inputs["symbol"],
-            name=machine_inputs["name"],
+            symbol=None if machine_inputs is None else machine_inputs["symbol"],
+            name=None if machine_inputs is None else machine_inputs["name"],
             bundle_scheme=args.scheme,
             release_scheme=args.release_scheme,
             release_catalog_index_dir=release_catalog_index_dir,
@@ -24787,22 +30339,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
             publication_registry_key_id=args.publication_registry_key_id,
             output_dir=args.output_dir,
-            service_scope=str(machine_inputs["service_scope"]),
-            billing_unit=str(machine_inputs["billing_unit"]),
-            consumption_model=str(machine_inputs["consumption_model"]),
-            root_id=machine_inputs["root_id"],
-            issuer=str(machine_inputs["issuer"]),
-            tenant_account=str(machine_inputs["tenant_account"]),
-            worker_account=str(machine_inputs["worker_account"]),
-            max_supply=machine_inputs["max_supply"],
-            initial_balance=str(machine_inputs["initial_balance"]),
-            tenant_amount=str(machine_inputs["tenant_amount"]),
-            worker_amount=str(machine_inputs["worker_amount"]),
-            worker_burn_amount=str(machine_inputs["worker_burn_amount"]),
-            intended_use=str(machine_inputs["intended_use"]),
-            profile_fields=machine_inputs["profile_fields"],
-            rules_hash=machine_inputs["rules_hash"],
-            nonce=machine_inputs["nonce"],
+            release_collection_dir=release_collection_dir,
+            service_scope=args.service_scope if machine_inputs is None else str(machine_inputs["service_scope"]),
+            billing_unit=args.billing_unit if machine_inputs is None else str(machine_inputs["billing_unit"]),
+            consumption_model=args.consumption_model if machine_inputs is None else str(machine_inputs["consumption_model"]),
+            root_id=args.root_id if machine_inputs is None else machine_inputs["root_id"],
+            issuer=args.issuer if machine_inputs is None else str(machine_inputs["issuer"]),
+            tenant_account=args.tenant_account if machine_inputs is None else str(machine_inputs["tenant_account"]),
+            worker_account=args.worker_account if machine_inputs is None else str(machine_inputs["worker_account"]),
+            max_supply=args.max_supply if machine_inputs is None else machine_inputs["max_supply"],
+            initial_balance=args.initial_balance if machine_inputs is None else str(machine_inputs["initial_balance"]),
+            tenant_amount=args.tenant_amount if machine_inputs is None else str(machine_inputs["tenant_amount"]),
+            worker_amount=args.worker_amount if machine_inputs is None else str(machine_inputs["worker_amount"]),
+            worker_burn_amount=args.worker_burn_amount if machine_inputs is None else str(machine_inputs["worker_burn_amount"]),
+            intended_use=args.intended_use if machine_inputs is None else str(machine_inputs["intended_use"]),
+            profile_fields=None if machine_inputs is None else machine_inputs["profile_fields"],
+            rules_hash=args.rules_hash if machine_inputs is None else machine_inputs["rules_hash"],
+            nonce=args.nonce if machine_inputs is None else machine_inputs["nonce"],
             key_prefix=args.key_prefix,
             key_suffix=args.key_suffix,
             include_state_hash=not args.no_state_hash,
@@ -24831,6 +30384,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "recursive",
                 (publication_catalog_workspace_preset or {}).get("recursive", True),
             ),
+            catalog_preset_path=catalog_preset_path,
         )
         print(f"wrote SATROOT-MACHINE-1 publication registry workspace to {Path(workspace['summary_path']).parent}")
         return 0
@@ -24838,6 +30392,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "bootstrap-demo-catalog":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_demo_catalog_preset(preset_path) if preset_path is not None else None
+        release_collection_dir = (
+            Path(args.release_collection_dir).resolve()
+            if args.release_collection_dir
+            else (
+                Path(str((preset or {}).get("release_collection_dir"))).resolve()
+                if (preset or {}).get("release_collection_dir")
+                else None
+            )
+        )
+        if release_collection_dir is not None:
+            workspace = write_demo_catalog_workspace(
+                bundle_scheme=args.scheme,
+                release_scheme=args.release_scheme,
+                release_key_id=args.release_key_id,
+                output_dir=args.output_dir,
+                release_collection_dir=release_collection_dir,
+                preset_path=preset_path,
+            )
+            print(f"wrote SATROOT demo catalog workspace to {Path(workspace['summary_path']).parent}")
+            return 0
+        if args.scheme is None:
+            raise SatRootError("bootstrap-demo-catalog requires --scheme unless a release collection is supplied")
+        if args.release_key_id is None:
+            raise SatRootError("bootstrap-demo-catalog requires --release-key-id unless a release collection is supplied")
         release_metadata = dict((preset or {}).get("release_metadata", {}))
         for key, value in {
             "channel": args.channel,
@@ -24896,6 +30474,128 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         output_dir = Path(args.output_dir)
         print(f"wrote SATROOT demo catalog workspace to {output_dir}")
+        return 0
+
+    if args.command == "bootstrap-demo-release-collection":
+        symbol_overrides = parse_named_string_overrides(
+            args.symbol_overrides,
+            label="demo release symbol override",
+            allowed_keys=DEMO_CATALOG_PROFILES,
+        )
+        name_overrides = parse_named_string_overrides(
+            args.name_overrides,
+            label="demo release name override",
+            allowed_keys=DEMO_CATALOG_PROFILES,
+        )
+        profile_field_overrides = parse_profile_field_override_map(
+            args.profile_field_overrides,
+            allowed_profiles=DEMO_CATALOG_PROFILES,
+        )
+        profile_structure_overrides = parse_profile_structure_override_map(
+            args.profile_structure_overrides,
+            allowed_profiles=DEMO_CATALOG_PROFILES,
+        )
+        generated = bootstrap_demo_release_collection_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            profiles=args.profile,
+            symbol_overrides=symbol_overrides,
+            name_overrides=name_overrides,
+            profile_field_overrides=profile_field_overrides,
+            profile_structure_overrides=profile_structure_overrides,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.channel,
+                "label": args.label,
+                "published_at": args.published_at,
+            },
+        )
+        print(
+            "wrote SATROOT demo release collection to "
+            f"{Path(generated['release_collection_dir'])}"
+        )
+        return 0
+
+    if args.command == "bootstrap-demo-bundle-index":
+        symbol_overrides = parse_named_string_overrides(
+            args.symbol_overrides,
+            label="demo bundle symbol override",
+            allowed_keys=DEMO_CATALOG_PROFILES,
+        )
+        name_overrides = parse_named_string_overrides(
+            args.name_overrides,
+            label="demo bundle name override",
+            allowed_keys=DEMO_CATALOG_PROFILES,
+        )
+        profile_field_overrides = parse_profile_field_override_map(
+            args.profile_field_overrides,
+            allowed_profiles=DEMO_CATALOG_PROFILES,
+        )
+        profile_structure_overrides = parse_profile_structure_override_map(
+            args.profile_structure_overrides,
+            allowed_profiles=DEMO_CATALOG_PROFILES,
+        )
+        generated = bootstrap_demo_bundle_index_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.scheme,
+            output_dir=args.output_dir,
+            profiles=args.profile,
+            symbol_overrides=symbol_overrides,
+            name_overrides=name_overrides,
+            profile_field_overrides=profile_field_overrides,
+            profile_structure_overrides=profile_structure_overrides,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            bundle_index_metadata_overrides={
+                "channel": args.channel,
+                "label": args.label,
+                "published_at": args.published_at,
+            },
+        )
+        print(
+            "wrote SATROOT demo bundle index to "
+            f"{Path(generated['bundle_index_path'])}"
+        )
+        return 0
+
+    if args.command == "bootstrap-demo-publication-stack":
+        if not args.preset_jsons:
+            raise SatRootError("bootstrap-demo-publication-stack requires at least one --preset-json")
+        catalog_metadata = {}
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                catalog_metadata[key] = value
+
+        bootstrap_demo_publication_stack_from_presets(
+            preset_paths=[Path(value).resolve() for value in args.preset_jsons],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            release_catalog_scheme=args.release_catalog_scheme,
+            release_catalog_key_id=args.release_catalog_key_id,
+            output_dir=args.output_dir,
+            release_catalog_metadata=catalog_metadata,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+        )
+        print(f"wrote SATROOT demo publication stack to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-publication-stack":
@@ -25002,7 +30702,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             load_machine_demo_catalog_preset(catalog_preset_path)
         release_catalog_preset_path = None if not args.release_catalog_preset_json else Path(args.release_catalog_preset_json).resolve()
         release_catalog_preset = (
-            load_release_catalog_preset(release_catalog_preset_path)
+            load_machine_release_catalog_preset(release_catalog_preset_path)
             if release_catalog_preset_path is not None
             else None
         )
@@ -25073,7 +30773,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             load_stable_demo_catalog_preset(catalog_preset_path)
         release_catalog_preset_path = None if not args.release_catalog_preset_json else Path(args.release_catalog_preset_json).resolve()
         release_catalog_preset = (
-            load_release_catalog_preset(release_catalog_preset_path)
+            load_stable_release_catalog_preset(release_catalog_preset_path)
             if release_catalog_preset_path is not None
             else None
         )
@@ -25259,7 +30959,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         release_catalog_index_preset_path = None if not args.release_catalog_index_preset_json else Path(args.release_catalog_index_preset_json).resolve()
         release_catalog_index_preset = (
-            load_release_catalog_index_preset(release_catalog_index_preset_path)
+            load_machine_release_catalog_index_preset(release_catalog_index_preset_path)
             if release_catalog_index_preset_path is not None
             else None
         )
@@ -25324,7 +31024,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         release_catalog_index_preset_path = None if not args.release_catalog_index_preset_json else Path(args.release_catalog_index_preset_json).resolve()
         release_catalog_index_preset = (
-            load_release_catalog_index_preset(release_catalog_index_preset_path)
+            load_stable_release_catalog_index_preset(release_catalog_index_preset_path)
             if release_catalog_index_preset_path is not None
             else None
         )
@@ -25360,6 +31060,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             publication_stack_collection_dir=publication_stack_collection_dir,
         )
         print(f"wrote SATROOT-STABLE-1 publication network to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-demo-publication-network":
+        if not args.preset_jsons:
+            raise SatRootError("bootstrap-demo-publication-network requires at least one --preset-json")
+        release_catalog_metadata = {}
+        for key, value in {
+            "channel": args.catalog_channel,
+            "label": args.catalog_label,
+            "published_at": args.catalog_published_at,
+        }.items():
+            if value is not None:
+                release_catalog_metadata[key] = value
+        release_catalog_index_metadata = {}
+        for key, value in {
+            "channel": args.channel,
+            "label": args.label,
+            "published_at": args.published_at,
+        }.items():
+            if value is not None:
+                release_catalog_index_metadata[key] = value
+
+        bootstrap_demo_publication_network_from_presets(
+            preset_paths=[Path(value).resolve() for value in args.preset_jsons],
+            bundle_scheme=args.scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            release_catalog_scheme=args.release_catalog_scheme,
+            release_catalog_key_id=args.release_catalog_key_id,
+            release_catalog_index_scheme=args.release_catalog_index_scheme,
+            release_catalog_index_key_id=args.release_catalog_index_key_id,
+            output_dir=args.output_dir,
+            release_catalog_metadata=release_catalog_metadata,
+            release_catalog_index_metadata=release_catalog_index_metadata,
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+        )
+        print(f"wrote SATROOT demo publication network to {Path(args.output_dir).resolve()}")
         return 0
 
     if args.command == "bootstrap-machine-demo-publication-network":
@@ -25498,6 +31239,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
         preset = load_publication_registry_workspace_preset(preset_path) if preset_path is not None else None
+        catalog_preset_path = (
+            Path(str((preset or {}).get("catalog_preset_path"))).resolve()
+            if (preset or {}).get("catalog_preset_path")
+            else None
+        )
+        catalog_preset = load_demo_catalog_preset(catalog_preset_path) if catalog_preset_path is not None else None
         if publication_catalog_workspace_preset is None and (preset or {}).get("publication_catalog_workspace_preset_path"):
             publication_catalog_workspace_preset_path = Path(str((preset or {}).get("publication_catalog_workspace_preset_path"))).resolve()
             publication_catalog_workspace_preset = load_publication_catalog_workspace_preset(publication_catalog_workspace_preset_path)
@@ -25514,15 +31261,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
+        publication_catalog_workspace_collection_dir = (
+            Path(args.publication_catalog_workspace_collection_dir).resolve()
+            if args.publication_catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("publication_catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("publication_catalog_workspace_collection_dir")
+                else None
+            )
+        )
         publication_catalog_workspace_dir = (
-            Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
-            if (preset or {}).get("publication_catalog_workspace_dir")
-            else None
+            None
+            if publication_catalog_workspace_collection_dir is not None
+            else (
+                _normalize_workspace_summary_input(
+                    (preset or {}).get("publication_catalog_workspace_dir"),
+                    label="publication catalog workspace",
+                )
+                if (preset or {}).get("publication_catalog_workspace_dir")
+                else None
+            )
         )
         if args.publication_catalog_workspace_dir:
-            publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
-        elif inventory_publication_catalog_workspace_dir is not None:
-            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                args.publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        elif publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is None and inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                inventory_publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
         publication_network_collection_dir = (
             None
             if publication_network_preset_path is not None
@@ -25539,12 +31308,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         publication_network_dir = (
             None
             if publication_network_preset_path is not None or publication_network_collection_dir is not None
-            else (Path((preset or {}).get("publication_network_dir")).resolve() if (preset or {}).get("publication_network_dir") else None)
+            else (
+                _normalize_workspace_summary_input(
+                    (preset or {}).get("publication_network_dir"),
+                    label="publication network workspace",
+                )
+                if (preset or {}).get("publication_network_dir")
+                else None
+            )
         )
         if args.publication_network_dir:
-            publication_network_dir = Path(args.publication_network_dir).resolve()
+            publication_network_dir = _normalize_workspace_summary_input(
+                args.publication_network_dir,
+                label="publication network workspace",
+            )
         elif publication_network_dir is None and publication_network_collection_dir is None and inventory_publication_network_dir is not None:
-            publication_network_dir = Path(inventory_publication_network_dir).resolve()
+            publication_network_dir = _normalize_workspace_summary_input(
+                inventory_publication_network_dir,
+                label="publication network workspace",
+            )
         publication_metadata_bundle_collection_dir = (publication_catalog_workspace_preset or {}).get(
             "publication_metadata_bundle_collection_dir"
         )
@@ -25552,12 +31334,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if (
             publication_network_dir is not None
             and publication_catalog_workspace_dir is None
+            and publication_catalog_workspace_collection_dir is None
             and publication_metadata_bundle_collection_dir is None
         ):
             discover_under.append(str(publication_network_dir))
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
-            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+            release_catalog_index_dir = str((Path(str(publication_network_dir)) / "release_catalog_index").resolve())
         if release_catalog_index_dir is None and publication_network_collection_dir is not None:
             collection_summary = summarize_publication_network_collection(publication_network_collection_dir)
             release_catalog_index_dir = str(
@@ -25600,39 +31383,200 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         }.items():
             if value is not None:
                 publication_registry_metadata[key] = value
-        write_publication_registry_workspace(
-            artifact_paths=[
-                *((publication_catalog_workspace_preset or {}).get("artifact_paths", [])),
-                *((preset or {}).get("artifact_paths", [])),
-                *inventory_artifact_paths,
-                *((args.path or [])),
-            ],
-            discover_under=[
-                *((publication_catalog_workspace_preset or {}).get("discover_under", [])),
-                *discover_under,
-            ],
-            recursive=False
+        artifact_paths = [
+            *((publication_catalog_workspace_preset or {}).get("artifact_paths", [])),
+            *((preset or {}).get("artifact_paths", [])),
+            *inventory_artifact_paths,
+            *((args.path or [])),
+        ]
+        registry_discover_under = [
+            *((publication_catalog_workspace_preset or {}).get("discover_under", [])),
+            *discover_under,
+        ]
+        registry_recursive = (
+            False
             if args.non_recursive
-            else (publication_catalog_workspace_preset or {}).get("recursive", (preset or {}).get("recursive", True)),
-            release_catalog_index_dir=release_catalog_index_dir,
-            publication_catalog_workspace_dir=publication_catalog_workspace_dir,
-            publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
-            publication_network_preset_path=publication_network_preset_path,
-            publication_network_dir=publication_network_dir,
-            publication_network_collection_dir=publication_network_collection_dir,
-            output_dir=args.output_dir,
-            signature_scheme=args.scheme,
-            release_key_id=args.release_key_id,
-            release_catalog_key_id=args.release_catalog_key_id,
-            release_catalog_index_key_id=args.release_catalog_index_key_id,
-            publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
-            publication_metadata_key_id=args.publication_metadata_key_id,
-            publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
-            publication_registry_key_id=args.publication_registry_key_id,
-            descriptor_index_metadata=descriptor_index_metadata,
-            publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
-            publication_registry_metadata=publication_registry_metadata,
+            else (publication_catalog_workspace_preset or {}).get("recursive", (preset or {}).get("recursive", True))
         )
+        if (
+            publication_catalog_workspace_dir is None
+            and publication_catalog_workspace_collection_dir is None
+            and catalog_preset is not None
+        ):
+            generated_publication_catalog_workspace_dir = Path(args.output_dir).resolve() / "publication_catalog_workspace"
+            generated_publication_catalog_workspace = bootstrap_publication_catalog_workspace_from_demo_catalog(
+                bundle_scheme=args.scheme,
+                release_key_id=args.release_key_id,
+                output_dir=generated_publication_catalog_workspace_dir,
+                release_scheme=args.scheme,
+                profiles=None if catalog_preset.get("release_collection_dir") is not None else catalog_preset.get("profiles"),
+                symbol_overrides=None if catalog_preset.get("release_collection_dir") is not None else catalog_preset.get("symbol_overrides"),
+                name_overrides=None if catalog_preset.get("release_collection_dir") is not None else catalog_preset.get("name_overrides"),
+                profile_field_overrides=(
+                    None
+                    if catalog_preset.get("release_collection_dir") is not None
+                    else catalog_preset.get("profile_field_overrides")
+                ),
+                profile_structure_overrides=(
+                    None
+                    if catalog_preset.get("release_collection_dir") is not None
+                    else catalog_preset.get("profile_structure_overrides")
+                ),
+                release_collection_dir=catalog_preset.get("release_collection_dir"),
+                release_metadata=catalog_preset.get("release_metadata"),
+                publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+                publication_metadata_key_id=args.publication_metadata_key_id,
+                publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+                descriptor_index_metadata=descriptor_index_metadata,
+                publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+                artifact_paths=artifact_paths,
+                discover_under=registry_discover_under,
+                publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
+                recursive=registry_recursive,
+                catalog_preset_path=catalog_preset_path,
+            )
+            published = write_publication_registry_workspace(
+                artifact_paths=[],
+                discover_under=[],
+                recursive=True,
+                release_catalog_index_dir=release_catalog_index_dir,
+                publication_catalog_workspace_dir=generated_publication_catalog_workspace_dir,
+                publication_network_preset_path=publication_network_preset_path,
+                publication_network_dir=publication_network_dir,
+                publication_network_collection_dir=publication_network_collection_dir,
+                output_dir=args.output_dir,
+                signature_scheme=args.scheme,
+                release_key_id=args.release_key_id,
+                release_catalog_key_id=args.release_catalog_key_id,
+                release_catalog_index_key_id=args.release_catalog_index_key_id,
+                publication_descriptor_index_key_id=None,
+                publication_metadata_key_id=None,
+                publication_metadata_catalog_key_id=None,
+                publication_registry_key_id=args.publication_registry_key_id,
+                publication_registry_metadata=publication_registry_metadata,
+            )
+            summary = copy.deepcopy(published["summary"])
+            summary["source_publication_catalog_workspace_dir"] = str(generated_publication_catalog_workspace_dir.resolve())
+            source_catalog_workspace_dir = generated_publication_catalog_workspace["summary"].get("source_catalog_workspace_dir")
+            if isinstance(source_catalog_workspace_dir, str) and source_catalog_workspace_dir.strip():
+                summary["source_catalog_workspace_dir"] = source_catalog_workspace_dir
+            source_catalog_summary_path = generated_publication_catalog_workspace["summary"].get("source_catalog_summary_path")
+            if isinstance(source_catalog_summary_path, str) and source_catalog_summary_path.strip():
+                summary["source_catalog_summary_path"] = source_catalog_summary_path
+            source_catalog_release_dir = generated_publication_catalog_workspace["summary"].get("source_catalog_release_dir")
+            if isinstance(source_catalog_release_dir, str) and source_catalog_release_dir.strip():
+                summary["source_catalog_release_dir"] = source_catalog_release_dir
+            source_catalog_release_manifest_path = generated_publication_catalog_workspace["summary"].get(
+                "source_catalog_release_manifest_path"
+            )
+            if (
+                isinstance(source_catalog_release_manifest_path, str)
+                and source_catalog_release_manifest_path.strip()
+            ):
+                summary["source_catalog_release_manifest_path"] = source_catalog_release_manifest_path
+            _write_json_file(Path(str(published["summary_path"])).resolve(), summary)
+        elif (
+            publication_catalog_workspace_dir is None
+            and publication_catalog_workspace_collection_dir is None
+            and publication_catalog_workspace_preset is not None
+        ):
+            generated_publication_catalog_workspace_dir = Path(args.output_dir).resolve() / "publication_catalog_workspace"
+            generated_publication_catalog_workspace = write_publication_catalog_workspace(
+                artifact_paths=artifact_paths,
+                discover_under=registry_discover_under,
+                recursive=registry_recursive,
+                output_dir=generated_publication_catalog_workspace_dir,
+                signature_scheme=args.scheme,
+                publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+                publication_metadata_key_id=args.publication_metadata_key_id,
+                publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+                publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
+                descriptor_index_metadata=descriptor_index_metadata,
+                publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+            )
+            published = write_publication_registry_workspace(
+                artifact_paths=[],
+                discover_under=[],
+                recursive=True,
+                release_catalog_index_dir=release_catalog_index_dir,
+                publication_catalog_workspace_dir=generated_publication_catalog_workspace_dir,
+                publication_network_preset_path=publication_network_preset_path,
+                publication_network_dir=publication_network_dir,
+                publication_network_collection_dir=publication_network_collection_dir,
+                output_dir=args.output_dir,
+                signature_scheme=args.scheme,
+                release_key_id=args.release_key_id,
+                release_catalog_key_id=args.release_catalog_key_id,
+                release_catalog_index_key_id=args.release_catalog_index_key_id,
+                publication_descriptor_index_key_id=None,
+                publication_metadata_key_id=None,
+                publication_metadata_catalog_key_id=None,
+                publication_registry_key_id=args.publication_registry_key_id,
+                publication_registry_metadata=publication_registry_metadata,
+            )
+            summary = copy.deepcopy(published["summary"])
+            summary["source_publication_catalog_workspace_dir"] = str(
+                generated_publication_catalog_workspace_dir.resolve()
+            )
+            source_catalog_workspace_dir = generated_publication_catalog_workspace["summary"].get(
+                "source_catalog_workspace_dir"
+            )
+            if isinstance(source_catalog_workspace_dir, str) and source_catalog_workspace_dir.strip():
+                summary["source_catalog_workspace_dir"] = source_catalog_workspace_dir
+            source_catalog_workspace_collection_dir = generated_publication_catalog_workspace["summary"].get(
+                "source_catalog_workspace_collection_dir"
+            )
+            if (
+                isinstance(source_catalog_workspace_collection_dir, str)
+                and source_catalog_workspace_collection_dir.strip()
+            ):
+                summary["source_catalog_workspace_collection_dir"] = (
+                    source_catalog_workspace_collection_dir
+                )
+            source_catalog_summary_path = generated_publication_catalog_workspace["summary"].get(
+                "source_catalog_summary_path"
+            )
+            if isinstance(source_catalog_summary_path, str) and source_catalog_summary_path.strip():
+                summary["source_catalog_summary_path"] = source_catalog_summary_path
+            source_catalog_release_dir = generated_publication_catalog_workspace["summary"].get(
+                "source_catalog_release_dir"
+            )
+            if isinstance(source_catalog_release_dir, str) and source_catalog_release_dir.strip():
+                summary["source_catalog_release_dir"] = source_catalog_release_dir
+            source_catalog_release_manifest_path = generated_publication_catalog_workspace["summary"].get(
+                "source_catalog_release_manifest_path"
+            )
+            if (
+                isinstance(source_catalog_release_manifest_path, str)
+                and source_catalog_release_manifest_path.strip()
+            ):
+                summary["source_catalog_release_manifest_path"] = source_catalog_release_manifest_path
+            _write_json_file(Path(str(published["summary_path"])).resolve(), summary)
+        else:
+            write_publication_registry_workspace(
+                artifact_paths=artifact_paths,
+                discover_under=registry_discover_under,
+                recursive=registry_recursive,
+                release_catalog_index_dir=release_catalog_index_dir,
+                publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
+                publication_metadata_bundle_collection_dir=publication_metadata_bundle_collection_dir,
+                publication_network_preset_path=publication_network_preset_path,
+                publication_network_dir=publication_network_dir,
+                publication_network_collection_dir=publication_network_collection_dir,
+                output_dir=args.output_dir,
+                signature_scheme=args.scheme,
+                release_key_id=args.release_key_id,
+                release_catalog_key_id=args.release_catalog_key_id,
+                release_catalog_index_key_id=args.release_catalog_index_key_id,
+                publication_descriptor_index_key_id=args.publication_descriptor_index_key_id,
+                publication_metadata_key_id=args.publication_metadata_key_id,
+                publication_metadata_catalog_key_id=args.publication_metadata_catalog_key_id,
+                publication_registry_key_id=args.publication_registry_key_id,
+                descriptor_index_metadata=descriptor_index_metadata,
+                publication_metadata_catalog_metadata=publication_metadata_catalog_metadata,
+                publication_registry_metadata=publication_registry_metadata,
+            )
         print(f"wrote SATROOT publication registry workspace to {Path(args.output_dir).resolve()}")
         return 0
 
@@ -25649,13 +31593,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         inventory_workspace_dirs = [] if catalog_workspace_collection_dir is not None else (load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else [])
+        workspace_dir_inputs = [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir]
+        _reject_nested_publish_preset_without_existing_workspace_inputs(
+            command_name="publish-publication-stack",
+            direct_workspace_dirs=workspace_dir_inputs,
+            collection_dir=catalog_workspace_collection_dir,
+            nested_preset_values=(preset or {}).get("catalog_preset_paths", []),
+            nested_label="catalog_presets",
+            bootstrap_command="bootstrap-publication-stack",
+            existing_workspace_label="catalog workspaces",
+        )
         catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
-            [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir],
+            workspace_dir_inputs,
             catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
@@ -25684,13 +31638,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         inventory_workspace_dirs = [] if catalog_workspace_collection_dir is not None else (load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else [])
+        workspace_dir_inputs = [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir]
+        _reject_nested_publish_preset_without_existing_workspace_inputs(
+            command_name="publish-machine-publication-stack",
+            direct_workspace_dirs=workspace_dir_inputs,
+            collection_dir=catalog_workspace_collection_dir,
+            nested_preset_values=(preset or {}).get("catalog_preset_paths", []),
+            nested_label="catalog_presets",
+            bootstrap_command="bootstrap-machine-publication-stack",
+            existing_workspace_label="machine publication catalog workspaces",
+        )
         catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
-            [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir],
+            workspace_dir_inputs,
             catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
@@ -25719,13 +31683,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         inventory_workspace_dirs = [] if catalog_workspace_collection_dir is not None else (load_inventory_demo_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else [])
+        workspace_dir_inputs = [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir]
+        _reject_nested_publish_preset_without_existing_workspace_inputs(
+            command_name="publish-stable-publication-stack",
+            direct_workspace_dirs=workspace_dir_inputs,
+            collection_dir=catalog_workspace_collection_dir,
+            nested_preset_values=(preset or {}).get("catalog_preset_paths", []),
+            nested_label="catalog_presets",
+            bootstrap_command="bootstrap-stable-publication-stack",
+            existing_workspace_label="stable publication catalog workspaces",
+        )
         catalog_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_demo_catalog_workspace_inputs(
-            [*((preset or {}).get("catalog_workspace_dirs", [])), *inventory_workspace_dirs, *args.catalog_workspace_dir],
+            workspace_dir_inputs,
             catalog_workspace_collection_dir=catalog_workspace_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
@@ -25754,13 +31728,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         inventory_workspace_dirs = [] if publication_stack_collection_dir is not None else (load_inventory_publication_stack_dirs(args.inventory_json) if args.inventory_json else [])
+        preset_workspace_dirs = (
+            []
+            if publication_stack_collection_dir is not None or preset is None
+            else _resolve_publication_stack_workspace_inputs_from_network_preset(
+                preset=preset,
+                stack_preset_loader=load_publication_stack_preset,
+            )
+        )
+        workspace_dir_inputs = [*preset_workspace_dirs, *((preset or {}).get("publication_stack_dirs", [])), *inventory_workspace_dirs, *args.publication_stack_dir]
+        _reject_nested_publish_preset_without_existing_workspace_inputs(
+            command_name="publish-publication-network",
+            direct_workspace_dirs=workspace_dir_inputs,
+            collection_dir=publication_stack_collection_dir,
+            nested_preset_values=(preset or {}).get("stack_preset_paths", []),
+            nested_label="stack_presets",
+            bootstrap_command="bootstrap-publication-network",
+            existing_workspace_label="publication stack workspaces",
+        )
         index_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_index_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_publication_stack_workspace_inputs(
-            [*((preset or {}).get("publication_stack_dirs", [])), *inventory_workspace_dirs, *args.publication_stack_dir],
+            workspace_dir_inputs,
             publication_stack_collection_dir=publication_stack_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
@@ -25789,13 +31781,35 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         inventory_workspace_dirs = [] if publication_stack_collection_dir is not None else (load_inventory_publication_stack_dirs(args.inventory_json) if args.inventory_json else [])
+        preset_workspace_dirs = (
+            []
+            if publication_stack_collection_dir is not None or preset is None
+            else _resolve_publication_stack_workspace_inputs_from_network_preset(
+                preset=preset,
+                stack_preset_loader=load_machine_publication_stack_preset,
+                stack_workspace_validator=lambda path: _require_machine_publication_stack_workspace(
+                    path,
+                    label="machine publication network preset nested publication stack workspace",
+                ),
+            )
+        )
+        workspace_dir_inputs = [*preset_workspace_dirs, *((preset or {}).get("publication_stack_dirs", [])), *inventory_workspace_dirs, *args.publication_stack_dir]
+        _reject_nested_publish_preset_without_existing_workspace_inputs(
+            command_name="publish-machine-publication-network",
+            direct_workspace_dirs=workspace_dir_inputs,
+            collection_dir=publication_stack_collection_dir,
+            nested_preset_values=(preset or {}).get("stack_preset_paths", []),
+            nested_label="stack_presets",
+            bootstrap_command="bootstrap-machine-publication-network",
+            existing_workspace_label="machine publication stack workspaces",
+        )
         index_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_index_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_publication_stack_workspace_inputs(
-            [*((preset or {}).get("publication_stack_dirs", [])), *inventory_workspace_dirs, *args.publication_stack_dir],
+            workspace_dir_inputs,
             publication_stack_collection_dir=publication_stack_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
@@ -25824,13 +31838,35 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         inventory_workspace_dirs = [] if publication_stack_collection_dir is not None else (load_inventory_publication_stack_dirs(args.inventory_json) if args.inventory_json else [])
+        preset_workspace_dirs = (
+            []
+            if publication_stack_collection_dir is not None or preset is None
+            else _resolve_publication_stack_workspace_inputs_from_network_preset(
+                preset=preset,
+                stack_preset_loader=load_stable_publication_stack_preset,
+                stack_workspace_validator=lambda path: _require_stable_publication_stack_workspace(
+                    path,
+                    label="stable publication network preset nested publication stack workspace",
+                ),
+            )
+        )
+        workspace_dir_inputs = [*preset_workspace_dirs, *((preset or {}).get("publication_stack_dirs", [])), *inventory_workspace_dirs, *args.publication_stack_dir]
+        _reject_nested_publish_preset_without_existing_workspace_inputs(
+            command_name="publish-stable-publication-network",
+            direct_workspace_dirs=workspace_dir_inputs,
+            collection_dir=publication_stack_collection_dir,
+            nested_preset_values=(preset or {}).get("stack_preset_paths", []),
+            nested_label="stack_presets",
+            bootstrap_command="bootstrap-stable-publication-network",
+            existing_workspace_label="stable publication stack workspaces",
+        )
         index_metadata = _merge_release_metadata_defaults((preset or {}).get("release_catalog_index_metadata"), {
             "channel": args.channel,
             "label": args.label,
             "published_at": args.published_at,
         })
         workspace_dirs = resolve_publication_stack_workspace_inputs(
-            [*((preset or {}).get("publication_stack_dirs", [])), *inventory_workspace_dirs, *args.publication_stack_dir],
+            workspace_dir_inputs,
             publication_stack_collection_dir=publication_stack_collection_dir,
             discover_under=args.discover_under,
             recursive=not args.non_recursive,
@@ -25879,7 +31915,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-machine-publication-catalog-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
-        preset = load_publication_registry_preset(preset_path) if preset_path is not None else None
+        preset = load_machine_publication_registry_preset(preset_path) if preset_path is not None else None
         inventory_publication_descriptor_index_dir = (
             load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -25910,7 +31946,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "publish-stable-publication-catalog-workspace":
         preset_path = None if not args.preset_json else Path(args.preset_json).resolve()
-        preset = load_publication_registry_preset(preset_path) if preset_path is not None else None
+        preset = load_stable_publication_registry_preset(preset_path) if preset_path is not None else None
         inventory_publication_descriptor_index_dir = (
             load_inventory_publication_descriptor_index_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -25954,18 +31990,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
+        publication_catalog_workspace_collection_dir = (
+            Path(args.publication_catalog_workspace_collection_dir).resolve()
+            if args.publication_catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("publication_catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("publication_catalog_workspace_collection_dir")
+                else None
+            )
+        )
         publication_catalog_workspace_dir = (
-            Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
-            if (preset or {}).get("publication_catalog_workspace_dir")
-            else None
+            None
+            if publication_catalog_workspace_collection_dir is not None
+            else (
+                _normalize_workspace_summary_input(
+                    (preset or {}).get("publication_catalog_workspace_dir"),
+                    label="publication catalog workspace",
+                )
+                if (preset or {}).get("publication_catalog_workspace_dir")
+                else None
+            )
         )
         if args.publication_catalog_workspace_dir:
-            publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
-        elif inventory_publication_catalog_workspace_dir is not None:
-            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                args.publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        elif publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is None and inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                inventory_publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        if publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is not None:
+            publication_catalog_workspace_dir, publication_catalog_workspace_collection_dir = (
+                _resolve_exactly_one_publication_catalog_workspace_from_collection(
+                    publication_catalog_workspace_collection_dir,
+                    label="publish-publication-registry-workspace publication_catalog_workspace_collection_dir",
+                )
+            )
         if publication_catalog_workspace_dir is None:
             raise SatRootError(
-                "publish-publication-registry-workspace requires publication_catalog_workspace_dir, a --preset-json providing it, or an --inventory-json containing a unique entry"
+                "publish-publication-registry-workspace requires publication_catalog_workspace_dir, --publication-catalog-workspace-collection-dir, a --preset-json providing one of them, or an --inventory-json containing a unique entry"
             )
         publication_network_collection_dir = (
             None
@@ -25981,21 +32046,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         publication_network_dir = (
-            Path(args.publication_network_dir).resolve()
+            _normalize_workspace_summary_input(
+                args.publication_network_dir,
+                label="publication network workspace",
+            )
             if args.publication_network_dir
             else (
                 None
                 if publication_network_preset_path is not None or publication_network_collection_dir is not None
                 else (
-                    Path((preset or {}).get("publication_network_dir")).resolve()
+                    _normalize_workspace_summary_input(
+                        (preset or {}).get("publication_network_dir"),
+                        label="publication network workspace",
+                    )
                     if (preset or {}).get("publication_network_dir")
-                    else (Path(inventory_publication_network_dir).resolve() if inventory_publication_network_dir is not None else None)
+                    else (
+                        _normalize_workspace_summary_input(
+                            inventory_publication_network_dir,
+                            label="publication network workspace",
+                        )
+                        if inventory_publication_network_dir is not None
+                        else None
+                    )
                 )
             )
         )
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
-            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+            release_catalog_index_dir = str((Path(str(publication_network_dir)) / "release_catalog_index").resolve())
         if release_catalog_index_dir is None and publication_network_collection_dir is not None:
             collection_summary = summarize_publication_network_collection(publication_network_collection_dir)
             release_catalog_index_dir = str(
@@ -26016,6 +32094,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if publication_network_preset_path is None:
             publish_publication_registry_workspace(
                 publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                 release_catalog_index_dir=release_catalog_index_dir,
                 publication_network_dir=publication_network_dir,
                 publication_network_collection_dir=publication_network_collection_dir,
@@ -26031,6 +32110,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 recursive=True,
                 release_catalog_index_dir=release_catalog_index_dir,
                 publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                 publication_network_preset_path=publication_network_preset_path,
                 publication_network_dir=publication_network_dir,
                 publication_network_collection_dir=publication_network_collection_dir,
@@ -26056,6 +32136,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         if publication_network_preset_path is None and (preset or {}).get("publication_network_preset_path"):
             publication_network_preset_path = Path(str((preset or {}).get("publication_network_preset_path"))).resolve()
+        if publication_network_preset_path is not None:
+            load_machine_publication_network_preset(publication_network_preset_path)
         inventory_publication_catalog_workspace_dir = (
             load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -26063,18 +32145,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
+        publication_catalog_workspace_collection_dir = (
+            Path(args.publication_catalog_workspace_collection_dir).resolve()
+            if args.publication_catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("publication_catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("publication_catalog_workspace_collection_dir")
+                else None
+            )
+        )
         publication_catalog_workspace_dir = (
-            Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
-            if (preset or {}).get("publication_catalog_workspace_dir")
-            else None
+            None
+            if publication_catalog_workspace_collection_dir is not None
+            else (
+                _normalize_workspace_summary_input(
+                    (preset or {}).get("publication_catalog_workspace_dir"),
+                    label="publication catalog workspace",
+                )
+                if (preset or {}).get("publication_catalog_workspace_dir")
+                else None
+            )
         )
         if args.publication_catalog_workspace_dir:
-            publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
-        elif inventory_publication_catalog_workspace_dir is not None:
-            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                args.publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        elif publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is None and inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                inventory_publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        if publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is not None:
+            publication_catalog_workspace_dir, publication_catalog_workspace_collection_dir = (
+                _resolve_exactly_one_publication_catalog_workspace_from_collection(
+                    publication_catalog_workspace_collection_dir,
+                    label="publish-machine-publication-registry-workspace publication_catalog_workspace_collection_dir",
+                )
+            )
         if publication_catalog_workspace_dir is None:
             raise SatRootError(
-                "publish-machine-publication-registry-workspace requires publication_catalog_workspace_dir, a --preset-json providing it, or an --inventory-json containing a unique entry"
+                "publish-machine-publication-registry-workspace requires publication_catalog_workspace_dir, --publication-catalog-workspace-collection-dir, a --preset-json providing one of them, or an --inventory-json containing a unique entry"
             )
         publication_network_collection_dir = (
             None
@@ -26090,21 +32201,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         publication_network_dir = (
-            Path(args.publication_network_dir).resolve()
+            _normalize_workspace_summary_input(
+                args.publication_network_dir,
+                label="publication network workspace",
+            )
             if args.publication_network_dir
             else (
                 None
                 if publication_network_preset_path is not None or publication_network_collection_dir is not None
                 else (
-                    Path((preset or {}).get("publication_network_dir")).resolve()
+                    _normalize_workspace_summary_input(
+                        (preset or {}).get("publication_network_dir"),
+                        label="publication network workspace",
+                    )
                     if (preset or {}).get("publication_network_dir")
-                    else (Path(inventory_publication_network_dir).resolve() if inventory_publication_network_dir is not None else None)
+                    else (
+                        _normalize_workspace_summary_input(
+                            inventory_publication_network_dir,
+                            label="publication network workspace",
+                        )
+                        if inventory_publication_network_dir is not None
+                        else None
+                    )
                 )
             )
         )
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
-            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+            release_catalog_index_dir = str((Path(str(publication_network_dir)) / "release_catalog_index").resolve())
         if release_catalog_index_dir is None and publication_network_collection_dir is not None:
             collection_summary = summarize_publication_network_collection(publication_network_collection_dir)
             release_catalog_index_dir = str(
@@ -26125,6 +32249,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if publication_network_preset_path is None:
             publish_machine_publication_registry_workspace(
                 publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                 release_catalog_index_dir=release_catalog_index_dir,
                 publication_network_dir=publication_network_dir,
                 publication_network_collection_dir=publication_network_collection_dir,
@@ -26140,6 +32265,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 recursive=True,
                 release_catalog_index_dir=release_catalog_index_dir,
                 publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                 publication_network_preset_path=publication_network_preset_path,
                 publication_network_dir=publication_network_dir,
                 publication_network_collection_dir=publication_network_collection_dir,
@@ -26175,6 +32301,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         if publication_network_preset_path is None and (preset or {}).get("publication_network_preset_path"):
             publication_network_preset_path = Path(str((preset or {}).get("publication_network_preset_path"))).resolve()
+        if publication_network_preset_path is not None:
+            load_stable_publication_network_preset(publication_network_preset_path)
         inventory_publication_catalog_workspace_dir = (
             load_inventory_publication_catalog_workspace_dir(args.inventory_json) if args.inventory_json else None
         )
@@ -26182,18 +32310,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         inventory_release_catalog_index_dir = (
             load_inventory_release_catalog_index_dir(args.inventory_json) if args.inventory_json else None
         )
+        publication_catalog_workspace_collection_dir = (
+            Path(args.publication_catalog_workspace_collection_dir).resolve()
+            if args.publication_catalog_workspace_collection_dir
+            else (
+                Path(str((preset or {}).get("publication_catalog_workspace_collection_dir"))).resolve()
+                if (preset or {}).get("publication_catalog_workspace_collection_dir")
+                else None
+            )
+        )
         publication_catalog_workspace_dir = (
-            Path((preset or {}).get("publication_catalog_workspace_dir")).resolve()
-            if (preset or {}).get("publication_catalog_workspace_dir")
-            else None
+            None
+            if publication_catalog_workspace_collection_dir is not None
+            else (
+                _normalize_workspace_summary_input(
+                    (preset or {}).get("publication_catalog_workspace_dir"),
+                    label="publication catalog workspace",
+                )
+                if (preset or {}).get("publication_catalog_workspace_dir")
+                else None
+            )
         )
         if args.publication_catalog_workspace_dir:
-            publication_catalog_workspace_dir = Path(args.publication_catalog_workspace_dir).resolve()
-        elif inventory_publication_catalog_workspace_dir is not None:
-            publication_catalog_workspace_dir = Path(inventory_publication_catalog_workspace_dir).resolve()
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                args.publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        elif publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is None and inventory_publication_catalog_workspace_dir is not None:
+            publication_catalog_workspace_dir = _normalize_workspace_summary_input(
+                inventory_publication_catalog_workspace_dir,
+                label="publication catalog workspace",
+            )
+        if publication_catalog_workspace_dir is None and publication_catalog_workspace_collection_dir is not None:
+            publication_catalog_workspace_dir, publication_catalog_workspace_collection_dir = (
+                _resolve_exactly_one_publication_catalog_workspace_from_collection(
+                    publication_catalog_workspace_collection_dir,
+                    label="publish-stable-publication-registry-workspace publication_catalog_workspace_collection_dir",
+                )
+            )
         if publication_catalog_workspace_dir is None:
             raise SatRootError(
-                "publish-stable-publication-registry-workspace requires publication_catalog_workspace_dir, a --preset-json providing it, or an --inventory-json containing a unique entry"
+                "publish-stable-publication-registry-workspace requires publication_catalog_workspace_dir, --publication-catalog-workspace-collection-dir, a --preset-json providing one of them, or an --inventory-json containing a unique entry"
             )
         publication_network_collection_dir = (
             None
@@ -26209,21 +32366,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
         publication_network_dir = (
-            Path(args.publication_network_dir).resolve()
+            _normalize_workspace_summary_input(
+                args.publication_network_dir,
+                label="publication network workspace",
+            )
             if args.publication_network_dir
             else (
                 None
                 if publication_network_preset_path is not None or publication_network_collection_dir is not None
                 else (
-                    Path((preset or {}).get("publication_network_dir")).resolve()
+                    _normalize_workspace_summary_input(
+                        (preset or {}).get("publication_network_dir"),
+                        label="publication network workspace",
+                    )
                     if (preset or {}).get("publication_network_dir")
-                    else (Path(inventory_publication_network_dir).resolve() if inventory_publication_network_dir is not None else None)
+                    else (
+                        _normalize_workspace_summary_input(
+                            inventory_publication_network_dir,
+                            label="publication network workspace",
+                        )
+                        if inventory_publication_network_dir is not None
+                        else None
+                    )
                 )
             )
         )
         release_catalog_index_dir = args.release_catalog_index_dir or (preset or {}).get("release_catalog_index_dir")
         if release_catalog_index_dir is None and publication_network_dir is not None:
-            release_catalog_index_dir = str((publication_network_dir / "release_catalog_index").resolve())
+            release_catalog_index_dir = str((Path(str(publication_network_dir)) / "release_catalog_index").resolve())
         if release_catalog_index_dir is None and publication_network_collection_dir is not None:
             collection_summary = summarize_publication_network_collection(publication_network_collection_dir)
             release_catalog_index_dir = str(
@@ -26244,6 +32414,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if publication_network_preset_path is None:
             publish_stable_publication_registry_workspace(
                 publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                 release_catalog_index_dir=release_catalog_index_dir,
                 publication_network_dir=publication_network_dir,
                 publication_network_collection_dir=publication_network_collection_dir,
@@ -26259,6 +32430,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 recursive=True,
                 release_catalog_index_dir=release_catalog_index_dir,
                 publication_catalog_workspace_dir=publication_catalog_workspace_dir,
+                publication_catalog_workspace_collection_dir=publication_catalog_workspace_collection_dir,
                 publication_network_preset_path=publication_network_preset_path,
                 publication_network_dir=publication_network_dir,
                 publication_network_collection_dir=publication_network_collection_dir,
@@ -26295,7 +32467,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "export-demo-catalog-preset":
-        preset = export_demo_catalog_preset_from_workspace(args.demo_catalog_dir)
+        preset = export_demo_catalog_preset_from_workspace(
+            args.demo_catalog_dir,
+            output_path=args.output,
+        )
         _write_output(preset, args.output)
         return 0
 
@@ -26390,6 +32565,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_publication_registry_workspace_preset_from_workspace(
             args.publication_registry_workspace_dir,
             output_path=args.output,
+            catalog_preset_path=args.catalog_preset_path,
             publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
             publication_network_preset_path=args.publication_network_preset_path,
             stack_preset_dir=args.stack_preset_dir,
@@ -26405,6 +32581,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_machine_publication_registry_workspace_preset_from_workspace(
             args.publication_registry_workspace_dir,
             output_path=args.output,
+            catalog_preset_path=args.catalog_preset_path,
             publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
             publication_network_preset_path=args.publication_network_preset_path,
             stack_preset_dir=args.stack_preset_dir,
@@ -26420,6 +32597,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_stable_publication_registry_workspace_preset_from_workspace(
             args.publication_registry_workspace_dir,
             output_path=args.output,
+            catalog_preset_path=args.catalog_preset_path,
             publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
             publication_network_preset_path=args.publication_network_preset_path,
             stack_preset_dir=args.stack_preset_dir,
@@ -26483,6 +32661,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_publication_registry_preset_from_workspace(
             args.publication_registry_dir,
             output_path=args.output,
+            publication_registry_workspace_preset_path=args.publication_registry_workspace_preset_path,
+            catalog_preset_path=args.catalog_preset_path,
+            publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
+            publication_network_preset_path=args.publication_network_preset_path,
+            stack_preset_dir=args.stack_preset_dir,
+            catalog_preset_dir=args.catalog_preset_dir,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
         )
         _write_output(preset, args.output)
         return 0
@@ -26491,6 +32677,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_machine_publication_registry_preset_from_workspace(
             args.publication_registry_dir,
             output_path=args.output,
+            publication_registry_workspace_preset_path=args.publication_registry_workspace_preset_path,
+            catalog_preset_path=args.catalog_preset_path,
+            publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
+            publication_network_preset_path=args.publication_network_preset_path,
+            stack_preset_dir=args.stack_preset_dir,
+            catalog_preset_dir=args.catalog_preset_dir,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
         )
         _write_output(preset, args.output)
         return 0
@@ -26499,6 +32693,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         preset = export_stable_publication_registry_preset_from_workspace(
             args.publication_registry_dir,
             output_path=args.output,
+            publication_registry_workspace_preset_path=args.publication_registry_workspace_preset_path,
+            catalog_preset_path=args.catalog_preset_path,
+            publication_catalog_workspace_preset_path=args.publication_catalog_workspace_preset_path,
+            publication_network_preset_path=args.publication_network_preset_path,
+            stack_preset_dir=args.stack_preset_dir,
+            catalog_preset_dir=args.catalog_preset_dir,
+            publication_descriptor_index_preset_path=args.publication_descriptor_index_preset_path,
+            publication_metadata_catalog_preset_path=args.publication_metadata_catalog_preset_path,
         )
         _write_output(preset, args.output)
         return 0
@@ -26975,12 +33177,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (
+            (preset or {}).get("publication_registry_workspace_collection_dir")
+        )
+        preset_publication_registry_workspace_preset_path = (
+            (preset or {}).get("publication_registry_workspace_preset_path")
+        )
+        (
+            nested_release_catalog_index_dir,
+            nested_publication_descriptor_index_dir,
+            nested_publication_metadata_catalog_dir,
+        ) = (
+            _resolve_publication_registry_component_inputs_from_workspace_preset(
+                preset_publication_registry_workspace_preset_path,
+                loader=load_publication_registry_workspace_preset,
+            )
+            if preset_publication_registry_workspace_preset_path is not None
+            else (None, None, None)
+        )
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         registry = build_publication_registry(
-            release_catalog_index_dir=args.release_catalog_index_dir or preset_publication_registry_workspace_dir or (preset or {}).get("release_catalog_index_dir") or inventory_release_catalog_index_dir,
-            publication_descriptor_index_dir=args.publication_descriptor_index_dir or preset_publication_registry_workspace_dir or (preset or {}).get("publication_descriptor_index_dir") or inventory_publication_descriptor_index_dir,
-            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir or preset_publication_registry_workspace_dir or (preset or {}).get("publication_metadata_catalog_dir") or inventory_publication_metadata_catalog_dir,
+            release_catalog_index_dir=args.release_catalog_index_dir or preset_publication_registry_workspace_dir or (preset or {}).get("release_catalog_index_dir") or nested_release_catalog_index_dir or inventory_release_catalog_index_dir,
+            publication_descriptor_index_dir=args.publication_descriptor_index_dir or preset_publication_registry_workspace_dir or (preset or {}).get("publication_descriptor_index_dir") or nested_publication_descriptor_index_dir or inventory_publication_descriptor_index_dir,
+            publication_metadata_catalog_dir=args.publication_metadata_catalog_dir or preset_publication_registry_workspace_dir or (preset or {}).get("publication_metadata_catalog_dir") or nested_publication_metadata_catalog_dir or inventory_publication_metadata_catalog_dir,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             base_dir=base_dir,
             registry_metadata=registry_metadata,
         )
@@ -27009,6 +33230,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (
+            (preset or {}).get("publication_registry_workspace_collection_dir")
+        )
+        preset_publication_registry_workspace_preset_path = (
+            (preset or {}).get("publication_registry_workspace_preset_path")
+        )
+        (
+            nested_release_catalog_index_dir,
+            nested_publication_descriptor_index_dir,
+            nested_publication_metadata_catalog_dir,
+        ) = (
+            _resolve_publication_registry_component_inputs_from_workspace_preset(
+                preset_publication_registry_workspace_preset_path,
+                loader=load_machine_publication_registry_workspace_preset,
+            )
+            if preset_publication_registry_workspace_preset_path is not None
+            else (None, None, None)
+        )
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         (
@@ -27020,18 +33259,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.release_catalog_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("release_catalog_index_dir")
+                or nested_release_catalog_index_dir
                 or inventory_release_catalog_index_dir
             ),
             publication_descriptor_index_dir=(
                 args.publication_descriptor_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_descriptor_index_dir")
+                or nested_publication_descriptor_index_dir
                 or inventory_publication_descriptor_index_dir
             ),
             publication_metadata_catalog_dir=(
                 args.publication_metadata_catalog_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_metadata_catalog_dir")
+                or nested_publication_metadata_catalog_dir
                 or inventory_publication_metadata_catalog_dir
             ),
         )
@@ -27039,6 +33281,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_catalog_index_dir=release_catalog_index_dir,
             publication_descriptor_index_dir=publication_descriptor_index_dir,
             publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             base_dir=base_dir,
             registry_metadata=registry_metadata,
         )
@@ -27067,6 +33310,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (
+            (preset or {}).get("publication_registry_workspace_collection_dir")
+        )
+        preset_publication_registry_workspace_preset_path = (
+            (preset or {}).get("publication_registry_workspace_preset_path")
+        )
+        (
+            nested_release_catalog_index_dir,
+            nested_publication_descriptor_index_dir,
+            nested_publication_metadata_catalog_dir,
+        ) = (
+            _resolve_publication_registry_component_inputs_from_workspace_preset(
+                preset_publication_registry_workspace_preset_path,
+                loader=load_stable_publication_registry_workspace_preset,
+            )
+            if preset_publication_registry_workspace_preset_path is not None
+            else (None, None, None)
+        )
         output_path = args.output
         base_dir = Path(output_path).resolve().parent if output_path else Path.cwd()
         (
@@ -27078,18 +33339,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.release_catalog_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("release_catalog_index_dir")
+                or nested_release_catalog_index_dir
                 or inventory_release_catalog_index_dir
             ),
             publication_descriptor_index_dir=(
                 args.publication_descriptor_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_descriptor_index_dir")
+                or nested_publication_descriptor_index_dir
                 or inventory_publication_descriptor_index_dir
             ),
             publication_metadata_catalog_dir=(
                 args.publication_metadata_catalog_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_metadata_catalog_dir")
+                or nested_publication_metadata_catalog_dir
                 or inventory_publication_metadata_catalog_dir
             ),
         )
@@ -27097,6 +33361,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             release_catalog_index_dir=release_catalog_index_dir,
             publication_descriptor_index_dir=publication_descriptor_index_dir,
             publication_metadata_catalog_dir=publication_metadata_catalog_dir,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             base_dir=base_dir,
             registry_metadata=registry_metadata,
         )
@@ -27388,28 +33653,48 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (preset or {}).get("publication_registry_workspace_collection_dir")
+        preset_publication_registry_workspace_preset_path = (
+            (preset or {}).get("publication_registry_workspace_preset_path")
+        )
+        (
+            nested_release_catalog_index_dir,
+            nested_publication_descriptor_index_dir,
+            nested_publication_metadata_catalog_dir,
+        ) = (
+            _resolve_publication_registry_component_inputs_from_workspace_preset(
+                preset_publication_registry_workspace_preset_path,
+                loader=load_publication_registry_workspace_preset,
+            )
+            if preset_publication_registry_workspace_preset_path is not None
+            else (None, None, None)
+        )
         signer = _release_manifest_signer_from_args(args)
         publish_publication_registry(
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
             signer=signer,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             release_catalog_index_dir=(
                 args.release_catalog_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("release_catalog_index_dir")
+                or nested_release_catalog_index_dir
                 or inventory_release_catalog_index_dir
             ),
             publication_descriptor_index_dir=(
                 args.publication_descriptor_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_descriptor_index_dir")
+                or nested_publication_descriptor_index_dir
                 or inventory_publication_descriptor_index_dir
             ),
             publication_metadata_catalog_dir=(
                 args.publication_metadata_catalog_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_metadata_catalog_dir")
+                or nested_publication_metadata_catalog_dir
                 or inventory_publication_metadata_catalog_dir
             ),
             registry_metadata=registry_metadata,
@@ -27439,28 +33724,48 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (preset or {}).get("publication_registry_workspace_collection_dir")
+        preset_publication_registry_workspace_preset_path = (
+            (preset or {}).get("publication_registry_workspace_preset_path")
+        )
+        (
+            nested_release_catalog_index_dir,
+            nested_publication_descriptor_index_dir,
+            nested_publication_metadata_catalog_dir,
+        ) = (
+            _resolve_publication_registry_component_inputs_from_workspace_preset(
+                preset_publication_registry_workspace_preset_path,
+                loader=load_machine_publication_registry_workspace_preset,
+            )
+            if preset_publication_registry_workspace_preset_path is not None
+            else (None, None, None)
+        )
         signer = _release_manifest_signer_from_args(args)
         publish_machine_publication_registry(
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
             signer=signer,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             release_catalog_index_dir=(
                 args.release_catalog_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("release_catalog_index_dir")
+                or nested_release_catalog_index_dir
                 or inventory_release_catalog_index_dir
             ),
             publication_descriptor_index_dir=(
                 args.publication_descriptor_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_descriptor_index_dir")
+                or nested_publication_descriptor_index_dir
                 or inventory_publication_descriptor_index_dir
             ),
             publication_metadata_catalog_dir=(
                 args.publication_metadata_catalog_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_metadata_catalog_dir")
+                or nested_publication_metadata_catalog_dir
                 or inventory_publication_metadata_catalog_dir
             ),
             registry_metadata=registry_metadata,
@@ -27490,28 +33795,48 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (preset or {}).get("publication_registry_workspace_collection_dir")
+        preset_publication_registry_workspace_preset_path = (
+            (preset or {}).get("publication_registry_workspace_preset_path")
+        )
+        (
+            nested_release_catalog_index_dir,
+            nested_publication_descriptor_index_dir,
+            nested_publication_metadata_catalog_dir,
+        ) = (
+            _resolve_publication_registry_component_inputs_from_workspace_preset(
+                preset_publication_registry_workspace_preset_path,
+                loader=load_stable_publication_registry_workspace_preset,
+            )
+            if preset_publication_registry_workspace_preset_path is not None
+            else (None, None, None)
+        )
         signer = _release_manifest_signer_from_args(args)
         publish_stable_publication_registry(
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
             signer=signer,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             release_catalog_index_dir=(
                 args.release_catalog_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("release_catalog_index_dir")
+                or nested_release_catalog_index_dir
                 or inventory_release_catalog_index_dir
             ),
             publication_descriptor_index_dir=(
                 args.publication_descriptor_index_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_descriptor_index_dir")
+                or nested_publication_descriptor_index_dir
                 or inventory_publication_descriptor_index_dir
             ),
             publication_metadata_catalog_dir=(
                 args.publication_metadata_catalog_dir
                 or preset_publication_registry_workspace_dir
                 or (preset or {}).get("publication_metadata_catalog_dir")
+                or nested_publication_metadata_catalog_dir
                 or inventory_publication_metadata_catalog_dir
             ),
             registry_metadata=registry_metadata,
@@ -27803,10 +34128,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (preset or {}).get("publication_registry_workspace_collection_dir")
+        preset_publication_registry_workspace_preset_path = (preset or {}).get("publication_registry_workspace_preset_path")
+        if (
+            preset_publication_registry_workspace_preset_path is not None
+            and preset_publication_registry_workspace_dir is None
+            and preset_publication_registry_workspace_collection_dir is None
+            and not any(
+                (
+                    (preset or {}).get("release_catalog_index_dir"),
+                    (preset or {}).get("publication_descriptor_index_dir"),
+                    (preset or {}).get("publication_metadata_catalog_dir"),
+                    args.release_catalog_index_dir,
+                    args.publication_descriptor_index_dir,
+                    args.publication_metadata_catalog_dir,
+                )
+            )
+        ):
+            preset_publication_registry_workspace_dir = str(
+                bootstrap_publication_registry_workspace_from_nested_preset(
+                    command="bootstrap-publication-registry-workspace",
+                    preset_path=preset_publication_registry_workspace_preset_path,
+                    output_dir=args.output_dir,
+                    signature_scheme=args.scheme,
+                    key_id=args.key_id,
+                ).resolve()
+            )
         output = bootstrap_publication_registry_publication(
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             release_catalog_index_dir=(
                 args.release_catalog_index_dir
                 or preset_publication_registry_workspace_dir
@@ -27852,6 +34204,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (preset or {}).get("publication_registry_workspace_collection_dir")
+        preset_publication_registry_workspace_preset_path = (preset or {}).get("publication_registry_workspace_preset_path")
+        if (
+            preset_publication_registry_workspace_preset_path is not None
+            and preset_publication_registry_workspace_dir is None
+            and preset_publication_registry_workspace_collection_dir is None
+            and not any(
+                (
+                    (preset or {}).get("release_catalog_index_dir"),
+                    (preset or {}).get("publication_descriptor_index_dir"),
+                    (preset or {}).get("publication_metadata_catalog_dir"),
+                    args.release_catalog_index_dir,
+                    args.publication_descriptor_index_dir,
+                    args.publication_metadata_catalog_dir,
+                )
+            )
+        ):
+            preset_publication_registry_workspace_dir = str(
+                bootstrap_publication_registry_workspace_from_nested_preset(
+                    command="bootstrap-stable-publication-registry-workspace",
+                    preset_path=preset_publication_registry_workspace_preset_path,
+                    output_dir=args.output_dir,
+                    signature_scheme=args.scheme,
+                    key_id=args.key_id,
+                ).resolve()
+            )
         (
             release_catalog_index_dir,
             publication_descriptor_index_dir,
@@ -27880,6 +34258,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             release_catalog_index_dir=release_catalog_index_dir,
             publication_descriptor_index_dir=publication_descriptor_index_dir,
             publication_metadata_catalog_dir=publication_metadata_catalog_dir,
@@ -27910,6 +34289,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if value is not None:
                 registry_metadata[key] = value
         preset_publication_registry_workspace_dir = (preset or {}).get("publication_registry_workspace_dir")
+        preset_publication_registry_workspace_collection_dir = (preset or {}).get("publication_registry_workspace_collection_dir")
+        preset_publication_registry_workspace_preset_path = (preset or {}).get("publication_registry_workspace_preset_path")
+        if (
+            preset_publication_registry_workspace_preset_path is not None
+            and preset_publication_registry_workspace_dir is None
+            and preset_publication_registry_workspace_collection_dir is None
+            and not any(
+                (
+                    (preset or {}).get("release_catalog_index_dir"),
+                    (preset or {}).get("publication_descriptor_index_dir"),
+                    (preset or {}).get("publication_metadata_catalog_dir"),
+                    args.release_catalog_index_dir,
+                    args.publication_descriptor_index_dir,
+                    args.publication_metadata_catalog_dir,
+                )
+            )
+        ):
+            preset_publication_registry_workspace_dir = str(
+                bootstrap_publication_registry_workspace_from_nested_preset(
+                    command="bootstrap-machine-publication-registry-workspace",
+                    preset_path=preset_publication_registry_workspace_preset_path,
+                    output_dir=args.output_dir,
+                    signature_scheme=args.scheme,
+                    key_id=args.key_id,
+                ).resolve()
+            )
         (
             release_catalog_index_dir,
             publication_descriptor_index_dir,
@@ -27938,6 +34343,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_dir=args.output_dir,
             signature_scheme=args.scheme,
             key_id=args.key_id,
+            publication_registry_workspace_collection_dir=preset_publication_registry_workspace_collection_dir,
             release_catalog_index_dir=release_catalog_index_dir,
             publication_descriptor_index_dir=publication_descriptor_index_dir,
             publication_metadata_catalog_dir=publication_metadata_catalog_dir,
@@ -28396,6 +34802,162 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         print(f"wrote SATROOT-STABLE-1 publication network collection to {Path(args.output_dir).resolve()}")
         return 0
+
+    if args.command == "bootstrap-publication-catalog-workspace-collection":
+        inventory_workspace_dirs = load_inventory_publication_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_publication_catalog_workspace_collection(
+            [*inventory_workspace_dirs, *args.publication_catalog_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT publication catalog workspace collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-machine-publication-catalog-workspace-collection":
+        inventory_workspace_dirs = load_inventory_publication_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_machine_publication_catalog_workspace_collection(
+            [*inventory_workspace_dirs, *args.publication_catalog_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication catalog workspace collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-stable-publication-catalog-workspace-collection":
+        inventory_workspace_dirs = load_inventory_publication_catalog_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_stable_publication_catalog_workspace_collection(
+            [*inventory_workspace_dirs, *args.publication_catalog_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT-STABLE-1 publication catalog workspace collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-publication-registry-workspace-collection":
+        inventory_workspace_dirs = load_inventory_publication_registry_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_publication_registry_workspace_collection(
+            [*inventory_workspace_dirs, *args.publication_registry_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT publication registry workspace collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-machine-publication-registry-workspace-collection":
+        inventory_workspace_dirs = load_inventory_publication_registry_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_machine_publication_registry_workspace_collection(
+            [*inventory_workspace_dirs, *args.publication_registry_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT-MACHINE-1 publication registry workspace collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bootstrap-stable-publication-registry-workspace-collection":
+        inventory_workspace_dirs = load_inventory_publication_registry_workspace_dirs(args.inventory_json) if args.inventory_json else []
+        bootstrap_stable_publication_registry_workspace_collection(
+            [*inventory_workspace_dirs, *args.publication_registry_workspace_dir],
+            output_dir=args.output_dir,
+            discover_under=args.discover_under,
+            recursive=not args.non_recursive,
+        )
+        print(f"wrote SATROOT-STABLE-1 publication registry workspace collection to {Path(args.output_dir).resolve()}")
+        return 0
+
+    if args.command == "bundle-collection-summary":
+        summary = summarize_bundle_collection(args.bundle_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "release-collection-summary":
+        summary = summarize_release_collection(args.release_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "release-catalog-collection-summary":
+        summary = summarize_release_catalog_collection(args.release_catalog_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "demo-catalog-workspace-collection-summary":
+        summary = summarize_demo_catalog_workspace_collection(args.catalog_workspace_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-stack-collection-summary":
+        summary = summarize_publication_stack_collection(args.publication_stack_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-network-collection-summary":
+        summary = summarize_publication_network_collection(args.publication_network_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-metadata-bundle-collection-summary":
+        summary = summarize_publication_metadata_bundle_collection(args.publication_metadata_bundle_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-catalog-workspace-collection-summary":
+        summary = summarize_publication_catalog_workspace_collection(args.publication_catalog_workspace_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "publication-registry-workspace-collection-summary":
+        summary = summarize_publication_registry_workspace_collection(args.publication_registry_workspace_collection_dir)
+        print(canonical_json(summary))
+        return 0
+
+    if args.command == "bundle-collection-lint":
+        report = lint_bundle_collection(args.bundle_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "release-collection-lint":
+        report = lint_release_collection(args.release_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "release-catalog-collection-lint":
+        report = lint_release_catalog_collection(args.release_catalog_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "demo-catalog-workspace-collection-lint":
+        report = lint_demo_catalog_workspace_collection(args.catalog_workspace_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-stack-collection-lint":
+        report = lint_publication_stack_collection(args.publication_stack_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-network-collection-lint":
+        report = lint_publication_network_collection(args.publication_network_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-metadata-bundle-collection-lint":
+        report = lint_publication_metadata_bundle_collection(args.publication_metadata_bundle_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-catalog-workspace-collection-lint":
+        report = lint_publication_catalog_workspace_collection(args.publication_catalog_workspace_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
+
+    if args.command == "publication-registry-workspace-collection-lint":
+        report = lint_publication_registry_workspace_collection(args.publication_registry_workspace_collection_dir)
+        print(canonical_json(report))
+        return 0 if report["ok"] else 1
 
     if args.command == "bundle-summary":
         summary = summarize_signed_ledger_bundle(args.bundle_dir)
@@ -29552,6 +36114,60 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 0
 
+    if args.command == "bootstrap-demo-release-catalog-publication":
+        generated = bootstrap_demo_release_catalog_publication_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.bundle_scheme,
+            release_scheme=args.release_scheme,
+            release_key_id=args.release_key_id,
+            output_dir=args.output_dir,
+            signature_scheme=args.scheme,
+            key_id=args.key_id,
+            profiles=args.profile,
+            symbol_overrides=parse_named_string_overrides(
+                args.symbol_overrides,
+                label="demo release symbol override",
+                allowed_keys=DEMO_CATALOG_PROFILES,
+            ),
+            name_overrides=parse_named_string_overrides(
+                args.name_overrides,
+                label="demo release name override",
+                allowed_keys=DEMO_CATALOG_PROFILES,
+            ),
+            profile_field_overrides=parse_profile_field_override_map(
+                args.profile_field_overrides,
+                allowed_profiles=DEMO_CATALOG_PROFILES,
+            ),
+            profile_structure_overrides=parse_profile_structure_override_map(
+                args.profile_structure_overrides,
+                allowed_profiles=DEMO_CATALOG_PROFILES,
+            ),
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            catalog_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.channel,
+                    "label": args.label,
+                    "published_at": args.published_at,
+                }.items()
+                if value is not None
+            },
+        )
+        print(
+            "wrote bootstrapped SATROOT demo release catalog publication to "
+            f"{Path(generated['release_catalog_publication']['release_catalog_manifest_path']).parent}"
+        )
+        return 0
+
     if args.command == "bootstrap-machine-release-catalog-publication":
         preset = load_machine_release_catalog_preset(args.preset_json) if args.preset_json else None
         release_collection_dir = (
@@ -29694,6 +36310,71 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         print(
             "wrote bootstrapped SATROOT-STABLE-1 demo release catalog index publication to "
+            f"{Path(generated['release_catalog_index_publication']['release_catalog_index_manifest_path']).parent}"
+        )
+        return 0
+
+    if args.command == "bootstrap-demo-release-catalog-index-publication":
+        generated = bootstrap_demo_release_catalog_index_publication_from_presets(
+            args.preset_jsons,
+            bundle_scheme=args.bundle_scheme,
+            output_dir=args.output_dir,
+            release_key_id=args.release_key_id,
+            catalog_signature_scheme=args.catalog_scheme,
+            catalog_key_id=args.catalog_key_id,
+            index_signature_scheme=args.scheme,
+            index_key_id=args.key_id,
+            release_scheme=args.release_scheme,
+            profiles=args.profile,
+            symbol_overrides=parse_named_string_overrides(
+                args.symbol_overrides,
+                label="demo release symbol override",
+                allowed_keys=DEMO_CATALOG_PROFILES,
+            ),
+            name_overrides=parse_named_string_overrides(
+                args.name_overrides,
+                label="demo release name override",
+                allowed_keys=DEMO_CATALOG_PROFILES,
+            ),
+            profile_field_overrides=parse_profile_field_override_map(
+                args.profile_field_overrides,
+                allowed_profiles=DEMO_CATALOG_PROFILES,
+            ),
+            profile_structure_overrides=parse_profile_structure_override_map(
+                args.profile_structure_overrides,
+                allowed_profiles=DEMO_CATALOG_PROFILES,
+            ),
+            key_prefix=args.key_prefix,
+            key_suffix=args.key_suffix,
+            include_state_hash=not args.no_state_hash,
+            include_annotation=not args.no_annotated_output,
+            verifier_only=args.verifier_only,
+            release_metadata_overrides={
+                "channel": args.release_channel,
+                "label": args.release_label,
+                "published_at": args.release_published_at,
+            },
+            catalog_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.catalog_channel,
+                    "label": args.catalog_label,
+                    "published_at": args.catalog_published_at,
+                }.items()
+                if value is not None
+            },
+            index_metadata={
+                key: value
+                for key, value in {
+                    "channel": args.channel,
+                    "label": args.label,
+                    "published_at": args.published_at,
+                }.items()
+                if value is not None
+            },
+        )
+        print(
+            "wrote bootstrapped SATROOT demo release catalog index publication to "
             f"{Path(generated['release_catalog_index_publication']['release_catalog_index_manifest_path']).parent}"
         )
         return 0

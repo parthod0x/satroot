@@ -27,9 +27,10 @@ validation = ["jsonschema>=4.23"]
 
 [project.scripts]
 satroot1 = "satroot1:main"
+satroot-test = "satroot_test:main"
 
 [tool.setuptools]
-py-modules = ["satroot1"]
+py-modules = ["satroot1", "satroot_collection_lint", "satroot_test"]
 
 [tool.setuptools.package-dir]
 "" = "src"

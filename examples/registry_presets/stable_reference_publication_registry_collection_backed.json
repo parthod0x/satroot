@@ -1,7 +1,7 @@
 {
   "type": "SATROOT-PUBLICATION-REGISTRY-PRESET",
   "version": "0.1",
-  "publication_registry_workspace_dir": "../generated_stable_publication_registry_workspace",
+  "publication_registry_workspace_collection_dir": "../../generated_stable_publication_registry_workspace_collection",
   "registry": {
     "channel": "stable",
     "label": "SATROOT Stable Reference Collection-Backed Publication Registry",

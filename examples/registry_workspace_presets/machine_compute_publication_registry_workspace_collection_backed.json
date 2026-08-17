@@ -1,7 +1,7 @@
 {
   "type": "SATROOT-PUBLICATION-REGISTRY-WORKSPACE-PRESET",
   "version": "0.1",
-  "publication_catalog_workspace_preset": "../publication_catalog_workspace_presets/machine_compute_publication_catalog_workspace.json",
+  "publication_catalog_workspace_collection_dir": "../../generated_machine_publication_catalog_workspace_collection",
   "publication_network_collection_dir": "../../generated_machine_publication_network_collection",
   "publication_registry": {
     "channel": "machine",
