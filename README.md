@@ -454,6 +454,14 @@ python scripts/run_receipt_profile_smoke.py
 
 That one writes into `.tmp_receipt_profile_smoke_run/` by default.
 
+For the identity-object lane, there is now a matching end-to-end smoke pass that replays `IDENTITY1` and materializes a full `SATROOT-IDENTITY-1` singleton publication registry workspace from the checked-in identity preset:
+
+```bash
+python scripts/run_identity_profile_smoke.py
+```
+
+That one writes into `.tmp_identity_profile_smoke_run/` by default.
+
 After `pip install -e .`, the packaged entrypoints are available too:
 
 ```bash
@@ -500,6 +508,18 @@ or:
 
 ```bash
 satroot-receipt-profile-smoke
+```
+
+The identity lane has the same packaged entrypoints:
+
+```bash
+python -m satroot_identity_profile_smoke
+```
+
+or:
+
+```bash
+satroot-identity-profile-smoke
 ```
 
 All three forms collect from the full `tests/` tree by default.

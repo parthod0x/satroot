@@ -82,6 +82,7 @@ Current status:
 - A dedicated receipt-profile smoke workflow now replays the checked-in `RECEIPT1` ledger and generates, summarizes, and lints a full `SATROOT-RECEIPT-1` singleton publication registry workspace from the checked-in receipt preset.
 - `SATROOT-IDENTITY-1` draft exists in this repo.
 - `IDENTITY1` examples are included as the first identity-object implementation artifact.
+- A dedicated identity-profile smoke workflow now replays the checked-in `IDENTITY1` ledger and generates, summarizes, and lints a full `SATROOT-IDENTITY-1` singleton publication registry workspace from the checked-in identity preset.
 - `SATROOT-LICENSE-1` draft exists in this repo.
 - `LICENSE1` examples are included as the first license-object implementation artifact.
 

@@ -2,6 +2,7 @@ __pycache__/
 .pytest_cache/
 .pytest_*.log
 .tmp_pytest_*/
+.tmp_identity_profile_smoke*/
 .tmp_machine_profile_smoke*/
 .tmp_receipt_profile_smoke*/
 .tmp_stable_profile_smoke*/

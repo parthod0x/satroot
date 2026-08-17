@@ -22,3 +22,4 @@ def test_pyproject_includes_all_top_level_runtime_modules():
     assert "satroot_stable_profile_smoke" in py_modules
     assert "satroot_machine_profile_smoke" in py_modules
     assert "satroot_receipt_profile_smoke" in py_modules
+    assert "satroot_identity_profile_smoke" in py_modules
