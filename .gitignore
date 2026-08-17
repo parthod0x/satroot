@@ -2,6 +2,7 @@ __pycache__/
 .pytest_cache/
 .pytest_*.log
 .tmp_pytest_*/
+.tmp_stable_profile_smoke*/
 *.pyc
 *.pyo
 .env

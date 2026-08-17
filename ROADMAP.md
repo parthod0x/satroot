@@ -29,15 +29,12 @@ Current scope:
 - supply invariants
 - example token `FLOOR1`
 
+Release status:
+
+- `v0.1-genesis` has been tagged and pushed from this repository.
+- The reference CLI, example preset tree, collection summary/lint surface, chunked test runner, and CI verification flow are now part of the frozen base deliverable.
+
 ## Near-term build order
-
-### v0.1 Genesis
-
-Goal: freeze the primitive.
-
-- Publish `SATROOT-1` as the minimal kernel.
-- Keep boundary language strict.
-- Keep implementation small and auditable.
 
 ### v0.2 Stable profile
 
@@ -46,11 +43,21 @@ Goal: add reference-value accounting without changing the base primitive.
 - Add `SATROOT-STABLE-1` as a profile only.
 - Include `USDROOT1` or `INRROOT1` example records.
 - Keep claims reference-only unless a later legal/compliance layer exists.
+- Add a clear end-to-end preset and publication path for stable profile artifacts, parallel to the current generic/machine/stable publication lanes.
+- Keep the output framed as deterministic accounting state, not redemption-bearing money.
 
 Current status:
 
 - `SATROOT-STABLE-1` draft exists in this repo.
 - `USDROOT1` reference-only examples are included as the first profile implementation artifact.
+- A dedicated stable-profile smoke workflow now replays the checked-in `USDROOT1` ledger and generates, summarizes, and lints a full `SATROOT-STABLE-1` publication registry workspace through the direct stable builder lane.
+
+Recommended concrete deliverables for `v0.2`:
+
+- one stable profile example that runs end-to-end from example records to signed publication output,
+- one stable profile bundle/release/catalog/index lane that mirrors the generic kernel ergonomics,
+- one profile-specific verification section in the docs explaining what is and is not being claimed,
+- one release tag such as `v0.2-stable-profile` only after the profile path is tested as thoroughly as the current `v0.1` kernel.
 
 ### v0.3 Namespace expansion
 
@@ -70,6 +77,28 @@ Current status:
 - `IDENTITY1` examples are included as the first identity-object implementation artifact.
 - `SATROOT-LICENSE-1` draft exists in this repo.
 - `LICENSE1` examples are included as the first license-object implementation artifact.
+
+Recommended order inside `v0.3`:
+
+1. machine-credit lane
+2. receipt/invoice lane
+3. identity/authority lane
+4. license/usage-right lane
+
+That order keeps the project close to machine-native accounting and operational workflows before moving into heavier rights semantics.
+
+## Immediate next milestone
+
+If work resumes right away, the best next milestone is:
+
+`v0.2-stable-profile`
+
+The success condition should be narrow:
+
+- the base `SATROOT-1` kernel remains unchanged in principle,
+- `SATROOT-STABLE-1` stays explicitly reference-only,
+- one stable example can be built, published, summarized, linted, and replayed through the same tooling style already established for `v0.1`,
+- the docs keep the legal/economic boundary language as strict as the current base protocol.
 
 ## Core architectural rule
 

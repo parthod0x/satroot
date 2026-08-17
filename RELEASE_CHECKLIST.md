@@ -5,7 +5,8 @@ Before publishing `v0.1-genesis`:
 - [ ] Confirm this repo contains no private keys, seed phrases, API tokens, or wallet files.
 - [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint.
 - [ ] Run `python scripts/run_pytest_chunked.py` from the repo root for the full suite, or use `python -m satroot_test` / `satroot-test` after `pip install -e .`.
-- [ ] After `pip install -e .`, run `python -c "import satroot1, satroot_collection_lint, satroot_test"` to confirm the installed modules resolve outside the repo-local pytest `pythonpath` shortcut.
+- [ ] Run `python scripts/run_stable_profile_smoke.py` from the repo root, or use `python -m satroot_stable_profile_smoke` / `satroot-stable-profile-smoke` after `pip install -e .`, to confirm the checked-in SATROOT-STABLE-1 profile lane still replays `USDROOT1` and emits a lint-clean publication registry workspace.
+- [ ] After `pip install -e .`, run `python -c "import satroot1, satroot_collection_lint, satroot_test, satroot_stable_profile_smoke"` to confirm the installed modules resolve outside the repo-local pytest `pythonpath` shortcut.
 - [ ] Optionally run `python -m pytest -q tests/test_run_pytest_chunked.py` as a quick smoke check on the chunked runner itself.
 - [ ] Confirm no `__pycache__/`, `.pytest_cache/`, build artifacts, or local virtual environments are committed.
 - [ ] Confirm README and SPEC use "anchor/root/witness" language, not "peg" language.

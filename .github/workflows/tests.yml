@@ -35,7 +35,11 @@ jobs:
 
       - name: Smoke test installed modules
         run: |
-          python -c "import satroot1, satroot_collection_lint, satroot_test; print('imports-ok')"
+          python -c "import satroot1, satroot_collection_lint, satroot_test, satroot_stable_profile_smoke; print('imports-ok')"
+
+      - name: Run stable-profile smoke workflow
+        run: |
+          python -m satroot_stable_profile_smoke --output-dir .tmp_stable_profile_smoke_ci
 
       - name: Run chunked pytest suite
         run: |

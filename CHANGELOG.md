@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightens the roadmap around the post-`v0.1-genesis` state by recording the released base deliverable and naming `v0.2-stable-profile` as the next concrete milestone.
+- Adds `python -m satroot_stable_profile_smoke`, `satroot-stable-profile-smoke`, and `scripts/run_stable_profile_smoke.py` for an explicit SATROOT-STABLE-1 end-to-end smoke pass that replays the checked-in `USDROOT1` example and generates, summarizes, and lints a full stable publication registry workspace through the direct stable builder lane.
+- Runs the stable-profile smoke workflow in CI, adds the packaged stable smoke module to the installed-import check, and ignores generated `.tmp_stable_profile_smoke*/` workspaces so local verification stays tidy by default.
 - Adds `python -m satroot_test`, `satroot-test`, and `scripts/run_pytest_chunked.py` for deterministic chunked pytest execution across the full `tests/` tree, keeps the repo-local wrapper usable from a fresh checkout by wiring `src/` directly, and adds a matching GitHub Actions workflow for repository verification without a single long-lived pytest process.
 - Clarifies the README and release guidance so plain `pytest` is framed as a smoke path while chunked execution is the preferred full-suite verification route.
 - Expands the GitHub Actions test workflow to cover both `ubuntu-latest` and `windows-latest`, and adds `workflow_dispatch` plus non-fail-fast matrix behavior for easier cross-platform verification and reruns.

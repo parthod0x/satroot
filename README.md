@@ -430,6 +430,14 @@ For the full suite, prefer the chunked helper:
 python scripts/run_pytest_chunked.py
 ```
 
+For a stable-profile end-to-end smoke pass that replays the checked-in `USDROOT1` example and generates a full `SATROOT-STABLE-1` publication registry workspace:
+
+```bash
+python scripts/run_stable_profile_smoke.py
+```
+
+By default that writes into `.tmp_stable_profile_smoke_run/` so the generated workspace stays clearly disposable.
+
 After `pip install -e .`, the packaged entrypoints are available too:
 
 ```bash
@@ -440,6 +448,18 @@ or:
 
 ```bash
 satroot-test
+```
+
+There is also a packaged stable-profile smoke entrypoint:
+
+```bash
+python -m satroot_stable_profile_smoke
+```
+
+or:
+
+```bash
+satroot-stable-profile-smoke
 ```
 
 All three forms collect from the full `tests/` tree by default.
