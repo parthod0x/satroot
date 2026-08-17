@@ -462,6 +462,14 @@ python scripts/run_identity_profile_smoke.py
 
 That one writes into `.tmp_identity_profile_smoke_run/` by default.
 
+For the license-object lane, there is now a matching end-to-end smoke pass that replays `LICENSE1` and materializes a full `SATROOT-LICENSE-1` singleton publication registry workspace from the checked-in license preset:
+
+```bash
+python scripts/run_license_profile_smoke.py
+```
+
+That one writes into `.tmp_license_profile_smoke_run/` by default.
+
 After `pip install -e .`, the packaged entrypoints are available too:
 
 ```bash
@@ -520,6 +528,18 @@ or:
 
 ```bash
 satroot-identity-profile-smoke
+```
+
+The license lane has the same packaged entrypoints:
+
+```bash
+python -m satroot_license_profile_smoke
+```
+
+or:
+
+```bash
+satroot-license-profile-smoke
 ```
 
 All three forms collect from the full `tests/` tree by default.

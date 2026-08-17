@@ -85,6 +85,7 @@ Current status:
 - A dedicated identity-profile smoke workflow now replays the checked-in `IDENTITY1` ledger and generates, summarizes, and lints a full `SATROOT-IDENTITY-1` singleton publication registry workspace from the checked-in identity preset.
 - `SATROOT-LICENSE-1` draft exists in this repo.
 - `LICENSE1` examples are included as the first license-object implementation artifact.
+- A dedicated license-profile smoke workflow now replays the checked-in `LICENSE1` ledger and generates, summarizes, and lints a full `SATROOT-LICENSE-1` singleton publication registry workspace from the checked-in license preset.
 
 Recommended order inside `v0.3`:
 

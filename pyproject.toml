@@ -32,9 +32,10 @@ satroot-stable-profile-smoke = "satroot_stable_profile_smoke:main"
 satroot-machine-profile-smoke = "satroot_machine_profile_smoke:main"
 satroot-receipt-profile-smoke = "satroot_receipt_profile_smoke:main"
 satroot-identity-profile-smoke = "satroot_identity_profile_smoke:main"
+satroot-license-profile-smoke = "satroot_license_profile_smoke:main"
 
 [tool.setuptools]
-py-modules = ["satroot1", "satroot_collection_lint", "satroot_test", "satroot_stable_profile_smoke", "satroot_machine_profile_smoke", "satroot_receipt_profile_smoke", "satroot_identity_profile_smoke"]
+py-modules = ["satroot1", "satroot_collection_lint", "satroot_test", "satroot_stable_profile_smoke", "satroot_machine_profile_smoke", "satroot_receipt_profile_smoke", "satroot_identity_profile_smoke", "satroot_license_profile_smoke"]
 
 [tool.setuptools.package-dir]
 "" = "src"

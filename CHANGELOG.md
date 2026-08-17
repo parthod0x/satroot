@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Tightens the roadmap around the post-`v0.2-stable-profile` state by recording the released stable-profile deliverable and naming `v0.3-namespace-expansion` as the next concrete milestone.
+- Adds `python -m satroot_license_profile_smoke`, `satroot-license-profile-smoke`, and `scripts/run_license_profile_smoke.py` for an explicit SATROOT-LICENSE-1 end-to-end smoke pass that replays the checked-in `LICENSE1` example and generates, summarizes, and lints a full singleton publication registry workspace from the checked-in license preset.
+- Runs the license-profile smoke workflow in CI, adds the packaged license smoke module to the installed-import check, and ignores generated `.tmp_license_profile_smoke*/` workspaces so local verification stays tidy by default.
 - Adds `python -m satroot_identity_profile_smoke`, `satroot-identity-profile-smoke`, and `scripts/run_identity_profile_smoke.py` for an explicit SATROOT-IDENTITY-1 end-to-end smoke pass that replays the checked-in `IDENTITY1` example and generates, summarizes, and lints a full singleton publication registry workspace from the checked-in identity preset.
 - Runs the identity-profile smoke workflow in CI, adds the packaged identity smoke module to the installed-import check, and ignores generated `.tmp_identity_profile_smoke*/` workspaces so local verification stays tidy by default.
 - Adds `python -m satroot_receipt_profile_smoke`, `satroot-receipt-profile-smoke`, and `scripts/run_receipt_profile_smoke.py` for an explicit SATROOT-RECEIPT-1 end-to-end smoke pass that replays the checked-in `RECEIPT1` example and generates, summarizes, and lints a full singleton publication registry workspace from the checked-in receipt preset.
