@@ -10,11 +10,13 @@ from satroot1 import (
     bootstrap_publication_catalog_workspace_collection,
     bootstrap_publication_network_collection,
     bootstrap_publication_registry_workspace_collection,
+    bootstrap_publication_stack_collection,
     lint_demo_catalog_workspace_collection,
     lint_publication_catalog_workspace_collection,
     lint_publication_network_collection,
     lint_publication_network_workspace,
     lint_publication_registry_workspace_collection,
+    lint_publication_stack_collection,
     lint_publication_stack_workspace,
     publish_publication_network_workspace,
     publish_publication_stack_workspace,
@@ -23,6 +25,7 @@ from satroot1 import (
     summarize_publication_network_collection,
     summarize_publication_network_workspace,
     summarize_publication_registry_workspace_collection,
+    summarize_publication_stack_collection,
     summarize_publication_stack_workspace,
 )
 from satroot_profile_matrix_smoke import run_profile_matrix_smoke
@@ -33,6 +36,25 @@ PROFILE_ORDER = ("stable", "machine", "receipt", "identity", "license")
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _resolve_compact_network_stack_workspace_dir(profile_report: Mapping[str, Any]) -> Path:
+    compact_network = profile_report["publication_network_workspace"]
+    network_workspace_dir = Path(str(compact_network["workspace_dir"])).resolve()
+    workspace_names = compact_network.get("workspace_names")
+    if not isinstance(workspace_names, list) or len(workspace_names) != 1:
+        raise ValueError("profile federation smoke expected exactly one source publication stack workspace")
+    workspace_name = workspace_names[0]
+    if not isinstance(workspace_name, str) or not workspace_name.strip():
+        raise ValueError("profile federation smoke source publication stack workspace name must be non-empty")
+
+    stack_workspace_dir = (network_workspace_dir / "stack_workspaces" / workspace_name).resolve()
+    if not stack_workspace_dir.is_dir():
+        raise ValueError(
+            "profile federation smoke could not resolve source publication stack workspace "
+            f"at {stack_workspace_dir}"
+        )
+    return stack_workspace_dir
 
 
 def run_profile_federation_smoke(
@@ -50,6 +72,10 @@ def run_profile_federation_smoke(
 
     demo_catalog_dirs = [
         Path(str(profile_reports[name]["demo_catalog_workspace"]["workspace_dir"])).resolve()
+        for name in PROFILE_ORDER
+    ]
+    publication_stack_dirs = [
+        _resolve_compact_network_stack_workspace_dir(profile_reports[name])
         for name in PROFILE_ORDER
     ]
     publication_network_dirs = [
@@ -88,12 +114,25 @@ def run_profile_federation_smoke(
     federated_stack_summary = summarize_publication_stack_workspace(federated_stack_dir)
     federated_stack_lint = lint_publication_stack_workspace(federated_stack_dir)
 
+    publication_stack_collection_dir = output_path / "publication_stack_collection"
+    bootstrap_publication_stack_collection(
+        publication_stack_dirs,
+        output_dir=publication_stack_collection_dir,
+    )
+    publication_stack_collection_summary = summarize_publication_stack_collection(
+        publication_stack_collection_dir
+    )
+    publication_stack_collection_lint = lint_publication_stack_collection(
+        publication_stack_collection_dir
+    )
+
     federated_network_dir = output_path / "federated_publication_network"
     publish_publication_network_workspace(
         [federated_stack_dir],
         output_dir=federated_network_dir,
         signature_scheme=bundle_scheme,
         key_id=release_catalog_index_key_id,
+        publication_stack_collection_dir=publication_stack_collection_dir,
         release_catalog_index_metadata={
             "channel": "federation",
             "label": "Released Profile Federation Release Catalog Index",
@@ -150,6 +189,8 @@ def run_profile_federation_smoke(
         "demo_catalog_workspace_collection_lint": demo_catalog_collection_lint,
         "publication_stack_workspace": federated_stack_summary,
         "publication_stack_workspace_lint": federated_stack_lint,
+        "publication_stack_collection": publication_stack_collection_summary,
+        "publication_stack_collection_lint": publication_stack_collection_lint,
         "publication_network_workspace": federated_network_summary,
         "publication_network_workspace_lint": federated_network_lint,
         "publication_network_collection": publication_network_collection_summary,
@@ -164,6 +205,7 @@ def run_profile_federation_smoke(
             report["profile_matrix"]["ok"] is True,
             report["demo_catalog_workspace_collection_lint"]["ok"] is True,
             report["publication_stack_workspace_lint"]["ok"] is True,
+            report["publication_stack_collection_lint"]["ok"] is True,
             report["publication_network_workspace_lint"]["ok"] is True,
             report["publication_network_collection_lint"]["ok"] is True,
             report["publication_catalog_workspace_collection_lint"]["ok"] is True,

@@ -117,7 +117,7 @@ The success condition should be narrow:
 Current status:
 
 - A first `satroot_profile_federation_smoke` wrapper now reuses the released profile matrix as source material.
-- That wrapper freezes the resulting per-profile demo catalog, publication network, publication catalog workspace, and publication registry workspace outputs into explicit collections.
+- That wrapper freezes the resulting per-profile demo catalog, publication stack, publication network, publication catalog workspace, and publication registry workspace outputs into explicit collections.
 - It also proves that those released profile demo catalogs can be republished through one mixed-profile publication stack and publication network without changing the base kernel.
 
 ## Core architectural rule

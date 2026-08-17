@@ -41,6 +41,10 @@ jobs:
         run: |
           python -m satroot_profile_matrix_smoke --output-dir .tmp_profile_matrix_smoke_ci
 
+      - name: Run profile-federation smoke workflow
+        run: |
+          python -m satroot_profile_federation_smoke --output-dir .tmp_profile_federation_smoke_ci
+
       - name: Run chunked pytest suite
         run: |
           python -m satroot_test --chunk-size 100
