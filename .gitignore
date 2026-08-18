@@ -3,9 +3,12 @@ __pycache__/
 .pytest_*.log
 .tmp_profile_catalog_probe*/
 .tmp_profile_registry_probe*/
+.tmp_demo_release_catalog_matrix_smoke*/
+.tmp_machine_demo_release_catalog_smoke*/
 .tmp_profile_federation_smoke*/
 .tmp_pytest_*/
 .tmp_profile_matrix_smoke*/
+.tmp_stable_demo_release_catalog_smoke*/
 .tmp_identity_profile_smoke*/
 .tmp_license_profile_smoke*/
 .tmp_machine_profile_smoke*/

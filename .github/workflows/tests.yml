@@ -35,7 +35,11 @@ jobs:
 
       - name: Smoke test installed modules
         run: |
-          python -c "import satroot1, satroot_collection_lint, satroot_test, satroot_profile_federation_smoke, satroot_profile_matrix_smoke, satroot_stable_profile_smoke, satroot_machine_profile_smoke, satroot_receipt_profile_smoke, satroot_identity_profile_smoke, satroot_license_profile_smoke; print('imports-ok')"
+          python -c "import satroot1, satroot_collection_lint, satroot_test, satroot_demo_release_catalog_matrix_smoke, satroot_stable_demo_release_catalog_smoke, satroot_machine_demo_release_catalog_smoke, satroot_profile_federation_smoke, satroot_profile_matrix_smoke, satroot_stable_profile_smoke, satroot_machine_profile_smoke, satroot_receipt_profile_smoke, satroot_identity_profile_smoke, satroot_license_profile_smoke; print('imports-ok')"
+
+      - name: Run demo release-catalog matrix smoke workflow
+        run: |
+          python -m satroot_demo_release_catalog_matrix_smoke --output-dir .tmp_demo_release_catalog_matrix_smoke_ci
 
       - name: Run released profile-matrix smoke workflow
         run: |
