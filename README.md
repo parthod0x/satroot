@@ -526,7 +526,21 @@ or:
 satroot-test
 ```
 
-The preferred umbrella verification for all currently released profile lanes is:
+The preferred top-level verification for the currently released operator surface is:
+
+```bash
+python -m satroot_operator_proof_smoke
+```
+
+or:
+
+```bash
+satroot-operator-proof-smoke
+```
+
+That one writes into `.tmp_operator_proof_smoke_run/` by default and runs the stable/machine publication ladder, the singleton publication ladder, and the mixed-profile federation smoke together into one consolidated proof report.
+
+If you only want the released per-profile verification surface beneath that top-level proof, use:
 
 ```bash
 python -m satroot_profile_matrix_smoke
@@ -651,20 +665,6 @@ satroot-publication-ladder-smoke
 ```
 
 That one writes into `.tmp_publication_ladder_smoke_run/` by default and runs the stable/machine bundle-index, release-catalog, and release-catalog-index matrix smokes together into one consolidated ladder report.
-
-If you want the top-level currently released operator proof in one pass, there is also:
-
-```bash
-python -m satroot_operator_proof_smoke
-```
-
-or:
-
-```bash
-satroot-operator-proof-smoke
-```
-
-That one writes into `.tmp_operator_proof_smoke_run/` by default and runs the stable/machine publication ladder, the singleton publication ladder, and the mixed-profile federation smoke together into one consolidated proof report.
 
 For the first operator-facing federation check above those released lanes, there is also:
 
