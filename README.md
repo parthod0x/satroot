@@ -638,6 +638,20 @@ satroot-demo-release-catalog-index-matrix-smoke
 
 That one writes into `.tmp_demo_release_catalog_index_matrix_smoke_run/` by default and runs the stable and machine demo release-catalog-index smoke workflows into one consolidated report.
 
+If you want that full stable/machine operator ladder in one pass, there is also:
+
+```bash
+python -m satroot_publication_ladder_smoke
+```
+
+or:
+
+```bash
+satroot-publication-ladder-smoke
+```
+
+That one writes into `.tmp_publication_ladder_smoke_run/` by default and runs the stable/machine bundle-index, release-catalog, and release-catalog-index matrix smokes together into one consolidated ladder report.
+
 For the first operator-facing federation check above those released lanes, there is also:
 
 ```bash
