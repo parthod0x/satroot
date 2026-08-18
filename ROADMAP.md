@@ -150,6 +150,12 @@ The success condition should be narrow:
 - signature verification for the anchored demo lane graduates from the placeholder interface to the existing Ed25519 verifier path without adding production key-management claims,
 - the docs keep separating protocol state from legal and economic claims as strictly as every released lane.
 
+Current status:
+
+- The anchored identity demo lane (`satroot_anchored_demo_smoke`) now exists with its own distinct placeholder root, accepts a real outpoint only through its `--root-id` flag at run time, and signs and verifies its lifecycle through the existing Ed25519 path.
+- The lane's report demonstrates the root lifecycle rule: state binds `root_id`, replay is deterministic, foreign-root events are rejected, and no ledger event kind models root custody.
+- Remaining for the milestone: bind one real one-satoshi BSV testnet outpoint through the lane, record that anchored run, and confirm every other example still carries a placeholder root.
+
 ## Core architectural rule
 
 SATROOT does not merely mint tokens from one satoshi.

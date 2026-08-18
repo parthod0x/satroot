@@ -2923,3 +2923,16 @@ The example `root_id` values in `examples/` are placeholders:
 ```
 
 Replace it only when intentionally anchoring to a real one-satoshi UTXO.
+
+## Anchored demo lane
+
+The anchored demo lane is the designated path for that intentional replacement, and the only lane ever meant to carry a real outpoint:
+
+```bash
+python scripts/run_anchored_demo_smoke.py
+python -m satroot_anchored_demo_smoke --root-id <txid>:<vout>
+```
+
+It binds one dedicated identity demo namespace to a `root_id` that defaults to its own distinct placeholder (`6666...6666:0`), signs the namespace lifecycle with the `ed25519` scheme instead of the demo or hmac schemes, and emits a report proving four things: the semantic state hash binds the `root_id`, replay is deterministic, events carrying a foreign root are rejected with `root_id mismatch`, and no ledger event kind models root custody.
+
+That last check is the root lifecycle rule made concrete: moving the root satoshi on-chain never appears in the ledger and cannot alter the semantic state hash. Binding a real one-satoshi outpoint (testnet first) only changes the `root_id` string passed at run time — never the event rules, and never a checked-in file. The lane requires the `[crypto]` extra (`pip install -e ".[crypto]"`).
