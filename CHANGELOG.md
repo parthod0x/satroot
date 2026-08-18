@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Slims the GitHub Actions test workflow to one Linux job that runs installed-module import smoke and then the release-gate umbrella, dropping the Windows matrix leg and the intermediate per-surface smoke steps that the gate's operator proof and chunked pytest already re-run, and cancels superseded in-progress runs for the same ref.
 - Adds `python -m satroot_anchored_demo_smoke`, `satroot-anchored-demo-smoke`, and `scripts/run_anchored_demo_smoke.py` as the first `v0.5-root-anchoring` lane: one dedicated identity demo namespace whose `root_id` defaults to a distinct placeholder and can be bound to a real one-satoshi outpoint via `--root-id` at run time, with its lifecycle signed and verified through the ed25519 path instead of the demo or hmac schemes.
 - Demonstrates the root lifecycle rule inside that lane's report: the semantic state hash binds the `root_id`, replay is deterministic, events carrying a foreign root are rejected with `root_id mismatch`, and no ledger event kind models root custody, so on-chain root movement stays out-of-band by construction.
 - Registers the anchored lane in packaging metadata, packaging assertions, release-gate import smoke, the CI installed-import check, and the release checklist, which now names it as the only lane ever intended to carry a real outpoint and only via its runtime flag, never in checked-in files.

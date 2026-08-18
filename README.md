@@ -540,7 +540,7 @@ satroot-release-gate-smoke
 
 That one writes into `.tmp_release_gate_smoke_run/` by default and runs installed-module import smoke, the top-level operator proof, and chunked pytest together into one consolidated release-gate report.
 
-The GitHub Actions test workflow now uses this same release-gate wrapper as its final umbrella check after the narrower smoke surfaces.
+The GitHub Actions test workflow now uses this same release-gate wrapper as its single umbrella check after installed-module import smoke: the operator proof inside the gate re-runs the ladder, federation, and registry surfaces, and chunked pytest covers every per-lane smoke test, so CI does not repeat the narrower smoke workflows as separate steps.
 
 The preferred top-level verification for the currently released operator surface is:
 
