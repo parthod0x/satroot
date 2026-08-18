@@ -462,6 +462,15 @@ python scripts/run_stable_demo_release_catalog_smoke.py
 
 That one writes into `.tmp_stable_demo_release_catalog_smoke_run/` by default.
 
+For the release-catalog index layer above those same stable and machine operator lanes, there are matching smokes that stage two checked-in presets, generate signed collections, bootstrap release catalog publications, and then bootstrap signed release catalog index publications:
+
+```bash
+python scripts/run_machine_demo_release_catalog_index_smoke.py
+python scripts/run_stable_demo_release_catalog_index_smoke.py
+```
+
+Those write into `.tmp_machine_demo_release_catalog_index_smoke_run/` and `.tmp_stable_demo_release_catalog_index_smoke_run/` by default.
+
 For the receipt-object lane, there is now a matching end-to-end smoke pass that replays `RECEIPT1` and materializes a full `SATROOT-RECEIPT-1` singleton publication registry workspace from the checked-in receipt preset:
 
 ```bash
@@ -526,6 +535,20 @@ satroot-demo-release-catalog-matrix-smoke
 
 That one writes into `.tmp_demo_release_catalog_matrix_smoke_run/` by default and runs the stable and machine demo release-catalog smoke workflows into one consolidated report.
 
+For the next layer up in that same operator ladder, there is also:
+
+```bash
+python -m satroot_demo_release_catalog_index_matrix_smoke
+```
+
+or:
+
+```bash
+satroot-demo-release-catalog-index-matrix-smoke
+```
+
+That one writes into `.tmp_demo_release_catalog_index_matrix_smoke_run/` by default and runs the stable and machine demo release-catalog-index smoke workflows into one consolidated report.
+
 For the first operator-facing federation check above those released lanes, there is also:
 
 ```bash
@@ -576,6 +599,20 @@ or:
 ```bash
 satroot-stable-demo-release-catalog-smoke
 satroot-machine-demo-release-catalog-smoke
+```
+
+And the matching index-layer operator lanes have packaged entrypoints too:
+
+```bash
+python -m satroot_stable_demo_release_catalog_index_smoke
+python -m satroot_machine_demo_release_catalog_index_smoke
+```
+
+or:
+
+```bash
+satroot-stable-demo-release-catalog-index-smoke
+satroot-machine-demo-release-catalog-index-smoke
 ```
 
 The receipt lane has the same packaged entrypoints:

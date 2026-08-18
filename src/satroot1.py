@@ -17442,7 +17442,7 @@ def bootstrap_demo_release_catalog_index_publication_from_presets(
     )
     catalog_publication = generated["release_catalog_publication"]
     published = bootstrap_release_catalog_index_publication(
-        [catalog_publication["release_catalog_manifest_path"]],
+        [generated["summary"]["release_catalog_publication_dir"]],
         output_dir=release_catalog_index_publication_dir,
         signature_scheme=index_signature_scheme,
         key_id=index_key_id,
@@ -17552,7 +17552,7 @@ def bootstrap_machine_demo_release_catalog_index_publication_from_presets(
     )
     catalog_publication = generated["release_catalog_publication"]
     published = bootstrap_machine_release_catalog_index_publication(
-        [catalog_publication["release_catalog_manifest_path"]],
+        [generated["summary"]["release_catalog_publication_dir"]],
         output_dir=release_catalog_index_publication_dir,
         signature_scheme=index_signature_scheme,
         key_id=index_key_id,
@@ -17656,7 +17656,7 @@ def bootstrap_stable_demo_release_catalog_index_publication_from_presets(
     )
     catalog_publication = generated["release_catalog_publication"]
     published = bootstrap_stable_release_catalog_index_publication(
-        [catalog_publication["release_catalog_manifest_path"]],
+        [generated["summary"]["release_catalog_publication_dir"]],
         output_dir=release_catalog_index_publication_dir,
         signature_scheme=index_signature_scheme,
         key_id=index_key_id,
