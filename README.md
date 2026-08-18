@@ -488,6 +488,16 @@ python scripts/run_receipt_profile_smoke.py
 
 That one writes into `.tmp_receipt_profile_smoke_run/` by default.
 
+For the lower singleton operator layer above individual receipt, identity, and license bundles, there are now matching bundle-index smoke passes that stage two checked-in presets, generate reusable signed bundle collections, and build one bundle index above each lane:
+
+```bash
+python scripts/run_receipt_demo_bundle_index_smoke.py
+python scripts/run_identity_demo_bundle_index_smoke.py
+python scripts/run_license_demo_bundle_index_smoke.py
+```
+
+Those write into `.tmp_receipt_demo_bundle_index_smoke_run/`, `.tmp_identity_demo_bundle_index_smoke_run/`, and `.tmp_license_demo_bundle_index_smoke_run/` by default.
+
 For the identity-object lane, there is now a matching end-to-end smoke pass that replays `IDENTITY1` and materializes a full `SATROOT-IDENTITY-1` singleton publication registry workspace from the checked-in identity preset:
 
 ```bash
@@ -529,6 +539,20 @@ satroot-profile-matrix-smoke
 ```
 
 That one writes into `.tmp_profile_matrix_smoke_run/` by default and runs the stable, machine, receipt, identity, and license profile smoke workflows into one consolidated report.
+
+For the matching lower singleton operator layer, there is also:
+
+```bash
+python -m satroot_singleton_demo_bundle_index_matrix_smoke
+```
+
+or:
+
+```bash
+satroot-singleton-demo-bundle-index-matrix-smoke
+```
+
+That one writes into `.tmp_singleton_demo_bundle_index_matrix_smoke_run/` by default and runs the receipt, identity, and license singleton demo bundle-index smoke workflows into one consolidated report.
 
 For the lowest multi-bundle operator layer above those direct profile smokes, there is also:
 

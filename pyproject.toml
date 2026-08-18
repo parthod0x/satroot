@@ -28,6 +28,10 @@ validation = ["jsonschema>=4.23"]
 [project.scripts]
 satroot1 = "satroot1:main"
 satroot-test = "satroot_test:main"
+satroot-singleton-demo-bundle-index-matrix-smoke = "satroot_singleton_demo_bundle_index_matrix_smoke:main"
+satroot-receipt-demo-bundle-index-smoke = "satroot_receipt_demo_bundle_index_smoke:main"
+satroot-identity-demo-bundle-index-smoke = "satroot_identity_demo_bundle_index_smoke:main"
+satroot-license-demo-bundle-index-smoke = "satroot_license_demo_bundle_index_smoke:main"
 satroot-demo-bundle-index-matrix-smoke = "satroot_demo_bundle_index_matrix_smoke:main"
 satroot-stable-demo-bundle-index-smoke = "satroot_stable_demo_bundle_index_smoke:main"
 satroot-machine-demo-bundle-index-smoke = "satroot_machine_demo_bundle_index_smoke:main"
@@ -46,7 +50,7 @@ satroot-identity-profile-smoke = "satroot_identity_profile_smoke:main"
 satroot-license-profile-smoke = "satroot_license_profile_smoke:main"
 
 [tool.setuptools]
-py-modules = ["satroot1", "satroot_collection_lint", "satroot_test", "satroot_demo_bundle_index_matrix_smoke", "satroot_stable_demo_bundle_index_smoke", "satroot_machine_demo_bundle_index_smoke", "satroot_demo_release_catalog_index_matrix_smoke", "satroot_stable_demo_release_catalog_index_smoke", "satroot_machine_demo_release_catalog_index_smoke", "satroot_demo_release_catalog_matrix_smoke", "satroot_stable_demo_release_catalog_smoke", "satroot_machine_demo_release_catalog_smoke", "satroot_profile_federation_smoke", "satroot_profile_matrix_smoke", "satroot_stable_profile_smoke", "satroot_machine_profile_smoke", "satroot_receipt_profile_smoke", "satroot_identity_profile_smoke", "satroot_license_profile_smoke"]
+py-modules = ["satroot1", "satroot_collection_lint", "satroot_test", "satroot_singleton_demo_bundle_index_matrix_smoke", "satroot_receipt_demo_bundle_index_smoke", "satroot_identity_demo_bundle_index_smoke", "satroot_license_demo_bundle_index_smoke", "satroot_demo_bundle_index_matrix_smoke", "satroot_stable_demo_bundle_index_smoke", "satroot_machine_demo_bundle_index_smoke", "satroot_demo_release_catalog_index_matrix_smoke", "satroot_stable_demo_release_catalog_index_smoke", "satroot_machine_demo_release_catalog_index_smoke", "satroot_demo_release_catalog_matrix_smoke", "satroot_stable_demo_release_catalog_smoke", "satroot_machine_demo_release_catalog_smoke", "satroot_profile_federation_smoke", "satroot_profile_matrix_smoke", "satroot_stable_profile_smoke", "satroot_machine_profile_smoke", "satroot_receipt_profile_smoke", "satroot_identity_profile_smoke", "satroot_license_profile_smoke"]
 
 [tool.setuptools.package-dir]
 "" = "src"
