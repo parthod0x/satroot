@@ -12,21 +12,27 @@ from satroot1 import (
     bootstrap_publication_registry_workspace_collection,
     bootstrap_publication_stack_collection,
     lint_demo_catalog_workspace_collection,
+    lint_publication_catalog_workspace,
     lint_publication_catalog_workspace_collection,
     lint_publication_network_collection,
     lint_publication_network_workspace,
+    lint_publication_registry_workspace,
     lint_publication_registry_workspace_collection,
     lint_publication_stack_collection,
     lint_publication_stack_workspace,
     publish_publication_network_workspace,
+    publish_publication_registry_workspace,
     publish_publication_stack_workspace,
     summarize_demo_catalog_workspace_collection,
+    summarize_publication_catalog_workspace,
     summarize_publication_catalog_workspace_collection,
     summarize_publication_network_collection,
     summarize_publication_network_workspace,
+    summarize_publication_registry_workspace,
     summarize_publication_registry_workspace_collection,
     summarize_publication_stack_collection,
     summarize_publication_stack_workspace,
+    write_publication_catalog_workspace,
 )
 from satroot_profile_matrix_smoke import run_profile_matrix_smoke
 
@@ -141,6 +147,44 @@ def run_profile_federation_smoke(
     federated_network_summary = summarize_publication_network_workspace(federated_network_dir)
     federated_network_lint = lint_publication_network_workspace(federated_network_dir)
 
+    federated_catalog_workspace_dir = output_path / "federated_publication_catalog_workspace"
+    write_publication_catalog_workspace(
+        artifact_paths=[],
+        discover_under=demo_catalog_dirs,
+        recursive=True,
+        output_dir=federated_catalog_workspace_dir,
+        signature_scheme=bundle_scheme,
+        publication_descriptor_index_key_id="publication-descriptor-index-key",
+        publication_metadata_key_id="publication-metadata-key",
+        publication_metadata_catalog_key_id="publication-metadata-catalog-key",
+    )
+    federated_catalog_workspace_summary = summarize_publication_catalog_workspace(
+        federated_catalog_workspace_dir
+    )
+    federated_catalog_workspace_lint = lint_publication_catalog_workspace(
+        federated_catalog_workspace_dir
+    )
+
+    federated_registry_workspace_dir = output_path / "federated_publication_registry_workspace"
+    publish_publication_registry_workspace(
+        publication_catalog_workspace_dir=federated_catalog_workspace_dir,
+        release_catalog_index_dir=federated_network_dir / "release_catalog_index",
+        publication_network_dir=federated_network_dir,
+        output_dir=federated_registry_workspace_dir,
+        signature_scheme=bundle_scheme,
+        key_id="publication-registry-key",
+        publication_registry_metadata={
+            "channel": "federation",
+            "label": "Released Profile Federation Publication Registry",
+        },
+    )
+    federated_registry_workspace_summary = summarize_publication_registry_workspace(
+        federated_registry_workspace_dir
+    )
+    federated_registry_workspace_lint = lint_publication_registry_workspace(
+        federated_registry_workspace_dir
+    )
+
     publication_network_collection_dir = output_path / "publication_network_collection"
     bootstrap_publication_network_collection(
         publication_network_dirs,
@@ -193,6 +237,10 @@ def run_profile_federation_smoke(
         "publication_stack_collection_lint": publication_stack_collection_lint,
         "publication_network_workspace": federated_network_summary,
         "publication_network_workspace_lint": federated_network_lint,
+        "publication_catalog_workspace": federated_catalog_workspace_summary,
+        "publication_catalog_workspace_lint": federated_catalog_workspace_lint,
+        "publication_registry_workspace": federated_registry_workspace_summary,
+        "publication_registry_workspace_lint": federated_registry_workspace_lint,
         "publication_network_collection": publication_network_collection_summary,
         "publication_network_collection_lint": publication_network_collection_lint,
         "publication_catalog_workspace_collection": publication_catalog_workspace_collection_summary,
@@ -207,6 +255,8 @@ def run_profile_federation_smoke(
             report["publication_stack_workspace_lint"]["ok"] is True,
             report["publication_stack_collection_lint"]["ok"] is True,
             report["publication_network_workspace_lint"]["ok"] is True,
+            report["publication_catalog_workspace_lint"]["ok"] is True,
+            report["publication_registry_workspace_lint"]["ok"] is True,
             report["publication_network_collection_lint"]["ok"] is True,
             report["publication_catalog_workspace_collection_lint"]["ok"] is True,
             report["publication_registry_workspace_collection_lint"]["ok"] is True,

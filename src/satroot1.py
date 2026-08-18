@@ -23104,7 +23104,7 @@ def build_publication_registry(
     if release_catalog_index_dir is not None:
         publication_dir = Path(_normalize_release_catalog_index_publication_input(release_catalog_index_dir)).resolve()
         manifest_path, index_path, manifest, index = _load_release_catalog_index_publication(publication_dir)
-        registry["release_catalog_index_publication"] = {
+        component = {
             "publication_directory_path": _relative_output_path(publication_dir, base_dir=base_dir),
             "release_catalog_index_manifest_path": _relative_output_path(manifest_path, base_dir=base_dir),
             "release_catalog_index_manifest_hash": "sha256:" + sha256_hex_bytes(manifest_path.read_bytes()),
@@ -23113,14 +23113,16 @@ def build_publication_registry(
             "signature_scheme": manifest.get("signature_scheme"),
             "signature_key_id": manifest.get("signature_key_id"),
             "release_catalog_count": index.get("release_catalog_count"),
-            "index": copy.deepcopy(index.get("index")),
         }
+        if isinstance(index.get("index"), Mapping):
+            component["index"] = copy.deepcopy(index.get("index"))
+        registry["release_catalog_index_publication"] = component
         component_count += 1
 
     if publication_descriptor_index_dir is not None:
         publication_dir = Path(_normalize_publication_descriptor_index_publication_input(publication_descriptor_index_dir)).resolve()
         manifest_path, index_path, manifest, index = _load_publication_descriptor_index_publication(publication_dir)
-        registry["publication_descriptor_index_publication"] = {
+        component = {
             "publication_directory_path": _relative_output_path(publication_dir, base_dir=base_dir),
             "publication_descriptor_index_manifest_path": _relative_output_path(manifest_path, base_dir=base_dir),
             "publication_descriptor_index_manifest_hash": "sha256:" + sha256_hex_bytes(manifest_path.read_bytes()),
@@ -23129,14 +23131,16 @@ def build_publication_registry(
             "signature_scheme": manifest.get("signature_scheme"),
             "signature_key_id": manifest.get("signature_key_id"),
             "artifact_count": index.get("artifact_count"),
-            "index": copy.deepcopy(index.get("index")),
         }
+        if isinstance(index.get("index"), Mapping):
+            component["index"] = copy.deepcopy(index.get("index"))
+        registry["publication_descriptor_index_publication"] = component
         component_count += 1
 
     if publication_metadata_catalog_dir is not None:
         publication_dir = Path(_normalize_publication_metadata_catalog_publication_input(publication_metadata_catalog_dir)).resolve()
         manifest_path, catalog_path, manifest, catalog = _load_publication_metadata_catalog_publication(publication_dir)
-        registry["publication_metadata_catalog_publication"] = {
+        component = {
             "publication_directory_path": _relative_output_path(publication_dir, base_dir=base_dir),
             "publication_metadata_catalog_manifest_path": _relative_output_path(manifest_path, base_dir=base_dir),
             "publication_metadata_catalog_manifest_hash": "sha256:" + sha256_hex_bytes(manifest_path.read_bytes()),
@@ -23145,8 +23149,10 @@ def build_publication_registry(
             "signature_scheme": manifest.get("signature_scheme"),
             "signature_key_id": manifest.get("signature_key_id"),
             "bundle_count": catalog.get("bundle_count"),
-            "index": copy.deepcopy(catalog.get("index")),
         }
+        if isinstance(catalog.get("index"), Mapping):
+            component["index"] = copy.deepcopy(catalog.get("index"))
+        registry["publication_metadata_catalog_publication"] = component
         component_count += 1
 
     if component_count == 0:

@@ -56005,6 +56005,85 @@ def test_validate_publication_registry_schema_accepts_generated_registry(tmp_pat
     validate_publication_registry_consistency(registry)
 
 
+def test_validate_publication_registry_schema_omits_null_nested_index_metadata(tmp_path):
+    network_root = tmp_path / "network_root"
+    release_root = tmp_path / "release_root"
+    network_root.mkdir(parents=True, exist_ok=True)
+    release_root.mkdir(parents=True, exist_ok=True)
+
+    network_dir = make_demo_publication_network_dir(network_root)
+    release_dir, _ = make_demo_release_dirs(release_root)
+    descriptor_index_dir = tmp_path / "descriptor_index_without_index_metadata"
+    metadata_release_bundle_dir = tmp_path / "metadata_inputs" / "release"
+    metadata_network_bundle_dir = tmp_path / "metadata_inputs" / "network"
+    metadata_catalog_dir = tmp_path / "metadata_catalog_without_index_metadata"
+
+    assert main(
+        [
+            "bootstrap-publication-descriptor-index-publication",
+            "--discover-under",
+            str(network_dir),
+            "--output-dir",
+            str(descriptor_index_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "descriptor-key",
+        ]
+    ) == 0
+
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(release_dir),
+            "--output-dir",
+            str(metadata_release_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-publication-metadata-bundle",
+            str(network_dir),
+            "--output-dir",
+            str(metadata_network_bundle_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "metadata-key",
+        ]
+    ) == 0
+    assert main(
+        [
+            "bootstrap-publication-metadata-catalog-publication",
+            str(metadata_release_bundle_dir),
+            str(metadata_network_bundle_dir),
+            "--output-dir",
+            str(metadata_catalog_dir),
+            "--scheme",
+            "hmac-sha256",
+            "--key-id",
+            "catalog-key",
+        ]
+    ) == 0
+
+    registry = build_publication_registry(
+        release_catalog_index_dir=network_dir / "release_catalog_index",
+        publication_descriptor_index_dir=descriptor_index_dir,
+        publication_metadata_catalog_dir=metadata_catalog_dir,
+        base_dir=tmp_path,
+    )
+
+    count = validate_instance_against_schema(registry, load_publication_registry_schema())
+    assert count == 1
+    assert "index" not in registry["publication_descriptor_index_publication"]
+    assert "index" not in registry["publication_metadata_catalog_publication"]
+    validate_publication_registry_consistency(registry)
+
+
 def test_validate_publication_registry_schema_accepts_generated_registry_with_workspace_collection_source(tmp_path):
     workspace_dir = make_publication_registry_workspace_dir(tmp_path)
     collection_dir = tmp_path / "publication_registry_workspace_collection"
