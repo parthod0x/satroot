@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v0.3` is the namespace-expansion proof artifact for `SATROOT-1`.
+`v0.4` is the publication-federation proof artifact for `SATROOT-1`.
 
-It proves that one native satoshi can anchor multiple deterministic semantic asset profiles without claiming subdivision below one satoshi, and that stable, machine, receipt, identity, and license lanes can all be replayed and published end to end without changing the base primitive.
+It proves that the released stable, machine, receipt, identity, and license profile artifacts can be consolidated into reusable mixed-profile publication collections, republished through shared publication stacks, networks, catalog workspaces, and registry workspaces, and round-tripped through exported nested presets, all without changing the base one-satoshi primitive or flattening profile-specific provenance.
 
 Current scope:
 
@@ -30,6 +30,7 @@ Current scope:
 - example token `FLOOR1`
 - example stable token `USDROOT1`
 - released profile-matrix smoke verification across stable, machine, receipt, identity, and license publication registry workspaces
+- released mixed-profile publication federation with collection-backed federated registry round trips, one packaged top-level operator proof, and one packaged local release gate above the per-profile lanes
 
 Release status:
 
@@ -39,6 +40,8 @@ Release status:
 - The `SATROOT-STABLE-1` reference-only lane now has a dedicated smoke workflow, packaged entrypoint, CI coverage, and a tagged publication-path milestone.
 - `v0.3-namespace-expansion` has been tagged and pushed from this repository.
 - The machine, receipt, identity, and license lanes now join the stable lane under one released profile-matrix smoke surface with dedicated per-profile publication-path verification.
+- `v0.4-publication-federation` has been tagged and pushed from this repository.
+- The mixed-profile federation surface, the collection-backed federated registry round trip, the stable/machine and singleton publication ladders, the top-level operator proof, and the local release gate are now part of the released deliverable.
 
 ## Near-term build order
 
@@ -100,13 +103,11 @@ Recommended order inside `v0.3`:
 
 That order keeps the project close to machine-native accounting and operational workflows before moving into heavier rights semantics.
 
-## Immediate next milestone
+### v0.4 Publication federation
 
-If work resumes right away, the best next milestone is:
+Goal: consolidate released profile artifacts into reusable higher-level publication collections without flattening their profile-specific provenance.
 
-`v0.4-publication-federation`
-
-The success condition should be narrow:
+The success condition is narrow:
 
 - the base `SATROOT-1` kernel remains unchanged in principle,
 - multiple generated profile artifacts can be consolidated into reusable higher-level publication collections without flattening their profile-specific provenance,
@@ -132,6 +133,22 @@ Current status:
 - The mixed federated publication catalog workspace and publication registry workspace are now also snapshotted into their own explicit top-level collections for reuse.
 - The mixed federated publication catalog workspace, publication stack, publication network, and publication registry workspace are now all exported and rebuilt through nested publication presets as part of the same smoke proof.
 - Those mixed federated registry workspace collections can now also drive a top-level publication-registry publication bootstrap and exported-preset round trip through a dedicated packaged smoke surface.
+- This milestone has now been tagged as `v0.4-publication-federation`.
+
+## Immediate next milestone
+
+If work resumes right away, the best next milestone is:
+
+`v0.5-root-anchoring`
+
+The success condition should be narrow:
+
+- the `SATROOT-1` kernel rules remain unchanged,
+- one real 1-satoshi BSV outpoint, on testnet first, is bound as the `root_id` of one dedicated demo namespace, replacing the all-zeros placeholder only in that lane,
+- the root lifecycle rule is demonstrated against that real outpoint, keeping root-satoshi custody and movement separate from semantic transfer events,
+- all other checked-in examples keep placeholder roots by default so the repo never accidentally claims a live anchor,
+- signature verification for the anchored demo lane graduates from the placeholder interface to the existing Ed25519 verifier path without adding production key-management claims,
+- the docs keep separating protocol state from legal and economic claims as strictly as every released lane.
 
 ## Core architectural rule
 

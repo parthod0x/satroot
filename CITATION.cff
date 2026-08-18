@@ -6,8 +6,8 @@ authors:
   - given-names: "PARTH MAURIA"
     family-names: "SAXENA"
     email: "parthms.id@gmail.com"
-version: "0.1.0"
-date-released: "2026-06-19"
+version: "0.4.0"
+date-released: "2026-08-18"
 license: "Apache-2.0"
 abstract: "SATROOT-1 defines a minimal one-satoshi-root token primitive: one native satoshi anchors unbounded protocol-defined semantic token state without subdividing Bitcoin below one satoshi."
 keywords:

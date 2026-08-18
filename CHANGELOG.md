@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.4-publication-federation - 2026-08-18
+
+- Moves the release-gate smoke to the final umbrella step of the GitHub Actions test workflow so CI ordering matches the documented flow of narrower smoke surfaces before one consolidated gate.
+- Generalizes the release checklist so its tag steps target the current milestone tag instead of a hardcoded `v0.1-genesis`, and syncs its installed-import check with the full packaged module list used in CI.
+- Cuts the accumulated unreleased changelog into explicit `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, and `v0.4-publication-federation` milestone sections.
+- Bumps the packaged version metadata to `0.4.0` in `pyproject.toml` and `CITATION.cff` so installed distributions report the released milestone line.
+- Marks `v0.4-publication-federation` as the completed publication-federation milestone and points the roadmap at `v0.5-root-anchoring` as the next concrete build target.
 - Adds `python -m satroot_federated_registry_collection_smoke`, `satroot-federated-registry-collection-smoke`, and `scripts/run_federated_registry_collection_smoke.py` for a higher mixed-profile proof surface that reruns the federation smoke, reuses the generated top-level publication-registry-workspace collection, bootstraps a top-level publication-registry publication from that collection-backed preset, exports the resulting publication back into a preset, and bootstraps it again for a collection-backed round trip.
 - Runs the new federated registry collection smoke workflow in CI, adds the packaged module to installed-import verification and packaging assertions, and ignores the generated smoke workspaces by default so the collection-backed top-level publication-registry publication surface is easy to rerun from both source and editable installs.
 - Promotes the new federated registry collection smoke into the top-level operator proof and release-gate import smoke so the canonical proof and local pre-tag gate both cover the collection-backed top-level registry publication path.
@@ -26,6 +33,9 @@
 - Runs the new demo release-catalog matrix smoke workflow in CI, adds the packaged release-catalog smoke modules to installed-import verification, packaging assertions, release guidance, and local ignore rules so the higher-level machine/stable operator lane stays easy to re-run from source and editable installs.
 - Adds `python -m satroot_profile_federation_smoke`, `satroot-profile-federation-smoke`, and `scripts/run_profile_federation_smoke.py` for a first `v0.4-publication-federation` operator wrapper that reuses the released profile matrix, freezes the resulting per-profile demo-catalog, publication-stack, publication-network, publication-catalog-workspace, and publication-registry-workspace outputs into collections, proves and snapshots a shared mixed-profile publication catalog workspace plus publication registry workspace above the federated network, and now round-trips the federated catalog workspace, stack, network, and top-level registry workspace back through exported nested presets.
 - Runs the federation smoke workflow in CI and adds the packaged federation smoke module to installed-import verification, packaging assertions, release guidance, and local ignore rules so the new `v0.4` proof surface is easy to run from both source and editable installs.
+
+## v0.3-namespace-expansion - 2026-08-18
+
 - Adds `python -m satroot_profile_matrix_smoke`, `satroot-profile-matrix-smoke`, and `scripts/run_profile_matrix_smoke.py` for a single end-to-end verification surface that runs the released stable, machine, receipt, identity, and license lanes and writes one consolidated report.
 - Replaces the five separate CI profile-smoke execution steps with one released profile-matrix smoke step, adds the packaged matrix smoke module to installed-import verification, and ignores generated `.tmp_profile_matrix_smoke*/` workspaces by default.
 - Marks `v0.3-namespace-expansion` as the completed namespace milestone and points the roadmap at `v0.4-publication-federation` as the next operator-focused build target.
@@ -38,8 +48,14 @@
 - Runs the receipt-profile smoke workflow in CI, adds the packaged receipt smoke module to the installed-import check, and ignores generated `.tmp_receipt_profile_smoke*/` workspaces so local verification stays tidy by default.
 - Adds `python -m satroot_machine_profile_smoke`, `satroot-machine-profile-smoke`, and `scripts/run_machine_profile_smoke.py` for an explicit SATROOT-MACHINE-1 end-to-end smoke pass that replays the checked-in `APICREDIT1` example and generates, summarizes, and lints a full machine publication registry workspace through the direct machine builder lane.
 - Runs the machine-profile smoke workflow in CI, adds the packaged machine smoke module to the installed-import check, and ignores generated `.tmp_machine_profile_smoke*/` workspaces so local verification stays tidy by default.
+
+## v0.2-stable-profile - 2026-08-18
+
 - Adds `python -m satroot_stable_profile_smoke`, `satroot-stable-profile-smoke`, and `scripts/run_stable_profile_smoke.py` for an explicit SATROOT-STABLE-1 end-to-end smoke pass that replays the checked-in `USDROOT1` example and generates, summarizes, and lints a full stable publication registry workspace through the direct stable builder lane.
 - Runs the stable-profile smoke workflow in CI, adds the packaged stable smoke module to the installed-import check, and ignores generated `.tmp_stable_profile_smoke*/` workspaces so local verification stays tidy by default.
+
+## v0.1-genesis - 2026-08-17
+
 - Adds `python -m satroot_test`, `satroot-test`, and `scripts/run_pytest_chunked.py` for deterministic chunked pytest execution across the full `tests/` tree, keeps the repo-local wrapper usable from a fresh checkout by wiring `src/` directly, and adds a matching GitHub Actions workflow for repository verification without a single long-lived pytest process.
 - Clarifies the README and release guidance so plain `pytest` is framed as a smoke path while chunked execution is the preferred full-suite verification route.
 - Expands the GitHub Actions test workflow to cover both `ubuntu-latest` and `windows-latest`, and adds `workflow_dispatch` plus non-fail-fast matrix behavior for easier cross-platform verification and reruns.
