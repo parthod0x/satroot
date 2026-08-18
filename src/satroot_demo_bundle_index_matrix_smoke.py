@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+from satroot_machine_demo_bundle_index_smoke import run_machine_demo_bundle_index_smoke
+from satroot_stable_demo_bundle_index_smoke import run_stable_demo_bundle_index_smoke
+
+
+def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _compact_lane_report(report: Mapping[str, Any]) -> dict[str, Any]:
+    bundle_index = report.get("bundle_index", {})
+    return {
+        "ok": report.get("ok"),
+        "profile": report.get("profile"),
+        "generated_bundle_count": report.get("generated_bundle_count"),
+        "report_path": report.get("report_path"),
+        "bundle_index_path": bundle_index.get("bundle_index_path"),
+        "bundle_index_label": bundle_index.get("release", {}).get("label")
+        if isinstance(bundle_index.get("release"), Mapping)
+        else None,
+    }
+
+
+def run_demo_bundle_index_matrix_smoke(
+    output_dir: str | Path,
+    *,
+    bundle_scheme: str = "hmac-sha256",
+) -> dict[str, Any]:
+    output_path = Path(output_dir).resolve()
+    if output_path.exists():
+        shutil.rmtree(output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    lane_reports = {
+        "stable": run_stable_demo_bundle_index_smoke(
+            output_path / "stable",
+            bundle_scheme=bundle_scheme,
+        ),
+        "machine": run_machine_demo_bundle_index_smoke(
+            output_path / "machine",
+            bundle_scheme=bundle_scheme,
+        ),
+    }
+
+    report: dict[str, Any] = {
+        "bundle_scheme": bundle_scheme,
+        "profile_count": len(lane_reports),
+        "profiles": {name: _compact_lane_report(lane) for name, lane in lane_reports.items()},
+        "profile_reports": lane_reports,
+    }
+    report["ok"] = all(
+        lane.get("ok") is True and lane.get("bundle_index_lint", {}).get("ok") is True
+        for lane in lane_reports.values()
+    )
+
+    report_path = output_path / "demo_bundle_index_matrix_smoke_report.json"
+    _write_json(report_path, report)
+    report["report_path"] = str(report_path.resolve())
+    _write_json(report_path, report)
+    return report
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the stable and machine demo bundle-index smoke workflows and "
+            "emit one consolidated matrix report."
+        )
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=".tmp_demo_bundle_index_matrix_smoke_run",
+        help="Directory where per-profile bundle-index smoke runs and the consolidated report will be written.",
+    )
+    parser.add_argument(
+        "--bundle-scheme",
+        default="hmac-sha256",
+        help="Signature scheme for generated bundle artifacts.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    report = run_demo_bundle_index_matrix_smoke(
+        args.output_dir,
+        bundle_scheme=args.bundle_scheme,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

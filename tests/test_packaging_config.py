@@ -19,6 +19,9 @@ def test_pyproject_includes_all_top_level_runtime_modules():
     assert "satroot1" in py_modules
     assert "satroot_collection_lint" in py_modules
     assert "satroot_test" in py_modules
+    assert "satroot_demo_bundle_index_matrix_smoke" in py_modules
+    assert "satroot_stable_demo_bundle_index_smoke" in py_modules
+    assert "satroot_machine_demo_bundle_index_smoke" in py_modules
     assert "satroot_demo_release_catalog_index_matrix_smoke" in py_modules
     assert "satroot_stable_demo_release_catalog_index_smoke" in py_modules
     assert "satroot_machine_demo_release_catalog_index_smoke" in py_modules

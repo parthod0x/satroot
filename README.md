@@ -446,6 +446,15 @@ python scripts/run_machine_profile_smoke.py
 
 That one writes into `.tmp_machine_profile_smoke_run/` by default.
 
+For the lower operator layer above individual bundles, there are now stable and machine bundle-index smoke passes that stage two checked-in presets, generate reusable signed bundle collections, and build one bundle index above each lane:
+
+```bash
+python scripts/run_machine_demo_bundle_index_smoke.py
+python scripts/run_stable_demo_bundle_index_smoke.py
+```
+
+Those write into `.tmp_machine_demo_bundle_index_smoke_run/` and `.tmp_stable_demo_bundle_index_smoke_run/` by default.
+
 For the higher-level machine release-catalog operator lane, there is also a smoke pass that stages two machine-only catalog presets from the checked-in compute example, generates a signed multi-release collection, and bootstraps a signed machine release catalog publication:
 
 ```bash
@@ -520,6 +529,20 @@ satroot-profile-matrix-smoke
 ```
 
 That one writes into `.tmp_profile_matrix_smoke_run/` by default and runs the stable, machine, receipt, identity, and license profile smoke workflows into one consolidated report.
+
+For the lowest multi-bundle operator layer above those direct profile smokes, there is also:
+
+```bash
+python -m satroot_demo_bundle_index_matrix_smoke
+```
+
+or:
+
+```bash
+satroot-demo-bundle-index-matrix-smoke
+```
+
+That one writes into `.tmp_demo_bundle_index_matrix_smoke_run/` by default and runs the stable and machine demo bundle-index smoke workflows into one consolidated report.
 
 For the lower operator layer above single releases but beneath the profile federation proof, there is also:
 
