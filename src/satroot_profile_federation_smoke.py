@@ -9,7 +9,9 @@ from satroot1 import (
     bootstrap_demo_catalog_workspace_collection,
     bootstrap_publication_catalog_workspace_collection,
     bootstrap_publication_network_collection,
+    bootstrap_publication_registry_workspace_from_nested_preset,
     bootstrap_publication_registry_workspace_collection,
+    export_publication_registry_workspace_preset_from_workspace,
     bootstrap_publication_stack_collection,
     lint_demo_catalog_workspace_collection,
     lint_publication_catalog_workspace,
@@ -210,6 +212,75 @@ def run_profile_federation_smoke(
     federated_registry_workspace_collection_lint = lint_publication_registry_workspace_collection(
         federated_registry_workspace_collection_dir
     )
+    federated_registry_roundtrip_export_dir = output_path / "federated_publication_registry_workspace_roundtrip_exports"
+    federated_registry_roundtrip_export_dir.mkdir(parents=True, exist_ok=True)
+    federated_registry_roundtrip_preset_path = (
+        federated_registry_roundtrip_export_dir / "federated_publication_registry_workspace.json"
+    )
+    federated_registry_roundtrip_network_preset_path = (
+        federated_registry_roundtrip_export_dir / "federated_publication_network.json"
+    )
+    federated_registry_roundtrip_catalog_workspace_preset_path = (
+        federated_registry_roundtrip_export_dir / "federated_publication_catalog_workspace.json"
+    )
+    federated_registry_roundtrip_descriptor_preset_path = (
+        federated_registry_roundtrip_export_dir / "federated_publication_descriptor_index.json"
+    )
+    federated_registry_roundtrip_metadata_catalog_preset_path = (
+        federated_registry_roundtrip_export_dir / "federated_publication_metadata_catalog.json"
+    )
+    federated_registry_roundtrip_stack_preset_dir = (
+        federated_registry_roundtrip_export_dir / "publication_stack_presets"
+    )
+    federated_registry_roundtrip_catalog_preset_dir = (
+        federated_registry_roundtrip_export_dir / "demo_catalog_presets"
+    )
+    federated_registry_roundtrip_preset = export_publication_registry_workspace_preset_from_workspace(
+        federated_registry_workspace_dir,
+        output_path=federated_registry_roundtrip_preset_path,
+        publication_catalog_workspace_preset_path=federated_registry_roundtrip_catalog_workspace_preset_path,
+        publication_network_preset_path=federated_registry_roundtrip_network_preset_path,
+        stack_preset_dir=federated_registry_roundtrip_stack_preset_dir,
+        catalog_preset_dir=federated_registry_roundtrip_catalog_preset_dir,
+        publication_descriptor_index_preset_path=federated_registry_roundtrip_descriptor_preset_path,
+        publication_metadata_catalog_preset_path=federated_registry_roundtrip_metadata_catalog_preset_path,
+    )
+    _write_json(federated_registry_roundtrip_preset_path, federated_registry_roundtrip_preset)
+    federated_registry_roundtrip_root_dir = (
+        output_path / "federated_publication_registry_workspace_roundtrip"
+    )
+    federated_registry_roundtrip_dir = bootstrap_publication_registry_workspace_from_nested_preset(
+        command="bootstrap-publication-registry-workspace",
+        preset_path=federated_registry_roundtrip_preset_path,
+        output_dir=federated_registry_roundtrip_root_dir,
+        signature_scheme=bundle_scheme,
+        key_id="publication-roundtrip-key",
+    )
+    federated_registry_roundtrip_summary = summarize_publication_registry_workspace(
+        federated_registry_roundtrip_dir
+    )
+    federated_registry_roundtrip_lint = lint_publication_registry_workspace(
+        federated_registry_roundtrip_dir
+    )
+    federated_registry_roundtrip_report = {
+        "preset_path": str(federated_registry_roundtrip_preset_path.resolve()),
+        "publication_network_preset_path": str(
+            federated_registry_roundtrip_network_preset_path.resolve()
+        ),
+        "publication_catalog_workspace_preset_path": str(
+            federated_registry_roundtrip_catalog_workspace_preset_path.resolve()
+        ),
+        "publication_descriptor_index_preset_path": str(
+            federated_registry_roundtrip_descriptor_preset_path.resolve()
+        ),
+        "publication_metadata_catalog_preset_path": str(
+            federated_registry_roundtrip_metadata_catalog_preset_path.resolve()
+        ),
+        "stack_preset_dir": str(federated_registry_roundtrip_stack_preset_dir.resolve()),
+        "catalog_preset_dir": str(federated_registry_roundtrip_catalog_preset_dir.resolve()),
+        "workspace_dir": str(federated_registry_roundtrip_dir.resolve()),
+        "workspace": federated_registry_roundtrip_summary,
+    }
 
     publication_network_collection_dir = output_path / "publication_network_collection"
     bootstrap_publication_network_collection(
@@ -271,6 +342,8 @@ def run_profile_federation_smoke(
         "publication_registry_workspace_lint": federated_registry_workspace_lint,
         "federated_publication_registry_workspace_collection": federated_registry_workspace_collection_summary,
         "federated_publication_registry_workspace_collection_lint": federated_registry_workspace_collection_lint,
+        "federated_publication_registry_workspace_roundtrip": federated_registry_roundtrip_report,
+        "federated_publication_registry_workspace_roundtrip_lint": federated_registry_roundtrip_lint,
         "publication_network_collection": publication_network_collection_summary,
         "publication_network_collection_lint": publication_network_collection_lint,
         "publication_catalog_workspace_collection": publication_catalog_workspace_collection_summary,
@@ -289,6 +362,7 @@ def run_profile_federation_smoke(
             report["federated_publication_catalog_workspace_collection_lint"]["ok"] is True,
             report["publication_registry_workspace_lint"]["ok"] is True,
             report["federated_publication_registry_workspace_collection_lint"]["ok"] is True,
+            report["federated_publication_registry_workspace_roundtrip_lint"]["ok"] is True,
             report["publication_network_collection_lint"]["ok"] is True,
             report["publication_catalog_workspace_collection_lint"]["ok"] is True,
             report["publication_registry_workspace_collection_lint"]["ok"] is True,

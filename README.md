@@ -508,7 +508,7 @@ or:
 satroot-profile-federation-smoke
 ```
 
-That one writes into `.tmp_profile_federation_smoke_run/` by default, reuses the released profile matrix, freezes the resulting per-profile demo-catalog, publication-stack, publication-network, publication-catalog-workspace, and publication-registry-workspace outputs into explicit collections, builds one shared mixed-profile publication catalog workspace plus publication registry workspace above the federated network, and then snapshots those mixed top-level workspaces into their own explicit collections too.
+That one writes into `.tmp_profile_federation_smoke_run/` by default, reuses the released profile matrix, freezes the resulting per-profile demo-catalog, publication-stack, publication-network, publication-catalog-workspace, and publication-registry-workspace outputs into explicit collections, builds one shared mixed-profile publication catalog workspace plus publication registry workspace above the federated network, snapshots those mixed top-level workspaces into their own explicit collections too, and round-trips the federated top-level registry workspace back through exported nested presets.
 
 There is also a packaged stable-profile smoke entrypoint:
 
