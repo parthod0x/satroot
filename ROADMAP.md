@@ -116,6 +116,7 @@ The success condition should be narrow:
 
 Current status:
 
+- The stable/machine publication ladder, singleton publication ladder, and mixed-profile federation helpers now also roll up under one packaged top-level operator-proof smoke wrapper.
 - The stable and machine bundle-index, release-catalog, and release-catalog-index matrix helpers now also roll up under one packaged publication-ladder smoke wrapper.
 - The receipt, identity, and license singleton bundle-index, release-catalog, and release-catalog-index matrix helpers now also roll up under one packaged singleton publication-ladder smoke wrapper.
 - The receipt, identity, and license singleton lower-level demo bundle-index helpers now have dedicated packaged smoke wrappers plus one small matrix wrapper above them.

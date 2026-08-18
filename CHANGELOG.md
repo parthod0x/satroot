@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Adds `python -m satroot_operator_proof_smoke`, `satroot-operator-proof-smoke`, and `scripts/run_operator_proof_smoke.py` for one top-level operator proof surface that runs the stable/machine publication ladder, the singleton publication ladder, and the mixed-profile federation smoke together and emits one consolidated proof report.
+- Runs the new operator-proof smoke workflow in CI, adds the packaged proof module to installed-import verification and packaging assertions, and ignores the generated proof workspaces by default so the repo now has one command for the full currently released operator story.
 - Adds `python -m satroot_publication_ladder_smoke`, `satroot-publication-ladder-smoke`, and `scripts/run_publication_ladder_smoke.py` for one umbrella operator proof that runs the stable/machine bundle-index, release-catalog, and release-catalog-index matrix smokes together and emits one consolidated ladder report.
 - Runs the new publication-ladder smoke workflow in CI, adds the packaged ladder module to installed-import verification and packaging assertions, and ignores the generated ladder workspaces by default so the stable/machine operator ladder has one easy rerun surface alongside the singleton ladder.
 - Adds `python -m satroot_singleton_publication_ladder_smoke`, `satroot-singleton-publication-ladder-smoke`, and `scripts/run_singleton_publication_ladder_smoke.py` for one umbrella operator proof that runs the receipt/identity/license singleton bundle-index, release-catalog, and release-catalog-index matrix smokes together and emits one consolidated ladder report.
