@@ -117,6 +117,8 @@ The success condition should be narrow:
 Current status:
 
 - The receipt, identity, and license singleton lower-level demo bundle-index helpers now have dedicated packaged smoke wrappers plus one small matrix wrapper above them.
+- The receipt, identity, and license singleton higher-level demo release-catalog publication helpers now have dedicated packaged smoke wrappers plus one small matrix wrapper above them.
+- The receipt, identity, and license singleton higher-level demo release-catalog-index publication helpers now have dedicated packaged smoke wrappers plus one small matrix wrapper above them.
 - The stable and machine lower-level demo bundle-index helpers now have dedicated packaged smoke wrappers plus one small matrix wrapper above them.
 - The stable and machine higher-level demo release-catalog index publication helpers now have dedicated packaged smoke wrappers plus one small matrix wrapper above them.
 - The stable and machine higher-level demo release-catalog publication helpers now have dedicated packaged smoke wrappers plus one small matrix wrapper above them.

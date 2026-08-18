@@ -23,6 +23,15 @@ def test_pyproject_includes_all_top_level_runtime_modules():
     assert "satroot_receipt_demo_bundle_index_smoke" in py_modules
     assert "satroot_identity_demo_bundle_index_smoke" in py_modules
     assert "satroot_license_demo_bundle_index_smoke" in py_modules
+    assert "satroot_singleton_demo_release_smoke_support" in py_modules
+    assert "satroot_singleton_demo_release_catalog_matrix_smoke" in py_modules
+    assert "satroot_receipt_demo_release_catalog_smoke" in py_modules
+    assert "satroot_identity_demo_release_catalog_smoke" in py_modules
+    assert "satroot_license_demo_release_catalog_smoke" in py_modules
+    assert "satroot_singleton_demo_release_catalog_index_matrix_smoke" in py_modules
+    assert "satroot_receipt_demo_release_catalog_index_smoke" in py_modules
+    assert "satroot_identity_demo_release_catalog_index_smoke" in py_modules
+    assert "satroot_license_demo_release_catalog_index_smoke" in py_modules
     assert "satroot_demo_bundle_index_matrix_smoke" in py_modules
     assert "satroot_stable_demo_bundle_index_smoke" in py_modules
     assert "satroot_machine_demo_bundle_index_smoke" in py_modules

@@ -554,6 +554,34 @@ satroot-singleton-demo-bundle-index-matrix-smoke
 
 That one writes into `.tmp_singleton_demo_bundle_index_matrix_smoke_run/` by default and runs the receipt, identity, and license singleton demo bundle-index smoke workflows into one consolidated report.
 
+For the next singleton operator layer above those bundle indexes, there is also:
+
+```bash
+python -m satroot_singleton_demo_release_catalog_matrix_smoke
+```
+
+or:
+
+```bash
+satroot-singleton-demo-release-catalog-matrix-smoke
+```
+
+That one writes into `.tmp_singleton_demo_release_catalog_matrix_smoke_run/` by default and runs the receipt, identity, and license singleton demo release-catalog smoke workflows into one consolidated report.
+
+For the next singleton operator layer above those per-profile catalogs, there is also:
+
+```bash
+python -m satroot_singleton_demo_release_catalog_index_matrix_smoke
+```
+
+or:
+
+```bash
+satroot-singleton-demo-release-catalog-index-matrix-smoke
+```
+
+That one writes into `.tmp_singleton_demo_release_catalog_index_matrix_smoke_run/` by default and runs the receipt, identity, and license singleton demo release-catalog-index smoke workflows into one consolidated report.
+
 For the lowest multi-bundle operator layer above those direct profile smokes, there is also:
 
 ```bash
@@ -626,6 +654,48 @@ And the machine-credit lane has the same packaged entrypoints:
 
 ```bash
 python -m satroot_machine_profile_smoke
+```
+
+The singleton receipt lane also has lower publication-ladder wrappers:
+
+```bash
+python scripts/run_receipt_demo_release_catalog_smoke.py
+python scripts/run_receipt_demo_release_catalog_index_smoke.py
+```
+
+or:
+
+```bash
+python -m satroot_receipt_demo_release_catalog_smoke
+python -m satroot_receipt_demo_release_catalog_index_smoke
+```
+
+The singleton identity lane exposes the same local and packaged flows:
+
+```bash
+python scripts/run_identity_demo_release_catalog_smoke.py
+python scripts/run_identity_demo_release_catalog_index_smoke.py
+```
+
+or:
+
+```bash
+python -m satroot_identity_demo_release_catalog_smoke
+python -m satroot_identity_demo_release_catalog_index_smoke
+```
+
+The singleton license lane exposes the same local and packaged flows:
+
+```bash
+python scripts/run_license_demo_release_catalog_smoke.py
+python scripts/run_license_demo_release_catalog_index_smoke.py
+```
+
+or:
+
+```bash
+python -m satroot_license_demo_release_catalog_smoke
+python -m satroot_license_demo_release_catalog_index_smoke
 ```
 
 or:

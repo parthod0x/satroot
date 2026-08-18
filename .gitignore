@@ -8,6 +8,14 @@ __pycache__/
 .tmp_receipt_demo_bundle_index_smoke*/
 .tmp_identity_demo_bundle_index_smoke*/
 .tmp_license_demo_bundle_index_smoke*/
+.tmp_singleton_demo_release_catalog_matrix_smoke*/
+.tmp_receipt_demo_release_catalog_smoke*/
+.tmp_identity_demo_release_catalog_smoke*/
+.tmp_license_demo_release_catalog_smoke*/
+.tmp_singleton_demo_release_catalog_index_matrix_smoke*/
+.tmp_receipt_demo_release_catalog_index_smoke*/
+.tmp_identity_demo_release_catalog_index_smoke*/
+.tmp_license_demo_release_catalog_index_smoke*/
 .tmp_machine_demo_bundle_index_smoke*/
 .tmp_demo_release_catalog_index_matrix_smoke*/
 .tmp_stable_demo_bundle_index_smoke*/
