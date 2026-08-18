@@ -1,6 +1,8 @@
 __pycache__/
 .pytest_cache/
 .pytest_*.log
+.tmp_release_gate_smoke_test_inputs*/
+.tmp_release_gate_smoke*/
 .tmp_operator_proof_smoke*/
 .tmp_publication_ladder_smoke*/
 .tmp_singleton_publication_ladder_smoke*/

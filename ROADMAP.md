@@ -116,6 +116,7 @@ The success condition should be narrow:
 
 Current status:
 
+- The top-level operator proof now has a matching packaged local release-gate wrapper above it for import smoke, proof execution, and chunked pytest in one pass before tagging.
 - The stable/machine publication ladder, singleton publication ladder, and mixed-profile federation helpers now also roll up under one packaged top-level operator-proof smoke wrapper.
 - The stable and machine bundle-index, release-catalog, and release-catalog-index matrix helpers now also roll up under one packaged publication-ladder smoke wrapper.
 - The receipt, identity, and license singleton bundle-index, release-catalog, and release-catalog-index matrix helpers now also roll up under one packaged singleton publication-ladder smoke wrapper.

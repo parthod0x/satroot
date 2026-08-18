@@ -526,6 +526,20 @@ or:
 satroot-test
 ```
 
+For the preferred local pre-tag release gate above the individual verification surfaces, use:
+
+```bash
+python -m satroot_release_gate_smoke
+```
+
+or:
+
+```bash
+satroot-release-gate-smoke
+```
+
+That one writes into `.tmp_release_gate_smoke_run/` by default and runs installed-module import smoke, the top-level operator proof, and chunked pytest together into one consolidated release-gate report.
+
 The preferred top-level verification for the currently released operator surface is:
 
 ```bash
