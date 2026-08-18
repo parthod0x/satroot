@@ -12,19 +12,27 @@ def test_run_operator_proof_smoke_builds_all_top_level_operator_surfaces(tmp_pat
     report = run_operator_proof_smoke(tmp_path / "operator_proof_smoke")
 
     assert report["ok"] is True
-    assert report["surface_count"] == 3
+    assert report["surface_count"] == 4
     assert set(report["surfaces"]) == {
         "publication_ladder",
         "singleton_publication_ladder",
         "profile_federation",
+        "federated_registry_collection",
     }
     assert report["surfaces"]["publication_ladder"]["layer_count"] == 3
     assert report["surfaces"]["singleton_publication_ladder"]["layer_count"] == 3
     assert report["surfaces"]["profile_federation"]["profile_count"] == 5
     assert report["surfaces"]["profile_federation"]["publication_registry_artifact_count"] == 15
+    assert report["surfaces"]["federated_registry_collection"]["workspace_count"] == 1
+    assert report["surfaces"]["federated_registry_collection"]["publication_registry_component_count"] == 3
+    assert (
+        report["surfaces"]["federated_registry_collection"]["roundtrip_publication_registry_component_count"]
+        == 3
+    )
     assert Path(report["surfaces"]["publication_ladder"]["report_path"]).is_file()
     assert Path(report["surfaces"]["singleton_publication_ladder"]["report_path"]).is_file()
     assert Path(report["surfaces"]["profile_federation"]["report_path"]).is_file()
+    assert Path(report["surfaces"]["federated_registry_collection"]["report_path"]).is_file()
     assert Path(report["report_path"]).is_file()
 
 

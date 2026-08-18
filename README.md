@@ -554,7 +554,7 @@ or:
 satroot-operator-proof-smoke
 ```
 
-That one writes into `.tmp_operator_proof_smoke_run/` by default and runs the stable/machine publication ladder, the singleton publication ladder, and the mixed-profile federation smoke together into one consolidated proof report.
+That one writes into `.tmp_operator_proof_smoke_run/` by default and runs the stable/machine publication ladder, the singleton publication ladder, the mixed-profile federation smoke, and the collection-backed federated registry publication round trip together into one consolidated proof report.
 
 If you only want the released per-profile verification surface beneath that top-level proof, use:
 

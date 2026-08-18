@@ -20,6 +20,7 @@ DEFAULT_IMPORT_MODULES = [
     "satroot_operator_proof_smoke",
     "satroot_publication_ladder_smoke",
     "satroot_singleton_publication_ladder_smoke",
+    "satroot_federated_registry_collection_smoke",
     "satroot_singleton_demo_bundle_index_matrix_smoke",
     "satroot_receipt_demo_bundle_index_smoke",
     "satroot_identity_demo_bundle_index_smoke",

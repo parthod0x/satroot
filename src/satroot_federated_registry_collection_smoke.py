@@ -111,16 +111,18 @@ def run_federated_registry_collection_smoke(
     output_dir: str | Path,
     *,
     bundle_scheme: str = "hmac-sha256",
+    profile_federation_report: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_path = Path(output_dir).resolve()
     if output_path.exists():
         shutil.rmtree(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    profile_federation_report = run_profile_federation_smoke(
-        output_path / "profile_federation",
-        bundle_scheme=bundle_scheme,
-    )
+    if profile_federation_report is None:
+        profile_federation_report = run_profile_federation_smoke(
+            output_path / "profile_federation",
+            bundle_scheme=bundle_scheme,
+        )
     registry_collection_dir = Path(
         str(
             profile_federation_report["federated_publication_registry_workspace_collection"][

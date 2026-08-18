@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from satroot_federated_registry_collection_smoke import run_federated_registry_collection_smoke
 from satroot_profile_federation_smoke import run_profile_federation_smoke
 from satroot_publication_ladder_smoke import run_publication_ladder_smoke
 from satroot_singleton_publication_ladder_smoke import (
@@ -34,6 +35,15 @@ def _compact_surface(report: Mapping[str, Any], *, surface_key: str) -> dict[str
         compact["profile_count"] = profile_matrix.get("profile_count")
         compact["profiles"] = profile_matrix.get("profiles")
         compact["publication_registry_artifact_count"] = registry_workspace.get("artifact_count")
+    elif surface_key == "federated_registry_collection":
+        collection_summary = report.get("publication_registry_workspace_collection", {})
+        registry_publication = report.get("publication_registry_publication", {})
+        roundtrip_registry_publication = report.get("roundtrip_publication_registry_publication", {})
+        compact["workspace_count"] = collection_summary.get("workspace_count")
+        compact["publication_registry_component_count"] = registry_publication.get("component_count")
+        compact["roundtrip_publication_registry_component_count"] = roundtrip_registry_publication.get(
+            "component_count"
+        )
 
     return compact
 
@@ -60,11 +70,17 @@ def run_operator_proof_smoke(
         output_path / "profile_federation",
         bundle_scheme=bundle_scheme,
     )
+    federated_registry_collection_report = run_federated_registry_collection_smoke(
+        output_path / "federated_registry_collection",
+        bundle_scheme=bundle_scheme,
+        profile_federation_report=profile_federation_report,
+    )
 
     surface_reports = {
         "publication_ladder": publication_ladder_report,
         "singleton_publication_ladder": singleton_publication_ladder_report,
         "profile_federation": profile_federation_report,
+        "federated_registry_collection": federated_registry_collection_report,
     }
     report: dict[str, Any] = {
         "bundle_scheme": bundle_scheme,
@@ -89,7 +105,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description=(
             "Run the top-level SATROOT operator proof surface across the stable/machine "
             "publication ladder, the singleton publication ladder, and the mixed-profile "
-            "federation proof."
+            "federation proof, plus the collection-backed federated registry publication round trip."
         )
     )
     parser.add_argument(
