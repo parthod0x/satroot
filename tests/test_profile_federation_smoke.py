@@ -19,7 +19,9 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
     assert report["publication_stack_collection"]["stack_count"] == 5
     assert report["publication_network_workspace"]["stack_count"] == 1
     assert report["publication_catalog_workspace"]["artifact_count"] == 15
+    assert report["federated_publication_catalog_workspace_collection"]["workspace_count"] == 1
     assert report["publication_registry_workspace"]["artifact_count"] == 15
+    assert report["federated_publication_registry_workspace_collection"]["workspace_count"] == 1
     assert report["publication_network_collection"]["network_count"] == 5
     assert report["publication_catalog_workspace_collection"]["workspace_count"] == 5
     assert report["publication_registry_workspace_collection"]["workspace_count"] == 5
@@ -28,7 +30,9 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
     assert report["publication_stack_collection_lint"]["ok"] is True
     assert report["publication_network_workspace_lint"]["ok"] is True
     assert report["publication_catalog_workspace_lint"]["ok"] is True
+    assert report["federated_publication_catalog_workspace_collection_lint"]["ok"] is True
     assert report["publication_registry_workspace_lint"]["ok"] is True
+    assert report["federated_publication_registry_workspace_collection_lint"]["ok"] is True
     assert report["publication_network_collection_lint"]["ok"] is True
     assert report["publication_catalog_workspace_collection_lint"]["ok"] is True
     assert report["publication_registry_workspace_collection_lint"]["ok"] is True
