@@ -6,12 +6,15 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from satroot1 import (
+    SatRootError,
     bootstrap_demo_catalog_workspace_collection,
     bootstrap_publication_catalog_workspace_collection,
     bootstrap_publication_network_collection,
     bootstrap_publication_registry_workspace_from_nested_preset,
     bootstrap_publication_registry_workspace_collection,
+    export_publication_network_preset_from_workspace,
     export_publication_registry_workspace_preset_from_workspace,
+    export_publication_stack_preset_from_workspace,
     bootstrap_publication_stack_collection,
     lint_demo_catalog_workspace_collection,
     lint_publication_catalog_workspace,
@@ -34,6 +37,7 @@ from satroot1 import (
     summarize_publication_registry_workspace_collection,
     summarize_publication_stack_collection,
     summarize_publication_stack_workspace,
+    main as satroot_main,
     write_publication_catalog_workspace,
 )
 from satroot_profile_matrix_smoke import run_profile_matrix_smoke
@@ -63,6 +67,64 @@ def _resolve_compact_network_stack_workspace_dir(profile_report: Mapping[str, An
             f"at {stack_workspace_dir}"
         )
     return stack_workspace_dir
+
+
+def _bootstrap_publication_stack_from_preset(
+    *,
+    preset_path: Path,
+    output_dir: Path,
+    signature_scheme: str,
+    key_id: str,
+) -> Path:
+    output_dir = output_dir.resolve()
+    exit_code = satroot_main(
+        [
+            "bootstrap-publication-stack",
+            "--stack-preset-json",
+            str(preset_path.resolve()),
+            "--scheme",
+            signature_scheme,
+            "--release-key-id",
+            key_id,
+            "--release-catalog-key-id",
+            key_id,
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    if exit_code != 0:
+        raise SatRootError("bootstrap-publication-stack failed while bootstrapping exported preset")
+    return output_dir
+
+
+def _bootstrap_publication_network_from_preset(
+    *,
+    preset_path: Path,
+    output_dir: Path,
+    signature_scheme: str,
+    key_id: str,
+) -> Path:
+    output_dir = output_dir.resolve()
+    exit_code = satroot_main(
+        [
+            "bootstrap-publication-network",
+            "--network-preset-json",
+            str(preset_path.resolve()),
+            "--scheme",
+            signature_scheme,
+            "--release-key-id",
+            key_id,
+            "--release-catalog-key-id",
+            key_id,
+            "--release-catalog-index-key-id",
+            key_id,
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    if exit_code != 0:
+        raise SatRootError("bootstrap-publication-network failed while bootstrapping exported preset")
+    return output_dir
 
 
 def run_profile_federation_smoke(
@@ -121,6 +183,38 @@ def run_profile_federation_smoke(
     )
     federated_stack_summary = summarize_publication_stack_workspace(federated_stack_dir)
     federated_stack_lint = lint_publication_stack_workspace(federated_stack_dir)
+    federated_stack_roundtrip_export_dir = output_path / "federated_publication_stack_roundtrip_exports"
+    federated_stack_roundtrip_export_dir.mkdir(parents=True, exist_ok=True)
+    federated_stack_roundtrip_preset_path = (
+        federated_stack_roundtrip_export_dir / "federated_publication_stack.json"
+    )
+    federated_stack_roundtrip_catalog_preset_dir = (
+        federated_stack_roundtrip_export_dir / "demo_catalog_presets"
+    )
+    federated_stack_roundtrip_preset = export_publication_stack_preset_from_workspace(
+        federated_stack_dir,
+        output_path=federated_stack_roundtrip_preset_path,
+        catalog_preset_dir=federated_stack_roundtrip_catalog_preset_dir,
+    )
+    _write_json(federated_stack_roundtrip_preset_path, federated_stack_roundtrip_preset)
+    federated_stack_roundtrip_dir = _bootstrap_publication_stack_from_preset(
+        preset_path=federated_stack_roundtrip_preset_path,
+        output_dir=output_path / "federated_publication_stack_roundtrip",
+        signature_scheme=bundle_scheme,
+        key_id="publication-roundtrip-key",
+    )
+    federated_stack_roundtrip_summary = summarize_publication_stack_workspace(
+        federated_stack_roundtrip_dir
+    )
+    federated_stack_roundtrip_lint = lint_publication_stack_workspace(
+        federated_stack_roundtrip_dir
+    )
+    federated_stack_roundtrip_report = {
+        "preset_path": str(federated_stack_roundtrip_preset_path.resolve()),
+        "catalog_preset_dir": str(federated_stack_roundtrip_catalog_preset_dir.resolve()),
+        "workspace_dir": str(federated_stack_roundtrip_dir.resolve()),
+        "workspace": federated_stack_roundtrip_summary,
+    }
 
     publication_stack_collection_dir = output_path / "publication_stack_collection"
     bootstrap_publication_stack_collection(
@@ -148,6 +242,43 @@ def run_profile_federation_smoke(
     )
     federated_network_summary = summarize_publication_network_workspace(federated_network_dir)
     federated_network_lint = lint_publication_network_workspace(federated_network_dir)
+    federated_network_roundtrip_export_dir = output_path / "federated_publication_network_roundtrip_exports"
+    federated_network_roundtrip_export_dir.mkdir(parents=True, exist_ok=True)
+    federated_network_roundtrip_preset_path = (
+        federated_network_roundtrip_export_dir / "federated_publication_network.json"
+    )
+    federated_network_roundtrip_stack_preset_dir = (
+        federated_network_roundtrip_export_dir / "publication_stack_presets"
+    )
+    federated_network_roundtrip_catalog_preset_dir = (
+        federated_network_roundtrip_export_dir / "demo_catalog_presets"
+    )
+    federated_network_roundtrip_preset = export_publication_network_preset_from_workspace(
+        federated_network_dir,
+        output_path=federated_network_roundtrip_preset_path,
+        stack_preset_dir=federated_network_roundtrip_stack_preset_dir,
+        catalog_preset_dir=federated_network_roundtrip_catalog_preset_dir,
+    )
+    _write_json(federated_network_roundtrip_preset_path, federated_network_roundtrip_preset)
+    federated_network_roundtrip_dir = _bootstrap_publication_network_from_preset(
+        preset_path=federated_network_roundtrip_preset_path,
+        output_dir=output_path / "federated_publication_network_roundtrip",
+        signature_scheme=bundle_scheme,
+        key_id="publication-roundtrip-key",
+    )
+    federated_network_roundtrip_summary = summarize_publication_network_workspace(
+        federated_network_roundtrip_dir
+    )
+    federated_network_roundtrip_lint = lint_publication_network_workspace(
+        federated_network_roundtrip_dir
+    )
+    federated_network_roundtrip_report = {
+        "preset_path": str(federated_network_roundtrip_preset_path.resolve()),
+        "stack_preset_dir": str(federated_network_roundtrip_stack_preset_dir.resolve()),
+        "catalog_preset_dir": str(federated_network_roundtrip_catalog_preset_dir.resolve()),
+        "workspace_dir": str(federated_network_roundtrip_dir.resolve()),
+        "workspace": federated_network_roundtrip_summary,
+    }
 
     federated_catalog_workspace_dir = output_path / "federated_publication_catalog_workspace"
     write_publication_catalog_workspace(
@@ -330,10 +461,14 @@ def run_profile_federation_smoke(
         "demo_catalog_workspace_collection_lint": demo_catalog_collection_lint,
         "publication_stack_workspace": federated_stack_summary,
         "publication_stack_workspace_lint": federated_stack_lint,
+        "federated_publication_stack_roundtrip": federated_stack_roundtrip_report,
+        "federated_publication_stack_roundtrip_lint": federated_stack_roundtrip_lint,
         "publication_stack_collection": publication_stack_collection_summary,
         "publication_stack_collection_lint": publication_stack_collection_lint,
         "publication_network_workspace": federated_network_summary,
         "publication_network_workspace_lint": federated_network_lint,
+        "federated_publication_network_roundtrip": federated_network_roundtrip_report,
+        "federated_publication_network_roundtrip_lint": federated_network_roundtrip_lint,
         "publication_catalog_workspace": federated_catalog_workspace_summary,
         "publication_catalog_workspace_lint": federated_catalog_workspace_lint,
         "federated_publication_catalog_workspace_collection": federated_catalog_workspace_collection_summary,
@@ -356,8 +491,10 @@ def run_profile_federation_smoke(
             report["profile_matrix"]["ok"] is True,
             report["demo_catalog_workspace_collection_lint"]["ok"] is True,
             report["publication_stack_workspace_lint"]["ok"] is True,
+            report["federated_publication_stack_roundtrip_lint"]["ok"] is True,
             report["publication_stack_collection_lint"]["ok"] is True,
             report["publication_network_workspace_lint"]["ok"] is True,
+            report["federated_publication_network_roundtrip_lint"]["ok"] is True,
             report["publication_catalog_workspace_lint"]["ok"] is True,
             report["federated_publication_catalog_workspace_collection_lint"]["ok"] is True,
             report["publication_registry_workspace_lint"]["ok"] is True,

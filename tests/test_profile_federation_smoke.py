@@ -16,8 +16,27 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
     assert report["profile_matrix"]["profile_count"] == 5
     assert report["demo_catalog_workspace_collection"]["workspace_count"] == 5
     assert report["publication_stack_workspace"]["workspace_count"] == 5
+    assert report["federated_publication_stack_roundtrip"]["workspace"]["workspace_count"] == 5
+    assert Path(report["federated_publication_stack_roundtrip"]["preset_path"]).is_file()
+    assert Path(report["federated_publication_stack_roundtrip"]["catalog_preset_dir"]).is_dir()
+    assert (
+        report["federated_publication_stack_roundtrip"]["workspace"][
+            "source_catalog_workspace_collection_dir"
+        ]
+        == report["demo_catalog_workspace_collection"]["collection_dir"]
+    )
     assert report["publication_stack_collection"]["stack_count"] == 5
     assert report["publication_network_workspace"]["stack_count"] == 1
+    assert report["federated_publication_network_roundtrip"]["workspace"]["stack_count"] == 1
+    assert Path(report["federated_publication_network_roundtrip"]["preset_path"]).is_file()
+    assert Path(report["federated_publication_network_roundtrip"]["stack_preset_dir"]).is_dir()
+    assert Path(report["federated_publication_network_roundtrip"]["catalog_preset_dir"]).is_dir()
+    assert (
+        report["federated_publication_network_roundtrip"]["workspace"][
+            "source_publication_stack_collection_dir"
+        ]
+        == report["publication_stack_collection"]["collection_dir"]
+    )
     assert report["publication_catalog_workspace"]["artifact_count"] == 15
     assert report["federated_publication_catalog_workspace_collection"]["workspace_count"] == 1
     assert report["publication_registry_workspace"]["artifact_count"] == 15
@@ -47,8 +66,10 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
     assert report["publication_registry_workspace_collection"]["workspace_count"] == 5
     assert report["demo_catalog_workspace_collection_lint"]["ok"] is True
     assert report["publication_stack_workspace_lint"]["ok"] is True
+    assert report["federated_publication_stack_roundtrip_lint"]["ok"] is True
     assert report["publication_stack_collection_lint"]["ok"] is True
     assert report["publication_network_workspace_lint"]["ok"] is True
+    assert report["federated_publication_network_roundtrip_lint"]["ok"] is True
     assert report["publication_catalog_workspace_lint"]["ok"] is True
     assert report["federated_publication_catalog_workspace_collection_lint"]["ok"] is True
     assert report["publication_registry_workspace_lint"]["ok"] is True
