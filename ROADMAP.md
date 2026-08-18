@@ -131,6 +131,7 @@ Current status:
 - It also proves that those released profile demo catalogs can be republished through one mixed-profile publication stack, publication network, publication catalog workspace, and publication registry workspace without changing the base kernel.
 - The mixed federated publication catalog workspace and publication registry workspace are now also snapshotted into their own explicit top-level collections for reuse.
 - The mixed federated publication catalog workspace, publication stack, publication network, and publication registry workspace are now all exported and rebuilt through nested publication presets as part of the same smoke proof.
+- Those mixed federated registry workspace collections can now also drive a top-level publication-registry publication bootstrap and exported-preset round trip through a dedicated packaged smoke surface.
 
 ## Core architectural rule
 

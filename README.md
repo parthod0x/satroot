@@ -696,6 +696,20 @@ satroot-profile-federation-smoke
 
 That one writes into `.tmp_profile_federation_smoke_run/` by default, reuses the released profile matrix, freezes the resulting per-profile demo-catalog, publication-stack, publication-network, publication-catalog-workspace, and publication-registry-workspace outputs into explicit collections, builds one shared mixed-profile publication catalog workspace plus publication registry workspace above the federated network, snapshots those mixed top-level workspaces into their own explicit collections too, and round-trips the federated catalog workspace, stack, network, and top-level registry workspace back through exported nested presets.
 
+If you want the next higher proof layer above that federated workspace surface, there is also:
+
+```bash
+python -m satroot_federated_registry_collection_smoke
+```
+
+or:
+
+```bash
+satroot-federated-registry-collection-smoke
+```
+
+That one writes into `.tmp_federated_registry_collection_smoke_run/` by default, reruns the mixed-profile federation smoke, reuses the generated top-level `publication_registry_workspace_collection`, bootstraps a top-level publication-registry publication from that collection-backed preset, exports the generated publication back into a preset, and bootstraps the publication again to prove the collection-backed registry publication round trip.
+
 There is also a packaged stable-profile smoke entrypoint:
 
 ```bash
