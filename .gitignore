@@ -1,6 +1,7 @@
 __pycache__/
 .pytest_cache/
 .pytest_*.log
+.tmp_singleton_publication_ladder_smoke*/
 .tmp_profile_catalog_probe*/
 .tmp_profile_registry_probe*/
 .tmp_demo_bundle_index_matrix_smoke*/

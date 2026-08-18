@@ -582,6 +582,20 @@ satroot-singleton-demo-release-catalog-index-matrix-smoke
 
 That one writes into `.tmp_singleton_demo_release_catalog_index_matrix_smoke_run/` by default and runs the receipt, identity, and license singleton demo release-catalog-index smoke workflows into one consolidated report.
 
+If you want the full singleton operator ladder in one pass, there is also:
+
+```bash
+python -m satroot_singleton_publication_ladder_smoke
+```
+
+or:
+
+```bash
+satroot-singleton-publication-ladder-smoke
+```
+
+That one writes into `.tmp_singleton_publication_ladder_smoke_run/` by default and runs the singleton bundle-index, release-catalog, and release-catalog-index matrix smokes together into one consolidated ladder report.
+
 For the lowest multi-bundle operator layer above those direct profile smokes, there is also:
 
 ```bash
