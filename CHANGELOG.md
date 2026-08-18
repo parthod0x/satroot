@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Adds `python -m satroot_release_gate_smoke`, `satroot-release-gate-smoke`, and `scripts/run_release_gate_smoke.py` for one local pre-tag release gate that runs installed-module import smoke, the top-level operator proof, and chunked pytest together and emits one consolidated gate report.
-- Adds the packaged release-gate module to installed-import verification, packaging assertions, release guidance, and local ignore rules so the repo now has one command for the full local release check before tagging.
+- Adds the packaged release-gate module to installed-import verification, packaging assertions, release guidance, local ignore rules, and the final GitHub Actions umbrella check so the repo now has one canonical command for the full local release check before tagging.
 - Adds `python -m satroot_operator_proof_smoke`, `satroot-operator-proof-smoke`, and `scripts/run_operator_proof_smoke.py` for one top-level operator proof surface that runs the stable/machine publication ladder, the singleton publication ladder, and the mixed-profile federation smoke together and emits one consolidated proof report.
 - Runs the new operator-proof smoke workflow in CI, adds the packaged proof module to installed-import verification and packaging assertions, and ignores the generated proof workspaces by default so the repo now has one command for the full currently released operator story.
 - Adds `python -m satroot_publication_ladder_smoke`, `satroot-publication-ladder-smoke`, and `scripts/run_publication_ladder_smoke.py` for one umbrella operator proof that runs the stable/machine bundle-index, release-catalog, and release-catalog-index matrix smokes together and emits one consolidated ladder report.
