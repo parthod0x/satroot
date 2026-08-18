@@ -50,6 +50,7 @@ DEFAULT_IMPORT_MODULES = [
     "satroot_receipt_profile_smoke",
     "satroot_identity_profile_smoke",
     "satroot_license_profile_smoke",
+    "satroot_anchored_demo_smoke",
 ]
 
 

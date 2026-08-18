@@ -38,6 +38,7 @@ __pycache__/
 .tmp_machine_profile_smoke*/
 .tmp_receipt_profile_smoke*/
 .tmp_stable_profile_smoke*/
+.tmp_anchored_demo_smoke*/
 *.pyc
 *.pyo
 .env
