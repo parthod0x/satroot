@@ -34,6 +34,10 @@
     "licensor_entity": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
     "licensee_entity": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
     "usage_scope": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
+    "stream_type": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
+    "stream_subject": {"type": "string", "minLength": 1, "maxLength": 128},
+    "publisher_entity": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
+    "sequence_policy": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
     "intended_use": {"type": "string", "minLength": 1},
     "symbol": {"type": "string", "pattern": "^[A-Z0-9]{1,16}$"},
     "name": {"type": "string", "minLength": 1},
@@ -118,6 +122,18 @@
           "profile_mode": {"const": "single-license"}
         },
         "required": ["profile_mode", "license_type", "asset_id", "licensor_entity", "licensee_entity", "usage_scope", "intended_use"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"profile": {"const": "SATROOT-EVENT-1"}},
+        "required": ["profile"]
+      },
+      "then": {
+        "properties": {
+          "profile_mode": {"const": "single-stream"}
+        },
+        "required": ["profile_mode", "stream_type", "stream_subject", "publisher_entity", "sequence_policy", "intended_use"]
       }
     },
     {

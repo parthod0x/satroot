@@ -52,7 +52,7 @@ The deeper SATROOT model is:
 1 satoshi -> 1 root namespace -> many semantic objects
 ```
 
-In `SATROOT-1`, that namespace is used only for a token ledger. Released profiles already use the same root structure for receipts, credits, licenses, identities, and machine-readable rights.
+In `SATROOT-1`, that namespace is used only for a token ledger. Registered profiles already use the same root structure for receipts, credits, licenses, identities, machine-readable rights, and event-stream heads.
 
 ### 2.5 Event ledger
 
@@ -359,7 +359,7 @@ The released `SATROOT-STABLE-1` profile defines reference-only accounting units 
 
 ## 11. Namespace expansion boundary
 
-Further SATROOT work may define additional object classes beyond the five released profiles under the same root model, but those profiles must not retroactively change the minimal meaning of `SATROOT-1`.
+Further SATROOT work may define additional object classes beyond the six registered profiles under the same root model, but those profiles must not retroactively change the minimal meaning of `SATROOT-1`.
 
 `SATROOT-1` remains:
 

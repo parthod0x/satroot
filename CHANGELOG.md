@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.1-event-streams - 2026-08-19
+
+- Registers `SATROOT-EVENT-1` as the sixth profile: an append-only event-stream head object in `single-stream` mode with deterministic publisher handoff, added to the profile registry, the record schema (four new genesis fields), kernel scaffold defaults, singleton demo defaults, genesis validation, and the singleton-object profile set — with the frozen `SATROOT-1` kernel rules unchanged, exactly as the namespace-expansion boundary requires.
+- Adds `examples/genesis_event1.json` and `examples/events_event1.json` as the schema-valid `EVENT1` stream-custody ledger example on its own placeholder root, plus the `profiles/event/SATROOT-EVENT-1.md` draft.
+- Adds `python -m satroot_event_profile_smoke`, `satroot-event-profile-smoke`, and `scripts/run_event_profile_smoke.py` as the dedicated event lane: replays the checked-in example, scaffolds a fresh single-stream demo ledger, and verifies a signed bundle over it; demo-catalog-matrix promotion for the event lane is deferred to a future milestone.
+
 ## v1.0-draft-freeze - 2026-08-19
 
 - Declares the `SATROOT-1` kernel rules frozen as the v1 protocol draft: no kernel-rule, lane, or dependency changes in this release.

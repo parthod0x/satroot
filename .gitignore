@@ -42,6 +42,7 @@ __pycache__/
 .tmp_anchored_publication_smoke*/
 .tmp_onchain_envelope_smoke*/
 .tmp_envelope_verification_smoke*/
+.tmp_event_profile_smoke*/
 *.pyc
 *.pyo
 .env

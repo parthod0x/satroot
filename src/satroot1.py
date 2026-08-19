@@ -131,6 +131,18 @@ PROFILE_SCAFFOLD_DEFAULTS: Dict[str, Dict[str, Any]] = {
             "intended_use": "license-ledger",
         },
     },
+    "SATROOT-EVENT-1": {
+        "decimals": 0,
+        "max_supply": "1",
+        "initial_balance": "1",
+        "fields": {
+            "stream_type": "telemetry-stream",
+            "stream_subject": "stream-0001",
+            "publisher_entity": "issuer-co",
+            "sequence_policy": "append-only",
+            "intended_use": "event-stream-ledger",
+        },
+    },
 }
 SINGLETON_DEMO_PROFILE_DEFAULTS: Dict[str, Dict[str, Optional[str]]] = {
     "SATROOT-RECEIPT-1": {
@@ -147,6 +159,11 @@ SINGLETON_DEMO_PROFILE_DEFAULTS: Dict[str, Dict[str, Optional[str]]] = {
         "holder_account": "customer",
         "next_holder": None,
         "archive_account": "archive",
+    },
+    "SATROOT-EVENT-1": {
+        "holder_account": "publisher_node",
+        "next_holder": "successor_publisher",
+        "archive_account": None,
     },
 }
 DEMO_CATALOG_BUNDLE_SPECS: tuple[Dict[str, str], ...] = (
@@ -2399,6 +2416,7 @@ _SINGLETON_OBJECT_PROFILES = {
     ("SATROOT-RECEIPT-1", "single-receipt"),
     ("SATROOT-IDENTITY-1", "single-identity"),
     ("SATROOT-LICENSE-1", "single-license"),
+    ("SATROOT-EVENT-1", "single-stream"),
 }
 
 
@@ -2412,7 +2430,7 @@ def _resolve_singleton_object_holder(
         verifier = demo_signature_verifier
     state = replay(events, verifier=verifier)
     if (state.profile, state.profile_mode) not in _SINGLETON_OBJECT_PROFILES:
-        raise SatRootError(f"singleton object {operation_label} requires a SATROOT receipt, identity, or license ledger")
+        raise SatRootError(f"singleton object {operation_label} requires a SATROOT receipt, identity, license, or event ledger")
     if state.supply != 1:
         raise SatRootError(f"singleton object {operation_label} requires exactly one live unit")
 
@@ -3040,7 +3058,7 @@ def bootstrap_singleton_object_demo_ledger(
     include_annotation: bool = True,
 ) -> Dict[str, Any]:
     if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
-        raise SatRootError("singleton demo bootstrap requires a SATROOT receipt, identity, or license profile")
+        raise SatRootError("singleton demo bootstrap requires a SATROOT receipt, identity, license, or event profile")
 
     issuer_account = require_account_name(issuer, "issuer")
     current_holder = require_account_name(holder_account, "holder_account")
@@ -3255,7 +3273,7 @@ def bootstrap_singleton_demo_bundle_index_from_presets(
     bundle_index_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
 ) -> Dict[str, Any]:
     if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
-        raise SatRootError("singleton demo bundle index bootstrap requires a SATROOT receipt, identity, or license profile")
+        raise SatRootError("singleton demo bundle index bootstrap requires a SATROOT receipt, identity, license, or event profile")
 
     structure_overrides: Dict[str, Any] = {}
     if root_id is not None:
@@ -3323,7 +3341,7 @@ def bootstrap_singleton_demo_release_collection_from_presets(
     release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
 ) -> Dict[str, Any]:
     if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
-        raise SatRootError("singleton demo release collection bootstrap requires a SATROOT receipt, identity, or license profile")
+        raise SatRootError("singleton demo release collection bootstrap requires a SATROOT receipt, identity, license, or event profile")
 
     structure_overrides: Dict[str, Any] = {}
     if root_id is not None:
@@ -3396,7 +3414,7 @@ def bootstrap_singleton_demo_release_catalog_publication_from_presets(
     catalog_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
-        raise SatRootError("singleton demo release catalog bootstrap requires a SATROOT receipt, identity, or license profile")
+        raise SatRootError("singleton demo release catalog bootstrap requires a SATROOT receipt, identity, license, or event profile")
 
     structure_overrides: Dict[str, Any] = {}
     if root_id is not None:
@@ -3475,7 +3493,7 @@ def bootstrap_singleton_demo_release_catalog_index_publication_from_presets(
     index_metadata: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
-        raise SatRootError("singleton demo release catalog index bootstrap requires a SATROOT receipt, identity, or license profile")
+        raise SatRootError("singleton demo release catalog index bootstrap requires a SATROOT receipt, identity, license, or event profile")
 
     structure_overrides: Dict[str, Any] = {}
     if root_id is not None:
@@ -3585,7 +3603,7 @@ def _bootstrap_singleton_demo_catalog_workspaces_from_presets(
     release_metadata_overrides: Optional[Mapping[str, Optional[str]]] = None,
 ) -> Dict[str, Any]:
     if profile not in SINGLETON_DEMO_PROFILE_DEFAULTS:
-        raise SatRootError("singleton demo catalog workspace bootstrap requires a SATROOT receipt, identity, or license profile")
+        raise SatRootError("singleton demo catalog workspace bootstrap requires a SATROOT receipt, identity, license, or event profile")
 
     root_output_dir = Path(output_dir).resolve()
     generated_workspaces: List[Dict[str, Any]] = []
@@ -12167,6 +12185,8 @@ def _validate_profile_specific_genesis(profile: str, event: Mapping[str, Any]) -
         _validate_identity_profile_genesis(event)
     elif profile == "SATROOT-LICENSE-1":
         _validate_license_profile_genesis(event)
+    elif profile == "SATROOT-EVENT-1":
+        _validate_event_profile_genesis(event)
 
 
 def _validate_stable_profile_genesis(event: Mapping[str, Any]) -> None:
@@ -12210,6 +12230,13 @@ def _validate_license_profile_genesis(event: Mapping[str, Any]) -> None:
     _validate_compact_identifier_field(event, "usage_scope")
     _validate_compact_identifier_field(event, "intended_use")
     _validate_singleton_object_profile(event, profile_label="license")
+
+
+def _validate_event_profile_genesis(event: Mapping[str, Any]) -> None:
+    _validate_compact_identifier_field(event, "stream_type")
+    _validate_compact_identifier_field(event, "sequence_policy")
+    _validate_compact_identifier_field(event, "intended_use")
+    _validate_singleton_object_profile(event, profile_label="event-stream")
 
 
 def _validate_compact_identifier_field(event: Mapping[str, Any], field_name: str) -> None:
@@ -24132,7 +24159,7 @@ def build_cli_parser() -> Any:
     bootstrap_machine_demo_parser.add_argument("--nonce", help="Optional nonce metadata")
     bootstrap_machine_demo_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_events.json")
 
-    bootstrap_singleton_demo_parser = subparsers.add_parser("bootstrap-singleton-demo", help="Generate a receipt, identity, or license singleton demo ledger plus annotated artifacts")
+    bootstrap_singleton_demo_parser = subparsers.add_parser("bootstrap-singleton-demo", help="Generate a receipt, identity, license, or event singleton demo ledger plus annotated artifacts")
     bootstrap_singleton_demo_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to scaffold")
     bootstrap_singleton_demo_parser.add_argument("--symbol", required=True, help="Asset symbol for the singleton demo")
     bootstrap_singleton_demo_parser.add_argument("--name", required=True, help="Human-readable asset name for the singleton demo")
@@ -24149,7 +24176,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_parser.add_argument("--nonce", help="Optional nonce metadata")
     bootstrap_singleton_demo_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_events.json")
 
-    bootstrap_singleton_demo_bundle_parser = subparsers.add_parser("bootstrap-singleton-demo-bundle", help="Generate a signed receipt, identity, or license singleton demo bundle from profile parameters")
+    bootstrap_singleton_demo_bundle_parser = subparsers.add_parser("bootstrap-singleton-demo-bundle", help="Generate a signed receipt, identity, license, or event singleton demo bundle from profile parameters")
     bootstrap_singleton_demo_bundle_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to scaffold")
     bootstrap_singleton_demo_bundle_parser.add_argument("--symbol", required=True, help="Asset symbol for the singleton demo bundle")
     bootstrap_singleton_demo_bundle_parser.add_argument("--name", required=True, help="Human-readable asset name for the singleton demo bundle")
@@ -24171,7 +24198,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_bundle_parser.add_argument("--no-annotated-output", action="store_true", help="Do not emit annotated_signed_events.json")
     bootstrap_singleton_demo_bundle_parser.add_argument("--verifier-only", action="store_true", help="For ed25519 bundles, omit private_keys.json and emit verifier-only material")
 
-    bootstrap_singleton_demo_release_parser = subparsers.add_parser("bootstrap-singleton-demo-release", help="Generate a signed receipt, identity, or license singleton demo bundle plus signed release directory from profile parameters")
+    bootstrap_singleton_demo_release_parser = subparsers.add_parser("bootstrap-singleton-demo-release", help="Generate a signed receipt, identity, license, or event singleton demo bundle plus signed release directory from profile parameters")
     bootstrap_singleton_demo_release_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to scaffold")
     bootstrap_singleton_demo_release_parser.add_argument("--symbol", required=True, help="Asset symbol for the singleton demo release")
     bootstrap_singleton_demo_release_parser.add_argument("--name", required=True, help="Human-readable asset name for the singleton demo release")
@@ -24198,7 +24225,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_release_parser.add_argument("--label", help="Optional human-readable release label for the bundle index")
     bootstrap_singleton_demo_release_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
-    bootstrap_singleton_demo_bundle_index_parser = subparsers.add_parser("bootstrap-singleton-demo-bundle-index", help="Generate multiple receipt, identity, or license singleton demo bundles from repeated presets, package them into a bundle collection, and build a reusable singleton bundle index")
+    bootstrap_singleton_demo_bundle_index_parser = subparsers.add_parser("bootstrap-singleton-demo-bundle-index", help="Generate multiple receipt, identity, license, or event singleton demo bundles from repeated presets, package them into a bundle collection, and build a reusable singleton bundle index")
     bootstrap_singleton_demo_bundle_index_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
     bootstrap_singleton_demo_bundle_index_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo bundles")
     bootstrap_singleton_demo_bundle_index_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
@@ -24224,7 +24251,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_bundle_index_parser.add_argument("--label", help="Optional human-readable bundle-index label")
     bootstrap_singleton_demo_bundle_index_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the bundle index")
 
-    bootstrap_singleton_demo_release_collection_parser = subparsers.add_parser("bootstrap-singleton-demo-release-collection", help="Generate multiple receipt, identity, or license singleton demo releases from repeated presets and package them into a reusable release collection")
+    bootstrap_singleton_demo_release_collection_parser = subparsers.add_parser("bootstrap-singleton-demo-release-collection", help="Generate multiple receipt, identity, license, or event singleton demo releases from repeated presets and package them into a reusable release collection")
     bootstrap_singleton_demo_release_collection_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
     bootstrap_singleton_demo_release_collection_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo releases")
     bootstrap_singleton_demo_release_collection_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
@@ -24252,7 +24279,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_release_collection_parser.add_argument("--label", help="Optional shared human-readable release label for generated bundle indexes")
     bootstrap_singleton_demo_release_collection_parser.add_argument("--published-at", help="Optional shared ISO-8601 style published-at metadata for generated bundle indexes")
 
-    bootstrap_singleton_demo_release_catalog_publication_parser = subparsers.add_parser("bootstrap-singleton-demo-release-catalog-publication", help="Generate multiple receipt, identity, or license singleton demo releases from repeated presets, package them into a release collection, and bootstrap a signed singleton release catalog publication")
+    bootstrap_singleton_demo_release_catalog_publication_parser = subparsers.add_parser("bootstrap-singleton-demo-release-catalog-publication", help="Generate multiple receipt, identity, license, or event singleton demo releases from repeated presets, package them into a release collection, and bootstrap a signed singleton release catalog publication")
     bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
     bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo releases")
     bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
@@ -24285,7 +24312,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog manifest")
     bootstrap_singleton_demo_release_catalog_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog manifest")
 
-    bootstrap_singleton_demo_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-singleton-demo-release-catalog-index-publication", help="Generate multiple receipt, identity, or license singleton demo releases from repeated presets, bootstrap a singleton release catalog publication, and bootstrap a signed singleton release catalog index publication in one step")
+    bootstrap_singleton_demo_release_catalog_index_publication_parser = subparsers.add_parser("bootstrap-singleton-demo-release-catalog-index-publication", help="Generate multiple receipt, identity, license, or event singleton demo releases from repeated presets, bootstrap a singleton release catalog publication, and bootstrap a signed singleton release catalog index publication in one step")
     bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
     bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo releases")
     bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
@@ -24323,7 +24350,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--scheme", choices=["hmac-sha256", "ed25519"], required=True, help="Signing scheme for the release catalog index manifest")
     bootstrap_singleton_demo_release_catalog_index_publication_parser.add_argument("--key-id", required=True, help="Signature key identifier to generate and use for the release catalog index manifest")
 
-    bootstrap_singleton_demo_publication_stack_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-stack", help="Generate multiple receipt, identity, or license singleton demo catalog workspaces from repeated presets and publish them as a signed singleton release catalog stack")
+    bootstrap_singleton_demo_publication_stack_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-stack", help="Generate multiple receipt, identity, license, or event singleton demo catalog workspaces from repeated presets and publish them as a signed singleton release catalog stack")
     bootstrap_singleton_demo_publication_stack_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
     bootstrap_singleton_demo_publication_stack_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo catalog workspaces")
     bootstrap_singleton_demo_publication_stack_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
@@ -24356,7 +24383,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_publication_stack_parser.add_argument("--label", help="Optional human-readable release catalog label")
     bootstrap_singleton_demo_publication_stack_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog")
 
-    bootstrap_singleton_demo_publication_network_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-network", help="Generate multiple receipt, identity, or license singleton demo catalog workspaces from repeated presets, bootstrap a singleton publication stack, and publish it as a signed singleton release-catalog index")
+    bootstrap_singleton_demo_publication_network_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-network", help="Generate multiple receipt, identity, license, or event singleton demo catalog workspaces from repeated presets, bootstrap a singleton publication stack, and publish it as a signed singleton release-catalog index")
     bootstrap_singleton_demo_publication_network_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
     bootstrap_singleton_demo_publication_network_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo catalog workspaces")
     bootstrap_singleton_demo_publication_network_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
@@ -24394,7 +24421,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_publication_network_parser.add_argument("--label", help="Optional human-readable release catalog index label")
     bootstrap_singleton_demo_publication_network_parser.add_argument("--published-at", help="Optional ISO-8601 style published-at metadata for the release catalog index")
 
-    bootstrap_singleton_demo_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-catalog-workspace", help="Generate multiple receipt, identity, or license singleton demo catalog workspaces from repeated presets and derive publication descriptor and metadata lanes in one reusable singleton publication catalog workspace")
+    bootstrap_singleton_demo_publication_catalog_workspace_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-catalog-workspace", help="Generate multiple receipt, identity, license, or event singleton demo catalog workspaces from repeated presets and derive publication descriptor and metadata lanes in one reusable singleton publication catalog workspace")
     bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
     bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo catalog workspaces")
     bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
@@ -24431,7 +24458,7 @@ def build_cli_parser() -> Any:
     bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-label", help="Optional human-readable publication-metadata-catalog label")
     bootstrap_singleton_demo_publication_catalog_workspace_parser.add_argument("--publication-metadata-catalog-published-at", help="Optional publication-metadata-catalog published_at metadata")
 
-    bootstrap_singleton_demo_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-registry-workspace", help="Generate multiple receipt, identity, or license singleton demo catalog workspaces from repeated presets, derive shared publication lanes, and bind them to a generated singleton publication network in one signed registry workspace")
+    bootstrap_singleton_demo_publication_registry_workspace_parser = subparsers.add_parser("bootstrap-singleton-demo-publication-registry-workspace", help="Generate multiple receipt, identity, license, or event singleton demo catalog workspaces from repeated presets, derive shared publication lanes, and bind them to a generated singleton publication network in one signed registry workspace")
     bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--profile", required=True, choices=sorted(SINGLETON_DEMO_PROFILE_DEFAULTS), help="Singleton SATROOT profile to keep from each preset")
     bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--preset-json", action="append", required=True, dest="preset_jsons", help="SATROOT demo catalog preset JSON file; repeat to generate multiple singleton demo catalog workspaces")
     bootstrap_singleton_demo_publication_registry_workspace_parser.add_argument("--symbol", help="Optional shared singleton symbol override when a preset omits it")
@@ -26572,7 +26599,7 @@ def build_cli_parser() -> Any:
     consume_machine_credit_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to the appended event")
     consume_machine_credit_parser.add_argument("--output", help="Optional output path")
 
-    transfer_singleton_object_parser = subparsers.add_parser("transfer-singleton-object", help="Append a profile-aware transfer for SATROOT receipt, identity, or license ledgers")
+    transfer_singleton_object_parser = subparsers.add_parser("transfer-singleton-object", help="Append a profile-aware transfer for SATROOT receipt, identity, license, or event ledgers")
     transfer_singleton_object_parser.add_argument("events_json", help="Path to an existing SATROOT singleton-object ledger array")
     transfer_singleton_object_parser.add_argument("--signer", required=True, help="Signer account name for the singleton transfer")
     transfer_singleton_object_parser.add_argument("--to", dest="to_account", required=True, help="Destination account for the singleton transfer")
@@ -26586,7 +26613,7 @@ def build_cli_parser() -> Any:
     transfer_singleton_object_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to the appended event")
     transfer_singleton_object_parser.add_argument("--output", help="Optional output path")
 
-    archive_singleton_object_parser = subparsers.add_parser("archive-singleton-object", help="Append an archival transfer for SATROOT receipt, identity, or license ledgers")
+    archive_singleton_object_parser = subparsers.add_parser("archive-singleton-object", help="Append an archival transfer for SATROOT receipt, identity, license, or event ledgers")
     archive_singleton_object_parser.add_argument("events_json", help="Path to an existing SATROOT singleton-object ledger array")
     archive_singleton_object_parser.add_argument("--signer", required=True, help="Signer account name for the archival transfer")
     archive_singleton_object_parser.add_argument("--archive-account", default="archive", help="Archive account destination; defaults to archive")
@@ -26600,7 +26627,7 @@ def build_cli_parser() -> Any:
     archive_singleton_object_parser.add_argument("--include-state-hash", action="store_true", help="Attach state_hash to the appended event")
     archive_singleton_object_parser.add_argument("--output", help="Optional output path")
 
-    retire_singleton_object_parser = subparsers.add_parser("retire-singleton-object", help="Append a burn retirement event for archived SATROOT receipt, identity, or license ledgers")
+    retire_singleton_object_parser = subparsers.add_parser("retire-singleton-object", help="Append a burn retirement event for archived SATROOT receipt, identity, license, or event ledgers")
     retire_singleton_object_parser.add_argument("events_json", help="Path to an existing archived SATROOT singleton-object ledger array")
     retire_singleton_object_parser.add_argument("--signer", required=True, help="Signer account name for the retirement burn")
     retire_singleton_object_parser.add_argument("--from", dest="from_account", default="archive", help="Archived source account to retire from; defaults to archive")

@@ -69,7 +69,8 @@ Current repo profiles include:
 - `SATROOT-MACHINE-1` for prepaid machine-credit balances,
 - `SATROOT-RECEIPT-1` for invoice and receipt objects,
 - `SATROOT-IDENTITY-1` for identity and authority objects,
-- `SATROOT-LICENSE-1` for license and usage-right objects.
+- `SATROOT-LICENSE-1` for license and usage-right objects,
+- `SATROOT-EVENT-1` for append-only event-stream head objects.
 
 The base kernel stays small; profiles carry domain-specific semantics.
 
@@ -116,7 +117,7 @@ Determinism depends on:
 The released line covers:
 
 - the `SATROOT-1` kernel, schemas, replay engine, and signing helpers,
-- the `FLOOR1` example ledger plus five released profile lanes: reference-value stable units, machine credits, receipts, identities, and licenses,
+- the `FLOOR1` example ledger plus six registered profiles: reference-value stable units, machine credits, receipts, identities, licenses, and event-stream heads (the first five with full demo-catalog-matrix lanes),
 - bundle/release/catalog/index/publication tooling up through mixed-profile federation and collection-backed registry round trips,
 - the anchored loop: anchored demo namespace, anchored publication, on-chain envelope builder, and offline envelope verifier, with real runs recorded in `ANCHORS.md`,
 - the eight-surface operator proof, the local release gate, tests, boundaries, and release metadata.
@@ -127,7 +128,7 @@ What the released line proves: one native satoshi — including one real testnet
 
 Remaining follow-on work stays profile-driven:
 
-- additional object classes beyond the five released profiles,
+- additional object classes beyond the six registered profiles, and demo-catalog-matrix promotion for the event lane,
 - future bridge layers for regulated or redeemable systems if ever needed.
 
 ## Full functionality envelope

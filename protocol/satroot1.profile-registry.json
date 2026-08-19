@@ -61,6 +61,18 @@
         "intended_use"
       ],
       "summary": "License and usage-right objects with deterministic assignment history."
+    },
+    {
+      "profile": "SATROOT-EVENT-1",
+      "profile_mode": "single-stream",
+      "required_genesis_fields": [
+        "stream_type",
+        "stream_subject",
+        "publisher_entity",
+        "sequence_policy",
+        "intended_use"
+      ],
+      "summary": "Append-only event-stream head objects with deterministic publisher handoff."
     }
   ]
 }

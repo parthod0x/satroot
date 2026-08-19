@@ -18,7 +18,7 @@ That means one satoshi can anchor a replayable semantic ledger without pretendin
 
 ## What this repo delivers
 
-This repository ships the `SATROOT-1` kernel, five released profile lanes, the publication ladder, and the anchored proof loop:
+This repository ships the `SATROOT-1` kernel, six registered profiles, the publication ladder, and the anchored proof loop:
 
 - `SPEC.md` - human-readable protocol specification.
 - `ARCHITECTURE.md` - top-level model, layer boundaries, and deliverable framing.
@@ -66,6 +66,7 @@ This repository ships the `SATROOT-1` kernel, five released profile lanes, the p
 - `profiles/receipt/SATROOT-RECEIPT-1.md` - receipt and invoice object profile draft.
 - `profiles/identity/SATROOT-IDENTITY-1.md` - identity and authority object profile draft.
 - `profiles/license/SATROOT-LICENSE-1.md` - license and usage-right object profile draft.
+- `profiles/event/SATROOT-EVENT-1.md` - event-stream head object profile draft.
 
 ## SATROOT-1 in one sentence
 
@@ -414,7 +415,16 @@ This repo also now includes the first license-object profile draft:
 - `examples/genesis_license1.json` for a `LICENSE1` genesis record,
 - `examples/events_license1.json` for a runnable license lifecycle ledger flow.
 
-Further profile work can extend that pattern beyond the five released profiles for:
+The sixth registered profile extends the singleton family to event streams:
+
+- `SATROOT-EVENT-1` for append-only event-stream head objects with deterministic publisher handoff,
+- `examples/genesis_event1.json` for an `EVENT1` genesis record,
+- `examples/events_event1.json` for a runnable stream-custody handoff ledger flow,
+- `python scripts/run_event_profile_smoke.py` (or `python -m satroot_event_profile_smoke` / `satroot-event-profile-smoke`) for its dedicated verification lane.
+
+The event lane is registered in the kernel, schema, and profile registry but is not yet part of the demo catalog matrix; matrix promotion is a separate future milestone.
+
+Further profile work can extend that pattern beyond the six registered profiles for:
 
 - additional authority object profiles,
 - additional rights profiles.

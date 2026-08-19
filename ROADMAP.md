@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v1.0` is the draft-freeze artifact for `SATROOT-1`.
+`v1.1` is the event-streams artifact for `SATROOT-1`.
 
-It declares the `SATROOT-1` kernel rules frozen as the v1 protocol draft, with every claim in `SPEC.md`, `README.md`, `ARCHITECTURE.md`, `BOUNDARIES.md`, `ANCHORS.md`, and the profile drafts aligned to what the released lanes actually prove — including the full anchoring loop against one real testnet satoshi — and with no new kernel rules, lanes, or dependencies added by the freeze itself.
+It registers `SATROOT-EVENT-1` as the sixth profile — an append-only event-stream head object in `single-stream` mode with deterministic publisher handoff — across the profile registry, record schema, kernel validation, and a dedicated verification lane with a checked-in placeholder-root example, all without changing the frozen `SATROOT-1` kernel rules, exactly as the namespace-expansion boundary requires.
 
 Current scope:
 
@@ -50,6 +50,7 @@ Release status:
 - `v0.8-envelope-verification` verifies that broadcast envelope fully offline from raw transaction bytes, with the confirmation recorded in `ANCHORS.md`.
 - `v0.9-anchored-operator-proof` folds the four anchored-surface lanes into the canonical operator proof and release gate on placeholder defaults.
 - `v1.0-draft-freeze` declares the kernel rules frozen as the v1 protocol draft after one full docs-versus-reality consistency pass.
+- `v1.1-event-streams` registers `SATROOT-EVENT-1` as the sixth profile with its own example ledger and verification lane, kernel rules unchanged.
 
 ## Near-term build order
 
@@ -250,11 +251,21 @@ Current status:
 - The consistency pass is complete: stale "future" and "v0.1" claims for shipped profiles and schemes are removed, the operator-proof surface count and anchored-lane checks are corrected, the anchored loop joins the claims-discipline and boundaries statements, and the kernel docstring names the real placeholder verifier.
 - The kernel rules are unchanged and declared frozen as the v1 protocol draft.
 
+### v1.1 Event streams
+
+Goal: register the first post-freeze object class under the namespace-expansion boundary without touching frozen kernel rules.
+
+Current status:
+
+- `SATROOT-EVENT-1` (`single-stream`) is registered in the profile registry, the record schema, kernel scaffold defaults, singleton demo defaults, and genesis validation.
+- The checked-in `EVENT1` example replays and schema-validates on its own placeholder root, and the dedicated event profile lane verifies the example, a fresh scaffolded ledger, and a signed bundle.
+- Demo-catalog-matrix promotion for the event lane is deferred to a future milestone.
+
 ## Beyond the freeze
 
 Post-freeze work stays profile-driven and out-of-band, taken up only when intentionally chosen:
 
-- additional object classes beyond the five released profiles (for example event streams),
+- additional object classes beyond the six registered profiles, and demo-catalog-matrix promotion for the event lane,
 - a mainnet anchor for a namespace meant to persist, using the same anchored lanes and `ANCHORS.md` discipline,
 - bridge layers for regulated or redeemable systems if ever needed,
 - production key-management guidance above the frozen signature schemes.
@@ -267,7 +278,7 @@ SATROOT does not merely mint tokens from one satoshi.
 
 It turns one satoshi into a root-bound namespace for deterministic semantic state.
 
-That namespace already supports tokens, credits, receipts, licenses, identities, and machine-readable rights through released profiles; event streams remain future work.
+That namespace already supports tokens, credits, receipts, licenses, identities, machine-readable rights, and event-stream heads through registered profiles.
 
 ## Non-goals for the base protocol
 

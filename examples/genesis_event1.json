@@ -1,0 +1,25 @@
+{
+  "protocol": "SATROOT-1",
+  "version": "0.1",
+  "action": "genesis",
+  "root_id": "7777777777777777777777777777777777777777777777777777777777777777:0",
+  "sequence": 0,
+  "symbol": "EVENT1",
+  "name": "SATROOT Telemetry Stream",
+  "decimals": 0,
+  "max_supply": "1",
+  "mint_authority": "issuer",
+  "transfer_model": "account-ledger",
+  "initial_balances": {
+    "issuer": "1"
+  },
+  "nonce": "satroot-event-v1-demo",
+  "rules_hash": "sha256:event1-demo",
+  "profile": "SATROOT-EVENT-1",
+  "profile_mode": "single-stream",
+  "stream_type": "telemetry-stream",
+  "stream_subject": "stream-0001",
+  "publisher_entity": "issuer-co",
+  "sequence_policy": "append-only",
+  "intended_use": "machine-event-stream-ledger"
+}
