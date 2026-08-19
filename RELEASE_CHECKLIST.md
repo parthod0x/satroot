@@ -1,9 +1,9 @@
 # SATROOT Release Checklist
 
-Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, or `v0.4-publication-federation`:
+Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, or `v0.5-root-anchoring`:
 
 - [ ] Confirm this repo contains no private keys, seed phrases, API tokens, or wallet files.
-- [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint. The anchored demo lane (`satroot_anchored_demo_smoke`) is the only lane intended to ever carry a real outpoint, and only via its `--root-id` flag at run time, never in checked-in files.
+- [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint. The anchored demo lane (`satroot_anchored_demo_smoke`) is the only lane intended to ever carry a real outpoint, and only via its `--root-id` flag at run time, never in checked-in input files or presets; `ANCHORS.md` is the sole checked-in record of intentional anchored runs.
 - [ ] Run `python scripts/run_release_gate_smoke.py` from the repo root, or use `python -m satroot_release_gate_smoke` / `satroot-release-gate-smoke` after `pip install -e .`, as the preferred local pre-tag release gate across import smoke, the top-level operator proof, and chunked pytest.
 - [ ] If that release gate fails and you need to rerun pieces independently, run `python scripts/run_pytest_chunked.py` from the repo root for the full suite, or use `python -m satroot_test` / `satroot-test` after `pip install -e .`.
 - [ ] If that release gate fails and you need to rerun the proof surface independently, run `python scripts/run_operator_proof_smoke.py` from the repo root, or use `python -m satroot_operator_proof_smoke` / `satroot-operator-proof-smoke` after `pip install -e .`, as the top-level released operator proof across the stable/machine publication ladder, singleton publication ladder, the mixed-profile federation surface, and the collection-backed federated registry publication round trip.
@@ -23,11 +23,11 @@ Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`,
 - [ ] Confirm README and SPEC do not claim subdivision below one satoshi.
 - [ ] Confirm README and SPEC do not claim redemption, reserves, securities, e-money, investment returns, or wallet/exchange compatibility.
 - [ ] Confirm `CHANGELOG.md` has a dated section for the milestone and `pyproject.toml` plus `CITATION.cff` carry the matching version.
-- [ ] Create the milestone git tag. For the current milestone: `v0.4-publication-federation`.
+- [ ] Create the milestone git tag. For the current milestone: `v0.5-root-anchoring`.
 - [ ] Preserve the release artifact hash after tagging.
 
 Suggested tag message for the current milestone:
 
 ```text
-SATROOT v0.4 publication federation: released profile artifacts consolidated into reusable mixed-profile publication collections above one unchanged one-satoshi kernel.
+SATROOT v0.5 root anchoring: one real one-satoshi testnet outpoint bound as a demo namespace root with ed25519-verified lifecycle, above one unchanged one-satoshi kernel.
 ```

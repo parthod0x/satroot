@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v0.4` is the publication-federation proof artifact for `SATROOT-1`.
+`v0.5` is the root-anchoring proof artifact for `SATROOT-1`.
 
-It proves that the released stable, machine, receipt, identity, and license profile artifacts can be consolidated into reusable mixed-profile publication collections, republished through shared publication stacks, networks, catalog workspaces, and registry workspaces, and round-tripped through exported nested presets, all without changing the base one-satoshi primitive or flattening profile-specific provenance.
+It proves that one real one-satoshi BSV testnet outpoint can be bound as the root of a dedicated demo namespace whose lifecycle is signed and verified through the ed25519 path, that the semantic state binds that root while rejecting foreign roots, and that root-satoshi custody stays out-of-band by construction — all without changing the base one-satoshi kernel and while every checked-in example keeps a placeholder root.
 
 Current scope:
 
@@ -42,6 +42,7 @@ Release status:
 - The machine, receipt, identity, and license lanes now join the stable lane under one released profile-matrix smoke surface with dedicated per-profile publication-path verification.
 - `v0.4-publication-federation` has been tagged and pushed from this repository.
 - The mixed-profile federation surface, the collection-backed federated registry round trip, the stable/machine and singleton publication ladders, the top-level operator proof, and the local release gate are now part of the released deliverable.
+- `v0.5-root-anchoring` binds the first real one-satoshi testnet outpoint through the anchored demo lane, recorded in `ANCHORS.md`.
 
 ## Near-term build order
 
@@ -135,13 +136,11 @@ Current status:
 - Those mixed federated registry workspace collections can now also drive a top-level publication-registry publication bootstrap and exported-preset round trip through a dedicated packaged smoke surface.
 - This milestone has now been tagged as `v0.4-publication-federation`.
 
-## Immediate next milestone
+### v0.5 Root anchoring
 
-If work resumes right away, the best next milestone is:
+Goal: replace the placeholder root with one intentional real outpoint in one dedicated demo lane, without changing kernel rules or default examples.
 
-`v0.5-root-anchoring`
-
-The success condition should be narrow:
+The success condition is narrow:
 
 - the `SATROOT-1` kernel rules remain unchanged,
 - one real 1-satoshi BSV outpoint, on testnet first, is bound as the `root_id` of one dedicated demo namespace, replacing the all-zeros placeholder only in that lane,
@@ -154,7 +153,21 @@ Current status:
 
 - The anchored identity demo lane (`satroot_anchored_demo_smoke`) now exists with its own distinct placeholder root, accepts a real outpoint only through its `--root-id` flag at run time, and signs and verifies its lifecycle through the existing Ed25519 path.
 - The lane's report demonstrates the root lifecycle rule: state binds `root_id`, replay is deterministic, foreign-root events are rejected, and no ledger event kind models root custody.
-- Remaining for the milestone: bind one real one-satoshi BSV testnet outpoint through the lane, record that anchored run, and confirm every other example still carries a placeholder root.
+- One real one-satoshi BSV testnet outpoint has been bound through the lane with every check passing, the run is recorded in `ANCHORS.md`, and every checked-in example still carries a placeholder root.
+
+## Immediate next milestone
+
+If work resumes right away, the best next milestone is:
+
+`v0.6-anchored-publication`
+
+The success condition should be narrow:
+
+- the `SATROOT-1` kernel rules remain unchanged,
+- the anchored demo namespace is published through the existing ladder — signed bundle, release, catalog, and registry workspace — with ed25519 signing end to end instead of the hmac default,
+- the published artifacts carry the real `root_id` only because the operator passes it at run time; checked-in presets stay on placeholder roots,
+- `ANCHORS.md` gains the published-artifact hashes as the continuation of the anchored-run record,
+- the docs keep separating protocol state from legal and economic claims as strictly as every released lane.
 
 ## Core architectural rule
 

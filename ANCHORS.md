@@ -1,0 +1,38 @@
+# SATROOT anchored-run record
+
+This file is the only place in the repository where a real on-chain outpoint is
+recorded, and it records history, never input: every checked-in example, preset,
+and default stays on placeholder roots, and the anchored demo lane accepts a real
+outpoint exclusively through its `--root-id` flag at run time.
+
+## v0.5-root-anchoring — first real anchor
+
+- Date: 2026-08-19
+- Network: BSV testnet
+- Root outpoint (`root_id`): `147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0`
+- Root satoshi holder address: `n2xDA14uhX4Ym6tcXHEFZwstiDhi2YzA3e` (operator-controlled)
+- Explorer: https://test.whatsonchain.com/tx/147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63
+- Lane: `satroot_anchored_demo_smoke` (profile `SATROOT-IDENTITY-1`, bundle scheme `ed25519`)
+- Semantic state hash of the anchored namespace:
+  `sha256:e1a2c685d3a3cf84a0ec81ad400ac1c66ecb9e9679338cbd13c4644e849fb4e3`
+- Lane report checks, all passing: `root_id_bound_to_state`,
+  `ed25519_bundle_verified`, `replay_deterministic`, `foreign_root_rejected`,
+  `no_custody_event_kinds`.
+
+Reproduce the verification at any time with:
+
+```bash
+python scripts/run_anchored_demo_smoke.py --root-id 147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0
+```
+
+The run is deterministic in structure but generates fresh ed25519 keys each
+time, so signatures differ between runs while every check and the bound
+`root_id` stay identical.
+
+## Root lifecycle statement
+
+The recorded outpoint is a one-satoshi UTXO whose custody remains with the
+operator's testnet wallet. Nothing in this repository can move it, and moving it
+on-chain would not alter the semantic state hash above: SATROOT state changes
+only through valid protocol events, and no ledger event kind models root
+custody. That separation is exactly what the anchored lane's report proves.
