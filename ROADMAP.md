@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v0.5` is the root-anchoring proof artifact for `SATROOT-1`.
+`v0.6` is the anchored-publication proof artifact for `SATROOT-1`.
 
-It proves that one real one-satoshi BSV testnet outpoint can be bound as the root of a dedicated demo namespace whose lifecycle is signed and verified through the ed25519 path, that the semantic state binds that root while rejecting foreign roots, and that root-satoshi custody stays out-of-band by construction — all without changing the base one-satoshi kernel and while every checked-in example keeps a placeholder root.
+It proves that the demo namespace anchored to a real one-satoshi BSV testnet outpoint can be published through the full existing ladder — signed bundles, release, catalog, network, and registry workspace — with ed25519 signing end to end, the real root bound in every generated bundle genesis, and the published-artifact hashes recorded in `ANCHORS.md`, all without changing the base one-satoshi kernel and while every checked-in example keeps a placeholder root.
 
 Current scope:
 
@@ -43,6 +43,7 @@ Release status:
 - `v0.4-publication-federation` has been tagged and pushed from this repository.
 - The mixed-profile federation surface, the collection-backed federated registry round trip, the stable/machine and singleton publication ladders, the top-level operator proof, and the local release gate are now part of the released deliverable.
 - `v0.5-root-anchoring` binds the first real one-satoshi testnet outpoint through the anchored demo lane, recorded in `ANCHORS.md`.
+- `v0.6-anchored-publication` publishes that anchored namespace through the full ed25519 publication ladder, with the published-artifact hashes recorded in `ANCHORS.md`.
 
 ## Near-term build order
 
@@ -155,18 +156,37 @@ Current status:
 - The lane's report demonstrates the root lifecycle rule: state binds `root_id`, replay is deterministic, foreign-root events are rejected, and no ledger event kind models root custody.
 - One real one-satoshi BSV testnet outpoint has been bound through the lane with every check passing, the run is recorded in `ANCHORS.md`, and every checked-in example still carries a placeholder root.
 
-## Immediate next milestone
+### v0.6 Anchored publication
 
-If work resumes right away, the best next milestone is:
+Goal: publish the real-anchored demo namespace through the existing publication ladder with ed25519 end to end.
 
-`v0.6-anchored-publication`
-
-The success condition should be narrow:
+The success condition is narrow:
 
 - the `SATROOT-1` kernel rules remain unchanged,
 - the anchored demo namespace is published through the existing ladder — signed bundle, release, catalog, and registry workspace — with ed25519 signing end to end instead of the hmac default,
 - the published artifacts carry the real `root_id` only because the operator passes it at run time; checked-in presets stay on placeholder roots,
 - `ANCHORS.md` gains the published-artifact hashes as the continuation of the anchored-run record,
+- the docs keep separating protocol state from legal and economic claims as strictly as every released lane.
+
+Current status:
+
+- The anchored publication lane (`satroot_anchored_publication_smoke`) publishes the anchored identity namespace through signed bundles, release, catalog, network, and registry workspace with ed25519 at every layer, verifying the root binding in every generated bundle genesis.
+- The singleton branch of the demo catalog workspace bundle generator now forwards `root_id`, `issuer`, `rules_hash`, and `nonce` structure overrides instead of silently dropping them, so runtime root injection produces lint-clean workspaces.
+- The real anchored testnet namespace has been published through the lane and its artifact hashes are recorded in `ANCHORS.md`.
+
+## Immediate next milestone
+
+If work resumes right away, the best next milestone is:
+
+`v0.7-onchain-envelope`
+
+The success condition should be narrow:
+
+- the `SATROOT-1` kernel rules remain unchanged,
+- a deterministic, offline builder produces the SPEC section 4 on-chain envelope payload (`OP_FALSE OP_RETURN "SATROOT1" <content-type> <payload>`) for the anchored namespace's state commitment, without adding any network-facing code to the repository,
+- the operator broadcasts that envelope on testnet out-of-band, exactly as the anchor outpoint itself was created,
+- `ANCHORS.md` records the envelope transaction id as the continuation of the anchored-run record,
+- checked-in examples and presets stay on placeholder roots and carry no real transaction ids,
 - the docs keep separating protocol state from legal and economic claims as strictly as every released lane.
 
 ## Core architectural rule

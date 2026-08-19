@@ -29,6 +29,27 @@ The run is deterministic in structure but generates fresh ed25519 keys each
 time, so signatures differ between runs while every check and the bound
 `root_id` stay identical.
 
+## v0.6-anchored-publication — anchored namespace published
+
+- Date: 2026-08-19
+- Root outpoint (`root_id`): `147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0` (same anchor as v0.5)
+- Lane: `satroot_anchored_publication_smoke` (profile `SATROOT-IDENTITY-1`, ed25519 end to end)
+- The anchored namespace was published through the full ladder — signed bundles, release, catalog, network, and registry workspace — with the real root bound in every generated bundle genesis and the registry workspace lint-clean.
+- Published-artifact hashes:
+  - `publication_registry_manifest`: `sha256:c039fc97e8f37c9cb12ae5a01658d149694fcaa76fa98d4d5aa0ae6b45bd46cf`
+  - `publication_metadata_catalog_manifest`: `sha256:1455edaaea656eead88ad5441736c51d2e4ec1d20a744f3bcca578a79a8cf841`
+
+Reproduce structure verification at any time with:
+
+```bash
+python scripts/run_anchored_publication_smoke.py --root-id 147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0
+```
+
+Each run generates fresh ed25519 keys, so signatures and therefore the manifest
+hashes differ between runs; the hashes above identify the specific published
+artifacts from the recorded run, while the checks and the bound `root_id` stay
+identical on every rerun.
+
 ## Root lifecycle statement
 
 The recorded outpoint is a one-satoshi UTXO whose custody remains with the

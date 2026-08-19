@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.6-anchored-publication - 2026-08-19
+
+- Adds `python -m satroot_anchored_publication_smoke`, `satroot-anchored-publication-smoke`, and `scripts/run_anchored_publication_smoke.py` to publish the anchored identity demo namespace through the full publication ladder — signed bundles, release, catalog, network, and registry workspace — with ed25519 signing end to end, verifying the root binding in every generated bundle genesis and emitting published-artifact hashes for the anchored-run record.
+- Fixes the singleton branch of the demo catalog workspace bundle generator to forward `root_id`, `issuer`, `rules_hash`, and `nonce` structure overrides into the generated bundle instead of silently dropping them, so runtime root injection now produces lint-clean workspaces whose bundle geneses actually carry the requested root.
+- Publishes the real anchored testnet namespace through the new lane and extends `ANCHORS.md` with the published-artifact hashes as the continuation of the anchored-run record.
+
 ## v0.5-root-anchoring - 2026-08-19
 
 - Binds the first real one-satoshi BSV testnet outpoint through the anchored demo lane with every lane check passing, and adds `ANCHORS.md` as the sole checked-in record of intentional anchored runs, keeping every example, preset, and default on placeholder roots.
