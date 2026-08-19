@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.9-anchored-operator-proof - 2026-08-19
+
+- Promotes the four anchored-surface lanes — anchored demo, anchored publication, on-chain envelope, and envelope verification — into the top-level operator proof on their placeholder defaults, so the canonical proof and the local release gate cover the whole anchoring loop on every run.
+- Keeps non-crypto installs green: the two ed25519-dependent anchored surfaces skip gracefully with an explicit skip record when the `[crypto]` extra is unavailable, while the offline envelope surfaces always run.
+
 ## v0.8-envelope-verification - 2026-08-19
 
 - Adds `python -m satroot_envelope_verification_smoke`, `satroot-envelope-verification-smoke`, and `scripts/run_envelope_verification_smoke.py` as a fully offline verifier that parses serialized transaction bytes, confirms they hash to an expected transaction id, locates the single zero-value SPEC section 4 `SATROOT1` envelope output, and matches it byte for byte against the deterministically rebuilt commitment; with no transaction supplied it builds and verifies a synthetic offline demo transaction.

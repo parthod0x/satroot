@@ -6,12 +6,21 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from satroot1 import ed25519_available
+from satroot_anchored_demo_smoke import run_anchored_demo_smoke
+from satroot_anchored_publication_smoke import run_anchored_publication_smoke
+from satroot_envelope_verification_smoke import run_envelope_verification_smoke
 from satroot_federated_registry_collection_smoke import run_federated_registry_collection_smoke
+from satroot_onchain_envelope_smoke import run_onchain_envelope_smoke
 from satroot_profile_federation_smoke import run_profile_federation_smoke
 from satroot_publication_ladder_smoke import run_publication_ladder_smoke
 from satroot_singleton_publication_ladder_smoke import (
     run_singleton_publication_ladder_smoke,
 )
+
+
+def _skipped_surface_report(reason: str) -> dict[str, Any]:
+    return {"ok": True, "skipped": True, "reason": reason}
 
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -24,6 +33,15 @@ def _compact_surface(report: Mapping[str, Any], *, surface_key: str) -> dict[str
         "report_path": report.get("report_path"),
         "surface_key": surface_key,
     }
+
+    if report.get("skipped") is True:
+        compact["skipped"] = True
+        compact["reason"] = report.get("reason")
+        return compact
+
+    if "checks" in report:
+        compact["checks"] = report.get("checks")
+        compact["root_is_placeholder"] = report.get("root_is_placeholder")
 
     if "layer_count" in report:
         compact["layer_count"] = report.get("layer_count")
@@ -76,11 +94,29 @@ def run_operator_proof_smoke(
         profile_federation_report=profile_federation_report,
     )
 
+    crypto_skip_reason = "cryptography package is not installed; anchored ed25519 surfaces skipped"
+    if ed25519_available():
+        anchored_demo_report = run_anchored_demo_smoke(output_path / "anchored_demo")
+        anchored_publication_report = run_anchored_publication_smoke(
+            output_path / "anchored_publication"
+        )
+    else:
+        anchored_demo_report = _skipped_surface_report(crypto_skip_reason)
+        anchored_publication_report = _skipped_surface_report(crypto_skip_reason)
+    onchain_envelope_report = run_onchain_envelope_smoke(output_path / "onchain_envelope")
+    envelope_verification_report = run_envelope_verification_smoke(
+        output_path / "envelope_verification"
+    )
+
     surface_reports = {
         "publication_ladder": publication_ladder_report,
         "singleton_publication_ladder": singleton_publication_ladder_report,
         "profile_federation": profile_federation_report,
         "federated_registry_collection": federated_registry_collection_report,
+        "anchored_demo": anchored_demo_report,
+        "anchored_publication": anchored_publication_report,
+        "onchain_envelope": onchain_envelope_report,
+        "envelope_verification": envelope_verification_report,
     }
     report: dict[str, Any] = {
         "bundle_scheme": bundle_scheme,
@@ -104,8 +140,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Run the top-level SATROOT operator proof surface across the stable/machine "
-            "publication ladder, the singleton publication ladder, and the mixed-profile "
-            "federation proof, plus the collection-backed federated registry publication round trip."
+            "publication ladder, the singleton publication ladder, the mixed-profile "
+            "federation proof, the collection-backed federated registry publication round "
+            "trip, and the anchored surfaces: anchored demo, anchored publication, on-chain "
+            "envelope, and envelope verification, all on placeholder defaults."
         )
     )
     parser.add_argument(

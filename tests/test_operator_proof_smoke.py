@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from satroot1 import ed25519_available
 from satroot_operator_proof_smoke import run_operator_proof_smoke
 
 
@@ -12,12 +13,16 @@ def test_run_operator_proof_smoke_builds_all_top_level_operator_surfaces(tmp_pat
     report = run_operator_proof_smoke(tmp_path / "operator_proof_smoke")
 
     assert report["ok"] is True
-    assert report["surface_count"] == 4
+    assert report["surface_count"] == 8
     assert set(report["surfaces"]) == {
         "publication_ladder",
         "singleton_publication_ladder",
         "profile_federation",
         "federated_registry_collection",
+        "anchored_demo",
+        "anchored_publication",
+        "onchain_envelope",
+        "envelope_verification",
     }
     assert report["surfaces"]["publication_ladder"]["layer_count"] == 3
     assert report["surfaces"]["singleton_publication_ladder"]["layer_count"] == 3
@@ -33,6 +38,19 @@ def test_run_operator_proof_smoke_builds_all_top_level_operator_surfaces(tmp_pat
     assert Path(report["surfaces"]["singleton_publication_ladder"]["report_path"]).is_file()
     assert Path(report["surfaces"]["profile_federation"]["report_path"]).is_file()
     assert Path(report["surfaces"]["federated_registry_collection"]["report_path"]).is_file()
+    for anchored_surface in ("anchored_demo", "anchored_publication"):
+        surface = report["surfaces"][anchored_surface]
+        assert surface["ok"] is True
+        if surface.get("skipped") is True:
+            assert ed25519_available() is False
+        else:
+            assert surface["root_is_placeholder"] is True
+            assert Path(surface["report_path"]).is_file()
+    for offline_surface in ("onchain_envelope", "envelope_verification"):
+        surface = report["surfaces"][offline_surface]
+        assert surface["ok"] is True
+        assert all(surface["checks"].values())
+        assert Path(surface["report_path"]).is_file()
     assert Path(report["report_path"]).is_file()
 
 
