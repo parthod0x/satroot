@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v0.9` is the anchored-operator-proof artifact for `SATROOT-1`.
+`v1.0` is the draft-freeze artifact for `SATROOT-1`.
 
-It proves that the whole anchoring loop — anchored demo namespace, anchored publication, on-chain envelope construction, and offline envelope verification — runs inside the canonical top-level operator proof and therefore inside the local release gate on every pre-tag run, on placeholder defaults, with the ed25519-dependent surfaces skipping gracefully on non-crypto installs, and with the base one-satoshi kernel and every checked-in example unchanged.
+It declares the `SATROOT-1` kernel rules frozen as the v1 protocol draft, with every claim in `SPEC.md`, `README.md`, `ARCHITECTURE.md`, `BOUNDARIES.md`, `ANCHORS.md`, and the profile drafts aligned to what the released lanes actually prove — including the full anchoring loop against one real testnet satoshi — and with no new kernel rules, lanes, or dependencies added by the freeze itself.
 
 Current scope:
 
@@ -31,6 +31,8 @@ Current scope:
 - example stable token `USDROOT1`
 - released profile-matrix smoke verification across stable, machine, receipt, identity, and license publication registry workspaces
 - released mixed-profile publication federation with collection-backed federated registry round trips, one packaged top-level operator proof, and one packaged local release gate above the per-profile lanes
+- released anchored loop: anchored demo namespace, anchored publication, deterministic on-chain envelope construction, and offline envelope verification, with real runs recorded in `ANCHORS.md`
+- the operator proof covers eight surfaces, so the release gate exercises the whole anchoring loop on every pre-tag run
 
 Release status:
 
@@ -47,6 +49,7 @@ Release status:
 - `v0.7-onchain-envelope` carries the anchored namespace's state commitment in a broadcast SPEC section 4 envelope, with the envelope transaction id recorded in `ANCHORS.md`.
 - `v0.8-envelope-verification` verifies that broadcast envelope fully offline from raw transaction bytes, with the confirmation recorded in `ANCHORS.md`.
 - `v0.9-anchored-operator-proof` folds the four anchored-surface lanes into the canonical operator proof and release gate on placeholder defaults.
+- `v1.0-draft-freeze` declares the kernel rules frozen as the v1 protocol draft after one full docs-versus-reality consistency pass.
 
 ## Near-term build order
 
@@ -230,19 +233,33 @@ Current status:
 - The operator proof now runs eight surfaces: the four established publication surfaces plus anchored demo, anchored publication, on-chain envelope, and envelope verification, all on placeholder defaults.
 - The two ed25519-dependent anchored surfaces skip gracefully with an explicit skip record when the `[crypto]` extra is unavailable; the offline envelope surfaces always run.
 
-## Immediate next milestone
+### v1.0 Draft freeze
 
-If work resumes right away, the best next milestone is:
+Goal: declare the kernel rules frozen as the v1 protocol draft after aligning every doc with released reality.
 
-`v1.0-draft-freeze`
-
-The success condition should be narrow:
+The success condition is narrow:
 
 - the `SATROOT-1` kernel rules remain unchanged and are declared frozen as the v1 protocol draft,
-- one full consistency pass aligns `SPEC.md`, `README.md`, `ARCHITECTURE.md`, `BOUNDARIES.md`, and the profile drafts with what the released lanes actually prove, removing any stale claims,
+- one full consistency pass aligns `SPEC.md`, `README.md`, `ARCHITECTURE.md`, `BOUNDARIES.md`, `ROADMAP.md`, `ANCHORS.md`, `examples/README.md`, and the profile drafts with what the released lanes actually prove, removing any stale claims,
 - the claims-discipline sections are re-audited against every released surface, including the anchored loop,
 - no new lanes, no new kernel features, and no new dependencies are added,
 - the docs keep separating protocol state from legal and economic claims as strictly as every released lane.
+
+Current status:
+
+- The consistency pass is complete: stale "future" and "v0.1" claims for shipped profiles and schemes are removed, the operator-proof surface count and anchored-lane checks are corrected, the anchored loop joins the claims-discipline and boundaries statements, and the kernel docstring names the real placeholder verifier.
+- The kernel rules are unchanged and declared frozen as the v1 protocol draft.
+
+## Beyond the freeze
+
+Post-freeze work stays profile-driven and out-of-band, taken up only when intentionally chosen:
+
+- additional object classes beyond the five released profiles (for example event streams),
+- a mainnet anchor for a namespace meant to persist, using the same anchored lanes and `ANCHORS.md` discipline,
+- bridge layers for regulated or redeemable systems if ever needed,
+- production key-management guidance above the frozen signature schemes.
+
+None of these change the frozen `SATROOT-1` kernel rules.
 
 ## Core architectural rule
 
@@ -250,15 +267,7 @@ SATROOT does not merely mint tokens from one satoshi.
 
 It turns one satoshi into a root-bound namespace for deterministic semantic state.
 
-That namespace may later support:
-
-- tokens,
-- credits,
-- receipts,
-- licenses,
-- identities,
-- machine-readable rights,
-- event streams.
+That namespace already supports tokens, credits, receipts, licenses, identities, and machine-readable rights through released profiles; event streams remain future work.
 
 ## Non-goals for the base protocol
 
@@ -269,4 +278,4 @@ The `SATROOT-1` kernel should not absorb:
 - exchange integration assumptions,
 - wallet interoperability claims,
 - legal-rights claims by default,
-- production signature standards before the data model is settled.
+- production key-management or PKI standards; the `hmac-sha256` and `ed25519` signature schemes themselves are already in the kernel.

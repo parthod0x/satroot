@@ -1,9 +1,11 @@
-"""SATROOT-1 v0.1 reference balance engine.
+"""SATROOT-1 reference balance engine.
 
 This is intentionally small and dependency-free.
 It validates ledger arithmetic, sequence order, root consistency,
-and basic authority placeholders. Real deployments must replace
-`verify_signature_placeholder` with actual signature verification.
+and basic authority placeholders. It ships `demo`, `hmac-sha256`,
+and `ed25519` verifiers; `demo_signature_verifier` is the placeholder
+path and real deployments must use `hmac-sha256`, `ed25519`, or an
+equivalent verifier instead.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
-# SATROOT-1 v0.1 Specification
+# SATROOT-1 Specification
 
-Status: Draft v0.1
-Date: 2026-06-19
+Status: v1 draft freeze candidate
+Date: 2026-08-19
 License: Apache-2.0
 
 ## 1. Purpose
@@ -52,7 +52,7 @@ The deeper SATROOT model is:
 1 satoshi -> 1 root namespace -> many semantic objects
 ```
 
-In `SATROOT-1`, that namespace is used only for a token ledger. Future profiles may use the same root structure for receipts, credits, licenses, identities, or machine-readable rights.
+In `SATROOT-1`, that namespace is used only for a token ledger. Released profiles already use the same root structure for receipts, credits, licenses, identities, and machine-readable rights.
 
 ### 2.5 Event ledger
 
@@ -127,6 +127,8 @@ application/satroot1+json
 ```
 
 For larger systems, the payload may be replaced by a content hash and an external availability pointer.
+
+A deterministic offline builder and an offline raw-transaction verifier for this envelope are released with the reference implementation; one broadcast envelope carrying a real anchored-namespace state commitment is recorded in `ANCHORS.md`.
 
 ## 5. Genesis record
 
@@ -222,11 +224,11 @@ The reference engine exposes a pluggable signature verifier interface:
 verifier(event, signing_payload) -> bool
 ```
 
-The demo verifier accepts `signature="demo"` for test records. Production deployments should replace it with a verifier that checks a real signature scheme against the canonical signing payload.
+The demo verifier accepts `signature="demo"` for test records. Production deployments should replace it with one of the shipped real schemes (`hmac-sha256`, `ed25519`) or an equivalent verifier over the canonical signing payload.
 
 The reference engine also includes a built-in `hmac-sha256` verifier constructor for controlled environments using shared secrets plus key identifiers. This is a concrete authenticated-event reference path, but it is not a public-key signature scheme.
 
-An optional `ed25519` reference path is also exposed when the `cryptography` package is installed. This gives the reference engine a concrete public-key verification model without making the base package depend on extra crypto libraries by default.
+An `ed25519` path is available when the `cryptography` package is installed; it is the public-key scheme used end to end by the released anchored lanes, without making the base package depend on extra crypto libraries by default.
 
 The reference implementation also exposes helper functions and a small CLI for replaying ledgers plus signing single events or whole event arrays against those reference schemes.
 
@@ -338,7 +340,9 @@ SATROOT-1 can truthfully say:
 - one satoshi anchors the token ledger,
 - token units are protocol-defined semantic units,
 - token supply can be arbitrarily large if the protocol permits it,
-- balances are computed by replaying protocol events.
+- balances are computed by replaying protocol events,
+- one real one-satoshi testnet outpoint has been bound as a namespace `root_id` with an ed25519-verified lifecycle,
+- a section 4 state commitment for that namespace has been broadcast on-chain and re-verified offline from raw transaction bytes.
 
 SATROOT-1 should not say:
 
@@ -351,11 +355,11 @@ SATROOT-1 should not say:
 
 Stable-value, fiat-reference, or stablecoin-like designs MUST be implemented as separate profiles. The SATROOT-1 base primitive does not create a stablecoin, redemption right, reserve claim, bank deposit, e-money token, or investment instrument.
 
-A future `SATROOT-STABLE-1` profile may define reference-only accounting units such as `USDROOT1`, but the base protocol remains only a one-satoshi-root semantic ledger primitive.
+The released `SATROOT-STABLE-1` profile defines reference-only accounting units such as `USDROOT1`, but the base protocol remains only a one-satoshi-root semantic ledger primitive.
 
 ## 11. Namespace expansion boundary
 
-Future SATROOT work may define additional object classes under the same root model, but those profiles must not retroactively change the minimal meaning of `SATROOT-1`.
+Further SATROOT work may define additional object classes beyond the five released profiles under the same root model, but those profiles must not retroactively change the minimal meaning of `SATROOT-1`.
 
 `SATROOT-1` remains:
 

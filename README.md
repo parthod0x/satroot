@@ -18,12 +18,14 @@ That means one satoshi can anchor a replayable semantic ledger without pretendin
 
 ## What this repo delivers
 
-This repository currently ships the `SATROOT-1` genesis implementation:
+This repository ships the `SATROOT-1` kernel, five released profile lanes, the publication ladder, and the anchored proof loop:
 
-- `SPEC.md` - human-readable v0.1 specification.
+- `SPEC.md` - human-readable protocol specification.
 - `ARCHITECTURE.md` - top-level model, layer boundaries, and deliverable framing.
 - `BOUNDARIES.md` - claim discipline, non-goals, and legal boundary language.
-- `ROADMAP.md` - project scope, deliverables, and planned protocol profiles.
+- `ROADMAP.md` - project scope, deliverables, and released plus planned protocol profiles.
+- `ANCHORS.md` - the only checked-in record of real on-chain outpoints and transaction ids.
+- `CHANGELOG.md`, `RELEASE_CHECKLIST.md`, `CITATION.cff` - release history, pre-tag gates, and citation metadata.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
 - `protocol/satroot1.bundle-manifest.schema.json` - JSON schema for signed bundle manifests.
 - `protocol/satroot1.bundle-index.schema.json` - JSON schema for bundle index catalogs.
@@ -44,7 +46,8 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `protocol/satroot1.publication-registry-manifest.schema.json` - JSON schema for signed publication registry manifests.
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
-- `examples/` - the `FLOOR1` demo token ledger.
+- `src/satroot_*_smoke.py` and `scripts/run_*.py` - the packaged smoke-lane modules and repo-local entrypoints, from per-profile lanes up through the operator proof, release gate, and the four anchored lanes.
+- `examples/` - six runnable demo ledgers (`FLOOR1`, `USDROOT1`, `APICREDIT1`, `RECEIPT1`, `IDENTITY1`, `LICENSE1`) and the reusable preset trees.
 - `examples/README.md` - guide to the reusable example preset trees, including collection-backed companions.
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `examples/bundle_index_presets/` - reusable SATROOT bundle-index presets.
@@ -57,7 +60,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 - `examples/registry_workspace_presets/` - reusable SATROOT publication-registry-workspace presets.
 - `examples/network_presets/` - reusable SATROOT publication-network presets.
 - `examples/stack_presets/` - reusable SATROOT end-to-end publication-stack presets.
-- `tests/test_satroot1.py` - validation tests for valid and invalid event flows.
+- `tests/` - test modules covering the kernel plus every packaged smoke lane.
 - `profiles/stable/SATROOT-STABLE-1.md` - reference-only stable-value profile draft.
 - `profiles/machine/SATROOT-MACHINE-1.md` - prepaid machine-credit profile draft.
 - `profiles/receipt/SATROOT-RECEIPT-1.md` - receipt and invoice object profile draft.
@@ -70,7 +73,7 @@ This repository currently ships the `SATROOT-1` genesis implementation:
 
 For the higher-level framing of how BSV, the SATROOT kernel, and the profile system fit together, see `ARCHITECTURE.md`.
 
-The v0.1 kernel defines:
+The `SATROOT-1` kernel defines:
 
 - a `root_id` bound to a one-satoshi UTXO,
 - a genesis record,
@@ -411,7 +414,7 @@ This repo also now includes the first license-object profile draft:
 - `examples/genesis_license1.json` for a `LICENSE1` genesis record,
 - `examples/events_license1.json` for a runnable license lifecycle ledger flow.
 
-Future profile work can extend that pattern for:
+Further profile work can extend that pattern beyond the five released profiles for:
 
 - additional authority object profiles,
 - additional rights profiles.
@@ -540,7 +543,7 @@ satroot-release-gate-smoke
 
 That one writes into `.tmp_release_gate_smoke_run/` by default and runs installed-module import smoke, the top-level operator proof, and chunked pytest together into one consolidated release-gate report.
 
-The GitHub Actions test workflow now uses this same release-gate wrapper as its single umbrella check after installed-module import smoke: the operator proof inside the gate re-runs the ladder, federation, and registry surfaces, and chunked pytest covers every per-lane smoke test, so CI does not repeat the narrower smoke workflows as separate steps.
+The GitHub Actions test workflow now uses this same release-gate wrapper as its single umbrella check after installed-module import smoke: the operator proof inside the gate re-runs the ladder, federation, registry, and anchored surfaces, and chunked pytest covers every per-lane smoke test, so CI does not repeat the narrower smoke workflows as separate steps.
 
 The preferred top-level verification for the currently released operator surface is:
 
@@ -554,7 +557,7 @@ or:
 satroot-operator-proof-smoke
 ```
 
-That one writes into `.tmp_operator_proof_smoke_run/` by default and runs the stable/machine publication ladder, the singleton publication ladder, the mixed-profile federation smoke, and the collection-backed federated registry publication round trip together into one consolidated proof report.
+That one writes into `.tmp_operator_proof_smoke_run/` by default and runs the stable/machine publication ladder, the singleton publication ladder, the mixed-profile federation smoke, and the collection-backed federated registry publication round trip, plus the four anchored surfaces — anchored demo, anchored publication, on-chain envelope, and envelope verification — for eight surfaces total in one consolidated proof report, with the two ed25519 surfaces skipping gracefully without the `[crypto]` extra.
 
 If you only want the released per-profile verification surface beneath that top-level proof, use:
 
@@ -728,6 +731,12 @@ And the machine-credit lane has the same packaged entrypoints:
 python -m satroot_machine_profile_smoke
 ```
 
+or:
+
+```bash
+satroot-machine-profile-smoke
+```
+
 The singleton receipt lane also has lower publication-ladder wrappers:
 
 ```bash
@@ -768,12 +777,6 @@ or:
 ```bash
 python -m satroot_license_demo_release_catalog_smoke
 python -m satroot_license_demo_release_catalog_index_smoke
-```
-
-or:
-
-```bash
-satroot-machine-profile-smoke
 ```
 
 And the stable and machine demo release-catalog operator lanes have packaged entrypoints too:
@@ -840,7 +843,7 @@ or:
 satroot-license-profile-smoke
 ```
 
-All three forms collect from the full `tests/` tree by default.
+The three chunked-runner forms (`scripts/run_pytest_chunked.py`, `python -m satroot_test`, `satroot-test`) collect from the full `tests/` tree by default.
 
 You can also resume from a later point or reduce chunk size:
 
@@ -2926,14 +2929,14 @@ Replace it only when intentionally anchoring to a real one-satoshi UTXO.
 
 ## Anchored demo lane
 
-The anchored demo lane is the designated path for that intentional replacement, and the only lane ever meant to carry a real outpoint:
+The anchored demo lane is the designated entry point for that intentional replacement. It is the first of the four anchored lanes — anchored demo, anchored publication, on-chain envelope, and envelope verification — which are the only lanes ever meant to carry a real outpoint or transaction id, and always only via run-time flags:
 
 ```bash
 python scripts/run_anchored_demo_smoke.py
 python -m satroot_anchored_demo_smoke --root-id <txid>:<vout>
 ```
 
-It binds one dedicated identity demo namespace to a `root_id` that defaults to its own distinct placeholder (`6666...6666:0`), signs the namespace lifecycle with the `ed25519` scheme instead of the demo or hmac schemes, and emits a report proving four things: the semantic state hash binds the `root_id`, replay is deterministic, events carrying a foreign root are rejected with `root_id mismatch`, and no ledger event kind models root custody.
+It binds one dedicated identity demo namespace to a `root_id` that defaults to its own distinct placeholder (`6666...6666:0`), signs the namespace lifecycle with the `ed25519` scheme instead of the demo or hmac schemes, and emits a report proving five things: the semantic state hash binds the `root_id`, the ed25519 bundle verifies against its generated key material, replay is deterministic, events carrying a foreign root are rejected with `root_id mismatch`, and no ledger event kind models root custody.
 
 That last check is the root lifecycle rule made concrete: moving the root satoshi on-chain never appears in the ledger and cannot alter the semantic state hash. Binding a real one-satoshi outpoint (testnet first) only changes the `root_id` string passed at run time — never the event rules, and never a checked-in file. The lane requires the `[crypto]` extra (`pip install -e ".[crypto]"`).
 

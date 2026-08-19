@@ -1,7 +1,7 @@
 # SATROOT-IDENTITY-1
 
 Status: Draft profile
-Depends on: SATROOT-1 v0.1
+Depends on: SATROOT-1
 
 ## Purpose
 

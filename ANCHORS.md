@@ -1,9 +1,10 @@
 # SATROOT anchored-run record
 
-This file is the only place in the repository where a real on-chain outpoint is
-recorded, and it records history, never input: every checked-in example, preset,
-and default stays on placeholder roots, and the anchored demo lane accepts a real
-outpoint exclusively through its `--root-id` flag at run time.
+This file is the only place in the repository where a real on-chain outpoint or
+transaction id is recorded, and it records history, never input: every checked-in
+example, preset, and default stays on placeholder roots, and the four anchored
+lanes accept real outpoints and transaction ids exclusively through run-time
+flags.
 
 ## v0.5-root-anchoring — first real anchor
 

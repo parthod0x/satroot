@@ -33,9 +33,13 @@ BSV provides:
 - the root UTXO that SATROOT binds to,
 - publication and timestamping,
 - transaction ordering and custody,
-- the witness layer for proving that protocol state was emitted.
+- the witness layer for proving that protocol state was emitted — exercised by the released envelope build and verify lanes.
 
 BSV does not provide SATROOT balances, rights, or token semantics natively. Those remain overlay state.
+
+#### Anchoring loop
+
+The released anchoring loop demonstrates Layer 1 against the real chain while keeping the repository itself offline and deterministic: the anchored demo lane binds a `root_id`, the anchored publication lane publishes that namespace with ed25519 end to end, the on-chain envelope lane builds the SPEC section 4 commitment script, and the envelope verification lane re-verifies a broadcast envelope from raw transaction bytes. Every intentional run against a real outpoint is recorded in `ANCHORS.md`, the only place in the repository where a real outpoint or transaction id may appear.
 
 ### Layer 2: SATROOT kernel
 
@@ -78,7 +82,7 @@ Important discipline:
 - root satoshi movement is not automatically token movement,
 - token movement occurs through valid SATROOT events,
 - replay engines follow the SATROOT event chain,
-- future on-chain settlement conventions can bind root movement more tightly, but the protocol state model must remain explicit.
+- the released SPEC section 4 commitment convention already binds namespace state on-chain; tighter root-movement settlement conventions remain future work, and the protocol state model must remain explicit.
 
 In practical terms, the SATROOT ledger follows the valid signed event sequence, not arbitrary interpretation of UTXO activity.
 
@@ -107,32 +111,23 @@ Determinism depends on:
 
 ## Deliverable framing
 
-### v0.1 Genesis
+### Delivered (v0.1 through v0.9)
 
-The first deliverable is the base proof artifact:
+The released line covers:
 
-- `SATROOT-1` kernel,
-- `FLOOR1` example ledger,
-- schemas,
-- replay engine,
-- signing helpers,
-- bundle/release/catalog/index/publication tooling,
-- tests,
-- boundaries and release metadata.
+- the `SATROOT-1` kernel, schemas, replay engine, and signing helpers,
+- the `FLOOR1` example ledger plus five released profile lanes: reference-value stable units, machine credits, receipts, identities, and licenses,
+- bundle/release/catalog/index/publication tooling up through mixed-profile federation and collection-backed registry round trips,
+- the anchored loop: anchored demo namespace, anchored publication, on-chain envelope builder, and offline envelope verifier, with real runs recorded in `ANCHORS.md`,
+- the eight-surface operator proof, the local release gate, tests, boundaries, and release metadata.
 
-What v0.1 proves:
+What the released line proves: one native satoshi — including one real testnet satoshi — can anchor deterministic semantic token state that publishes, commits on-chain, and verifies offline.
 
-one native satoshi can anchor deterministic semantic token state.
+### Follow-on
 
-### v0.2 and later
+Remaining follow-on work stays profile-driven:
 
-Follow-on work should stay profile-driven:
-
-- reference-value stable units,
-- machine-credit networks,
-- receipt and invoice flows,
-- identity and license objects,
-- richer publication and packaging workflows,
+- additional object classes beyond the five released profiles,
 - future bridge layers for regulated or redeemable systems if ever needed.
 
 ## Full functionality envelope
