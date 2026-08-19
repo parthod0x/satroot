@@ -56,3 +56,4 @@ def test_pyproject_includes_all_top_level_runtime_modules():
     assert "satroot_anchored_demo_smoke" in py_modules
     assert "satroot_anchored_publication_smoke" in py_modules
     assert "satroot_onchain_envelope_smoke" in py_modules
+    assert "satroot_envelope_verification_smoke" in py_modules

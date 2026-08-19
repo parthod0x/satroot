@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.8-envelope-verification - 2026-08-19
+
+- Adds `python -m satroot_envelope_verification_smoke`, `satroot-envelope-verification-smoke`, and `scripts/run_envelope_verification_smoke.py` as a fully offline verifier that parses serialized transaction bytes, confirms they hash to an expected transaction id, locates the single zero-value SPEC section 4 `SATROOT1` envelope output, and matches it byte for byte against the deterministically rebuilt commitment; with no transaction supplied it builds and verifies a synthetic offline demo transaction.
+- Verifies the real broadcast envelope transaction from operator-fetched raw bytes with every check passing, and extends `ANCHORS.md` with the verified confirmation as the continuation of the anchored-run record.
+
 ## v0.7-onchain-envelope - 2026-08-19
 
 - Adds `python -m satroot_onchain_envelope_smoke`, `satroot-onchain-envelope-smoke`, and `scripts/run_onchain_envelope_smoke.py` as a deterministic, fully offline builder for the SPEC section 4 on-chain envelope: `OP_FALSE OP_RETURN "SATROOT1" <content-type> <payload>` carrying a canonical JSON commitment of the namespace `root_id` and semantic state hash, with a round-trip parser that rejects malformed scripts and foreign protocol tags.

@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v0.7` is the on-chain-envelope proof artifact for `SATROOT-1`.
+`v0.8` is the envelope-verification proof artifact for `SATROOT-1`.
 
-It proves that the state commitment of the real-anchored demo namespace can be carried in the SPEC section 4 on-chain envelope — `OP_FALSE OP_RETURN "SATROOT1" <content-type> <payload>` — built deterministically and fully offline by a packaged lane, broadcast by the operator out-of-band on testnet, and recorded in `ANCHORS.md`, all without adding network-facing code to the repository, changing the base one-satoshi kernel, or moving any checked-in example off its placeholder root.
+It proves that the broadcast SPEC section 4 envelope carrying the anchored namespace's state commitment can be verified fully offline from raw transaction bytes — hashing to the recorded transaction id, carrying exactly one zero-value `SATROOT1` envelope output, and matching the deterministically rebuilt commitment byte for byte — all without adding network-facing code to the repository, changing the base one-satoshi kernel, or moving any checked-in example off its placeholder root.
 
 Current scope:
 
@@ -45,6 +45,7 @@ Release status:
 - `v0.5-root-anchoring` binds the first real one-satoshi testnet outpoint through the anchored demo lane, recorded in `ANCHORS.md`.
 - `v0.6-anchored-publication` publishes that anchored namespace through the full ed25519 publication ladder, with the published-artifact hashes recorded in `ANCHORS.md`.
 - `v0.7-onchain-envelope` carries the anchored namespace's state commitment in a broadcast SPEC section 4 envelope, with the envelope transaction id recorded in `ANCHORS.md`.
+- `v0.8-envelope-verification` verifies that broadcast envelope fully offline from raw transaction bytes, with the confirmation recorded in `ANCHORS.md`.
 
 ## Near-term build order
 
@@ -193,18 +194,35 @@ Current status:
 - The on-chain envelope lane (`satroot_onchain_envelope_smoke`) deterministically builds and round-trips the SPEC section 4 commitment script for a namespace root and state hash, fully offline, rejecting malformed scripts and foreign protocol tags.
 - The real envelope for the anchored testnet namespace has been broadcast out-of-band and its transaction id is recorded in `ANCHORS.md`.
 
-## Immediate next milestone
+### v0.8 Envelope verification
 
-If work resumes right away, the best next milestone is:
+Goal: verify the broadcast envelope offline from raw transaction bytes, closing the read side of the anchoring loop.
 
-`v0.8-envelope-verification`
-
-The success condition should be narrow:
+The success condition is narrow:
 
 - the `SATROOT-1` kernel rules remain unchanged,
 - an offline verifier takes the raw transaction bytes of a broadcast envelope transaction — fetched by the operator out-of-band — locates the SPEC section 4 envelope output, and confirms it carries the recorded commitment for the anchored namespace,
 - the verifier needs no network access and adds no network-facing code to the repository,
 - `ANCHORS.md` records the verified envelope confirmation as the continuation of the anchored-run record,
+- checked-in examples and presets stay on placeholder roots and carry no real transaction ids,
+- the docs keep separating protocol state from legal and economic claims as strictly as every released lane.
+
+Current status:
+
+- The envelope verification lane (`satroot_envelope_verification_smoke`) parses serialized transaction bytes offline, confirms the transaction id hash, locates the single zero-value `SATROOT1` envelope output, and matches it byte for byte against the rebuilt commitment, with a synthetic offline demo transaction as its default surface.
+- The real broadcast envelope has been verified from operator-fetched raw bytes with every check passing, recorded in `ANCHORS.md`.
+
+## Immediate next milestone
+
+If work resumes right away, the best next milestone is:
+
+`v0.9-anchored-operator-proof`
+
+The success condition should be narrow:
+
+- the `SATROOT-1` kernel rules remain unchanged,
+- the four anchored-surface lanes — anchored demo, anchored publication, on-chain envelope, and envelope verification — are promoted into the top-level operator proof on their placeholder defaults, so the canonical proof and the local release gate cover the whole anchoring loop,
+- the promoted lanes skip gracefully where the `[crypto]` extra is unavailable, keeping non-crypto installs green,
 - checked-in examples and presets stay on placeholder roots and carry no real transaction ids,
 - the docs keep separating protocol state from legal and economic claims as strictly as every released lane.
 

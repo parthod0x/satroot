@@ -53,6 +53,7 @@ DEFAULT_IMPORT_MODULES = [
     "satroot_anchored_demo_smoke",
     "satroot_anchored_publication_smoke",
     "satroot_onchain_envelope_smoke",
+    "satroot_envelope_verification_smoke",
 ]
 
 

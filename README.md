@@ -2951,4 +2951,11 @@ python scripts/run_onchain_envelope_smoke.py
 python -m satroot_onchain_envelope_smoke --root-id <txid>:<vout> --state-hash sha256:<hex>
 ```
 
+The envelope verification lane closes the read side: given a serialized transaction's raw bytes (fetched out-of-band), it confirms — fully offline — that the bytes hash to the expected transaction id and carry exactly one `SATROOT1` envelope output matching the rebuilt commitment byte for byte:
+
+```bash
+python scripts/run_envelope_verification_smoke.py
+python -m satroot_envelope_verification_smoke --raw-tx-hex-file <path> --root-id <txid>:<vout> --state-hash sha256:<hex> --expected-txid <txid>
+```
+
 Intentional anchored runs against real outpoints are recorded in `ANCHORS.md`, the only place in the repository where a real outpoint may appear.

@@ -71,6 +71,23 @@ python scripts/run_onchain_envelope_smoke.py \
 The builder is fully deterministic, so the produced `envelope_script.hex` is
 byte-identical to the script carried in the broadcast transaction's output 0.
 
+## v0.8-envelope-verification — broadcast envelope verified offline
+
+- Date: 2026-08-19
+- Envelope transaction id: `6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0` (same envelope as v0.7)
+- Lane: `satroot_envelope_verification_smoke`
+- The operator fetched the raw transaction bytes out-of-band; the offline verifier parsed them, confirmed they hash to the recorded transaction id, located the single zero-value `SATROOT1` envelope output, and matched it byte for byte against the deterministically rebuilt commitment for the anchored namespace's `root_id` and state hash. Every check passed.
+
+Reproduce at any time by saving the raw transaction hex to a file and running:
+
+```bash
+python scripts/run_envelope_verification_smoke.py \
+  --raw-tx-hex-file <path-to-raw-tx-hex> \
+  --root-id 147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0 \
+  --state-hash sha256:e1a2c685d3a3cf84a0ec81ad400ac1c66ecb9e9679338cbd13c4644e849fb4e3 \
+  --expected-txid 6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0
+```
+
 ## Root lifecycle statement
 
 The recorded outpoint is a one-satoshi UTXO whose custody remains with the
