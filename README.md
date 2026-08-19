@@ -2944,4 +2944,11 @@ python scripts/run_anchored_publication_smoke.py
 python -m satroot_anchored_publication_smoke --root-id <txid>:<vout>
 ```
 
+The on-chain envelope lane completes the loop, building the SPEC section 4 commitment script (`OP_FALSE OP_RETURN "SATROOT1" <content-type> <payload>`) for a namespace's root and state hash — deterministically and fully offline; the operator broadcasts the result out-of-band:
+
+```bash
+python scripts/run_onchain_envelope_smoke.py
+python -m satroot_onchain_envelope_smoke --root-id <txid>:<vout> --state-hash sha256:<hex>
+```
+
 Intentional anchored runs against real outpoints are recorded in `ANCHORS.md`, the only place in the repository where a real outpoint may appear.

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.7-onchain-envelope - 2026-08-19
+
+- Adds `python -m satroot_onchain_envelope_smoke`, `satroot-onchain-envelope-smoke`, and `scripts/run_onchain_envelope_smoke.py` as a deterministic, fully offline builder for the SPEC section 4 on-chain envelope: `OP_FALSE OP_RETURN "SATROOT1" <content-type> <payload>` carrying a canonical JSON commitment of the namespace `root_id` and semantic state hash, with a round-trip parser that rejects malformed scripts and foreign protocol tags.
+- Keeps the repository network-free by design: the lane builds and verifies the envelope script offline, and the operator broadcasts it out-of-band exactly as the anchor outpoint itself was created.
+- Broadcasts the real envelope for the anchored testnet namespace out-of-band and extends `ANCHORS.md` with the envelope transaction id as the continuation of the anchored-run record.
+
 ## v0.6-anchored-publication - 2026-08-19
 
 - Adds `python -m satroot_anchored_publication_smoke`, `satroot-anchored-publication-smoke`, and `scripts/run_anchored_publication_smoke.py` to publish the anchored identity demo namespace through the full publication ladder — signed bundles, release, catalog, network, and registry workspace — with ed25519 signing end to end, verifying the root binding in every generated bundle genesis and emitting published-artifact hashes for the anchored-run record.
