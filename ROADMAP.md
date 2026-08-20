@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v1.3` is the key-management-guidance artifact for `SATROOT-1`.
+`v1.4` is the pre-publication-hardening artifact for `SATROOT-1`.
 
-It adds `KEY_MANAGEMENT.md` as the operational discipline for composing the frozen signature schemes — scheme selection, three-layer custody separation, verifier-only distribution, and rotation — as a docs-only release that changes no kernel rules, lanes, schemes, or dependencies.
+It is the outcome of a full pre-publication review: schema-conformance strictness for amount, decimals, and sequence inputs the JSON schema already forbade (no valid artifact changes); bounds-checking of the standalone envelope parser; explicit documentation of the signer-to-key-binding boundary across `BOUNDARIES.md`, `KEY_MANAGEMENT.md`, and `SPEC.md` with a pinning test; and packaging the protocol schemas and example ledgers as installable package data so a published wheel is self-contained. The frozen `SATROOT-1` kernel rules are unchanged.
 
 Current scope:
 
@@ -29,7 +29,7 @@ Current scope:
 - supply invariants
 - example token `FLOOR1`
 - example stable token `USDROOT1`
-- released profile-matrix smoke verification across stable, machine, receipt, identity, and license publication registry workspaces
+- released profile-matrix smoke verification across stable, machine, receipt, identity, license, and event publication registry workspaces
 - released mixed-profile publication federation with collection-backed federated registry round trips, one packaged top-level operator proof, and one packaged local release gate above the per-profile lanes
 - released anchored loop: anchored demo namespace, anchored publication, deterministic on-chain envelope construction, and offline envelope verification, with real runs recorded in `ANCHORS.md`
 - the operator proof covers eight surfaces, so the release gate exercises the whole anchoring loop on every pre-tag run
@@ -53,6 +53,7 @@ Release status:
 - `v1.1-event-streams` registers `SATROOT-EVENT-1` as the sixth profile with its own example ledger and verification lane, kernel rules unchanged.
 - `v1.2-event-matrix-promotion` promotes the event lane into the demo catalog matrix, profile matrix, and federation surface as a full sixth lane.
 - `v1.3-key-management` adds `KEY_MANAGEMENT.md` as docs-only operational guidance above the frozen signature schemes.
+- `v1.4-prepublication-hardening` applies a full pre-publication review: schema-conformance strictness, envelope-parser bounds, the documented signer-key boundary, and installable package data.
 
 ## Near-term build order
 

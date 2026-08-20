@@ -101,3 +101,17 @@ def test_module_entrypoint_event_profile_smoke_runs_with_repo_pythonpath(tmp_pat
 
     assert result.returncode == 0
     assert '"ok": true' in result.stdout
+
+
+def test_parse_amount_rejects_non_ascii_digits():
+    from satroot1 import parse_amount, parse_decimals
+
+    assert parse_amount("10") == 10
+    with pytest.raises(SatRootError):
+        parse_amount("１０")  # fullwidth digits
+    with pytest.raises(SatRootError):
+        parse_amount("²")  # superscript two
+    with pytest.raises(SatRootError):
+        parse_decimals(True)
+    with pytest.raises(SatRootError):
+        parse_decimals(False)

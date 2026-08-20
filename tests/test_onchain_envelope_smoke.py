@@ -127,3 +127,10 @@ def test_module_entrypoint_onchain_envelope_smoke_runs_with_repo_pythonpath(tmp_
 
     assert result.returncode == 0
     assert '"ok": true' in result.stdout
+
+
+def test_parse_envelope_script_rejects_truncated_pushdata():
+    with pytest.raises(SatRootError):
+        parse_envelope_script(bytes.fromhex("006a4c"))
+    with pytest.raises(SatRootError):
+        parse_envelope_script(bytes.fromhex("006a4d01"))

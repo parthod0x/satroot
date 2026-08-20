@@ -34,25 +34,64 @@ class SatRootError(ValueError):
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 REFERENCE_UNIT_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{1,15}$")
 COMPACT_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
-PROFILE_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.profile-registry.json"
-SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.schema.json"
-BUNDLE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-manifest.schema.json"
-BUNDLE_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.bundle-index.schema.json"
-RELEASE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-manifest.schema.json"
-RELEASE_CATALOG_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog.schema.json"
-RELEASE_CATALOG_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-manifest.schema.json"
-RELEASE_CATALOG_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-index.schema.json"
-RELEASE_CATALOG_INDEX_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.release-catalog-index-manifest.schema.json"
-DEMO_CATALOG_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.demo-catalog-summary.schema.json"
-PUBLICATION_STACK_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-stack-summary.schema.json"
-PUBLICATION_NETWORK_SUMMARY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-network-summary.schema.json"
-PUBLICATION_DESCRIPTOR_INDEX_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-descriptor-index.schema.json"
-PUBLICATION_DESCRIPTOR_INDEX_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-descriptor-index-manifest.schema.json"
-PUBLICATION_METADATA_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-metadata-manifest.schema.json"
-PUBLICATION_METADATA_CATALOG_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-metadata-catalog.schema.json"
-PUBLICATION_METADATA_CATALOG_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-metadata-catalog-manifest.schema.json"
-PUBLICATION_REGISTRY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-registry.schema.json"
-PUBLICATION_REGISTRY_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "protocol" / "satroot1.publication-registry-manifest.schema.json"
+
+
+def _packaged_data_dir(package_name: str) -> Optional[Path]:
+    try:
+        from importlib.resources import files as _resource_files
+
+        candidate = Path(str(_resource_files(package_name)))
+    except Exception:
+        return None
+    return candidate if candidate.is_dir() else None
+
+
+def protocol_root() -> Path:
+    """Directory holding the protocol schemas and profile registry.
+
+    Prefers a source checkout beside this module; falls back to the
+    `satroot_protocol` package data shipped inside built distributions.
+    """
+    source_candidate = Path(__file__).resolve().parents[1] / "protocol"
+    if (source_candidate / "satroot1.profile-registry.json").is_file():
+        return source_candidate
+    packaged = _packaged_data_dir("satroot_protocol")
+    return packaged if packaged is not None else source_candidate
+
+
+def examples_root() -> Path:
+    """Directory holding the runnable example ledgers and preset trees.
+
+    Prefers a source checkout beside this module; falls back to the
+    `satroot_examples` package data shipped inside built distributions.
+    """
+    source_candidate = Path(__file__).resolve().parents[1] / "examples"
+    if (source_candidate / "genesis_floor1.json").is_file():
+        return source_candidate
+    packaged = _packaged_data_dir("satroot_examples")
+    return packaged if packaged is not None else source_candidate
+
+
+_PROTOCOL_ROOT = protocol_root()
+PROFILE_REGISTRY_PATH = _PROTOCOL_ROOT / "satroot1.profile-registry.json"
+SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.schema.json"
+BUNDLE_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.bundle-manifest.schema.json"
+BUNDLE_INDEX_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.bundle-index.schema.json"
+RELEASE_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.release-manifest.schema.json"
+RELEASE_CATALOG_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.release-catalog.schema.json"
+RELEASE_CATALOG_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.release-catalog-manifest.schema.json"
+RELEASE_CATALOG_INDEX_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.release-catalog-index.schema.json"
+RELEASE_CATALOG_INDEX_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.release-catalog-index-manifest.schema.json"
+DEMO_CATALOG_SUMMARY_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.demo-catalog-summary.schema.json"
+PUBLICATION_STACK_SUMMARY_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-stack-summary.schema.json"
+PUBLICATION_NETWORK_SUMMARY_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-network-summary.schema.json"
+PUBLICATION_DESCRIPTOR_INDEX_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-descriptor-index.schema.json"
+PUBLICATION_DESCRIPTOR_INDEX_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-descriptor-index-manifest.schema.json"
+PUBLICATION_METADATA_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-metadata-manifest.schema.json"
+PUBLICATION_METADATA_CATALOG_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-metadata-catalog.schema.json"
+PUBLICATION_METADATA_CATALOG_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-metadata-catalog-manifest.schema.json"
+PUBLICATION_REGISTRY_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-registry.schema.json"
+PUBLICATION_REGISTRY_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publication-registry-manifest.schema.json"
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
@@ -2603,7 +2642,7 @@ def signing_payload(event: Dict[str, Any]) -> str:
 
 
 def parse_amount(value: str) -> int:
-    if not isinstance(value, str) or not value.isdigit():
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]+", value):
         raise SatRootError(f"invalid amount: {value!r}")
     return int(value)
 
@@ -12131,7 +12170,7 @@ def validate_root_id(root_id: str) -> None:
 
 
 def parse_decimals(value: Any) -> int:
-    if not isinstance(value, int) or value < 0 or value > 18:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 18:
         raise SatRootError(f"invalid decimals: {value!r}")
     return value
 
@@ -12346,7 +12385,7 @@ def apply_genesis(event: Dict[str, Any]) -> SatRootState:
         raise SatRootError("unsupported protocol/version")
     if event.get("action") != "genesis":
         raise SatRootError("first event must be genesis")
-    if event.get("sequence") != 0:
+    if isinstance(event.get("sequence"), bool) or event.get("sequence") != 0:
         raise SatRootError("genesis sequence must be 0")
     validate_root_id(event["root_id"])
     validate_stated_event_id(event)
@@ -12396,7 +12435,7 @@ def require_next_event(state: SatRootState, event: Dict[str, Any], verifier: Sig
         raise SatRootError("unsupported protocol/version")
     if event.get("root_id") != state.root_id:
         raise SatRootError("root_id mismatch")
-    if event.get("sequence") != state.sequence + 1:
+    if isinstance(event.get("sequence"), bool) or event.get("sequence") != state.sequence + 1:
         raise SatRootError("bad sequence")
     if event.get("prev_event_id") != state.last_event_id:
         raise SatRootError("bad prev_event_id")
@@ -24008,7 +24047,7 @@ def validate_instance_against_schema(instance: Any, schema: Optional[Dict[str, A
         schema = load_protocol_schema()
 
     if importlib.util.find_spec("jsonschema") is None:
-        raise SatRootError("jsonschema package is required for schema validation; install with `pip install -e .[validation]`")
+        raise SatRootError("jsonschema package is required for schema validation; install the [validation] extra, e.g. `pip install \"satroot[validation]\"` or `pip install -e .[validation]`")
 
     from jsonschema import validators as jsonschema_validators
 

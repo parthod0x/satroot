@@ -16,6 +16,17 @@ SATROOT starts from one idea:
 
 That means one satoshi can anchor a replayable semantic ledger without pretending to create sub-satoshis. Token units, credits, receipts, rights, and other objects live as protocol-defined state above the native chain unit.
 
+## Quickstart
+
+Requires Python 3.10 or newer. From a clone of this repo:
+
+```bash
+pip install -e .
+satroot1 replay examples/events_floor1.json
+```
+
+That replays the checked-in `FLOOR1` demo ledger and prints its deterministic balances and state hash. Add the extras for the full surface: `pip install -e ".[crypto,validation]"` enables ed25519 signing (used by the anchored lanes) and JSON-schema validation (used by the publication workspace generators). Every checked-in example runs on placeholder roots — see `ANCHORS.md` for the real testnet anchoring record, and `SPEC.md` for the protocol itself. Licensed Apache-2.0.
+
 ## What this repo delivers
 
 This repository ships the `SATROOT-1` kernel, six registered profiles, the publication ladder, and the anchored proof loop:
@@ -25,7 +36,7 @@ This repository ships the `SATROOT-1` kernel, six registered profiles, the publi
 - `BOUNDARIES.md` - claim discipline, non-goals, and legal boundary language.
 - `ROADMAP.md` - project scope, deliverables, and released plus planned protocol profiles.
 - `ANCHORS.md` - the only checked-in record of real on-chain outpoints and transaction ids.
-- `KEY_MANAGEMENT.md` - operational guidance for composing the frozen signature schemes: custody separation, verifier-only distribution, and rotation.
+- `KEY_MANAGEMENT.md` - operational guidance for composing the frozen signature schemes: custody separation, verifier-only distribution, rotation, and the lint-versus-verify trust model (`*-lint` is structural; `verify-*` is the cryptographic gate).
 - `CHANGELOG.md`, `RELEASE_CHECKLIST.md`, `CITATION.cff` - release history, pre-tag gates, and citation metadata.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
 - `protocol/satroot1.bundle-manifest.schema.json` - JSON schema for signed bundle manifests.
@@ -48,7 +59,7 @@ This repository ships the `SATROOT-1` kernel, six registered profiles, the publi
 - `protocol/satroot1.profile-registry.json` - explicit compatibility registry for supported profiles.
 - `src/satroot1.py` - reference parser, deterministic replay engine, and signing utility CLI.
 - `src/satroot_*_smoke.py` and `scripts/run_*.py` - the packaged smoke-lane modules and repo-local entrypoints, from per-profile lanes up through the operator proof, release gate, and the four anchored lanes.
-- `examples/` - six runnable demo ledgers (`FLOOR1`, `USDROOT1`, `APICREDIT1`, `RECEIPT1`, `IDENTITY1`, `LICENSE1`) and the reusable preset trees.
+- `examples/` - seven runnable demo ledgers (`FLOOR1`, `USDROOT1`, `APICREDIT1`, `RECEIPT1`, `IDENTITY1`, `LICENSE1`, `EVENT1`) and the reusable preset trees.
 - `examples/README.md` - guide to the reusable example preset trees, including collection-backed companions.
 - `examples/catalog_presets/` - reusable SATROOT demo catalog scenario presets.
 - `examples/bundle_index_presets/` - reusable SATROOT bundle-index presets.
@@ -238,11 +249,11 @@ SATROOT-1 does not claim to be:
 - a security token framework,
 - an exchange-listing or universal wallet standard.
 
-## Future direction
+## Profile lanes and preset tree
 
-The base protocol stays intentionally small. Expansion belongs in separate profiles.
+The base protocol stays intentionally small. Expansion belongs in separate profiles, and the released profile lanes below all follow that rule.
 
-This repo now includes the first stable-value profile draft:
+This repo includes the stable-value profile:
 
 - `SATROOT-STABLE-1` for reference-value accounting units,
 - `examples/genesis_usdroot1.json` for a `USDROOT1` genesis record,
@@ -432,11 +443,13 @@ Further profile work can extend that pattern beyond the six registered profiles 
 
 ## Run tests
 
-For a quick local smoke run:
+For a quick local smoke run, pick one lane:
 
 ```bash
-python -m pytest
+python -m pytest tests/test_stable_profile_smoke.py
 ```
+
+Running bare `python -m pytest` collects the entire suite (1,600+ tests generating full publication workspaces) and is slow; prefer the chunked helper below for full runs.
 
 For the full suite, prefer the chunked helper:
 
@@ -2886,10 +2899,10 @@ Sign a single event record:
 satroot1 sign-event event.json --scheme hmac-sha256 --key-id issuer-key --secret issuer-secret
 ```
 
-The legacy direct script flow still works:
+The same CLI also runs directly from the source tree without installing:
 
 ```bash
-python src/satroot1.py examples/events_floor1.json
+python src/satroot1.py replay examples/events_floor1.json
 ```
 
 ## Run the demo ledgers
@@ -2938,7 +2951,7 @@ The example `root_id` values in `examples/` are placeholders:
 
 Replace it only when intentionally anchoring to a real one-satoshi UTXO.
 
-## Anchored demo lane
+## Anchored lanes
 
 The anchored demo lane is the designated entry point for that intentional replacement. It is the first of the four anchored lanes — anchored demo, anchored publication, on-chain envelope, and envelope verification — which are the only lanes ever meant to carry a real outpoint or transaction id, and always only via run-time flags:
 

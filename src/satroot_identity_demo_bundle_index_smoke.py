@@ -16,8 +16,10 @@ from satroot1 import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BASE_PRESET_JSON = REPO_ROOT / "examples" / "catalog_presets" / "identity_authority_catalog.json"
+from satroot1 import examples_root as _examples_root
+
+EXAMPLES_ROOT = _examples_root()
+DEFAULT_BASE_PRESET_JSON = EXAMPLES_ROOT / "catalog_presets" / "identity_authority_catalog.json"
 PROFILE = "SATROOT-IDENTITY-1"
 
 

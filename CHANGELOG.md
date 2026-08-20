@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.4-prepublication-hardening - 2026-08-20
+
+- Makes the reference engine conform to its own JSON schema on three input classes the schema already forbade, so no valid artifact changes: `parse_amount` now rejects non-ASCII/Unicode digit strings (previously accepted, or raised a non-`SatRootError`), and `decimals` and `sequence` now reject JSON booleans at genesis and replay.
+- Bounds-checks the standalone on-chain envelope parser against truncated `OP_PUSHDATA1`/`OP_PUSHDATA2` length bytes so malformed scripts raise `SatRootError` instead of `IndexError`.
+- Documents the deliberate v1 boundary that the kernel authorizes on the `signer` string plus a valid signature under some registered key, and does not bind a signing key to the account it acts for, across `BOUNDARIES.md`, `KEY_MANAGEMENT.md`, and the `SPEC.md` claim-discipline section; adds `tests/test_kernel_adversarial.py` pinning this boundary plus type-strictness and replay/sequence enforcement.
+- Ships the protocol schemas and example ledgers as package data (`satroot_protocol`, `satroot_examples`) with a source-checkout-first resolver, so an installed wheel resolves the profile registry, schemas, and example presets without the source tree; adds a `## Quickstart` with install/first-command/license to the top of the README and fixes the stale direct-invocation and demo-ledger-count references surfaced by the pre-publication review.
+
 ## v1.3-key-management - 2026-08-20
 
 - Adds `KEY_MANAGEMENT.md`: operational guidance for composing the frozen `demo`, `hmac-sha256`, and `ed25519` schemes — scheme selection, three-layer custody separation (root satoshi, event signing keys, publication keys), verifier-only distribution as the default, rotation via the ledger's own `rotate-authority` action and publication key-id succession, and an explicit non-claims section consistent with `BOUNDARIES.md`.

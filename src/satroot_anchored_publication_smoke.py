@@ -17,10 +17,12 @@ from satroot1 import (
 from satroot_anchored_demo_smoke import PLACEHOLDER_ROOT_ID
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from satroot1 import examples_root as _examples_root
+
+EXAMPLES_ROOT = _examples_root()
 PROFILE = "SATROOT-IDENTITY-1"
 BUNDLE_SCHEME = "ed25519"
-DEFAULT_PRESET_JSON = REPO_ROOT / "examples" / "catalog_presets" / "identity_authority_catalog.json"
+DEFAULT_PRESET_JSON = EXAMPLES_ROOT / "catalog_presets" / "identity_authority_catalog.json"
 
 
 def _sha256_file(path: Path) -> str:

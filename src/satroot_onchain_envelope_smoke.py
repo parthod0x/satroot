@@ -67,9 +67,13 @@ def parse_envelope_script(script: bytes) -> dict[str, Any]:
         if 1 <= opcode <= 0x4B:
             length = opcode
         elif opcode == OP_PUSHDATA1:
+            if index + 1 > len(script):
+                raise SatRootError("truncated push length in envelope script")
             length = script[index]
             index += 1
         elif opcode == OP_PUSHDATA2:
+            if index + 2 > len(script):
+                raise SatRootError("truncated push length in envelope script")
             length = int.from_bytes(script[index : index + 2], "little")
             index += 2
         else:

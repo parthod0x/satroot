@@ -10,9 +10,11 @@ from satroot_singleton_demo_release_smoke_support import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from satroot1 import examples_root as _examples_root
+
+EXAMPLES_ROOT = _examples_root()
 PROFILE = "SATROOT-LICENSE-1"
-DEFAULT_BASE_PRESET_JSON = REPO_ROOT / "examples" / "catalog_presets" / "license_usage_catalog.json"
+DEFAULT_BASE_PRESET_JSON = EXAMPLES_ROOT / "catalog_presets" / "license_usage_catalog.json"
 VARIANTS = [
     (
         "license_catalog_alpha.json",

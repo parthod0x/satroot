@@ -22,8 +22,10 @@ from satroot1 import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_EVENTS_JSON = REPO_ROOT / "examples" / "events_apicredit1.json"
+from satroot1 import examples_root as _examples_root
+
+EXAMPLES_ROOT = _examples_root()
+DEFAULT_EVENTS_JSON = EXAMPLES_ROOT / "events_apicredit1.json"
 
 
 def _load_events(events_json: str | Path) -> list[dict[str, Any]]:

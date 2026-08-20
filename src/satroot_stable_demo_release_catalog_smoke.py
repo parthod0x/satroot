@@ -15,8 +15,10 @@ from satroot1 import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BASE_PRESET_JSON = REPO_ROOT / "examples" / "catalog_presets" / "stable_reference_catalog.json"
+from satroot1 import examples_root as _examples_root
+
+EXAMPLES_ROOT = _examples_root()
+DEFAULT_BASE_PRESET_JSON = EXAMPLES_ROOT / "catalog_presets" / "stable_reference_catalog.json"
 
 
 def _load_json_object(path: str | Path) -> dict[str, Any]:

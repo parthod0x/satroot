@@ -1,6 +1,6 @@
 # SATROOT-1 Specification
 
-Status: v1 draft freeze candidate
+Status: v1 draft (frozen at v1.0-draft-freeze)
 Date: 2026-08-19
 License: Apache-2.0
 
@@ -349,7 +349,8 @@ SATROOT-1 should not say:
 - Bitcoin itself has been subdivided below one satoshi,
 - semantic units are native Bitcoin units,
 - the token has legal/economic rights unless separately documented,
-- wallets or exchanges will recognize it without integration.
+- wallets or exchanges will recognize it without integration,
+- the frozen kernel binds a signing key to the account it signs for — it checks the `signer` string and a valid signature under some registered key, but key-to-account binding is an application-level responsibility (see `KEY_MANAGEMENT.md`).
 
 ## 10. Stable-value boundary
 

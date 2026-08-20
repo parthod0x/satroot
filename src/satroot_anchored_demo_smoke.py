@@ -17,7 +17,6 @@ from satroot1 import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "SATROOT-IDENTITY-1"
 BUNDLE_SCHEME = "ed25519"
 PLACEHOLDER_ROOT_ID = "6" * 64 + ":0"
