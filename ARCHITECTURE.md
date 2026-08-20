@@ -117,7 +117,7 @@ Determinism depends on:
 The released line covers:
 
 - the `SATROOT-1` kernel, schemas, replay engine, and signing helpers,
-- the `FLOOR1` example ledger plus six registered profiles: reference-value stable units, machine credits, receipts, identities, licenses, and event-stream heads (the first five with full demo-catalog-matrix lanes),
+- the `FLOOR1` example ledger plus six registered profiles with full demo-catalog-matrix lanes: reference-value stable units, machine credits, receipts, identities, licenses, and event-stream heads,
 - bundle/release/catalog/index/publication tooling up through mixed-profile federation and collection-backed registry round trips,
 - the anchored loop: anchored demo namespace, anchored publication, on-chain envelope builder, and offline envelope verifier, with real runs recorded in `ANCHORS.md`,
 - the eight-surface operator proof, the local release gate, tests, boundaries, and release metadata.
@@ -128,7 +128,7 @@ What the released line proves: one native satoshi — including one real testnet
 
 Remaining follow-on work stays profile-driven:
 
-- additional object classes beyond the six registered profiles, and demo-catalog-matrix promotion for the event lane,
+- additional object classes beyond the six registered profiles,
 - future bridge layers for regulated or redeemable systems if ever needed.
 
 ## Full functionality envelope

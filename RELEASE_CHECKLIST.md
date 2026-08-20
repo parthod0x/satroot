@@ -1,6 +1,6 @@
 # SATROOT Release Checklist
 
-Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, or `v1.1-event-streams`:
+Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, `v1.1-event-streams`, or `v1.2-event-matrix-promotion`:
 
 - [ ] Confirm this repo contains no private keys, seed phrases, API tokens, or wallet files.
 - [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint. The anchored demo lane (`satroot_anchored_demo_smoke`) is the only lane intended to ever carry a real outpoint, and only via its `--root-id` flag at run time, never in checked-in input files or presets; `ANCHORS.md` is the sole checked-in record of intentional anchored runs.
@@ -15,7 +15,7 @@ Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`,
 - [ ] Run `python scripts/run_receipt_profile_smoke.py` from the repo root, or use `python -m satroot_receipt_profile_smoke` / `satroot-receipt-profile-smoke` after `pip install -e .`, to confirm the checked-in SATROOT-RECEIPT-1 profile lane still replays `RECEIPT1` and emits a lint-clean singleton publication registry workspace.
 - [ ] Run `python scripts/run_identity_profile_smoke.py` from the repo root, or use `python -m satroot_identity_profile_smoke` / `satroot-identity-profile-smoke` after `pip install -e .`, to confirm the checked-in SATROOT-IDENTITY-1 profile lane still replays `IDENTITY1` and emits a lint-clean singleton publication registry workspace.
 - [ ] Run `python scripts/run_license_profile_smoke.py` from the repo root, or use `python -m satroot_license_profile_smoke` / `satroot-license-profile-smoke` after `pip install -e .`, to confirm the checked-in SATROOT-LICENSE-1 profile lane still replays `LICENSE1` and emits a lint-clean singleton publication registry workspace.
-- [ ] Run `python scripts/run_event_profile_smoke.py` from the repo root, or use `python -m satroot_event_profile_smoke` / `satroot-event-profile-smoke` after `pip install -e .`, to confirm the checked-in SATROOT-EVENT-1 stream-head example replays `EVENT1` and a scaffolded single-stream demo bundle signs and verifies.
+- [ ] Run `python scripts/run_event_profile_smoke.py` from the repo root, or use `python -m satroot_event_profile_smoke` / `satroot-event-profile-smoke` after `pip install -e .`, to confirm the checked-in SATROOT-EVENT-1 profile lane still replays `EVENT1` and emits a lint-clean singleton publication registry workspace.
 - [ ] Run `python scripts/run_anchored_demo_smoke.py` from the repo root, or use `python -m satroot_anchored_demo_smoke` / `satroot-anchored-demo-smoke` after `pip install -e ".[crypto]"`, to confirm the anchored identity demo lane binds its placeholder root, verifies its ed25519-signed lifecycle, rejects foreign-root events, and keeps root custody out of ledger state.
 - [ ] Run `python scripts/run_anchored_publication_smoke.py` from the repo root, or use `python -m satroot_anchored_publication_smoke` / `satroot-anchored-publication-smoke` after `pip install -e ".[crypto]"`, to confirm the anchored namespace publishes through the full ed25519 publication ladder into a lint-clean registry workspace with the root bound in every generated bundle.
 - [ ] Run `python scripts/run_onchain_envelope_smoke.py` from the repo root, or use `python -m satroot_onchain_envelope_smoke` / `satroot-onchain-envelope-smoke` after `pip install -e .`, to confirm the SPEC section 4 on-chain envelope builder deterministically produces and round-trips the `OP_FALSE OP_RETURN "SATROOT1"` commitment script, fully offline.
@@ -27,11 +27,11 @@ Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`,
 - [ ] Confirm README and SPEC do not claim subdivision below one satoshi.
 - [ ] Confirm README and SPEC do not claim redemption, reserves, securities, e-money, investment returns, or wallet/exchange compatibility.
 - [ ] Confirm `CHANGELOG.md` has a dated section for the milestone and `pyproject.toml` plus `CITATION.cff` carry the matching version.
-- [ ] Create the milestone git tag. For the current milestone: `v1.1-event-streams`.
+- [ ] Create the milestone git tag. For the current milestone: `v1.2-event-matrix-promotion`.
 - [ ] Preserve the release artifact hash after tagging.
 
 Suggested tag message for the current milestone:
 
 ```text
-SATROOT v1.1 event streams: SATROOT-EVENT-1 registered as the sixth profile for append-only event-stream head objects, above one unchanged frozen one-satoshi kernel.
+SATROOT v1.2 event matrix promotion: the event lane promoted into the demo catalog matrix, profile matrix, and federation surface as a full sixth lane, above one unchanged frozen one-satoshi kernel.
 ```

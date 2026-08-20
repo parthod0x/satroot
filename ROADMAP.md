@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v1.1` is the event-streams artifact for `SATROOT-1`.
+`v1.2` is the event-matrix-promotion artifact for `SATROOT-1`.
 
-It registers `SATROOT-EVENT-1` as the sixth profile — an append-only event-stream head object in `single-stream` mode with deterministic publisher handoff — across the profile registry, record schema, kernel validation, and a dedicated verification lane with a checked-in placeholder-root example, all without changing the frozen `SATROOT-1` kernel rules, exactly as the namespace-expansion boundary requires.
+It promotes the `SATROOT-EVENT-1` lane into the demo catalog matrix, the profile-matrix smoke, and the federation surface as a full sixth lane — with its own checked-in catalog preset, a full singleton publication registry workspace lane, and six-lane federated collections — all without changing the frozen `SATROOT-1` kernel rules.
 
 Current scope:
 
@@ -51,6 +51,7 @@ Release status:
 - `v0.9-anchored-operator-proof` folds the four anchored-surface lanes into the canonical operator proof and release gate on placeholder defaults.
 - `v1.0-draft-freeze` declares the kernel rules frozen as the v1 protocol draft after one full docs-versus-reality consistency pass.
 - `v1.1-event-streams` registers `SATROOT-EVENT-1` as the sixth profile with its own example ledger and verification lane, kernel rules unchanged.
+- `v1.2-event-matrix-promotion` promotes the event lane into the demo catalog matrix, profile matrix, and federation surface as a full sixth lane.
 
 ## Near-term build order
 
@@ -259,13 +260,23 @@ Current status:
 
 - `SATROOT-EVENT-1` (`single-stream`) is registered in the profile registry, the record schema, kernel scaffold defaults, singleton demo defaults, and genesis validation.
 - The checked-in `EVENT1` example replays and schema-validates on its own placeholder root, and the dedicated event profile lane verifies the example, a fresh scaffolded ledger, and a signed bundle.
-- Demo-catalog-matrix promotion for the event lane is deferred to a future milestone.
+- Demo-catalog-matrix promotion for the event lane followed in `v1.2-event-matrix-promotion`.
+
+### v1.2 Event matrix promotion
+
+Goal: make the event lane a full peer of the five original lanes across every multi-profile surface.
+
+Current status:
+
+- `SATROOT-EVENT-1` is in the demo catalog bundle specs and structure-override specs, with the checked-in `event_stream_catalog.json` preset.
+- The event profile lane emits a full lint-clean singleton publication registry workspace, mirroring the identity lane.
+- The profile matrix runs six lanes and the federation surface freezes six-lane collections with eighteen-artifact mixed registry workspaces.
 
 ## Beyond the freeze
 
 Post-freeze work stays profile-driven and out-of-band, taken up only when intentionally chosen:
 
-- additional object classes beyond the six registered profiles, and demo-catalog-matrix promotion for the event lane,
+- additional object classes beyond the six registered profiles,
 - a mainnet anchor for a namespace meant to persist, using the same anchored lanes and `ANCHORS.md` discipline,
 - bridge layers for regulated or redeemable systems if ever needed,
 - production key-management guidance above the frozen signature schemes.

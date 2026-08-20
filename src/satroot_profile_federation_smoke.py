@@ -44,7 +44,7 @@ from satroot1 import (
 from satroot_profile_matrix_smoke import run_profile_matrix_smoke
 
 
-PROFILE_ORDER = ("stable", "machine", "receipt", "identity", "license")
+PROFILE_ORDER = ("stable", "machine", "receipt", "identity", "license", "event")
 
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:

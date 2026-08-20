@@ -67434,12 +67434,12 @@ def test_cli_bootstrap_demo_catalog(tmp_path, capsys):
     bundle_index = json.loads((release_dir / "bundle_index.json").read_text(encoding="utf-8"))
     release_manifest = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
     release_secrets = json.loads((release_dir / "release_secrets.json").read_text(encoding="utf-8"))
-    assert summary["bundle_count"] == 5
-    assert len(summary["bundles"]) == 5
-    assert {entry["bundle_name"] for entry in summary["bundles"]} == {"stable", "machine", "receipt", "identity", "license"}
+    assert summary["bundle_count"] == 6
+    assert len(summary["bundles"]) == 6
+    assert {entry["bundle_name"] for entry in summary["bundles"]} == {"stable", "machine", "receipt", "identity", "license", "event"}
     assert summary["release"] == bundle_index["release"]
-    assert bundle_index["bundle_count"] == 5
-    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"USDCAT1", "APICAT1", "RECCAT1", "IDCAT1", "LICCAT1"}
+    assert bundle_index["bundle_count"] == 6
+    assert {entry["symbol"] for entry in bundle_index["bundles"]} == {"USDCAT1", "APICAT1", "RECCAT1", "IDCAT1", "LICCAT1", "EVTCAT1"}
     assert bundle_index["release"]["label"] == "SATROOT Demo Catalog"
     assert release_manifest["signature_key_id"] == "release-key"
 
@@ -67454,7 +67454,7 @@ def test_cli_bootstrap_demo_catalog(tmp_path, capsys):
         release_dir / "release_manifest.json",
         verifier=make_hmac_sha256_verifier(release_secrets),
     )
-    assert verified["bundle_count"] == 5
+    assert verified["bundle_count"] == 6
     assert verified["release"] == bundle_index["release"]
 
 

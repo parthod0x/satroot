@@ -12,13 +12,14 @@ def test_run_profile_matrix_smoke_builds_all_released_profile_workspaces(tmp_pat
     report = run_profile_matrix_smoke(tmp_path / "profile_matrix_smoke")
 
     assert report["ok"] is True
-    assert report["profile_count"] == 5
-    assert set(report["profiles"]) == {"stable", "machine", "receipt", "identity", "license"}
+    assert report["profile_count"] == 6
+    assert set(report["profiles"]) == {"stable", "machine", "receipt", "identity", "license", "event"}
     assert report["profiles"]["stable"]["profile"] == "SATROOT-STABLE-1"
     assert report["profiles"]["machine"]["profile"] == "SATROOT-MACHINE-1"
     assert report["profiles"]["receipt"]["profile"] == "SATROOT-RECEIPT-1"
     assert report["profiles"]["identity"]["profile"] == "SATROOT-IDENTITY-1"
     assert report["profiles"]["license"]["profile"] == "SATROOT-LICENSE-1"
+    assert report["profiles"]["event"]["profile"] == "SATROOT-EVENT-1"
     assert Path(report["profiles"]["stable"]["publication_registry_manifest_path"]).is_file()
     assert Path(report["profiles"]["machine"]["publication_registry_manifest_path"]).is_file()
     assert Path(report["profiles"]["receipt"]["publication_registry_manifest_path"]).is_file()

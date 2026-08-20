@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.2-event-matrix-promotion - 2026-08-20
+
+- Promotes the event lane into the demo catalog matrix: `SATROOT-EVENT-1` joins `DEMO_CATALOG_BUNDLE_SPECS` and the structure-override specs, gains the checked-in `examples/catalog_presets/event_stream_catalog.json` preset, and the generic demo catalog surfaces now generate six bundles.
+- Upgrades the event profile lane from a bundle-level check to a full singleton publication registry workspace lane mirroring the identity lane, and adds it to the profile-matrix smoke and the federation `PROFILE_ORDER`, growing the matrix to six lanes and the federated registry workspace to eighteen artifacts.
+- Updates every profile-count and artifact-count assertion across the federation, matrix, operator-proof, and federated-collection test surfaces from five/fifteen to six/eighteen.
+
 ## v1.1-event-streams - 2026-08-19
 
 - Registers `SATROOT-EVENT-1` as the sixth profile: an append-only event-stream head object in `single-stream` mode with deterministic publisher handoff, added to the profile registry, the record schema (four new genesis fields), kernel scaffold defaults, singleton demo defaults, genesis validation, and the singleton-object profile set — with the frozen `SATROOT-1` kernel rules unchanged, exactly as the namespace-expansion boundary requires.

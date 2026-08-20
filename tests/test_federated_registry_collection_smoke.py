@@ -14,7 +14,7 @@ def test_run_federated_registry_collection_smoke_builds_collection_backed_regist
     source_collection_dir = report["publication_registry_workspace_collection"]["collection_dir"]
 
     assert report["ok"] is True
-    assert report["profile_federation"]["profile_count"] == 5
+    assert report["profile_federation"]["profile_count"] == 6
     assert report["publication_registry_workspace_collection"]["workspace_count"] == 1
     assert report["publication_registry_publication"]["component_count"] == 3
     assert report["publication_registry_publication"]["source_publication_registry_workspace_collection_dir"] == (

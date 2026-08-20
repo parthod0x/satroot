@@ -12,17 +12,21 @@ from satroot1 import SatRootError, replay, scaffold_genesis_record
 from satroot_event_profile_smoke import run_event_profile_smoke
 
 
-def test_run_event_profile_smoke_replays_example_and_scaffold(tmp_path):
+def test_run_event_profile_smoke_builds_full_registry_workspace(tmp_path):
     report = run_event_profile_smoke(tmp_path / "event_profile_smoke")
 
     assert report["ok"] is True
-    assert report["profile"] == "SATROOT-EVENT-1"
+    assert report["ledger_replay"]["profile"] == "SATROOT-EVENT-1"
     assert report["ledger_replay"]["profile_mode"] == "single-stream"
     assert report["ledger_replay"]["symbol"] == "EVENT1"
     assert report["ledger_replay"]["stream_type"] == "telemetry-stream"
     assert report["ledger_replay"]["sequence_policy"] == "append-only"
     assert report["ledger_replay"]["balances"]["successor_publisher"] == 1
-    assert all(report["checks"].values())
+    assert report["demo_catalog_workspace_lint"]["ok"] is True
+    assert report["publication_catalog_workspace_lint"]["ok"] is True
+    assert report["publication_network_workspace_lint"]["ok"] is True
+    assert report["publication_registry_workspace_lint"]["ok"] is True
+    assert Path(report["publication_registry_workspace"]["publication_registry_manifest_path"]).is_file()
     assert Path(report["report_path"]).is_file()
 
 

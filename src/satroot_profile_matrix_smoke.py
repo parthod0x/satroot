@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from satroot_event_profile_smoke import run_event_profile_smoke
 from satroot_identity_profile_smoke import run_identity_profile_smoke
 from satroot_license_profile_smoke import run_license_profile_smoke
 from satroot_machine_profile_smoke import run_machine_profile_smoke
@@ -44,6 +45,7 @@ def run_profile_matrix_smoke(
         "receipt": run_receipt_profile_smoke(output_path / "receipt", bundle_scheme=bundle_scheme),
         "identity": run_identity_profile_smoke(output_path / "identity", bundle_scheme=bundle_scheme),
         "license": run_license_profile_smoke(output_path / "license", bundle_scheme=bundle_scheme),
+        "event": run_event_profile_smoke(output_path / "event", bundle_scheme=bundle_scheme),
     }
 
     report: dict[str, Any] = {

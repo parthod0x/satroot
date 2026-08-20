@@ -1,0 +1,34 @@
+{
+  "type": "SATROOT-DEMO-CATALOG-PRESET",
+  "version": "0.1",
+  "profiles": [
+    "SATROOT-EVENT-1"
+  ],
+  "symbol_overrides": {
+    "SATROOT-EVENT-1": "TELEV1"
+  },
+  "name_overrides": {
+    "SATROOT-EVENT-1": "SATROOT Telemetry Stream Head"
+  },
+  "profile_field_overrides": {
+    "SATROOT-EVENT-1": {
+      "stream_type": "telemetry-stream",
+      "stream_subject": "ops-telemetry",
+      "publisher_entity": "operations",
+      "sequence_policy": "append-only",
+      "intended_use": "operator-event-stream-ledger"
+    }
+  },
+  "profile_structure_overrides": {
+    "SATROOT-EVENT-1": {
+      "holder_account": "publisher_alpha",
+      "next_holder": "publisher_beta",
+      "retire": false
+    }
+  },
+  "release": {
+    "channel": "stable",
+    "label": "SATROOT Event Stream Catalog",
+    "published_at": "2026-08-20T00:00:00Z"
+  }
+}

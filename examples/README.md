@@ -17,7 +17,7 @@ This directory contains both runnable ledger examples and reusable preset trees 
 - `receipt_invoice_*` is the SATROOT-RECEIPT-1 singleton receipt lane.
 - `identity_authority_*` is the SATROOT-IDENTITY-1 singleton identity lane.
 - `license_usage_*` is the SATROOT-LICENSE-1 singleton license lane.
-- `genesis_event1.json` / `events_event1.json` are the SATROOT-EVENT-1 single-stream ledger example; the event lane has no preset tree yet because it is not part of the demo catalog matrix.
+- `event_stream_*` is the SATROOT-EVENT-1 single-stream lane; `genesis_event1.json` / `events_event1.json` are its runnable ledger example.
 
 ## Collection-backed companions
 

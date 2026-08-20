@@ -422,7 +422,7 @@ The sixth registered profile extends the singleton family to event streams:
 - `examples/events_event1.json` for a runnable stream-custody handoff ledger flow,
 - `python scripts/run_event_profile_smoke.py` (or `python -m satroot_event_profile_smoke` / `satroot-event-profile-smoke`) for its dedicated verification lane.
 
-The event lane is registered in the kernel, schema, and profile registry but is not yet part of the demo catalog matrix; matrix promotion is a separate future milestone.
+The event lane is a full member of the demo catalog matrix, the profile-matrix smoke, and the federation surface, alongside the five original profiles.
 
 Further profile work can extend that pattern beyond the six registered profiles for:
 

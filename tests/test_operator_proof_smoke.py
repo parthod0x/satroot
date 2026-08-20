@@ -26,8 +26,8 @@ def test_run_operator_proof_smoke_builds_all_top_level_operator_surfaces(tmp_pat
     }
     assert report["surfaces"]["publication_ladder"]["layer_count"] == 3
     assert report["surfaces"]["singleton_publication_ladder"]["layer_count"] == 3
-    assert report["surfaces"]["profile_federation"]["profile_count"] == 5
-    assert report["surfaces"]["profile_federation"]["publication_registry_artifact_count"] == 15
+    assert report["surfaces"]["profile_federation"]["profile_count"] == 6
+    assert report["surfaces"]["profile_federation"]["publication_registry_artifact_count"] == 18
     assert report["surfaces"]["federated_registry_collection"]["workspace_count"] == 1
     assert report["surfaces"]["federated_registry_collection"]["publication_registry_component_count"] == 3
     assert (

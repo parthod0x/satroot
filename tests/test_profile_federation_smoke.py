@@ -13,10 +13,10 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
 
     assert report["ok"] is True
     assert report["profile_matrix"]["ok"] is True
-    assert report["profile_matrix"]["profile_count"] == 5
-    assert report["demo_catalog_workspace_collection"]["workspace_count"] == 5
-    assert report["publication_stack_workspace"]["workspace_count"] == 5
-    assert report["federated_publication_stack_roundtrip"]["workspace"]["workspace_count"] == 5
+    assert report["profile_matrix"]["profile_count"] == 6
+    assert report["demo_catalog_workspace_collection"]["workspace_count"] == 6
+    assert report["publication_stack_workspace"]["workspace_count"] == 6
+    assert report["federated_publication_stack_roundtrip"]["workspace"]["workspace_count"] == 6
     assert Path(report["federated_publication_stack_roundtrip"]["preset_path"]).is_file()
     assert Path(report["federated_publication_stack_roundtrip"]["catalog_preset_dir"]).is_dir()
     assert (
@@ -25,7 +25,7 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
         ]
         == report["demo_catalog_workspace_collection"]["collection_dir"]
     )
-    assert report["publication_stack_collection"]["stack_count"] == 5
+    assert report["publication_stack_collection"]["stack_count"] == 6
     assert report["publication_network_workspace"]["stack_count"] == 1
     assert report["federated_publication_network_roundtrip"]["workspace"]["stack_count"] == 1
     assert Path(report["federated_publication_network_roundtrip"]["preset_path"]).is_file()
@@ -37,8 +37,8 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
         ]
         == report["publication_stack_collection"]["collection_dir"]
     )
-    assert report["publication_catalog_workspace"]["artifact_count"] == 15
-    assert report["federated_publication_catalog_workspace_roundtrip"]["workspace"]["artifact_count"] == 15
+    assert report["publication_catalog_workspace"]["artifact_count"] == 18
+    assert report["federated_publication_catalog_workspace_roundtrip"]["workspace"]["artifact_count"] == 18
     assert Path(report["federated_publication_catalog_workspace_roundtrip"]["preset_path"]).is_file()
     assert Path(
         report["federated_publication_catalog_workspace_roundtrip"][
@@ -51,9 +51,9 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
         ]
     ).is_file()
     assert report["federated_publication_catalog_workspace_collection"]["workspace_count"] == 1
-    assert report["publication_registry_workspace"]["artifact_count"] == 15
+    assert report["publication_registry_workspace"]["artifact_count"] == 18
     assert report["federated_publication_registry_workspace_collection"]["workspace_count"] == 1
-    assert report["federated_publication_registry_workspace_roundtrip"]["workspace"]["artifact_count"] == 15
+    assert report["federated_publication_registry_workspace_roundtrip"]["workspace"]["artifact_count"] == 18
     assert Path(
         report["federated_publication_registry_workspace_roundtrip"]["preset_path"]
     ).is_file()
@@ -73,9 +73,9 @@ def test_run_profile_federation_smoke_builds_federated_outputs_and_collections(t
         ]
         is None
     )
-    assert report["publication_network_collection"]["network_count"] == 5
-    assert report["publication_catalog_workspace_collection"]["workspace_count"] == 5
-    assert report["publication_registry_workspace_collection"]["workspace_count"] == 5
+    assert report["publication_network_collection"]["network_count"] == 6
+    assert report["publication_catalog_workspace_collection"]["workspace_count"] == 6
+    assert report["publication_registry_workspace_collection"]["workspace_count"] == 6
     assert report["demo_catalog_workspace_collection_lint"]["ok"] is True
     assert report["publication_stack_workspace_lint"]["ok"] is True
     assert report["federated_publication_stack_roundtrip_lint"]["ok"] is True

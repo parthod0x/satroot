@@ -197,6 +197,12 @@ DEMO_CATALOG_BUNDLE_SPECS: tuple[Dict[str, str], ...] = (
         "symbol": "LICCAT1",
         "name": "SATROOT License Catalog",
     },
+    {
+        "bundle_name": "event",
+        "profile": "SATROOT-EVENT-1",
+        "symbol": "EVTCAT1",
+        "name": "SATROOT Event Catalog",
+    },
 )
 DEMO_CATALOG_PROFILES: tuple[str, ...] = tuple(spec["profile"] for spec in DEMO_CATALOG_BUNDLE_SPECS)
 DEMO_CATALOG_STRUCTURE_OVERRIDE_SPECS: Dict[str, Dict[str, str]] = {
@@ -224,6 +230,12 @@ DEMO_CATALOG_STRUCTURE_OVERRIDE_SPECS: Dict[str, Dict[str, str]] = {
         "retire": "bool",
     },
     "SATROOT-IDENTITY-1": {
+        "holder_account": "account",
+        "next_holder": "optional_account",
+        "archive_account": "optional_account",
+        "retire": "bool",
+    },
+    "SATROOT-EVENT-1": {
         "holder_account": "account",
         "next_holder": "optional_account",
         "archive_account": "optional_account",
