@@ -34,6 +34,8 @@
 - Completes one full documentation consistency pass aligning `SPEC.md`, `README.md`, `ARCHITECTURE.md`, `BOUNDARIES.md`, `ROADMAP.md`, `ANCHORS.md`, and the five profile drafts with what the released lanes actually prove: removes stale "future"/"v0.1" claims for shipped profiles and schemes, corrects the operator-proof surface count and anchored-lane check count, adds the anchored loop to the claims-discipline and boundaries statements, documents the released SPEC section 4 builder and verifier under the envelope section, and adds an anchoring-loop subsection to the architecture doc.
 - Fixes the kernel module docstring, which referenced a nonexistent `verify_signature_placeholder` function and a stale v0.1 label, to name the real `demo_signature_verifier` placeholder and the shipped `hmac-sha256` and `ed25519` schemes.
 
+## v0.9-anchored-operator-proof - 2026-08-19
+
 - Promotes the four anchored-surface lanes — anchored demo, anchored publication, on-chain envelope, and envelope verification — into the top-level operator proof on their placeholder defaults, so the canonical proof and the local release gate cover the whole anchoring loop on every run.
 - Keeps non-crypto installs green: the two ed25519-dependent anchored surfaces skip gracefully with an explicit skip record when the `[crypto]` extra is unavailable, while the offline envelope surfaces always run.
 
