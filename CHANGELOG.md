@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.3-key-management - 2026-08-20
+
+- Adds `KEY_MANAGEMENT.md`: operational guidance for composing the frozen `demo`, `hmac-sha256`, and `ed25519` schemes — scheme selection, three-layer custody separation (root satoshi, event signing keys, publication keys), verifier-only distribution as the default, rotation via the ledger's own `rotate-authority` action and publication key-id succession, and an explicit non-claims section consistent with `BOUNDARIES.md`.
+- Docs-only release: no kernel rules, lanes, schemes, or dependencies change.
+
 ## v1.2-event-matrix-promotion - 2026-08-20
 
 - Promotes the event lane into the demo catalog matrix: `SATROOT-EVENT-1` joins `DEMO_CATALOG_BUNDLE_SPECS` and the structure-override specs, gains the checked-in `examples/catalog_presets/event_stream_catalog.json` preset, and the generic demo catalog surfaces now generate six bundles.

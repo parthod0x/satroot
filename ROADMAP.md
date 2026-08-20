@@ -15,9 +15,9 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v1.2` is the event-matrix-promotion artifact for `SATROOT-1`.
+`v1.3` is the key-management-guidance artifact for `SATROOT-1`.
 
-It promotes the `SATROOT-EVENT-1` lane into the demo catalog matrix, the profile-matrix smoke, and the federation surface as a full sixth lane — with its own checked-in catalog preset, a full singleton publication registry workspace lane, and six-lane federated collections — all without changing the frozen `SATROOT-1` kernel rules.
+It adds `KEY_MANAGEMENT.md` as the operational discipline for composing the frozen signature schemes — scheme selection, three-layer custody separation, verifier-only distribution, and rotation — as a docs-only release that changes no kernel rules, lanes, schemes, or dependencies.
 
 Current scope:
 
@@ -52,6 +52,7 @@ Release status:
 - `v1.0-draft-freeze` declares the kernel rules frozen as the v1 protocol draft after one full docs-versus-reality consistency pass.
 - `v1.1-event-streams` registers `SATROOT-EVENT-1` as the sixth profile with its own example ledger and verification lane, kernel rules unchanged.
 - `v1.2-event-matrix-promotion` promotes the event lane into the demo catalog matrix, profile matrix, and federation surface as a full sixth lane.
+- `v1.3-key-management` adds `KEY_MANAGEMENT.md` as docs-only operational guidance above the frozen signature schemes.
 
 ## Near-term build order
 
@@ -278,10 +279,9 @@ Post-freeze work stays profile-driven and out-of-band, taken up only when intent
 
 - additional object classes beyond the six registered profiles,
 - a mainnet anchor for a namespace meant to persist, using the same anchored lanes and `ANCHORS.md` discipline,
-- bridge layers for regulated or redeemable systems if ever needed,
-- production key-management guidance above the frozen signature schemes.
+- bridge layers for regulated or redeemable systems if ever needed.
 
-None of these change the frozen `SATROOT-1` kernel rules.
+Key-management guidance shipped in `v1.3-key-management` as `KEY_MANAGEMENT.md`. None of the remaining directions change the frozen `SATROOT-1` kernel rules.
 
 ## Core architectural rule
 
