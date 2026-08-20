@@ -21,6 +21,11 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules"
 ]
 
+[project.urls]
+Homepage = "https://github.com/parthod0x/satroot"
+Repository = "https://github.com/parthod0x/satroot"
+Changelog = "https://github.com/parthod0x/satroot/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 crypto = ["cryptography>=42"]
 validation = ["jsonschema>=4.23"]
