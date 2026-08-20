@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One Satoshi, One Namespace — SATROOT</title>
+<meta name="description" content="SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — anchored for real on testnet, verifiable offline from raw bytes.">
+<meta property="og:title" content="One Satoshi, One Namespace">
+<meta property="og:description" content="A satoshi is the floor of value, not the ceiling of meaning. SATROOT's launch note, with reproducible on-chain proof.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --paper: #FDFDFB;
+  --ink: #1A1F1C;
+  --dim: #5A635D;
+  --ledger: #1E6B4E;
+  --rule: #D8DED9;
+  --mark: #B98A2F;
+  --block: #F4F6F4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #131614;
+    --ink: #E6EAE6;
+    --dim: #97A29A;
+    --ledger: #4FA97E;
+    --rule: #2A302B;
+    --mark: #D3A94C;
+    --block: #1A1E1B;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.0625rem;
+  line-height: 1.72;
+  margin: 0;
+  padding: 0 1.25rem;
+}
+.sheet {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 4rem 0 5rem;
+}
+.eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ledger);
+  margin: 0 0 1.5rem;
+}
+h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 3.1rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin: 0 0 1.25rem;
+}
+.standfirst {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--dim);
+  margin: 0 0 2.25rem;
+  text-wrap: balance;
+}
+.floorline {
+  border: none;
+  border-top: 3px solid var(--ink);
+  margin: 0 0 0.4rem;
+}
+.floorcaption {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+.floorcaption .one-sat { color: var(--mark); }
+h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  font-size: 1.45rem;
+  line-height: 1.25;
+  margin: 3rem 0 0.9rem;
+  text-wrap: balance;
+}
+p { margin: 0 0 1.15rem; }
+a { color: var(--ledger); text-decoration-thickness: 1px; text-underline-offset: 2.5px; }
+a:focus-visible { outline: 2px solid var(--ledger); outline-offset: 2px; }
+strong { font-weight: 600; }
+blockquote {
+  margin: 1.8rem 0;
+  padding: 0 0 0 1.25rem;
+  border-left: 3px solid var(--ledger);
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.25rem;
+  line-height: 1.45;
+  font-weight: 400;
+}
+.record {
+  background: var(--block);
+  border: 1px solid var(--rule);
+  margin: 1.6rem 0;
+}
+.record-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.record-head .kind { color: var(--ledger); font-weight: 500; }
+.record-head .net { color: var(--dim); }
+.record-body {
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+}
+.record-body code, pre code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.65;
+  white-space: pre;
+  display: block;
+}
+code.inline {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.85em;
+}
+.record-note {
+  padding: 0.55rem 1rem 0.75rem;
+  font-size: 0.88rem;
+  color: var(--dim);
+  border-top: 1px solid var(--rule);
+}
+pre {
+  background: var(--block);
+  border: 1px solid var(--rule);
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  margin: 1.4rem 0;
+}
+ol.loop {
+  margin: 1.2rem 0 1.4rem;
+  padding-left: 1.4rem;
+}
+ol.loop li { margin-bottom: 0.55rem; padding-left: 0.35rem; }
+ol.loop li::marker {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+  color: var(--ledger);
+  font-weight: 500;
+}
+ul { margin: 1.1rem 0 1.3rem; padding-left: 1.3rem; }
+ul li { margin-bottom: 0.45rem; }
+.footer {
+  margin-top: 4rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.88rem;
+  color: var(--dim);
+}
+.footer p { margin-bottom: 0.4rem; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <p class="eyebrow">SATROOT · Launch note</p>
+  <h1>A satoshi is the floor of value, not the ceiling of meaning.</h1>
+  <p class="standfirst">SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — and we anchored one for real, on testnet, with every step independently verifiable from raw bytes.</p>
+  <hr class="floorline">
+  <p class="floorcaption"><span>THE FLOOR: 1 NATIVE SATOSHI</span><span class="one-sat">1 SAT</span></p>
+
+  <h2>The idea</h2>
+  <p>Bitcoin's smallest native unit is the satoshi. Most token designs respond to that floor in one of two ways: pretend to subdivide it, or ignore the chain entirely and keep balances in a database. SATROOT takes a third position:</p>
+  <blockquote>The satoshi is not subdivided. The satoshi anchors a protocol-defined state space.</blockquote>
+  <p>One specific one-satoshi UTXO becomes a <strong>root witness</strong> — the namespace handle for a ledger whose state is computed purely by replaying signed events. Token units, machine credits, receipts, identities, licenses, and event-stream custody all live as overlay state above that root. The chain provides the anchor, ordering, and publication; the protocol provides deterministic meaning. Nothing about the satoshi itself changes, and moving it is never mistaken for a semantic transfer: state follows valid signed events, not UTXO activity.</p>
+
+  <h2>What shipped</h2>
+  <p>The reference implementation is a dependency-free, pure-Python kernel — a canonical event format, a replay engine with strict sequence and hash-chain enforcement, and three signature schemes (a demo placeholder, <code class="inline">hmac-sha256</code>, and <code class="inline">ed25519</code>). Above the kernel sit six released object profiles — stable reference units, machine credits, receipts, identities, licenses, and event-stream heads — and a full publication ladder that packages ledgers into signed bundles, releases, catalogs, and registry workspaces, each layer carrying its own manifest hashes and verification tooling.</p>
+  <p>Nineteen tagged releases, ~1,700 tests behind a single release gate, and the protocol rules declared frozen as the v1 draft. Install it:</p>
+  <pre><code>pip install satroot
+satroot1 replay examples/events_floor1.json</code></pre>
+
+  <h2>The proof</h2>
+  <p>A protocol document can claim anything. So instead of claiming, we ran the whole loop against the real chain and recorded every artifact. The loop has four steps, and each one is reproducible:</p>
+  <ol class="loop">
+    <li><strong>Anchor.</strong> A real one-satoshi testnet outpoint was bound as the <code class="inline">root_id</code> of a demo namespace, its full lifecycle signed and verified with ed25519.</li>
+    <li><strong>Publish.</strong> That namespace was pushed through the entire publication ladder — bundles, release, catalog, registry — with ed25519 at every layer.</li>
+    <li><strong>Commit.</strong> The namespace's state hash was broadcast on-chain inside the spec's <code class="inline">OP_RETURN</code> envelope.</li>
+    <li><strong>Verify.</strong> The broadcast transaction's raw bytes were fetched and verified fully offline: the bytes hash to the recorded txid, and the envelope matches the deterministically rebuilt commitment byte for byte.</li>
+  </ol>
+
+  <div class="record">
+    <div class="record-head"><span class="kind">Record · Root outpoint</span><span class="net">BSV testnet</span></div>
+    <div class="record-body"><code>147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0</code></div>
+    <div class="record-note">One satoshi, held by the operator, anchoring the namespace. Custody of this output is deliberately outside the protocol: moving it is not a semantic transfer.</div>
+  </div>
+
+  <div class="record">
+    <div class="record-head"><span class="kind">Record · State commitment</span><span class="net">semantic ledger</span></div>
+    <div class="record-body"><code>sha256:e1a2c685d3a3cf84a0ec81ad400ac1c66ecb9e9679338cbd13c4644e849fb4e3</code></div>
+    <div class="record-note">The anchored namespace's semantic state hash — the value committed on-chain.</div>
+  </div>
+
+  <div class="record">
+    <div class="record-head"><span class="kind">Record · Envelope transaction</span><span class="net">BSV testnet</span></div>
+    <div class="record-body"><code>6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0</code></div>
+    <div class="record-note">Output 0 is a zero-value OP_FALSE OP_RETURN carrying the SATROOT1 tag, content type, and the canonical JSON commitment of root and state hash. Look it up on any testnet explorer.</div>
+  </div>
+
+  <p>Don't take the article's word for it. Save the raw transaction hex to a file and run the offline verifier yourself:</p>
+  <pre><code>python scripts/run_envelope_verification_smoke.py \
+  --raw-tx-hex-file rawtx.hex \
+  --root-id 147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0 \
+  --state-hash sha256:e1a2c685d3a3cf84a0ec81ad400ac1c66ecb9e9679338cbd13c4644e849fb4e3 \
+  --expected-txid 6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0</code></pre>
+  <p>No network access, no trust in us: the verifier parses the bytes, hashes them, finds the envelope output, and compares it byte-for-byte against the commitment it rebuilds from scratch. The complete record of every intentional anchored run lives in <a href="https://github.com/parthod0x/satroot/blob/main/ANCHORS.md">ANCHORS.md</a> — the only place in the repository a real outpoint may appear.</p>
+
+  <h2>What it deliberately is not</h2>
+  <p>SATROOT's documentation spends as much effort on boundaries as on features, because overlay protocols die of overclaiming:</p>
+  <ul>
+    <li>It does not subdivide Bitcoin below one satoshi, and semantic units are not native Bitcoin units.</li>
+    <li>It creates no stablecoin, security, redemption right, or reserve claim; stable-value designs are reference-only profiles with those non-claims stated in the genesis record itself.</li>
+    <li>There is no token sale. The protocol is Apache-2.0, and the anchored satoshi is worth exactly one satoshi.</li>
+    <li>The frozen kernel authorizes on the signer string plus a valid signature under a registered key; binding keys to accounts across trust domains is explicitly an application-layer responsibility, documented rather than hand-waved.</li>
+  </ul>
+
+  <h2>Where this goes</h2>
+  <p>The profile system is the point. A namespace rooted in one satoshi can carry the custody lineage of a telemetry stream, the prepaid credit balance of an autonomous agent, or the assignment history of a license — deterministically, with offline verification, for the cost of almost nothing. The machine-credit and event-stream profiles are aimed squarely at the emerging problem of proving what autonomous agents consumed, published, and were authorized to do.</p>
+  <p>The kernel is frozen; the profiles are open. If you want to build an object class on a one-satoshi root, the repository ships everything this article described — including the tooling that produced its own proof.</p>
+
+  <div class="footer">
+    <p>Code: <a href="https://github.com/parthod0x/satroot">github.com/parthod0x/satroot</a> · Package: <a href="https://pypi.org/project/satroot/">pypi.org/project/satroot</a></p>
+    <p>Apache-2.0 · SATROOT-1 v1 draft (frozen) · Anchored records: <a href="https://github.com/parthod0x/satroot/blob/main/ANCHORS.md">ANCHORS.md</a></p>
+  </div>
+</div>
+</body>
+</html>

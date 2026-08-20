@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Adds `docs/index.html` and `docs/LAUNCH.md`, the launch note "One Satoshi, One Namespace", served via GitHub Pages from the `docs/` folder.
+
 ## v1.4-prepublication-hardening - 2026-08-20
 
 - Makes the reference engine conform to its own JSON schema on three input classes the schema already forbade, so no valid artifact changes: `parse_amount` now rejects non-ASCII/Unicode digit strings (previously accepted, or raised a non-`SatRootError`), and `decimals` and `sequence` now reject JSON booleans at genesis and replay.
