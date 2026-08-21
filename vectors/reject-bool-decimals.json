@@ -1,0 +1,33 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-bool-decimals",
+  "description": "JSON booleans are not accepted where integers are required",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": true,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:37a9d22411829cf7d5c685371914f06a528e2ef08d12bb9851c10f32212c1893"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "invalid decimals: True",
+    "note": "bool decimals rejected"
+  }
+}

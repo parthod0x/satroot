@@ -1,0 +1,65 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-wrong-key-ed25519",
+  "description": "valid signature under an unregistered key",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:a3f46794aace6b316d7f9ade3dea57d513b3f2dc17cb96553bd9a2450047d97e31d4bafba0bd55c9089ec2d9ff2b20cec3e74791ec6ba70162f1263c4c229a00",
+      "event_id": "sha256:884dda8b9913c85e8df8d0cca9bd21a544914c3c2cd8a2474d1a78b3fd7c0918"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "transfer",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:884dda8b9913c85e8df8d0cca9bd21a544914c3c2cd8a2474d1a78b3fd7c0918",
+      "signer": "issuer",
+      "signature": "ed25519:c3abbe500e332b54b00d4b870307681e86ccf18dcc5d628b9a87bec32528512c4e6b72a1d9c741b45ad51b6bb818ace7704310825b29145eb119f86c1feae908",
+      "from": "issuer",
+      "to": "alice",
+      "amount": "400",
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "event_id": "sha256:7ab6765a9d101d7964b33226a4db7124ca6c9a7a2f86bdb6b412af98f4678901"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "burn",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 2,
+      "prev_event_id": "sha256:7ab6765a9d101d7964b33226a4db7124ca6c9a7a2f86bdb6b412af98f4678901",
+      "signer": "alice",
+      "signature": "ed25519:bdc042e6293b2f777bf25faee9bccb813bf9379672d87fb136ac387b555cb8adfe1b52564f5e7be21c31955d4a6c2363a59431ec9f674d2c5d1671028898360d",
+      "from": "alice",
+      "amount": "10",
+      "signature_scheme": "ed25519",
+      "signature_key_id": "alice-key",
+      "event_id": "sha256:17e05aac21340cac4ddf98fbd686136fbff81bf9c94f218db29e862ed5ccda20"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "signature verification failed",
+    "note": "wrong key rejected"
+  }
+}

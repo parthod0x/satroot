@@ -1,0 +1,36 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-genesis-only-demo",
+  "description": "a bare genesis is a complete ledger",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:9277f8492d3f2fde9987963438aa33ea378e0f7c0f4e7540066be0a1029f8a04",
+    "balances": {
+      "issuer": "1000"
+    },
+    "record_count": 1
+  }
+}

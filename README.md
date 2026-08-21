@@ -36,6 +36,7 @@ This repository ships the `SATROOT-1` kernel, six registered profiles, the publi
 - `BOUNDARIES.md` - claim discipline, non-goals, and legal boundary language.
 - `ROADMAP.md` - project scope, deliverables, and released plus planned protocol profiles.
 - `ANCHORS.md` - the only checked-in record of real on-chain outpoints and transaction ids.
+- `INTEGRATION.md` - integrator's guide: how to build an application on the package (provisioning, appending, verifiable exports, envelope commitments) and the pitfalls the kernel enforces.
 - `KEY_MANAGEMENT.md` - operational guidance for composing the frozen signature schemes: custody separation, verifier-only distribution, rotation, and the lint-versus-verify trust model (`*-lint` is structural; `verify-*` is the cryptographic gate).
 - `CHANGELOG.md`, `RELEASE_CHECKLIST.md`, `CITATION.cff` - release history, pre-tag gates, and citation metadata.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.
