@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/parthod0x/satroot"
+Homepage = "https://satroot.com"
 Repository = "https://github.com/parthod0x/satroot"
 Changelog = "https://github.com/parthod0x/satroot/blob/main/CHANGELOG.md"
 
