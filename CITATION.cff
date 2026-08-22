@@ -1,18 +1,33 @@
 cff-version: 1.2.0
-title: "SATROOT-1: One-Satoshi Root Token Primitive"
-message: "If you use this protocol draft, please cite it using the metadata from this file."
+title: "SATROOT: deterministic, offline-verifiable semantic ledgers rooted in a single satoshi"
+message: "If you use this software or protocol, please cite it as below."
 type: software
 authors:
-  - given-names: "PARTH MAURIA"
-    family-names: "SAXENA"
+  - family-names: "Saxena"
+    given-names: "Parth Mauria"
     email: "parthms.id@gmail.com"
-version: "1.4.0"
-date-released: "2026-08-20"
-license: "Apache-2.0"
-abstract: "SATROOT-1 defines a minimal one-satoshi-root token primitive: one native satoshi anchors unbounded protocol-defined semantic token state without subdividing Bitcoin below one satoshi."
+    alias: "parthod0x"
+repository-code: "https://github.com/parthod0x/satroot"
+url: "https://parthod0x.github.io/satroot/"
+license: Apache-2.0
 keywords:
-  - Bitcoin
-  - BSV
-  - satoshi
-  - semantic tokens
-  - machine-native ledgers
+  - verifiable-ledger
+  - deterministic-replay
+  - event-sourcing
+  - ed25519
+  - canonical-json
+  - offline-verification
+  - bsv
+  - semantic-ledger
+abstract: >-
+  SATROOT is an Apache-2.0 protocol and dependency-free pure-Python
+  reference implementation for deterministic, replayable semantic
+  ledgers. A ledger is an append-only log of canonically serialized,
+  signed events; anyone holding the log and the public keys can
+  recompute the exact state and its hash offline, with no server and no
+  trust in the operator. Typed object profiles (stable reference units,
+  machine credits, receipts, identities, licenses, and event-stream
+  custody) sit above a frozen kernel, alongside a publication ladder of
+  signed bundles, releases, catalogs, and registries. Ledger state
+  hashes can optionally be committed on-chain in OP_RETURN envelopes
+  and verified from raw transaction bytes.

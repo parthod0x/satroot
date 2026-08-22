@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.5-integration-and-vectors - 2026-08-22
 
+- Adds `CITATION.cff` so archived releases and citations carry correct authorship, and enables Zenodo archiving of tagged releases.
 - Adds `INTEGRATION.md`, an integrator's guide distilled from building a real multi-agent credit-ledger service on the published wheel: provisioning, appending, bundle export with persistent keys, envelope commitments, and a pitfall index.
 - Adds `vectors/`, a deterministic 14-vector conformance corpus over the frozen kernel rules (three schemes, fixed key material, byte-stable regeneration), with `scripts/generate_conformance_vectors.py`, `scripts/run_conformance_vectors.py`, and `tests/test_conformance_vectors.py` pinning the corpus to the reference engine.
 - Adds `docs/index.html` and `docs/LAUNCH.md`, the launch note "One Satoshi, One Namespace", served via GitHub Pages from the `docs/` folder.
