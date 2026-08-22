@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.6-mainnet-anchor - 2026-08-22
 
+- Records the first **mainnet** anchoring run in `ANCHORS.md`: root satoshi `38ff9da029e66ee9b6a1b175025388caf7fb6d3bb0273812737d7dd6b347c473:0` (confirmed, block 963415), namespace bound and published through the full ladder with ed25519, semantic state hash `sha256:34049329f152c388cad547440b32213d48be583c0fa16d93a94582f7399fde58` committed on-chain in the SPEC section 4 envelope (tx `7f5946898440a96e18526440ed7140eda85e7dad7e753c7d0b88d09f008b1f83`), and the broadcast bytes verified fully offline with all seven checks passing. Updates the launch note to lead with the mainnet proof.
 - Adds `SECURITY_REVIEW.md` recording the first internal adversarial pass over the kernel - the surfaces attacked, the twelve attack shapes that were correctly rejected, the two findings, and the highest-value places for a future external reviewer to look.
 - Refines the signer-key-binding boundary in `BOUNDARIES.md`: because `prev_event_id` binds each event into its successor, key substitution on an interior event is rejected by the chain and only the final event is genuinely exposed; `test_key_substitution_is_chain_blocked_except_at_the_tip` pins both halves.
 - Bounds protocol amounts at 512 digits (`MAX_AMOUNT_DIGITS`) across the engine, the JSON schema, and the TypeScript verifier, fixing a determinism defect found by the adversarial pass: `parse_amount` previously delegated to `int()`, whose string-conversion limit is host-configurable in CPython, so a sufficiently long digit string raised a bare `ValueError` instead of `SatRootError` and the accept/reject decision depended on interpreter configuration - and diverged from implementations with unbounded integers. The bound sits below CPython's configurable floor of 640, so conforming implementations now agree on every host. Adds two conformance vectors (transfer amount and genesis balance) and two adversarial regression tests.
