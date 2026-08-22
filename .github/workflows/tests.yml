@@ -38,3 +38,25 @@ jobs:
       - name: Run release-gate smoke workflow
         run: |
           python -m satroot_release_gate_smoke --output-dir .tmp_release_gate_smoke_ci --skip-import-smoke
+
+  conformance-typescript:
+    name: Conformance corpus (independent TypeScript verifier)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install verifier dependencies
+        working-directory: verifiers/typescript
+        run: npm install
+
+      - name: Replay the corpus with the TypeScript verifier
+        working-directory: verifiers/typescript
+        run: npm test

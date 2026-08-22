@@ -54,6 +54,7 @@ This repository ships the `SATROOT-1` kernel, six registered profiles, the publi
 - `docs/CLI.md` - complete `satroot1` command and smoke-lane reference.
 - `docs/TESTING.md` - running the test suite and each individual lane.
 - `vectors/` - deterministic conformance corpus for validating any SATROOT-1 implementation; see `vectors/README.md`.
+- `verifiers/typescript/` - independent TypeScript verifier that passes the same corpus, demonstrating the spec is implementable without the reference code.
 - `KEY_MANAGEMENT.md` - operational guidance for composing the frozen signature schemes: custody separation, verifier-only distribution, rotation, and the lint-versus-verify trust model (`*-lint` is structural; `verify-*` is the cryptographic gate).
 - `CHANGELOG.md`, `RELEASE_CHECKLIST.md`, `CITATION.cff` - release history, pre-tag gates, and citation metadata.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.

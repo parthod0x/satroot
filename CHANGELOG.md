@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Adds `verifiers/typescript/`, an independent TypeScript implementation of the SATROOT-1 replay rules with zero runtime dependencies, which reproduces canonical JSON, event ids, and state hashes byte for byte and passes all 31 conformance vectors across all three signature schemes; wired into CI as a second job so any kernel change that breaks cross-implementation agreement fails the build. Its README records the details a second implementer must get right (key sorting at every level, HMAC secrets as literal UTF-8 of the hex string, raw Ed25519 keys in an SPKI envelope, zero balances omitted from the commitment snapshot).
 - Grows the conformance corpus from 14 to 31 vectors (12 accept, 19 reject), covering the two previously untested kernel actions (`freeze`, `rotate-authority`, plus standalone `mint`), authority enforcement (non-authority mint/rotate/freeze), frozen-account transfers, amount canonicalization (zero, negative, leading zeros), and chain integrity (broken `prev_event_id`, reordered events, forged signatures).
 
 ## v1.5-integration-and-vectors - 2026-08-22

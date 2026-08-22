@@ -1,0 +1,16 @@
+{
+  "name": "satroot1-verifier",
+  "version": "0.1.0",
+  "description": "Independent TypeScript verifier for the SATROOT-1 protocol, validated against the conformance corpus",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node dist/run-vectors.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
