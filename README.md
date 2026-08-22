@@ -1,5 +1,9 @@
 # SATROOT
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22055844.svg)](https://doi.org/10.5281/zenodo.22055844)
+[![PyPI](https://img.shields.io/pypi/v/satroot.svg)](https://pypi.org/project/satroot/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 **SATROOT** is a one-satoshi-rooted semantic asset protocol.
 
 Its base primitive, **SATROOT-1**, treats one native BSV satoshi UTXO as the irreducible accounting floor and uses that UTXO as a root witness, authority handle, and namespace anchor for deterministic protocol state.
@@ -26,6 +30,16 @@ satroot1 replay examples/events_floor1.json
 ```
 
 That replays the checked-in `FLOOR1` demo ledger and prints its deterministic balances and state hash. Add the extras for the full surface: `pip install -e ".[crypto,validation]"` enables ed25519 signing (used by the anchored lanes) and JSON-schema validation (used by the publication workspace generators). Every checked-in example runs on placeholder roots — see `ANCHORS.md` for the real testnet anchoring record, and `SPEC.md` for the protocol itself. Licensed Apache-2.0.
+
+## Citation
+
+Archived on Zenodo; every tagged release gets its own DOI. The concept
+DOI below always resolves to the latest version:
+
+> Saxena, Parth Mauria. *SATROOT: deterministic, offline-verifiable
+> semantic ledgers rooted in a single satoshi*. https://doi.org/10.5281/zenodo.22055844
+
+Machine-readable metadata is in `CITATION.cff`.
 
 ## What this repo delivers
 
