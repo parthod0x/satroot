@@ -1,6 +1,6 @@
 # A satoshi is the floor of value, not the ceiling of meaning
 
-SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — and we anchored one for real, on testnet, with every step independently verifiable from raw bytes.
+SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — and we anchored one for real, on mainnet, with every step independently verifiable from raw bytes.
 
 ## The idea
 
@@ -14,7 +14,7 @@ One specific one-satoshi UTXO becomes a **root witness** — the namespace handl
 
 The reference implementation is a dependency-free, pure-Python kernel — a canonical event format, a replay engine with strict sequence and hash-chain enforcement, and three signature schemes (a demo placeholder, `hmac-sha256`, and `ed25519`). Above the kernel sit six released object profiles — stable reference units, machine credits, receipts, identities, licenses, and event-stream heads — and a full publication ladder that packages ledgers into signed bundles, releases, catalogs, and registry workspaces, each layer carrying its own manifest hashes and verification tooling.
 
-Nineteen tagged releases, ~1,700 tests behind a single release gate, and the protocol rules declared frozen as the v1 draft.
+Fifteen tagged releases, ~1,700 tests behind a single release gate, and the protocol rules declared frozen as the v1 draft.
 
 ```bash
 pip install satroot
@@ -25,25 +25,25 @@ satroot1 replay examples/events_floor1.json
 
 A protocol document can claim anything. So instead of claiming, we ran the whole loop against the real chain and recorded every artifact:
 
-1. **Anchor.** A real one-satoshi testnet outpoint was bound as the `root_id` of a demo namespace, its full lifecycle signed and verified with ed25519.
+1. **Anchor.** A real one-satoshi mainnet outpoint was bound as the `root_id` of a demo namespace, its full lifecycle signed and verified with ed25519.
 2. **Publish.** That namespace was pushed through the entire publication ladder — bundles, release, catalog, registry — with ed25519 at every layer.
 3. **Commit.** The namespace's state hash was broadcast on-chain inside the spec's `OP_RETURN` envelope.
 4. **Verify.** The broadcast transaction's raw bytes were fetched and verified fully offline: the bytes hash to the recorded txid, and the envelope matches the deterministically rebuilt commitment byte for byte.
 
-The records (BSV testnet):
+The records (BSV mainnet):
 
-- Root outpoint: `147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0`
-- State commitment: `sha256:e1a2c685d3a3cf84a0ec81ad400ac1c66ecb9e9679338cbd13c4644e849fb4e3`
-- Envelope transaction: `6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0` (output 0 is a zero-value `OP_FALSE OP_RETURN` carrying the `SATROOT1` tag and the canonical JSON commitment)
+- Root outpoint: `38ff9da029e66ee9b6a1b175025388caf7fb6d3bb0273812737d7dd6b347c473:0`
+- State commitment: `sha256:34049329f152c388cad547440b32213d48be583c0fa16d93a94582f7399fde58`
+- Envelope transaction: `7f5946898440a96e18526440ed7140eda85e7dad7e753c7d0b88d09f008b1f83` (output 0 is a zero-value `OP_FALSE OP_RETURN` carrying the `SATROOT1` tag and the canonical JSON commitment)
 
 Don't take this post's word for it. Save the raw transaction hex to a file and run the offline verifier yourself:
 
 ```bash
 python scripts/run_envelope_verification_smoke.py \
   --raw-tx-hex-file rawtx.hex \
-  --root-id 147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0 \
-  --state-hash sha256:e1a2c685d3a3cf84a0ec81ad400ac1c66ecb9e9679338cbd13c4644e849fb4e3 \
-  --expected-txid 6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0
+  --root-id 38ff9da029e66ee9b6a1b175025388caf7fb6d3bb0273812737d7dd6b347c473:0 \
+  --state-hash sha256:34049329f152c388cad547440b32213d48be583c0fa16d93a94582f7399fde58 \
+  --expected-txid 7f5946898440a96e18526440ed7140eda85e7dad7e753c7d0b88d09f008b1f83
 ```
 
 No network access, no trust in us: the verifier parses the bytes, hashes them, finds the envelope output, and compares it byte-for-byte against the commitment it rebuilds from scratch. The complete record of every intentional anchored run lives in `ANCHORS.md` — the only place in the repository a real outpoint may appear.

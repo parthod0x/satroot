@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>One Satoshi, One Namespace — SATROOT</title>
-<meta name="description" content="SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — anchored for real on testnet, verifiable offline from raw bytes.">
+<meta name="description" content="SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — anchored for real on mainnet, verifiable offline from raw bytes.">
 <meta property="og:title" content="One Satoshi, One Namespace">
 <meta property="og:description" content="A satoshi is the floor of value, not the ceiling of meaning. SATROOT's launch note, with reproducible on-chain proof.">
 <meta property="og:type" content="article">
@@ -181,7 +181,7 @@ ul li { margin-bottom: 0.45rem; }
 <div class="sheet">
   <p class="eyebrow">SATROOT · Launch note</p>
   <h1>A satoshi is the floor of value, not the ceiling of meaning.</h1>
-  <p class="standfirst">SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — and we anchored one for real, on testnet, with every step independently verifiable from raw bytes.</p>
+  <p class="standfirst">SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — and we anchored one for real, on mainnet, with every step independently verifiable from raw bytes.</p>
   <hr class="floorline">
   <p class="floorcaption"><span>THE FLOOR: 1 NATIVE SATOSHI</span><span class="one-sat">1 SAT</span></p>
 
@@ -192,43 +192,43 @@ ul li { margin-bottom: 0.45rem; }
 
   <h2>What shipped</h2>
   <p>The reference implementation is a dependency-free, pure-Python kernel — a canonical event format, a replay engine with strict sequence and hash-chain enforcement, and three signature schemes (a demo placeholder, <code class="inline">hmac-sha256</code>, and <code class="inline">ed25519</code>). Above the kernel sit six released object profiles — stable reference units, machine credits, receipts, identities, licenses, and event-stream heads — and a full publication ladder that packages ledgers into signed bundles, releases, catalogs, and registry workspaces, each layer carrying its own manifest hashes and verification tooling.</p>
-  <p>Nineteen tagged releases, ~1,700 tests behind a single release gate, and the protocol rules declared frozen as the v1 draft. Install it:</p>
+  <p>Fifteen tagged releases, ~1,700 tests behind a single release gate, and the protocol rules declared frozen as the v1 draft. Install it:</p>
   <pre><code>pip install satroot
 satroot1 replay examples/events_floor1.json</code></pre>
 
   <h2>The proof</h2>
   <p>A protocol document can claim anything. So instead of claiming, we ran the whole loop against the real chain and recorded every artifact. The loop has four steps, and each one is reproducible:</p>
   <ol class="loop">
-    <li><strong>Anchor.</strong> A real one-satoshi testnet outpoint was bound as the <code class="inline">root_id</code> of a demo namespace, its full lifecycle signed and verified with ed25519.</li>
+    <li><strong>Anchor.</strong> A real one-satoshi mainnet outpoint was bound as the <code class="inline">root_id</code> of a demo namespace, its full lifecycle signed and verified with ed25519.</li>
     <li><strong>Publish.</strong> That namespace was pushed through the entire publication ladder — bundles, release, catalog, registry — with ed25519 at every layer.</li>
     <li><strong>Commit.</strong> The namespace's state hash was broadcast on-chain inside the spec's <code class="inline">OP_RETURN</code> envelope.</li>
     <li><strong>Verify.</strong> The broadcast transaction's raw bytes were fetched and verified fully offline: the bytes hash to the recorded txid, and the envelope matches the deterministically rebuilt commitment byte for byte.</li>
   </ol>
 
   <div class="record">
-    <div class="record-head"><span class="kind">Record · Root outpoint</span><span class="net">BSV testnet</span></div>
-    <div class="record-body"><code>147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0</code></div>
+    <div class="record-head"><span class="kind">Record · Root outpoint</span><span class="net">BSV mainnet</span></div>
+    <div class="record-body"><code>38ff9da029e66ee9b6a1b175025388caf7fb6d3bb0273812737d7dd6b347c473:0</code></div>
     <div class="record-note">One satoshi, held by the operator, anchoring the namespace. Custody of this output is deliberately outside the protocol: moving it is not a semantic transfer.</div>
   </div>
 
   <div class="record">
     <div class="record-head"><span class="kind">Record · State commitment</span><span class="net">semantic ledger</span></div>
-    <div class="record-body"><code>sha256:e1a2c685d3a3cf84a0ec81ad400ac1c66ecb9e9679338cbd13c4644e849fb4e3</code></div>
+    <div class="record-body"><code>sha256:34049329f152c388cad547440b32213d48be583c0fa16d93a94582f7399fde58</code></div>
     <div class="record-note">The anchored namespace's semantic state hash — the value committed on-chain.</div>
   </div>
 
   <div class="record">
-    <div class="record-head"><span class="kind">Record · Envelope transaction</span><span class="net">BSV testnet</span></div>
-    <div class="record-body"><code>6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0</code></div>
-    <div class="record-note">Output 0 is a zero-value OP_FALSE OP_RETURN carrying the SATROOT1 tag, content type, and the canonical JSON commitment of root and state hash. Look it up on any testnet explorer.</div>
+    <div class="record-head"><span class="kind">Record · Envelope transaction</span><span class="net">BSV mainnet</span></div>
+    <div class="record-body"><code>7f5946898440a96e18526440ed7140eda85e7dad7e753c7d0b88d09f008b1f83</code></div>
+    <div class="record-note">Output 0 is a zero-value OP_FALSE OP_RETURN carrying the SATROOT1 tag, content type, and the canonical JSON commitment of root and state hash. Look it up on any mainnet explorer.</div>
   </div>
 
   <p>Don't take the article's word for it. Save the raw transaction hex to a file and run the offline verifier yourself:</p>
   <pre><code>python scripts/run_envelope_verification_smoke.py \
   --raw-tx-hex-file rawtx.hex \
-  --root-id 147bbb9ee7ef860f2f70acfe5a9197011a66af81234d0b6aefffae4702d24b63:0 \
-  --state-hash sha256:e1a2c685d3a3cf84a0ec81ad400ac1c66ecb9e9679338cbd13c4644e849fb4e3 \
-  --expected-txid 6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0</code></pre>
+  --root-id 38ff9da029e66ee9b6a1b175025388caf7fb6d3bb0273812737d7dd6b347c473:0 \
+  --state-hash sha256:34049329f152c388cad547440b32213d48be583c0fa16d93a94582f7399fde58 \
+  --expected-txid 7f5946898440a96e18526440ed7140eda85e7dad7e753c7d0b88d09f008b1f83</code></pre>
   <p>No network access, no trust in us: the verifier parses the bytes, hashes them, finds the envelope output, and compares it byte-for-byte against the commitment it rebuilds from scratch. The complete record of every intentional anchored run lives in <a href="https://github.com/parthod0x/satroot/blob/main/ANCHORS.md">ANCHORS.md</a> — the only place in the repository a real outpoint may appear.</p>
 
   <h2>What it deliberately is not</h2>

@@ -89,10 +89,50 @@ python scripts/run_envelope_verification_smoke.py \
   --expected-txid 6051ed98964b0b8e609fff3e6d38358de55c618d4a95bad696ef2ff5f86e47c0
 ```
 
+## v1.6-mainnet-anchor — first real anchor on BSV mainnet
+
+The whole loop, repeated on **mainnet**. Everything above this section ran on
+testnet; this section is the production-network record.
+
+- Date: 2026-08-22
+- Network: **BSV mainnet**
+- Root outpoint (`root_id`): `38ff9da029e66ee9b6a1b175025388caf7fb6d3bb0273812737d7dd6b347c473:0`
+- Root satoshi holder address: `1K47C4mQhZwfnnbvCCAFfjfkwwgcGdT2Br` (operator-controlled, fresh wallet)
+- Explorer: https://whatsonchain.com/tx/38ff9da029e66ee9b6a1b175025388caf7fb6d3bb0273812737d7dd6b347c473
+- Confirmed in block 963415.
+- Semantic state hash of the anchored namespace:
+  `sha256:34049329f152c388cad547440b32213d48be583c0fa16d93a94582f7399fde58`
+- Lanes run against the real outpoint, all passing:
+  - `satroot_anchored_demo_smoke` (profile `SATROOT-IDENTITY-1`, ed25519) — checks
+    `root_id_bound_to_state`, `ed25519_bundle_verified`, `replay_deterministic`,
+    `foreign_root_rejected`, `no_custody_event_kinds`.
+  - `satroot_anchored_publication_smoke` — full ladder, lint-clean registry
+    workspace, root bound in every generated bundle genesis. Published-artifact
+    hashes:
+    - `publication_registry_manifest`: `sha256:25e7ea384af6a7f222c90dc979d531b05c37b7a34da73edea67775a9dbecbcc0`
+    - `publication_metadata_catalog_manifest`: `sha256:6e63a157d9c777fb9a8e986e9a1c7c22aabe7ca54bae57a643bff139180baca3`
+- Envelope transaction id: `7f5946898440a96e18526440ed7140eda85e7dad7e753c7d0b88d09f008b1f83`
+- Explorer: https://whatsonchain.com/tx/7f5946898440a96e18526440ed7140eda85e7dad7e753c7d0b88d09f008b1f83
+- Envelope output: index 0, zero value, `OP_FALSE OP_RETURN "SATROOT1"
+  "application/satroot1+json" <190-byte canonical JSON commitment>`.
+- Offline verification of the broadcast bytes: **all seven checks passed** —
+  `raw_transaction_parsed`, `txid_matches_expected`, `exactly_one_envelope_output`,
+  `envelope_output_value_zero`, `envelope_decodes`, `commitment_matches`, and
+  `script_byte_identical_to_rebuild`.
+
+Reproduce the verification from the public chain — fetch the raw transaction hex
+from any explorer, save it to a file, then:
+
+```bash
+python scripts/run_envelope_verification_smoke.py   --raw-tx-hex-file <path-to-raw-tx-hex>   --root-id 38ff9da029e66ee9b6a1b175025388caf7fb6d3bb0273812737d7dd6b347c473:0   --state-hash sha256:34049329f152c388cad547440b32213d48be583c0fa16d93a94582f7399fde58   --expected-txid 7f5946898440a96e18526440ed7140eda85e7dad7e753c7d0b88d09f008b1f83
+```
+
+No network access is required: the verifier works purely from the bytes.
+
 ## Root lifecycle statement
 
-The recorded outpoint is a one-satoshi UTXO whose custody remains with the
-operator's testnet wallet. Nothing in this repository can move it, and moving it
+The recorded outpoints are one-satoshi UTXOs whose custody remains with the
+operator's wallets (testnet for the v0.5 record, mainnet for v1.6). Nothing in this repository can move it, and moving it
 on-chain would not alter the semantic state hash above: SATROOT state changes
 only through valid protocol events, and no ledger event kind models root
 custody. That separation is exactly what the anchored lane's report proves.
