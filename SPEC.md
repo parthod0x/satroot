@@ -168,6 +168,22 @@ It is valid only if:
 - max supply is not exceeded,
 - sequence is exactly previous sequence + 1.
 
+### 6.1a Amount encoding
+
+Every amount, balance, and supply value is a base-10 ASCII digit string,
+never a JSON number. Amounts carry at most **512 digits**.
+
+The bound exists for determinism, not for capacity: some runtimes limit
+integer-from-string conversion (CPython's limit is configurable, with a
+floor of 640 digits) while others are unbounded. Without an explicit
+protocol bound, the same ledger could replay on one host and fail on
+another, which would break the deterministic-replay guarantee. 512 sits
+below every such floor, so conforming implementations agree regardless of
+host configuration, and the ceiling is far above any realistic supply.
+
+Values that exceed the bound are rejected as invalid, exactly like
+non-digit input.
+
 ### 6.2 Transfer
 
 A `transfer` event moves semantic balance between accounts.

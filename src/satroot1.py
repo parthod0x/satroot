@@ -31,6 +31,11 @@ class SatRootError(ValueError):
     pass
 
 
+# Maximum digits in any protocol amount. Chosen well below CPython's
+# minimum configurable int-string conversion limit (640) so that parsing
+# is deterministic on every host and in every implementation.
+MAX_AMOUNT_DIGITS = 512
+
 ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
 REFERENCE_UNIT_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{1,15}$")
 COMPACT_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
@@ -2644,6 +2649,12 @@ def signing_payload(event: Dict[str, Any]) -> str:
 def parse_amount(value: str) -> int:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9]+", value):
         raise SatRootError(f"invalid amount: {value!r}")
+    # Bounded so the accept/reject decision never depends on the host's
+    # integer-string conversion limit (CPython's is configurable and its
+    # floor is 640 digits), which would otherwise make replay
+    # host-dependent and diverge from other implementations.
+    if len(value) > MAX_AMOUNT_DIGITS:
+        raise SatRootError(f"amount exceeds {MAX_AMOUNT_DIGITS} digits")
     return int(value)
 
 

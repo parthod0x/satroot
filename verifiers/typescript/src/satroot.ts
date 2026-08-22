@@ -166,9 +166,19 @@ export function stateHash(s: State): string {
 
 const AMOUNT_RE = /^[0-9]+$/;
 
+/**
+ * Maximum digits in any protocol amount. BigInt itself is unbounded, so
+ * this bound exists purely to keep the accept/reject decision identical
+ * to every other implementation — see SPEC.md.
+ */
+export const MAX_AMOUNT_DIGITS = 512;
+
 function parseAmount(value: Json): bigint {
   if (typeof value !== "string" || !AMOUNT_RE.test(value)) {
     throw new SatRootError(`invalid amount: ${JSON.stringify(value)}`);
+  }
+  if (value.length > MAX_AMOUNT_DIGITS) {
+    throw new SatRootError(`amount exceeds ${MAX_AMOUNT_DIGITS} digits`);
   }
   return BigInt(value);
 }

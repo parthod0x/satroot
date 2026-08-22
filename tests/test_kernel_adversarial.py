@@ -12,7 +12,12 @@ import copy
 import pytest
 
 from satroot1 import (
+    MAX_AMOUNT_DIGITS,
     SatRootError,
+    bootstrap_signed_ledger_bundle,
+    build_scaffold_root_id,
+    ed25519_sign,
+    signing_payload,
     bootstrap_singleton_object_demo_ledger,
     ed25519_available,
     event_id,
@@ -56,6 +61,78 @@ def test_parse_amount_rejects_unicode_and_leading_forms():
     for bad in ("١٢٣", "𝟏", "²", "", "1_000", " 10", "10 "):
         with pytest.raises(SatRootError):
             parse_amount(bad)
+
+
+def test_amount_digit_bound_is_enforced_and_host_independent():
+    """A digit bound keeps parsing deterministic across hosts.
+
+    CPython's integer-string conversion limit is configurable (floor 640),
+    so without an explicit protocol bound the accept/reject decision would
+    depend on interpreter configuration and diverge from implementations
+    with unbounded integers. The bound sits below that floor, so int()
+    can never raise on a value the protocol accepts.
+    """
+    assert MAX_AMOUNT_DIGITS < 640
+    assert parse_amount("9" * MAX_AMOUNT_DIGITS) == int("9" * MAX_AMOUNT_DIGITS)
+    for overlong in ("9" * (MAX_AMOUNT_DIGITS + 1), "1" * 5000):
+        with pytest.raises(SatRootError):
+            parse_amount(overlong)
+
+
+def test_overlong_amount_raises_protocol_error_not_valueerror():
+    """A hostile ledger must fail as SatRootError, never a bare ValueError."""
+    genesis = scaffold_genesis_record(
+        symbol="ADV1",
+        name="adversarial",
+        root_id=build_scaffold_root_id(),
+        mint_authority="issuer",
+        decimals=0,
+        initial_balance="1",
+    )
+    genesis["initial_balances"]["issuer"] = "9" * 5000
+    signed = sign_event_record(genesis, scheme="demo", key_id=None, signer=None)
+    with pytest.raises(SatRootError):
+        replay([signed])
+
+
+def test_key_substitution_is_chain_blocked_except_at_the_tip():
+    """Characterise the signer-key-binding boundary precisely.
+
+    The kernel authorizes on the `signer` string plus a valid signature
+    under any registered key. In a stored ledger, `prev_event_id` binds
+    each event into its successor, so substituting the key on an interior
+    event breaks the chain; only the final event, which has no successor,
+    is genuinely exposed. BOUNDARIES.md states this.
+    """
+    if not ed25519_available():
+        pytest.skip("ed25519 extra not installed")
+
+    ledger = bootstrap_singleton_object_demo_ledger(
+        profile="SATROOT-IDENTITY-1", symbol="ADV2", name="adversarial",
+        holder_account="alice",
+    )
+    bundle = bootstrap_signed_ledger_bundle(ledger["events"], scheme="ed25519")
+    events = bundle["signed_events"]
+    private_keys = bundle["material"]["private_keys"]
+    verifier = make_ed25519_verifier(bundle["material"]["public_keys"])
+
+    def resign(index):
+        mutated = copy.deepcopy(events)
+        target = mutated[index]
+        other = [k for k in private_keys if k != target.get("signature_key_id")][0]
+        target.pop("event_id", None)
+        target.pop("state_hash", None)
+        target["signature_key_id"] = other
+        target["signature"] = ed25519_sign(signing_payload(target), private_keys[other])
+        return mutated
+
+    # An interior event: the chain rejects it regardless of the signature.
+    if len(events) > 2:
+        with pytest.raises(SatRootError):
+            replay(resign(1), verifier=verifier)
+
+    # The tip: accepted, which is exactly the documented boundary.
+    replay(resign(len(events) - 1), verifier=verifier)
 
 
 def test_parse_decimals_rejects_bool():

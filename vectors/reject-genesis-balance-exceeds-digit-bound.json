@@ -1,0 +1,33 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-genesis-balance-exceeds-digit-bound",
+  "description": "the digit bound applies to genesis balances too",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:29da07927c99f70d6795024c01750dc120bd78d713acaf6d2b68150b6b2c40ce"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "amount exceeds 512 digits",
+    "note": "amount digit bound"
+  }
+}

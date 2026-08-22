@@ -19,7 +19,7 @@ SATROOT-1 is a protocol primitive, not a financial product.
 - It does not create a stablecoin, security token, e-money token, deposit, or redemption right.
 - It does not promise reserves, price stability, exchange support, wallet support, profit, or legal rights.
 - It defines `hmac-sha256` and `ed25519` verification paths but makes no production key-management, custody, or HSM claims; the `demo` scheme remains an explicit placeholder.
-- It does not, in the frozen v1 draft, bind a signing key to the account it acts for: authorization compares the `signer` string only, so any key registered in a verifier can sign as any account. Deploy each namespace under keys held by a single trust domain, or add an application-level key-to-account policy above the kernel; see `KEY_MANAGEMENT.md`.
+- It does not, in the frozen v1 draft, bind a signing key to the account it acts for: authorization compares the `signer` string only, so any key registered in a verifier can sign as any account. In a stored ledger the practical exposure is narrower than that statement alone suggests — every event is bound into the next one's `prev_event_id`, so re-signing an interior event with a different registered key breaks the chain and is rejected. The **final** event carries no such successor, so it is the record actually exposed by this boundary. Deploy each namespace under keys held by a single trust domain, or add an application-level key-to-account policy above the kernel; see `KEY_MANAGEMENT.md`.
 
 ## Stable-value work
 

@@ -275,6 +275,23 @@ def build_vectors():
     add("reject-negative-amount", "amounts are unsigned digit strings",
         "demo", negative_amount, _expect_error(negative_amount, verifier, "negative amount"))
 
+    overlong_amount = copy.deepcopy(base)
+    overlong_amount[1]["amount"] = "9" * (sr.MAX_AMOUNT_DIGITS + 1)
+    add("reject-amount-exceeds-digit-bound",
+        "amounts are bounded so the decision never depends on host integer limits",
+        "demo", overlong_amount,
+        _expect_error(overlong_amount, verifier, "amount digit bound"))
+
+    overlong_genesis_balance = _genesis()
+    overlong_genesis_balance["initial_balances"]["issuer"] = "9" * (sr.MAX_AMOUNT_DIGITS + 1)
+    overlong_genesis = [
+        sr.sign_event_record(overlong_genesis_balance, scheme="demo", key_id=None, signer=None)
+    ]
+    add("reject-genesis-balance-exceeds-digit-bound",
+        "the digit bound applies to genesis balances too",
+        "demo", overlong_genesis,
+        _expect_error(overlong_genesis, sr.demo_signature_verifier, "amount digit bound"))
+
     leading_zero = copy.deepcopy(base)
     leading_zero[1]["amount"] = "0400"
     add("reject-leading-zero-amount", "amounts must be in canonical form",

@@ -48,6 +48,7 @@ This repository ships the `SATROOT-1` kernel, six registered profiles, the publi
 - `SPEC.md` - human-readable protocol specification.
 - `ARCHITECTURE.md` - top-level model, layer boundaries, and deliverable framing.
 - `BOUNDARIES.md` - claim discipline, non-goals, and legal boundary language.
+- `SECURITY_REVIEW.md` - record of internal adversarial passes over the kernel: what was attacked, what held, what was fixed.
 - `ROADMAP.md` - project scope, deliverables, and released plus planned protocol profiles.
 - `ANCHORS.md` - the only checked-in record of real on-chain outpoints and transaction ids.
 - `INTEGRATION.md` - integrator's guide: how to build an application on the package (provisioning, appending, verifiable exports, envelope commitments) and the pitfalls the kernel enforces.
