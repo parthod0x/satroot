@@ -1,0 +1,50 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-freeze-account-demo",
+  "description": "freezing an account is a valid authority action",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "freeze",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
+      "signer": "issuer",
+      "signature": "demo",
+      "account": "alice",
+      "frozen": true,
+      "signature_scheme": "demo",
+      "event_id": "sha256:1242e516d2ab141a2edf3eaa37f1316e186f7aec8b656abd77441bb0dd536d4e"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:7cd9424e0c9b0efda6fd93979fe0f59429c8cad0dd6ce54ba28b296551d38066",
+    "balances": {
+      "issuer": "1000"
+    },
+    "record_count": 2
+  }
+}

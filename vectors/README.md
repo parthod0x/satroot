@@ -1,7 +1,10 @@
 # SATROOT-1 conformance vectors
 
-A deterministic corpus for testing any SATROOT-1 implementation against
-the reference. Each `*.json` file is one vector:
+A deterministic corpus of 31 vectors (12 that must replay, 19 that
+must be rejected) for testing any SATROOT-1 implementation against the
+reference. Every kernel action - transfer, mint, burn, freeze, and
+rotate-authority - is exercised, across all three signature schemes.
+Each `*.json` file is one vector:
 
 ```json
 {

@@ -189,6 +189,113 @@ def build_vectors():
     add("reject-unknown-action", "actions outside the frozen kernel set",
         "demo", unknown, _expect_error(unknown, verifier, "unknown action"))
 
+    # -- remaining kernel actions: freeze, mint, rotate-authority ---------
+    FREEZE = dict(action="freeze", signer="issuer", account="alice", frozen="true")
+    UNFREEZE = dict(action="freeze", signer="issuer", account="alice", frozen="false")
+    ROTATE = dict(action="rotate-authority", signer="issuer", new_mint_authority="alice")
+
+    events, verifier = _build_ledger("demo", [FREEZE])
+    add("valid-freeze-account-demo", "freezing an account is a valid authority action",
+        "demo", events, _expect_ok(events, verifier))
+
+    events, verifier = _build_ledger("demo", [FREEZE, UNFREEZE])
+    add("valid-freeze-then-unfreeze-demo", "freeze state is reversible by the authority",
+        "demo", events, _expect_ok(events, verifier))
+
+    events, verifier = _build_ledger("demo", [MINT])
+    add("valid-mint-demo", "the mint authority may mint new units",
+        "demo", events, _expect_ok(events, verifier))
+
+    events, verifier = _build_ledger("demo", [ROTATE])
+    add("valid-rotate-authority-demo", "mint authority may hand off to another account",
+        "demo", events, _expect_ok(events, verifier))
+
+    events, verifier = _build_ledger(
+        "demo", [ROTATE, dict(action="mint", signer="alice", to_account="alice", amount="10")]
+    )
+    add("valid-mint-after-rotation-demo", "the new authority may mint after handoff",
+        "demo", events, _expect_ok(events, verifier))
+
+    events, verifier = _build_ledger(
+        "demo", [dict(TRANSFER, amount="1000")]
+    )
+    add("valid-transfer-entire-balance-demo", "transferring the full balance leaves zero",
+        "demo", events, _expect_ok(events, verifier))
+
+    events, verifier = _build_ledger("ed25519", [FREEZE, UNFREEZE, MINT, ROTATE])
+    add("valid-all-actions-ed25519", "every kernel action in one signed ledger",
+        "ed25519", events, _expect_ok(events, verifier))
+
+    # -- authority and state rejections ----------------------------------
+    frozen_events, verifier = _build_ledger("demo", [TRANSFER, FREEZE])
+    blocked = sr.scaffold_event_from_ledger(
+        frozen_events, action="transfer", signer="alice",
+        from_account="alice", to_account="issuer", amount="1", verifier=verifier,
+    )
+    blocked = sr.sign_event_record(blocked, scheme="demo", key_id=None, signer=None)
+    frozen_ledger = copy.deepcopy(frozen_events) + [blocked]
+    add("reject-transfer-from-frozen-account", "a frozen account cannot move units",
+        "demo", frozen_ledger, _expect_error(frozen_ledger, verifier, "frozen account"))
+
+    base, verifier = _build_ledger("demo", [TRANSFER])
+    rogue_mint = sr.scaffold_event_from_ledger(
+        base, action="mint", signer="alice", to_account="alice", amount="5", verifier=verifier,
+    )
+    rogue_mint = sr.sign_event_record(rogue_mint, scheme="demo", key_id=None, signer=None)
+    rogue_ledger = copy.deepcopy(base) + [rogue_mint]
+    add("reject-mint-by-non-authority", "only the mint authority may mint",
+        "demo", rogue_ledger, _expect_error(rogue_ledger, verifier, "not mint authority"))
+
+    rogue_rotate = sr.scaffold_event_from_ledger(
+        base, action="rotate-authority", signer="alice",
+        new_mint_authority="alice", verifier=verifier,
+    )
+    rogue_rotate = sr.sign_event_record(rogue_rotate, scheme="demo", key_id=None, signer=None)
+    rotate_ledger = copy.deepcopy(base) + [rogue_rotate]
+    add("reject-rotate-by-non-authority", "only the mint authority may hand off authority",
+        "demo", rotate_ledger, _expect_error(rotate_ledger, verifier, "not mint authority"))
+
+    rogue_freeze = sr.scaffold_event_from_ledger(
+        base, action="freeze", signer="alice", account="issuer",
+        frozen="true", verifier=verifier,
+    )
+    rogue_freeze = sr.sign_event_record(rogue_freeze, scheme="demo", key_id=None, signer=None)
+    freeze_ledger = copy.deepcopy(base) + [rogue_freeze]
+    add("reject-freeze-by-non-authority", "only the authority may freeze accounts",
+        "demo", freeze_ledger, _expect_error(freeze_ledger, verifier, "not mint authority"))
+
+    # -- amount and chain-integrity rejections ---------------------------
+    zero_amount = copy.deepcopy(base)
+    zero_amount[1]["amount"] = "0"
+    add("reject-zero-amount", "transfers must move a positive quantity",
+        "demo", zero_amount, _expect_error(zero_amount, verifier, "zero amount"))
+
+    negative_amount = copy.deepcopy(base)
+    negative_amount[1]["amount"] = "-5"
+    add("reject-negative-amount", "amounts are unsigned digit strings",
+        "demo", negative_amount, _expect_error(negative_amount, verifier, "negative amount"))
+
+    leading_zero = copy.deepcopy(base)
+    leading_zero[1]["amount"] = "0400"
+    add("reject-leading-zero-amount", "amounts must be in canonical form",
+        "demo", leading_zero, _expect_error(leading_zero, verifier, "non-canonical amount"))
+
+    broken_chain, verifier2 = _build_ledger("demo", [TRANSFER, BURN])
+    broken_chain = copy.deepcopy(broken_chain)
+    broken_chain[2]["prev_event_id"] = "sha256:" + "00" * 32
+    add("reject-broken-prev-event-id", "each event commits to its predecessor",
+        "demo", broken_chain, _expect_error(broken_chain, verifier2, "hash chain broken"))
+
+    reordered, verifier3 = _build_ledger("demo", [TRANSFER, BURN])
+    reordered = [copy.deepcopy(reordered[0]), copy.deepcopy(reordered[2]), copy.deepcopy(reordered[1])]
+    add("reject-reordered-events", "event order is fixed by sequence and hash chain",
+        "demo", reordered, _expect_error(reordered, verifier3, "out-of-order events"))
+
+    forged_sig = copy.deepcopy(base)
+    forged_sig[1]["signature"] = "demo:not-a-real-signature"
+    add("reject-forged-signature-demo", "signatures are checked, not merely present",
+        "demo", forged_sig, _expect_error(forged_sig, verifier, "bad signature"))
+
     # ed25519 wrong-key: alice's event re-signed with a key not registered for her
     ed_events, ed_verifier = _build_ledger("ed25519", [TRANSFER])
     wrong_signer = sr.make_ed25519_signer({"alice-key": "55" * 32})

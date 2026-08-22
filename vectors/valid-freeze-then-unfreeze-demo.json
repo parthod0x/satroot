@@ -1,0 +1,64 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-freeze-then-unfreeze-demo",
+  "description": "freeze state is reversible by the authority",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "freeze",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
+      "signer": "issuer",
+      "signature": "demo",
+      "account": "alice",
+      "frozen": true,
+      "signature_scheme": "demo",
+      "event_id": "sha256:1242e516d2ab141a2edf3eaa37f1316e186f7aec8b656abd77441bb0dd536d4e"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "freeze",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 2,
+      "prev_event_id": "sha256:1242e516d2ab141a2edf3eaa37f1316e186f7aec8b656abd77441bb0dd536d4e",
+      "signer": "issuer",
+      "signature": "demo",
+      "account": "alice",
+      "frozen": false,
+      "signature_scheme": "demo",
+      "event_id": "sha256:6f3b9bf129e35cb2270f0e0c263023fb3efa6346d9070e40a379483ef0bcd0e1"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:cf9df004886f91b4af4ad02246ab0ad5872dd83f709ef4ea053defa70a78397a",
+    "balances": {
+      "issuer": "1000"
+    },
+    "record_count": 3
+  }
+}

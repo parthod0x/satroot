@@ -1,0 +1,61 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-rotate-by-non-authority",
+  "description": "only the mint authority may hand off authority",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "transfer",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
+      "signer": "issuer",
+      "signature": "demo",
+      "from": "issuer",
+      "to": "alice",
+      "amount": "400",
+      "signature_scheme": "demo",
+      "event_id": "sha256:ebbc12c7dc4a997060d865e81e1712534e28ef90af6a67a5d902b605ba85ba2a"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "rotate-authority",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 2,
+      "prev_event_id": "sha256:ebbc12c7dc4a997060d865e81e1712534e28ef90af6a67a5d902b605ba85ba2a",
+      "signer": "alice",
+      "signature": "demo",
+      "new_mint_authority": "alice",
+      "signature_scheme": "demo",
+      "event_id": "sha256:0e6c7c7554cd1bbaa0985cfb9e9f1c8b6c18882af99f694e55c52d80b09bad1a"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "unauthorized authority rotation",
+    "note": "not mint authority"
+  }
+}

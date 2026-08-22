@@ -1,0 +1,51 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-transfer-entire-balance-demo",
+  "description": "transferring the full balance leaves zero",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "transfer",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
+      "signer": "issuer",
+      "signature": "demo",
+      "from": "issuer",
+      "to": "alice",
+      "amount": "1000",
+      "signature_scheme": "demo",
+      "event_id": "sha256:d030632b9fff1e2c32972244b57d1a53f3c116da8c3018fab38075b94617b0ae"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:0c7632870b69a6a0f98fab8b64fd90816e43679624171e19e54cc2eb4eaaf215",
+    "balances": {
+      "alice": "1000"
+    },
+    "record_count": 2
+  }
+}

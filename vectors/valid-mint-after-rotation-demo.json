@@ -1,0 +1,64 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-mint-after-rotation-demo",
+  "description": "the new authority may mint after handoff",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "rotate-authority",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
+      "signer": "issuer",
+      "signature": "demo",
+      "new_mint_authority": "alice",
+      "signature_scheme": "demo",
+      "event_id": "sha256:7c7a2942552d8e476aa5487a9eaddde669fdb81652d21c0b09a36d8b24808eb2"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "mint",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 2,
+      "prev_event_id": "sha256:7c7a2942552d8e476aa5487a9eaddde669fdb81652d21c0b09a36d8b24808eb2",
+      "signer": "alice",
+      "signature": "demo",
+      "to": "alice",
+      "amount": "10",
+      "signature_scheme": "demo",
+      "event_id": "sha256:13ce63753d78e49d2c54e8e43a6c4c5016dca48c14c46c5420f3f99a492d5fc7"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:2bc0e7fb02d16e14d20d0369ad0985194ac0500adaf4a439a96181d932b6d195",
+    "balances": {
+      "alice": "10",
+      "issuer": "1000"
+    },
+    "record_count": 3
+  }
+}

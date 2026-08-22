@@ -1,0 +1,51 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-mint-demo",
+  "description": "the mint authority may mint new units",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "mint",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
+      "signer": "issuer",
+      "signature": "demo",
+      "to": "alice",
+      "amount": "50",
+      "signature_scheme": "demo",
+      "event_id": "sha256:de712c05ffc12965852001c0ab8ff41b08c63618872fed56f3e96ebfbbef92d0"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:87ae2defde4af8bdf6ef2cd438aa8d30bac89bd4ece0fb1616f7eda4546ba996",
+    "balances": {
+      "alice": "50",
+      "issuer": "1000"
+    },
+    "record_count": 2
+  }
+}
