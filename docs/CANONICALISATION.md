@@ -172,9 +172,56 @@ or is the intended answer that such profiles register their own?
 - Floats are rejected. The draft forbids non-integer JSON numbers in
   digest-bearing fields, so this is stricter than the profile requires rather
   than a gap in it.
-- **The official RFC 8785 conformance vectors have not been run.** The JCS
-  serialiser here is validated against cases chosen by its own author, which
-  is weaker evidence than it looks.
+- The integer and float limits above are declared scope, not silent failure:
+  the vector tests skip on them explicitly rather than passing quietly.
+
+## Validated against the published RFC 8785 vectors
+
+```bash
+python scripts/fetch_rfc8785_vectors.py
+python -m pytest tests/test_rfc8785_official_vectors.py
+```
+
+**3 pass, 0 fail, 2 skipped.** The skips are `values.json` and
+`structures.json`, which contain non-integer numbers this implementation
+rejects by declared scope rather than rendering via ECMAScript
+`Number::toString`. `arrays.json`, `unicode.json` and `weird.json` pass — the
+last containing control characters, an astral emoji key, Hebrew, the Euro
+sign and `</script>`.
+
+### The RFC's own vector settles the UTF-16 question
+
+`weird.json` contains **U+1F602** (astral) and **U+FB33** (BMP). The reference
+output orders the astral character **first**, because its surrogate pair
+begins `D83D`, below `FB33` as a code unit. Under code-point ordering the
+smiley (128514) would sort after the Hebrew letter (64307).
+
+- `satroot_jcs.jcs_serialize` reproduces the official output exactly.
+- SATROOT's `canonical_json` **does not**.
+
+The divergence documented above is therefore demonstrated by the reference
+test data for the RFC itself, not by inputs chosen to prove a point.
+
+### A correction to the payload-binding draft
+
+`draft-mih-sokolov-scitt-payload-binding-01` section 11.3 forbids floats in
+digest-bearing fields, justifying it on the grounds that "the same quantity
+serialises as 1.0, 1e0 or 1.00 in different implementations and JCS does not
+normalise these forms".
+
+**JCS does normalise those forms** — it parses each number and re-serialises
+it via ECMAScript `Number::toString`. The RFC's own vectors show it:
+
+| input | canonical output |
+|---|---|
+| `4.50` | `4.5` |
+| `2e-3` | `0.002` |
+| `333333333.33333329` | `333333333.3333333` |
+
+The prohibition is well founded: binary rounding, exactness of monetary
+quantities, and the IEEE-754 safe-integer range are all good reasons to
+require decimal strings. But the stated justification is not one of them, and
+an implementer reading it may conclude JCS is less deterministic than it is.
 
 ## What this is offered as
 
