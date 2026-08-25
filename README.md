@@ -4,13 +4,38 @@
 [![PyPI](https://img.shields.io/pypi/v/satroot.svg)](https://pypi.org/project/satroot/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**SATROOT** is a one-satoshi-rooted semantic asset protocol.
+**SATROOT is a signed, hash-linked, append-only event log with deterministic
+replay to a typed state.**
 
-Its base primitive, **SATROOT-1**, treats one native BSV satoshi UTXO as the irreducible accounting floor and uses that UTXO as a root witness, authority handle, and namespace anchor for deterministic protocol state.
+Anyone holding the log and the public keys can recompute the exact state and
+its hash offline — no server, no database, no trust in whoever produced it.
+Two independent implementations (Python and TypeScript) reproduce every state
+hash byte for byte against a shared conformance corpus.
 
-The core rule is simple:
+Ledger state can *optionally* be committed to an external timestamping
+backend, so a third party can attest that a given state existed at a given
+time. Two backends ship: an **RFC 3161 Time-Stamp Authority** (no blockchain
+involved) and a **Bitcoin SV** `OP_RETURN` transaction. Both are optional and
+interchangeable — they commit byte-identical documents — and **verifying a
+ledger never requires either.**
+
+Above the replay engine sit typed object profiles — stable reference units,
+machine credits, receipts, identities, licenses, and event-stream custody —
+each defining what its events mean and which transitions are legal.
+
+<details>
+<summary>Where the name comes from, and the original framing</summary>
+
+Its base primitive, **SATROOT-1**, can treat one native BSV satoshi UTXO as
+an irreducible accounting floor, using that UTXO as a root witness, authority
+handle, and namespace anchor for deterministic protocol state.
 
 > The satoshi is not subdivided. The satoshi anchors a protocol-defined state space.
+
+That origin explains the vocabulary, but it is not a requirement: a namespace
+root is an identifier, and the chain is one way to publish commitments about
+it.
+</details>
 
 ## Project thesis
 
@@ -29,7 +54,7 @@ pip install -e .
 satroot1 replay examples/events_floor1.json
 ```
 
-That replays the checked-in `FLOOR1` demo ledger and prints its deterministic balances and state hash. Add the extras for the full surface: `pip install -e ".[crypto,validation]"` enables ed25519 signing (used by the anchored lanes) and JSON-schema validation (used by the publication workspace generators). Every checked-in example runs on placeholder roots — see `ANCHORS.md` for the real testnet anchoring record, and `SPEC.md` for the protocol itself. Licensed Apache-2.0.
+That replays the checked-in `FLOOR1` demo ledger and prints its deterministic balances and state hash. Add the extras for the full surface: `pip install -e ".[crypto,validation]"` enables ed25519 signing (used by the anchored lanes) and JSON-schema validation (used by the publication workspace generators). Every checked-in example runs on placeholder roots — see `ANCHORS.md` for the real mainnet anchoring record, and `SPEC.md` for the protocol itself. Licensed Apache-2.0.
 
 ## Citation
 
@@ -55,7 +80,7 @@ This repository ships the `SATROOT-1` kernel, six registered profiles, the publi
 - `docs/CLI.md` - complete `satroot1` command and smoke-lane reference.
 - `docs/TESTING.md` - running the test suite and each individual lane.
 - `vectors/` - deterministic conformance corpus for validating any SATROOT-1 implementation; see `vectors/README.md`.
-- `verifiers/typescript/` - independent TypeScript verifier that passes the same corpus, demonstrating the spec is implementable without the reference code.
+- `verifiers/typescript/` - a second implementation, in TypeScript, that passes the same corpus. Written by the same author from the specification rather than ported from the reference code, so it demonstrates the spec is implementable from its text - but it is not third-party independent validation.
 - `KEY_MANAGEMENT.md` - operational guidance for composing the frozen signature schemes: custody separation, verifier-only distribution, rotation, and the lint-versus-verify trust model (`*-lint` is structural; `verify-*` is the cryptographic gate).
 - `CHANGELOG.md`, `RELEASE_CHECKLIST.md`, `CITATION.cff` - release history, pre-tag gates, and citation metadata.
 - `protocol/satroot1.schema.json` - JSON schema for genesis and event records.

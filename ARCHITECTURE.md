@@ -2,7 +2,7 @@
 
 ## One-line model
 
-SATROOT is a BSV-anchored overlay protocol that turns one native satoshi into a root-bound namespace for deterministic semantic state.
+SATROOT is a deterministic ledger protocol with optional, interchangeable commitment backends (RFC 3161 or BSV) that turns one native satoshi into a root-bound namespace for deterministic semantic state.
 
 ## Core thesis
 
