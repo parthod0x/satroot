@@ -1,158 +1,204 @@
 # How SATROOT relates to existing work
 
-Researched August 2026. The short version: **the component parts of SATROOT
-all exist as standards already. The contribution is composition, not
-invention** — and one specific piece that no published standard specifies.
+Researched August 2026, and corrected after two adversarial reviews found the
+first version of this document selectively scoped.
 
-This document exists so that claim can be checked rather than believed, and
-so the places where established systems are *better* than SATROOT are stated
-by us rather than discovered by someone else.
-
----
-
-## The one thing that appears to be unoccupied
-
-Every mature system in this space proves some version of:
-
-> *this opaque entry is at index i of a log whose root is R, and R is
-> append-only-consistent with earlier roots.*
-
-None of them defines:
-
-> `S_n = f(S_{n-1}, e_n)` — a canonical serialisation, a **typed transition
-> relation**, and a **deterministic state commitment** that any third party
-> can recompute offline from the log alone.
-
-That is the gap SATROOT occupies. The payload semantics that transparency
-architectures deliberately leave opaque are exactly what SATROOT defines.
-
-| System | Append-only ordered log | Replays to | General typed state |
-|---|---|---|---|
-| **IETF SCITT** (RFC 9943) | yes, abstract VDS | — payload **opaque by charter** | no |
-| **in-toto** | no — unordered evidence DAG | verdict + artifacts | no |
-| **SLSA** | no log at all | policy verdict | no |
-| **C2PA** | no global order | validation status codes | no |
-| **W3C VC** | no | standalone documents | no |
-| **KERI KEL** | **yes** | **key state** | no — fixed domain |
-| **KERI TEL** | **yes** | **registry state** | no — fixed domain |
-| **Certificate Transparency** | yes | — multiset of certs | no |
-| **Trillian** | yes | — leaves opaque by design | no (Map API removed) |
-| **Sigstore / Rekor** | yes | — independent attestations | no |
-| **git** | DAG, mutable refs | filesystem tree | no |
-
-### Honest prior art — the two closest things
-
-**KERI's Key Event Log is a genuine event-sourced state machine.**
-Hash-chained, sequence-numbered, replayed to derive control authority, with
-duplicity detection as its purpose. It is architecturally the nearest
-relative SATROOT has. The difference is domain, not mechanism: a KEL replays
-to *key state*, a TEL to *issued/revoked registry state*. Both are fixed,
-narrow domains, and the KERI suite has no general typed-state facility. KERI
-can anchor commitments to external data via seals, but explicitly does not
-interpret or type that data.
-
-**Google's Verifiable Log-Derived Map is the same concept, published first.**
-A map derived from an input log via a well-defined mapping function, which
-verifiers reconstruct identically by replaying entries. That is SATROOT's
-idea, described by someone else, earlier. Its status is the reason the space
-is still open: it lives in `trillian/experimental/batchmap`, the
-non-experimental Trillian Map API was **removed outright**, and it carries a
-stated limitation — verification cost scales linearly in the number of
-revisions. SATROOT shares that linear-cost property (see limitations below).
-
-Two adjacent near-misses: **gittuf's Reference State Log** replays to Git ref
-values, and **IETF KEYTRANS** standardises identity→key binding — both
-narrow-domain log-derived maps.
+**Summary: SATROOT is a compact, well-tested implementation of a
+well-established design family — log-derived state. It does not occupy an
+empty category. Its contribution is a precisely specified state commitment, a
+cross-language conformance corpus, and offline verification from a file.**
 
 ---
 
-## Where established systems are better than SATROOT
+## First, what SATROOT actually is
 
-Stated plainly, because these are real and a reader will find them anyway.
+Stated precisely, because an earlier version of this document and the README
+overstated it.
 
-**Verification cost.** Certificate Transparency and Rekor give **O(log n)**
-inclusion proofs against a published root. SATROOT verification replays the
-**entire log** — O(n). For a ledger of thousands of events that is fine; for
-hundreds of millions it is not. Let's Encrypt's CT shard currently holds over
-640 million entries served as flat files; SATROOT has no story at that scale.
+The kernel defines **one reducer**, with five actions — `mint`, `transfer`,
+`burn`, `freeze`, `rotate-authority` — over a fixed state shape: balances,
+supply, mint authority, frozen accounts, sequence, and last event id.
 
-**Non-equivocation.** SATROOT proves a log is internally consistent to
-whoever holds it. It does **not** prevent split-view: an operator could serve
-two divergent, internally valid histories to two parties. Transparency logs
-solve this with published roots, gossip and witnessing. SATROOT does not.
+The six "profiles" (stable reference units, machine credits, receipts,
+identities, licenses, event streams) **add required genesis metadata and
+validation. They do not define profile-specific state or transitions.** Each
+maps its lifecycle onto the same account/balance operations.
 
-**Third-party witnessing is no longer a differentiator.** C2SP
-`tlog-witness/v1.0.0` shipped March 2026, `transparency-dev/witness` is
-active, and Rekor v2 checkpoints already carry witness cosignatures. Any
-claim that verifiable logs lack independent witnessing is out of date.
-
-**Ecosystem maturity.** Sigstore, CT, in-toto and SLSA have production
-deployments, multiple independent implementations, and institutional
-governance. SATROOT has two implementations by one author.
+So SATROOT is **a typed token-and-account ledger with domain-labelled
+profiles**, not a general application-state machine framework. Anyone
+evaluating it should hold it to that description.
 
 ---
 
-## The pieces SATROOT composes, and their standards
+## The pattern is old, and named
 
-| Concern | Existing standard | SATROOT's position |
-|---|---|---|
-| Canonical serialisation | **RFC 8785 (JCS)** — note: Informational, Independent Submission, *not* Standards Track; **RFC 8949 §4.2** deterministic CBOR is Standards Track | SATROOT uses sorted-key, separator-tight, non-ASCII-preserving JSON. For the value types the protocol permits this coincides with JCS; **the relationship is documented rather than assumed** — see below |
-| Signed events | COSE `COSE_Sign1`, JOSE, DSSE | SATROOT uses a plain signed-JSON envelope with ed25519/HMAC. **A COSE profile would improve interoperability** and is an obvious future deliverable |
-| Append-only log + proofs | RFC 6962/9162, **RFC 9942 COSE Receipts**, C2SP `tlog-tiles` | SATROOT uses a per-event `prev_event_id` hash chain, not a Merkle tree. Simpler; no succinct proofs |
-| Transparency architecture | **RFC 9943 (SCITT)**, June 2026 | Complementary, not competing — see below |
-| Timestamping | **RFC 3161**; OpenTimestamps | Both supported as commitment backends alongside the chain envelope |
+Deterministic replay of an ordered log to typed state is **state machine
+replication** (Schneider, 1990). It is not a new idea, and this document
+should not have implied otherwise.
 
-### Canonicalisation and JCS
+Contemporary systems implementing it:
 
-SATROOT's canonical form is deliberately narrow: objects with string keys,
-sorted; no insignificant whitespace; non-ASCII emitted literally; all
-quantities as ASCII digit **strings**, never JSON numbers, bounded to 512
-digits. Because amounts are strings, SATROOT never encounters the
-floating-point serialisation rules that make JCS subtle.
+| System | Ordered signed log | Deterministic replay | State commitment | Verifiable offline from a file |
+|---|---|---|---|---|
+| **Ethereum** (and EVM chains) | yes, RLP-encoded signed txs | yes — a formally specified transition function | yes, state root | no — requires the chain |
+| **CometBFT / ABCI** | yes | yes — apps are deterministic state machines | yes, AppHash in the header | no — requires consensus |
+| **Sidetree** (DIF) | yes, anchored ops | **yes — replayed under common deterministic rules** | DID Document state | partially |
+| **AT Protocol** | yes, signed commits, DAG-CBOR | records, not derived state | Merkle Search Tree root | **yes** — repo exports as a CAR file |
+| **KERI KEL / TEL** | yes | **yes** | key state / registry state | yes |
+| **Trillian log-derived map** | yes | **yes, by definition** | map root | audit is O(n); entry proofs are efficient |
+| **Automerge** | op log | yes | document state | yes |
+| **draft-sato-soos-sov** (SCITT-adjacent) | yes, Event Stream | **yes — SO Type defines a state machine** | derived typed graph | — |
+| **SATROOT** | yes | yes | state hash | **yes** |
 
-That makes SATROOT's canonicalisation a **strict subset of JCS behaviour for
-the documents it permits**, with one thing to watch: JCS sorts keys by UTF-16
-code unit, Python sorts by code point. These differ only for keys containing
-characters outside the Basic Multilingual Plane, which the schema does not
-permit in field names. Anyone building an implementation should treat this as
-a conformance question, and the corpus in `vectors/` is where it gets
-settled.
+**Ethereum disproves any mechanism-level novelty claim outright.** Canonical
+serialisation, signed events in total order, a formally specified typed
+transition function, a state commitment third parties recompute — with
+cross-client differential testing far beyond a 33-vector corpus. Omitting it
+from a comparison table, in a project whose flagship demonstration is a chain
+anchor, was indefensible.
+
+**The honest distinction** is not novelty of mechanism. It is the trust and
+availability model: Ethereum, CometBFT and Sidetree bind state transition to
+a **consensus or sequencing system** and require a globally shared history.
+SATROOT verifies **your** ledger from **your** file, with no shared history,
+no consensus, and no network. AT Protocol comes closest — its repos verify
+offline from a CAR file — but its MST commits to the **current record set**,
+not to state derived by a transition relation, so balances and custody are
+not recoverable from the root.
+
+That is a real difference. It is a difference of deployment model and scope,
+not of invention.
+
+### Adjacent standards worth naming
+
+**RFC 6902 (JSON Patch)** is standards-track and already supplies typed
+operations applied sequentially to structured state — a general deterministic
+transition mechanism, lacking only signatures, a log, and a commitment. Since
+this document claims composition rather than invention, JSON Patch belongs in
+the list of things being composed from.
+
+**draft-sato-soos-sov** is the omission that mattered most. It is
+SCITT-adjacent and defines an SO Type specifying a state machine, an
+append-only causally ordered signed Event Stream, state derived from that
+stream, and SCITT submission of entries. Any claim that no SCITT-adjacent
+work specifies typed state evolution is untenable.
+
+**KERI is more extensible than previously stated here.** ACDC allows any
+number of transaction-event types for different applications, TELs can track
+public or private transaction state, and BADA-RUN provides monotonic
+authenticated update rules. Calling the TEL a "fixed narrow domain" understated
+it. The remaining difference is that KERI has no single general reducer and no
+whole-application state commitment equivalent to SATROOT's snapshot hash.
 
 ---
 
-## Relationship to SCITT specifically
+## The narrowest claim that survives scrutiny
 
-**SCITT and SATROOT solve adjacent, non-overlapping problems.** SCITT's
-charter explicitly excludes payload semantics — *"the Statement is considered
-opaque to the Transparency Service"* — and lists "define data formats for
-payload content" as a non-goal. SCITT standardises registration,
-non-equivocation and receipts; it deliberately says nothing about what a
-statement *means* or what state a sequence of statements produces.
+Not "no standard specifies this." That is false.
 
-That is precisely the layer SATROOT defines. A SATROOT ledger could plausibly
-be registered as SCITT Signed Statements, gaining witnessing and inclusion
-proofs it currently lacks, while SATROOT supplies the typed replay semantics
-SCITT declines to specify.
+What appears to be true, and is worth stating only in this form:
 
-Worth noting for anyone working in this area: eighteen individual drafts
-currently orbit the SCITT working group, and a striking number concern
-**AI-agent action receipts, agent action capsules, canonical payload binding,
-and EU AI Act Article 50 profiles**. Several use RFC 8785 JCS for exactly the
-digest-binding purpose SATROOT uses its canonical JSON for. None specifies
-deterministic replay to typed state.
+> No **IETF or W3C standards-track** document specifies deterministic typed
+> replay to application state above a signed log, **independent of a
+> consensus or sequencing system**, with a portable state commitment
+> verifiable offline from a file.
+
+Even that is a conjunction of five conditions, and a conjunction assembled
+after the fact can always be made to fit. It should be read as a description
+of where SATROOT sits, not as a claim to territory.
+
+**The strongest honest framing:** SATROOT applies a KERI-like architecture to
+account-ledger semantics, adds a whole-state commitment, and pins it with a
+cross-language conformance corpus. That is checkable and survives contact with
+someone who knows the field.
+
+---
+
+## Where established systems are better
+
+**Verification cost.** CT and Rekor give **O(log n)** inclusion proofs.
+SATROOT replays the entire log — **O(n)**. Trillian's log-derived map
+separates expensive global auditing from efficient per-entry client queries;
+SATROOT does not, and every ordinary verifier pays full replay. Google built
+a log-derived map, shipped it experimentally, and **removed the
+non-experimental Map API** — the fair reading is low demand and a fatal
+cost profile, not merely an abandoned opportunity.
+
+**Non-equivocation.** SATROOT does not prevent split-view: an operator can
+serve two divergent, internally valid histories to two parties. Transparency
+logs solve this with published roots, gossip and witnessing.
+
+**Witnessing is not a differentiator.** C2SP `tlog-witness/v1.0.0` shipped
+March 2026; Rekor v2 checkpoints carry witness cosignatures.
+
+**Maturity.** Sigstore, CT, in-toto and SLSA have production deployments,
+multiple independent implementations, and institutional governance. SATROOT
+has two implementations by one author.
+
+---
+
+## Weaknesses a domain expert would ask about
+
+The list above is performance and maturity — the kind a benchmark reveals.
+These are the ones that require knowing the field to ask, and an earlier
+version of this document omitted all of them.
+
+**Key compromise.** This is the sharpest gap, and it is conspicuous precisely
+because KERI is named above as the nearest relative — pre-rotation and
+duplicity detection under key compromise is what a KEL exists for. SATROOT
+has **no pre-rotation, no duplicity detection, and no defined recovery
+procedure.** If a signing key is compromised, an attacker who also controls
+distribution can produce an alternative valid history from the compromise
+point forward. `rotate-authority` changes the mint authority going forward;
+it does not repudiate anything already signed, and prior state is only as
+trustworthy as the key that signed it was at the time. There is no protocol
+answer to "which of these two valid histories is real."
+
+**Erasure.** An append-only signed log with a binding state commitment is in
+direct tension with a GDPR right to erasure. SATROOT specifies **no
+redaction, no salted commitments, and no off-log payload mechanism.** Removing
+an event breaks the hash chain and changes the state hash. Any deployment
+holding personal data in event payloads has an unresolved problem, and any
+claim of GDPR *suitability* has to be qualified by this.
+
+**No formal semantics.** The transition relation is specified in **prose and
+pinned by test vectors**, not formally verified. There is no type system, no
+machine-checked specification, no proof of determinism. Two implementations
+agreeing on 33 vectors is evidence, not proof — and both were written by the
+same author.
+
+**Scale.** No sharding, no compaction, no snapshot-with-proof. A long-lived
+ledger grows without bound and replay cost grows with it.
+
+---
+
+## Relationship to SCITT
+
+SCITT treats the Statement payload as opaque **to the Transparency Service**,
+and the charter lists payload data formats as a non-goal. That was a
+deliberate decision — payload semantics are where interoperability becomes
+hard — and it should not be characterised as a vacancy waiting to be filled.
+
+SCITT is also explicitly **extensible**: application profiles may define
+payload semantics, and several already do. "Adjacent and non-overlapping" was
+too absolute. There is real overlap in signed statements, ordering,
+commitments and verification; the application reducer is an additional layer
+above.
+
+**Terminology note:** RFC 9943 already uses *replayability* for replaying
+registration into the Verifiable Data Structure. To avoid collision, SATROOT's
+property is better called **application-state derivation**.
 
 ---
 
 ## What this means for someone evaluating SATROOT
 
-If you need **inclusion proofs at scale, non-equivocation across parties, or
-an established ecosystem**, use Certificate Transparency, Sigstore, or a SCITT
-Transparency Service. Those problems are solved, well, by others.
+If you need inclusion proofs at scale, non-equivocation, key-compromise
+recovery, or an established ecosystem — use Certificate Transparency,
+Sigstore, a SCITT Transparency Service, or KERI. Those problems are solved
+elsewhere, by more people, better.
 
-If you need **a log whose entries have defined meaning, replaying
-deterministically to a typed state that any party can recompute offline from
-a file**, no standard specifies that today, and that is what SATROOT is for.
-
-The honest summary is that SATROOT is a small, well-tested composition of
-established primitives that fills one specific unoccupied gap — not a new
-cryptographic idea, and not a replacement for transparency infrastructure.
+If you want a small, inspectable, dependency-free ledger whose state any
+party can recompute offline from a file, with a cross-language conformance
+corpus pinning the rules — that is what SATROOT is, and it is a modest and
+useful thing to be.

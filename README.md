@@ -19,9 +19,15 @@ involved) and a **Bitcoin SV** `OP_RETURN` transaction. Both are optional and
 interchangeable — they commit byte-identical documents — and **verifying a
 ledger never requires either.**
 
-Above the replay engine sit typed object profiles — stable reference units,
-machine credits, receipts, identities, licenses, and event-stream custody —
-each defining what its events mean and which transitions are legal.
+The kernel defines **one reducer**: five actions (`mint`, `transfer`, `burn`,
+`freeze`, `rotate-authority`) over balances, supply, mint authority and frozen
+accounts. Six **profiles** — stable reference units, machine credits,
+receipts, identities, licenses, and event-stream custody — add required
+genesis metadata and validation on top of that single reducer; they do not
+define their own state or transitions. SATROOT is therefore a typed
+token-and-account ledger with domain-labelled profiles, not a general
+application-state framework. `COMPARISON.md` places it against related work,
+including where that work is better.
 
 <details>
 <summary>Where the name comes from, and the original framing</summary>
