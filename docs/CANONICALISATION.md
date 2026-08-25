@@ -149,7 +149,16 @@ A small, reproducible cross-implementation result, of the kind that is useful
 to anyone binding digests over JSON payloads — including the drafts in the
 IETF SCITT orbit that use JCS for exactly that purpose.
 
-The finding is unremarkable in itself: two reasonable schemes disagree on one
-narrow input class, and the disagreement is easy to avoid once known. It is
-recorded here because "we checked" is worth more than "it should be fine",
-and because the earlier assertion in this repository was the latter.
+Two findings, of different weight.
+
+Against plain RFC 8785, the disagreement is narrow — non-BMP object keys —
+and unreachable through a schema-valid SATROOT record.
+
+Against `jcs-n`, it is not narrow. The schemes disagree on the ordinary
+snapshot, because they encode different answers to whether an absent member
+is the same as an empty one. That is a modelling decision a profile has to
+make explicitly, and it is the kind of thing that surfaces as a mysterious
+digest mismatch if nobody writes it down.
+
+Recorded here because "we checked" is worth more than "it should be fine",
+and because the earlier claim in this repository was the latter.
