@@ -86,6 +86,7 @@ This repository ships the `SATROOT-1` kernel, six registered profiles, the publi
 - `drafts/` - Internet-Draft submissions. `draft-saxena-scitt-state-derivation-00` reports this implementation experience to the IETF SCITT community and asks where an application-state commitment should be carried.
 - `COMPARISON.md` - how SATROOT relates to SCITT, in-toto/SLSA, C2PA, W3C VC, KERI, Certificate Transparency, Sigstore and git: what it composes from existing standards, the one gap it fills, and where those systems are better than it.
 - `INTEGRATION.md` - integrator's guide: how to build an application on the package (provisioning, appending, verifiable exports, envelope commitments) and the pitfalls the kernel enforces.
+- `docs/CANONICALISATION.md` - measured comparison of SATROOT's canonical JSON against RFC 8785 (JCS): where they agree, the one input class where they diverge, and why neither normalises Unicode.
 - `docs/CLI.md` - complete `satroot1` command and smoke-lane reference.
 - `docs/TESTING.md` - running the test suite and each individual lane.
 - `vectors/` - deterministic conformance corpus for validating any SATROOT-1 implementation; see `vectors/README.md`.

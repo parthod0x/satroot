@@ -172,6 +172,35 @@ ledger grows without bound and replay cost grows with it.
 
 ---
 
+## Canonicalisation, measured against RFC 8785
+
+Full result in `docs/CANONICALISATION.md`; reproduce with
+`PYTHONPATH=src python src/satroot_jcs.py`.
+
+Several drafts in the SCITT orbit use RFC 8785 (JCS) for the same
+digest-binding purpose SATROOT uses its canonical JSON for, so whether the
+two agree is worth measuring rather than assuming.
+
+**13 of 15 cases agree.** The two that diverge do so for one reason: JCS
+sorts object keys by **UTF-16 code unit**, Python's `sort_keys=True` sorts by
+**Unicode code point**, and those orders differ whenever a key contains a
+character outside the Basic Multilingual Plane, since UTF-16 encodes those as
+surrogate pairs that sort below ordinary BMP characters.
+
+The divergence is unreachable through any schema-valid SATROOT record,
+because field names come from a fixed ASCII vocabulary — but that is a
+property of the schema, not of the canonicalisation. Any profile permitting
+user-supplied object keys must choose a scheme explicitly.
+
+Neither scheme normalises Unicode: NFC and NFD forms remain distinct keys
+under both, and both emit identical bytes. Normalisation is therefore a
+producer-side concern that no canonicalisation scheme reconciles.
+
+Numbers are out of scope in this comparison: RFC 8785 requires ECMAScript
+`Number::toString` semantics, and `satroot_jcs` rejects floats rather than
+approximating it. SATROOT never emits a JSON number for a quantity, so the
+result is unaffected.
+
 ## Relationship to SCITT
 
 SCITT treats the Statement payload as opaque **to the Transparency Service**,
