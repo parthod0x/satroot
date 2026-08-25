@@ -65,19 +65,20 @@ def test_digest_is_lowercase_hex_of_expected_length():
 # --- The findings worth reporting, as opposed to the arithmetic ------------
 
 
-def test_emptied_object_inside_an_array_is_ambiguous_in_the_draft():
-    """Two defensible readings of "member" give different digests.
+def test_only_object_members_are_removed_not_array_elements():
+    """The conforming reading, which RFC 8259 settles unambiguously.
 
-    The draft says to remove "every member whose value is null, an empty
-    array, or an empty object". In JSON a *member* is a name/value pair in
-    an object, not an array element - which is the reading implemented
-    here. Under a reading that also prunes emptied objects from arrays,
-    the array would become empty and its parent member would then be
-    removed, producing a different digest from the same input.
+    RFC 8259 defines `member = string name-separator value`, occurring only
+    inside an object; array contents are elements. The draft uses the terms
+    correspondingly - "empty array (zero elements)" against "empty object
+    (zero members)". So an object that empties inside an array stays in the
+    array, and its parent member survives.
+
+    Not an ambiguity in the specification. It is, however, a place a
+    generic recursive prune would diverge, which a test vector prevents.
     """
     record = {"a": [{"b": None}]}
     assert jcs.strip_absent(record) == {"a": [{}]}
-    # The alternative reading would yield {} - a different digest entirely.
     assert jcs.jcs_n(record) != jcs.jcs_n({})
 
 
@@ -87,11 +88,11 @@ def test_array_elements_that_are_null_or_empty_are_retained():
 
 
 def test_falsy_but_present_values_must_survive():
-    """The most likely real-world interop failure.
+    """A nonconforming implementation would strip these; a vector prevents it.
 
-    "Members explicitly set to a non-null value are not removed" is
-    unambiguous in prose, but an implementer writing `if (!value) delete`
-    in a falsiness-based language strips false, 0 and "" as well.
+    Note the draft's own wording is slightly imprecise here: it says members
+    "explicitly set to a non-null value are not removed", but an empty array
+    and an empty object are themselves non-null values and *are* removed.
     """
     record = {"a": False, "b": 0, "c": "", "d": None, "e": [], "f": {}}
     assert jcs.strip_absent(record) == {"a": False, "b": 0, "c": ""}
@@ -113,7 +114,12 @@ def test_exclusion_set_is_applied_before_normalisation():
 
 
 def test_integers_beyond_exact_representation_are_rejected():
-    """str() diverges from ECMAScript Number::toString above 1e21."""
+    """Guarded at 2**53, the exactly-representable boundary.
+
+    ECMAScript Number::toString also switches to exponential form at 1e21,
+    which str() does not; both are beyond this implementation's scope, and
+    the 2**53 guard is the stricter of the two.
+    """
     import pytest
     from satroot1 import SatRootError
 

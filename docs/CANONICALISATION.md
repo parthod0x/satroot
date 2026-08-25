@@ -119,50 +119,48 @@ Recorded here so the repository does not mistake it for one.
 
 ### What implementing it actually surfaced
 
-**1. An emptied object inside an array is ambiguous.** The draft says to
-remove "every member" whose value is empty. In JSON a *member* is a
-name/value pair in an object, not an array element. Under that reading:
+**1. The draft publishes no `jcs-n` test vectors.** Appendix A walks an
+example and stops before the digest. Every divergence below is prevented by a
+vector rather than by prose, which makes vectors the useful contribution.
+
+**2. A generic recursive prune diverges on arrays — though the text is not
+ambiguous.** RFC 8259 defines `member` as a name/value pair occurring only
+inside an object; array contents are elements. The draft uses the terms
+correspondingly: "empty array (zero elements)" against "empty object (zero
+members)". So there is exactly one conforming reading:
 
 ```
 {"a": [{"b": null}]}  ->  {"a": [{}]}
 ```
 
-Under a reading that also prunes emptied objects from their arrays, the array
-becomes empty, `a` is then an empty array, and the whole record reduces to
-`{}`. **Same input, two defensible readings, different digests.** The draft
-does not say which.
+An implementer writing a generic prune that also filters arrays reduces this
+to `{}`. That is a nonconforming implementation rather than a second reading
+— but it is exactly what a published vector prevents.
 
-**2. Falsy-but-present values are a trap for some languages.** "Members
-explicitly set to a non-null value are not removed" is unambiguous in prose,
-but an implementer writing `if (!value) delete obj[key]` in a
-falsiness-based language also strips `false`, `0` and `""`:
+**3. "Explicitly set to a non-null value" is imprecise.** An empty array and
+an empty object *are* non-null values, and they are removed. An implementer
+writing `if (!value) delete obj[key]` in a falsiness-based language
+additionally strips `false`, `0` and `""`:
 
 ```
 {"a": false, "b": 0, "c": "", "d": null, "e": [], "f": {}}
-  correct  -> {"a": false, "b": 0, "c": ""}
-  falsiness -> {}
+  conforming -> {"a": false, "b": 0, "c": ""}
+  falsiness  -> {}
 ```
 
-This is the most likely real-world divergence between conforming
-implementations, and a non-normative note would prevent it.
+**4. Section 3.1 holds a small internal tension.** It says the semantic
+equivalence of absent, null, empty array and empty object "is a payload-class
+decision", but `jcs-n`'s stripping is unconditional and runs *after* the
+profile's own normalisation. A payload class does not configure that
+equivalence; it decides only by selecting `jcs-n` or not. Reading the sentence
+as a **precondition** for selecting the algorithm would remove the tension.
 
-**3. The collapse is unconditional, which constrains which payload classes
-can use it.** These four inputs share one digest:
+These four inputs share one digest, which is the behaviour such a
+precondition would describe:
 
 ```
 {}   {"x": null}   {"x": []}   {"x": {}}     ->  44136fa355b3678a...
 ```
-
-A payload class may declare an exclusion set, but cannot opt out of the
-stripping. So a profile whose commitment binds *shape* — where a member
-present-and-empty asserts something different from that member being absent —
-cannot express that through `jcs-n` at all. Its options are to accept the
-collapse or to register a different algorithm.
-
-Since the canonicalization algorithm registry uses Specification Required
-with a Designated Expert, and entries are immutable, that is a registry
-question with a real answer space: is a shape-preserving variant in scope,
-or is the intended answer that such profiles register their own?
 
 ### Limits of this implementation
 
@@ -175,19 +173,22 @@ or is the intended answer that such profiles register their own?
 - The integer and float limits above are declared scope, not silent failure:
   the vector tests skip on them explicitly rather than passing quietly.
 
-## Validated against the published RFC 8785 vectors
+## Partial validation against the JCS reference corpus
 
 ```bash
 python scripts/fetch_rfc8785_vectors.py
 python -m pytest tests/test_rfc8785_official_vectors.py
 ```
 
-**3 pass, 0 fail, 2 skipped.** The skips are `values.json` and
-`structures.json`, which contain non-integer numbers this implementation
-rejects by declared scope rather than rendering via ECMAScript
-`Number::toString`. `arrays.json`, `unicode.json` and `weird.json` pass — the
-last containing control characters, an astral emoji key, Hebrew, the Euro
-sign and `</script>`.
+**Number serialisation is not implemented, so this is not evidence of RFC
+8785 conformance.** Of five files from the JCS authors' reference corpus,
+`arrays.json`, `unicode.json` and `weird.json` pass; `values.json` and
+`structures.json` are skipped because they contain non-integer numbers.
+
+The skipped pair is precisely where JCS is hard — everything else is key
+sorting and JSON escaping, the easy majority. The reference repository also
+publishes a far larger number-serialisation corpus, which has not been run at
+all. Treat this as coverage of the easy part, not as conformance.
 
 ### The RFC's own vector settles the UTF-16 question
 
@@ -202,15 +203,17 @@ smiley (128514) would sort after the Hebrew letter (64307).
 The divergence documented above is therefore demonstrated by the reference
 test data for the RFC itself, not by inputs chosen to prove a point.
 
-### A correction to the payload-binding draft
+### A wording point on section 11.3
 
 `draft-mih-sokolov-scitt-payload-binding-01` section 11.3 forbids floats in
-digest-bearing fields, justifying it on the grounds that "the same quantity
-serialises as 1.0, 1e0 or 1.00 in different implementations and JCS does not
-normalise these forms".
+digest-bearing fields, on the grounds that "the same quantity serialises as
+1.0, 1e0 or 1.00 in different implementations and JCS does not normalise
+these forms".
 
-**JCS does normalise those forms** — it parses each number and re-serialises
-it via ECMAScript `Number::toString`. The RFC's own vectors show it:
+**The conclusion is right; the stated reason appears to undersell it.** As a
+statement about the specification, JCS does normalise those forms: it parses
+each number and re-serialises via ECMAScript `Number::toString`. The RFC's
+own vectors show it:
 
 | input | canonical output |
 |---|---|
@@ -218,27 +221,39 @@ it via ECMAScript `Number::toString`. The RFC's own vectors show it:
 | `2e-3` | `0.002` |
 | `333333333.33333329` | `333333333.3333333` |
 
-The prohibition is well founded: binary rounding, exactness of monetary
-quantities, and the IEEE-754 safe-integer range are all good reasons to
-require decimal strings. But the stated justification is not one of them, and
-an implementer reading it may conclude JCS is less deterministic than it is.
+Two readings would make the sentence defensible, and both are worth stating.
+As an *operational* claim it holds — shortest-round-trip float rendering is
+genuinely hard, which is why the reference suite ships a separate
+hundred-million-value number corpus, and implementations do vary in practice.
 
-## What this is offered as
+More importantly, **JCS normalises destructively.** It round-trips through
+IEEE-754 binary64, so `333333333.33333329` becomes `333333333.3333333`, and
+two distinct decimal quantities that map to the same double become
+byte-identical. For monetary values that is worse than not normalising: the
+digest binds the double rather than the decimal anyone wrote down. That is a
+stronger argument for the same prohibition than the one given.
 
-A small, reproducible cross-implementation result, of the kind that is useful
-to anyone binding digests over JSON payloads — including the drafts in the
-IETF SCITT orbit that use JCS for exactly that purpose.
+**Standing caveat:** this implementation rejects floats and integers above
+2^53 rather than rendering them, and therefore skips exactly the reference
+vectors that exercise number handling. The observation rests on reading RFC
+8785 and its published vectors, not on having implemented the algorithm.
 
-Two findings, of different weight.
+## What this is, and is not
 
-Against plain RFC 8785, the disagreement is narrow — non-BMP object keys —
-and unreachable through a schema-valid SATROOT record.
+**Not a cross-implementation result.** Both sides are driven by one author's
+Python — SATROOT's canonicalisation, and that same author's restricted
+implementation of another specification. No independent `jcs-n`
+implementation is involved.
 
-Against `jcs-n`, it is not narrow. The schemes disagree on the ordinary
-snapshot, because they encode different answers to whether an absent member
-is the same as an empty one. That is a modelling decision a profile has to
-make explicitly, and it is the kind of thing that surfaces as a mysterious
-digest mismatch if nobody writes it down.
+**Not a finding that the two disagree.** The payload-binding draft states
+that digests are comparable only within a single digest context. Comparing
+across two deliberately different contexts carries no information, and an
+earlier version of this document treated that comparison as the headline
+result. It was wrong to.
 
-Recorded here because "we checked" is worth more than "it should be fine",
-and because the earlier claim in this repository was the latter.
+What this is: a restricted implementation of `jcs-n` written from the draft
+text, whose construction surfaced four things a published test vector would
+prevent, plus one point about the rationale in section 11.3.
+
+The value, if any, lies in the vectors and that note. The digest comparison
+which prompted the work is not the contribution.

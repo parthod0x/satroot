@@ -33,13 +33,14 @@ def _cases():
 def test_official_vector(name, src, expected_path):
     value = json.loads(src.read_text(encoding="utf-8"))
     expected = expected_path.read_text(encoding="utf-8")
-    try:
-        assert jcs.jcs_serialize(value) == expected
-    except SatRootError as exc:
-        # values.json and structures.json contain non-integer numbers, which
-        # this implementation rejects rather than rendering via ECMAScript
-        # Number::toString. That is a declared limit, not a silent failure.
-        pytest.skip(f"out of declared scope: {exc}")
+    # Only these two carry non-integer numbers, which this implementation
+    # rejects by declared scope. Any other failure is a real failure and
+    # must not be swallowed by a blanket skip.
+    if name in ("values.json", "structures.json"):
+        with pytest.raises(SatRootError):
+            jcs.jcs_serialize(value)
+        pytest.skip("contains non-integer numbers; number rendering not implemented")
+    assert jcs.jcs_serialize(value) == expected
 
 
 def test_the_official_vector_distinguishes_the_two_schemes():
@@ -64,7 +65,7 @@ def test_the_official_vector_distinguishes_the_two_schemes():
     assert satroot_keys.index(smiley) > satroot_keys.index(hebrew)
 
 
-def test_jcs_does_normalise_lexical_number_forms():
+def test_reference_vectors_show_number_reserialisation():
     """Contradicts a claim in draft-mih-sokolov-scitt-payload-binding-01.
 
     That draft states floats must not appear in digest-bearing fields
@@ -73,7 +74,13 @@ def test_jcs_does_normalise_lexical_number_forms():
     re-serialises via ECMAScript Number::toString, which does normalise
     exactly those forms - as the RFC's own vectors show.
     """
-    src = (VECTORS / "input" / "values.json").read_text(encoding="utf-8")
-    out = (VECTORS / "output" / "values.json").read_text(encoding="utf-8")
-    assert "4.50" in src and "4.50" not in out and "4.5" in out
-    assert "2e-3" in src and "0.002" in out
+    import json as _json
+
+    src = _json.loads((VECTORS / "input" / "values.json").read_text(encoding="utf-8"))
+    out = _json.loads((VECTORS / "output" / "values.json").read_text(encoding="utf-8"))
+    # Compare parsed structures rather than substrings, which would match
+    # incidental text elsewhere in the file.
+    assert src == out, "same values, different lexical forms"
+    raw_in = (VECTORS / "input" / "values.json").read_text(encoding="utf-8")
+    raw_out = (VECTORS / "output" / "values.json").read_text(encoding="utf-8")
+    assert raw_in != raw_out, "the reference output re-serialises the numbers"

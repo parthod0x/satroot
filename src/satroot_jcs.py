@@ -7,10 +7,11 @@ this module exists to check it rather than assert it.
 
 The two differ in exactly one respect that can be exercised: **JCS sorts
 object keys by UTF-16 code unit, while Python's ``sort_keys=True`` sorts by
-Unicode code point.** Those orders diverge whenever a key contains a
-character outside the Basic Multilingual Plane, because UTF-16 represents
-such characters as surrogate pairs beginning with 0xD800-0xDBFF, which sort
-below characters in the range 0xE000-0xFFFF.
+Unicode code point.** Those orders *can* diverge - not always - when an
+astral-plane key is compared against a high-BMP key, because UTF-16
+represents astral characters as surrogate pairs beginning 0xD800-0xDBFF,
+which sort below characters in 0xE000-0xFFFF. Two astral keys compare the
+same way under both schemes.
 
 Numbers are deliberately out of scope here. RFC 8785 requires ECMAScript
 ``Number::toString`` semantics, which is a genuinely subtle algorithm; this
@@ -29,8 +30,16 @@ from satroot1 import SatRootError, canonical_json
 
 
 def _utf16_sort_key(name: str) -> bytes:
-    """RFC 8785 section 3.2.3: sort by UTF-16 code units."""
-    return name.encode("utf-16-be", errors="surrogatepass")
+    """RFC 8785 section 3.2.3: sort by UTF-16 code units.
+
+    Lone surrogates are rejected: RFC 8785 requires them to be an error,
+    and ``surrogatepass`` would sort them silently.
+    """
+    try:
+        name.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise SatRootError(f"lone surrogate in object key: {name!r}") from exc
+    return name.encode("utf-16-be")
 
 
 def jcs_serialize(value: Any) -> str:
@@ -194,11 +203,12 @@ def jcs_n(value: Any, exclusion_set: Optional[Iterable[str]] = None) -> str:
     """
     import hashlib
 
+    if not isinstance(value, dict):
+        raise SatRootError("jcs-n is defined over a JSON object")
     reduced = value
-    if exclusion_set:
-        if not isinstance(value, dict):
-            raise SatRootError("exclusion_set applies to a JSON object")
-        reduced = {k: v for k, v in value.items() if k not in set(exclusion_set)}
+    if exclusion_set is not None:
+        excluded = set(exclusion_set)  # materialise once; generators are consumed
+        reduced = {k: v for k, v in value.items() if k not in excluded}
     canonical = jcs_serialize(strip_absent(reduced))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -210,8 +220,14 @@ def satroot_digest(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
-def compare_jcs_n(value: Any) -> Dict[str, Any]:
-    """Compare a jcs-n digest against SATROOT's over the same record."""
+def _illustrative_digest_difference(value: Any) -> Dict[str, Any]:
+    """Illustrative only - NOT a meaningful comparison.
+
+    The payload-binding draft states that digests are comparable only
+    within one digest context. Comparing a jcs-n digest against SATROOT's
+    compares two deliberately different contexts, so a difference carries
+    no information. Retained to demonstrate that, not to report it.
+    """
     return {
         "agree": jcs_n(value) == satroot_digest(value),
         "jcs_n": jcs_n(value),
