@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Adds `COMPARISON.md`, an honest field survey placing SATROOT against SCITT (RFC 9943), in-toto/SLSA, C2PA, W3C Verifiable Credentials, KERI/ACDC, Certificate Transparency, Trillian, Sigstore/Rekor and git. Records that the component parts are all existing standards and the contribution is composition; names KERI's Key Event Log and Google's experimental Verifiable Log-Derived Map as the closest prior art; and states plainly where those systems are better than SATROOT - O(log n) inclusion proofs versus SATROOT's O(n) full replay, non-equivocation and split-view resistance, and ecosystem maturity. Also records that third-party witnessing is no longer a differentiator for anyone, and documents the relationship between SATROOT's canonical JSON and RFC 8785 JCS.
+
 - Adds `satroot_commitment`, which separates *what* a namespace commits from *where* it is published. The commitment document - canonical JSON binding `root_id` to `state_hash` - is now defined independently of any backend, and two backends implement it: the existing `bsv-opreturn` envelope, and a new dependency-free `rfc3161` backend that submits the commitment digest to any Time-Stamp Authority with no blockchain involved. `tests/test_commitment_backends.py` pins the property that matters: both backends commit byte-identical documents, so "the anchoring backend is interchangeable" is demonstrated rather than asserted. Ledger replay and state verification continue to require no backend at all.
 
 ## v1.6-mainnet-anchor - 2026-08-22
