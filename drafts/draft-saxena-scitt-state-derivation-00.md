@@ -3,7 +3,6 @@ title: "Application-State Derivation over a SCITT Statement Sequence"
 abbrev: "SCITT State Derivation"
 docname: draft-saxena-scitt-state-derivation-00
 category: info
-submissiontype: independent
 ipr: trust200902
 area: Security
 keyword:
@@ -22,14 +21,14 @@ author:
 normative:
   RFC9943:
   RFC9052:
-  RFC8949:
-  RFC8785:
   RFC2119:
   RFC8174:
 
 informative:
+  RFC8949:
+  RFC8785:
   RFC6902:
-  RFC6962:
+  RFC9162:
   I-D.sato-soos-sov:
 
 --- abstract
@@ -68,7 +67,9 @@ derived from it, and that derived state is what a relying party needs to
 check.
 
 This document describes how such a derivation can be specified above SCITT
-without modifying it.
+without modifying it. It reports implementation experience rather than
+proposing new mechanism, and is offered as a basis for discussion about where
+an application-state commitment ought to be carried.
 
 ## Relationship to Existing Work
 
@@ -76,17 +77,19 @@ The general pattern is state machine replication, and it is not new. Several
 systems implement ordered signed logs with deterministic replay to typed
 state. Blockchain execution layers, including Ethereum and applications built
 on CometBFT/ABCI, specify a transition function and commit to the resulting
-state root. The Key Event Logs of KERI replay to key state, and its
-Transaction Event Logs to registry state. Sidetree replays anchored
+state root. The Key Event Logs of KERI replay to key state; its Transaction Event Logs
+admit application-defined transaction event types and can track public or
+private transaction state, so they are more extensible than a fixed registry. Sidetree replays anchored
 operations to DID Document state. Verifiable Log-Derived Maps derive
-key/value state from an input log. Automerge replays an operation log to
-document state, and AT Protocol repositories are signed, deterministically
+key/value state from an input log. Automerge converges on document state from causally
+related concurrent operations, which is a different determinism property from
+replay of a total order, and AT Protocol repositories are signed, deterministically
 encoded, and verifiable offline from an exported file, though their Merkle
 Search Tree root commits to the current record set rather than to state
 derived by a transition relation.
 
-Within the SCITT community specifically, {{I-D.sato-soos-sov}} defines an
-object type carrying a state machine and schema, an append-only causally
+{{I-D.sato-soos-sov}}, an individual draft and work in
+progress, defines an object type carrying a state machine and schema, an append-only causally
 ordered signed event stream, and state derived from that stream. It is the
 closest existing work to what this document describes, and readers should
 consider the two together.
@@ -102,9 +105,7 @@ specified in a profile, is independent of any consensus mechanism, and where
 a relying party can verify the derived state from a file without contacting
 a service.
 
-The mechanism described here is therefore a composition of existing
-primitives, not a new one. Its only claim to novelty is the specific
-combination.
+The mechanism described here is a composition of existing primitives.
 
 # Conventions and Definitions
 
@@ -138,10 +139,19 @@ A profile conforming to this pattern specifies four things.
 
 3. **A reducer.** The profile defines the admissible event types and, for
    each, the transition applied to the prior state. The reducer MUST be
-   total in the sense that every event either produces a next state or is
-   rejected; it MUST NOT depend on wall-clock time, network state, iteration
-   order of unordered collections, or any input outside the Statement
-   Sequence.
+   total in the sense that every syntactically valid event either produces a
+   next state or is rejected. **A profile MUST state whether rejection
+   invalidates the entire sequence or skips the event leaving state
+   unchanged**; two implementations choosing differently derive different
+   state from identical input. The implementation described below rejects the
+   whole sequence.
+
+   Determinism requires excluding more than the obvious: wall-clock time,
+   network state, and iteration order of unordered collections, but also
+   Unicode normalisation form, locale-dependent collation, floating-point
+   arithmetic, and integer width. Arithmetic should be exact over an
+   explicitly bounded domain, with out-of-domain values rejected rather than
+   truncated or promoted.
 
 4. **A state commitment.** A digest over the canonical serialisation of the
    derived state.
@@ -177,7 +187,7 @@ Neither does it provide succinct proofs. Verification as described replays
 the entire sequence, and is therefore linear in its length. Where a relying
 party needs to check membership of a single entry rather than the whole
 derived state, the inclusion proof mechanisms of {{RFC9943}} and
-{{RFC6962}} are appropriate and this pattern is not.
+{{RFC9162}} are appropriate and this pattern is not.
 
 # Implementation Experience
 
@@ -216,8 +226,9 @@ not by amending the specification text.
 attention.** If a signing key is compromised, an attacker who also controls
 distribution of the Statement Sequence can produce an alternative sequence,
 valid under the reducer, diverging from the point of compromise. Replay
-alone cannot distinguish the two. Registration on a Transparency Service
-mitigates this by making divergence detectable; profiles requiring recovery
+alone cannot distinguish the two. Registration on a Transparency Service does not by itself detect this: the
+payload is opaque to the Service, so divergence is detectable only by a party
+that fetches the statements for the Subject and replays them. profiles requiring recovery
 semantics should consider mechanisms such as the pre-rotation and duplicity
 detection used by KERI, which this pattern does not itself provide.
 
@@ -242,6 +253,4 @@ This document has no IANA actions.
 # Acknowledgements
 {:numbered="false"}
 
-This document reports implementation experience rather than proposing new
-mechanism, and is offered to the SCITT community as a basis for discussion
-about where an application-state commitment ought to be carried.
+TBD.
