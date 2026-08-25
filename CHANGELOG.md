@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Adds `drafts/draft-saxena-scitt-state-derivation-00.md`, an Internet-Draft for the IETF SCITT community. It reports implementation experience rather than proposing new mechanism: what a profile must specify for an ordered Statement Sequence to reduce deterministically to application state, the three places independent implementations diverged in practice, and an open question about whether the reducer's total order should come from registration order or from the payloads. Security considerations state plainly that this pattern does not address key compromise and is in tension with a right of erasure.
+
 - Adds `satroot_cose`: encodes SATROOT events as COSE_Sign1 Signed Statements, the payload form used by SCITT (RFC 9943) transparency services, with every statement in a ledger sharing the namespace `root_id` as its CWT subject. Includes a dependency-free deterministic CBOR encoder implementing the RFC 8949 section 4.2 subset COSE requires, checked against the RFC's own test vectors. Signatures are over the raw `Sig_structure`, so they interoperate with other COSE implementations. Tests pin that the encoding is lossless: the encoded payloads replay to the same state hash as the original ledger. Scope is deliberately limited to Signed Statements - no Transparency Service, no Receipts, no inclusion proofs.
 
 - Corrects how the project describes itself, in `README.md` and `COMPARISON.md`: the kernel defines a single reducer over five actions and a fixed state shape, and the six profiles add genesis metadata and validation rather than their own state or transitions. SATROOT is a typed token-and-account ledger with domain-labelled profiles, not a general application-state framework - earlier wording overstated this.
