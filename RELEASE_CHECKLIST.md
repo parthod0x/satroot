@@ -1,6 +1,6 @@
 # SATROOT Release Checklist
 
-Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, `v1.1-event-streams`, `v1.2-event-matrix-promotion`, `v1.3-key-management`, or `v1.4-prepublication-hardening`:
+Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, `v1.1-event-streams`, `v1.2-event-matrix-promotion`, `v1.3-key-management`, `v1.4-prepublication-hardening`, `v1.5-integration-and-vectors`, `v1.6-mainnet-anchor`, or `v1.7-standards-alignment`:
 
 - [ ] Confirm this repo contains no private keys, seed phrases, API tokens, or wallet files.
 - [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint. The four anchored lanes (anchored demo, anchored publication, on-chain envelope, and envelope verification) are the only lanes intended to ever carry a real outpoint or transaction id, and only via run-time flags, never in checked-in input files or presets; `ANCHORS.md` is the sole checked-in record of intentional anchored runs.
@@ -27,7 +27,7 @@ Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`,
 - [ ] Confirm README and SPEC do not claim subdivision below one satoshi.
 - [ ] Confirm README and SPEC do not claim redemption, reserves, securities, e-money, investment returns, or wallet/exchange compatibility.
 - [ ] Confirm `CHANGELOG.md` has a dated section for the milestone and `pyproject.toml` plus `CITATION.cff` carry the matching version.
-- [ ] Create the milestone git tag. For the current milestone: `v1.4-prepublication-hardening`.
+- [ ] Create the milestone git tag. For the current milestone: `v1.7-standards-alignment`.
 - [ ] Preserve the release artifact hash after tagging.
 
 Suggested tag message for the current milestone:
