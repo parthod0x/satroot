@@ -85,63 +85,96 @@ properly and should not use this module for that purpose.
 
 ## Compared against `jcs-n`
 
-`draft-mih-sokolov-scitt-payload-binding-01` (Mih, Action State Group;
-Sokolov, Tyche Institute; 27 July 2026) defines **`jcs-n`**, a digest over
-JSON payloads. Implemented here from the draft text, in `satroot_jcs.jcs_n`.
-
-The algorithm is:
-
-1. Remove, bottom-up and recursively, every member whose value is JSON
-   `null`, an empty array, or an empty object.
-2. Apply RFC 8785 (JCS).
-3. SHA-256.
-4. Lowercase hexadecimal.
-
-**Worth stating clearly, because it is easy to assume otherwise: the "n" is
-*absent-field* normalisation, not Unicode normalisation.** The draft adds no
-NFC or NFD step. So `jcs-n` inherits the behaviour measured above — NFC and
-NFD forms remain distinct — and normalisation stays a producer-side concern.
-
-### Result: the schemes disagree on the ordinary SATROOT snapshot
-
-Not on exotic input. On the common case:
+`draft-mih-sokolov-scitt-payload-binding-01` defines **`jcs-n`**. The full
+construction is:
 
 ```
-commitment snapshot of an unprofiled ledger, no frozen accounts
-
-  jcs-n   : de0e21d70f84fd91e5919cdd5399d178...
-  satroot : c2c8ba71dc82384ce11547e47f5f0b10...
+CANONICAL-DIGEST(jcs-n, P) = lowercase_hex(SHA-256(JCS(normalize(P minus exclusion_set))))
 ```
 
-`jcs-n` strips three members that SATROOT retains:
+where `normalize` removes, bottom-up and recursively, every member whose
+value is `null`, an empty array, or an empty object; and the exclusion set is
+declared by the payload class, covering fields that carry the record's own
+derived identifier or reference other records in a chain.
 
-| Member | Value in an ordinary snapshot | jcs-n |
-|---|---|---|
-| `frozen_accounts` | `[]` when nothing is frozen | removed |
-| `profile` | `null` when the ledger has no profile | removed |
-| `profile_mode` | `null` likewise | removed |
-| `max_supply` | `null` when no cap is set | removed |
+Implemented in `satroot_jcs.jcs_n` from the draft text.
 
-Records containing none of these agree.
+**The "n" is *absent-field* normalisation, not Unicode normalisation.** The
+draft adds no NFC step, and is explicit that this is a choice: its Related
+Work section contrasts `jcs-n` with a draft that does define NFC rules and
+notes the two are not byte-compatible.
 
-### Why this matters beyond the two implementations
+### What is not a finding
 
-The two schemes encode different answers to a real modelling question:
-**is an absent member the same as an empty one?**
+SATROOT's state snapshot carries members `jcs-n` removes — `frozen_accounts`
+when empty, `profile` and `profile_mode` when null — so the two digests
+differ. **This is arithmetic, not a discovery.** Anyone reading the algorithm
+predicts it, and the draft states in the same section that the semantic
+equivalence of absent, null, empty array and empty object is a payload-class
+decision. It also states that digests are comparable only within the same
+digest context, so comparing across two deliberately different contexts is
+not a meaningful operation.
 
-`jcs-n` says yes — `{"frozen_accounts": []}` and `{}` denote the same state,
-so they should digest identically, which makes digests stable across
-producers that differ only in whether they emit empty collections.
+Recorded here so the repository does not mistake it for one.
 
-SATROOT says no — the snapshot is a fixed shape, and every member is present
-whether or not it holds anything, so the digest binds the shape as well as
-the contents.
+### What implementing it actually surfaced
 
-Both are defensible. Neither is a bug. But a profile that digests a payload
-under one scheme and verifies it under the other will fail, and the failure
-will look like corruption rather than a specification mismatch. **Any profile
-combining SCITT payload binding with a state commitment should state which
-convention it uses.**
+**1. An emptied object inside an array is ambiguous.** The draft says to
+remove "every member" whose value is empty. In JSON a *member* is a
+name/value pair in an object, not an array element. Under that reading:
+
+```
+{"a": [{"b": null}]}  ->  {"a": [{}]}
+```
+
+Under a reading that also prunes emptied objects from their arrays, the array
+becomes empty, `a` is then an empty array, and the whole record reduces to
+`{}`. **Same input, two defensible readings, different digests.** The draft
+does not say which.
+
+**2. Falsy-but-present values are a trap for some languages.** "Members
+explicitly set to a non-null value are not removed" is unambiguous in prose,
+but an implementer writing `if (!value) delete obj[key]` in a
+falsiness-based language also strips `false`, `0` and `""`:
+
+```
+{"a": false, "b": 0, "c": "", "d": null, "e": [], "f": {}}
+  correct  -> {"a": false, "b": 0, "c": ""}
+  falsiness -> {}
+```
+
+This is the most likely real-world divergence between conforming
+implementations, and a non-normative note would prevent it.
+
+**3. The collapse is unconditional, which constrains which payload classes
+can use it.** These four inputs share one digest:
+
+```
+{}   {"x": null}   {"x": []}   {"x": {}}     ->  44136fa355b3678a...
+```
+
+A payload class may declare an exclusion set, but cannot opt out of the
+stripping. So a profile whose commitment binds *shape* — where a member
+present-and-empty asserts something different from that member being absent —
+cannot express that through `jcs-n` at all. Its options are to accept the
+collapse or to register a different algorithm.
+
+Since the canonicalization algorithm registry uses Specification Required
+with a Designated Expert, and entries are immutable, that is a registry
+question with a real answer space: is a shape-preserving variant in scope,
+or is the intended answer that such profiles register their own?
+
+### Limits of this implementation
+
+- Integers above 2**53 are **rejected**, not rendered. RFC 8785 requires
+  ECMAScript `Number::toString`, which switches to exponential form at 1e21
+  and cannot exactly represent larger integers; `str()` diverges on both.
+- Floats are rejected. The draft forbids non-integer JSON numbers in
+  digest-bearing fields, so this is stricter than the profile requires rather
+  than a gap in it.
+- **The official RFC 8785 conformance vectors have not been run.** The JCS
+  serialiser here is validated against cases chosen by its own author, which
+  is weaker evidence than it looks.
 
 ## What this is offered as
 

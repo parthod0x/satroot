@@ -23,7 +23,7 @@ conformance must handle numbers and should not use this module for that.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from satroot1 import SatRootError, canonical_json
 
@@ -47,6 +47,16 @@ def jcs_serialize(value: Any) -> str:
             "ECMAScript Number::toString semantics"
         )
     if isinstance(value, int):
+        # RFC 8785 requires ECMAScript Number::toString, which switches to
+        # exponential form at 1e21 and cannot exactly represent integers
+        # beyond 2**53. str() diverges on both. Reject rather than render
+        # incorrectly; SATROOT never emits a JSON number for a quantity.
+        if abs(value) > 2 ** 53:
+            raise SatRootError(
+                f"integer {value} exceeds the exactly-representable range "
+                "(2**53); ECMAScript Number::toString rendering is not "
+                "implemented here"
+            )
         return str(value)
     if isinstance(value, str):
         # JSON string escaping is identical between RFC 8785 and Python's
@@ -100,8 +110,9 @@ def divergence_cases() -> List[Tuple[str, Any]]:
         ("mathematical alphanumerics", {"\U0001D400": 1, "�": 2}),
         # Unicode normalisation: neither scheme normalises, so NFC and NFD
         # forms of the same text are different keys in both. Worth pinning.
-        # Written with explicit escapes: as literals, the source file's own
-        # encoding collapses them and the case becomes vacuous.
+        # These are genuinely distinct byte sequences: C3 A9 (U+00E9, NFC)
+        # and 65 CC 81 (e + U+0301, NFD). Verified by test, because writing
+        # them as literals makes the case vacuous if an editor normalises.
         ("NFC vs NFD keys", {"é": 1, "é": 2}),
         ("NFC vs NFD on the value side", {"a": "é", "b": "é"}),
     ]
@@ -168,11 +179,27 @@ def strip_absent(value: Any) -> Any:
     return value
 
 
-def jcs_n(value: Any) -> str:
-    """The ``jcs-n`` digest: strip absent members, canonicalise, SHA-256, hex."""
+def jcs_n(value: Any, exclusion_set: Optional[Iterable[str]] = None) -> str:
+    """The ``jcs-n`` digest, per draft-mih-sokolov-scitt-payload-binding-01.
+
+    The full construction is::
+
+        lowercase_hex(SHA-256(JCS(normalize(P minus exclusion_set))))
+
+    The exclusion set is declared by the payload class and covers fields
+    carrying the derived identifier itself, or referencing other records in
+    a chain, so that a record's content address stays stable regardless of
+    what later chains to it. Omitting it computes only steps 1-4 of section
+    3.1, which is not the complete construction.
+    """
     import hashlib
 
-    canonical = jcs_serialize(strip_absent(value))
+    reduced = value
+    if exclusion_set:
+        if not isinstance(value, dict):
+            raise SatRootError("exclusion_set applies to a JSON object")
+        reduced = {k: v for k, v in value.items() if k not in set(exclusion_set)}
+    canonical = jcs_serialize(strip_absent(reduced))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 

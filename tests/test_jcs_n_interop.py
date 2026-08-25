@@ -60,3 +60,75 @@ def test_digest_is_lowercase_hex_of_expected_length():
     assert len(digest) == 64
     assert digest == digest.lower()
     assert all(c in "0123456789abcdef" for c in digest)
+
+
+# --- The findings worth reporting, as opposed to the arithmetic ------------
+
+
+def test_emptied_object_inside_an_array_is_ambiguous_in_the_draft():
+    """Two defensible readings of "member" give different digests.
+
+    The draft says to remove "every member whose value is null, an empty
+    array, or an empty object". In JSON a *member* is a name/value pair in
+    an object, not an array element - which is the reading implemented
+    here. Under a reading that also prunes emptied objects from arrays,
+    the array would become empty and its parent member would then be
+    removed, producing a different digest from the same input.
+    """
+    record = {"a": [{"b": None}]}
+    assert jcs.strip_absent(record) == {"a": [{}]}
+    # The alternative reading would yield {} - a different digest entirely.
+    assert jcs.jcs_n(record) != jcs.jcs_n({})
+
+
+def test_array_elements_that_are_null_or_empty_are_retained():
+    assert jcs.strip_absent({"a": [None]}) == {"a": [None]}
+    assert jcs.strip_absent({"a": [{}, []]}) == {"a": [{}, []]}
+
+
+def test_falsy_but_present_values_must_survive():
+    """The most likely real-world interop failure.
+
+    "Members explicitly set to a non-null value are not removed" is
+    unambiguous in prose, but an implementer writing `if (!value) delete`
+    in a falsiness-based language strips false, 0 and "" as well.
+    """
+    record = {"a": False, "b": 0, "c": "", "d": None, "e": [], "f": {}}
+    assert jcs.strip_absent(record) == {"a": False, "b": 0, "c": ""}
+
+
+def test_jcs_n_deliberately_collapses_four_distinct_inputs():
+    """Absent, null, empty array and empty object share one digest."""
+    digests = {
+        jcs.jcs_n({}),
+        jcs.jcs_n({"x": None}),
+        jcs.jcs_n({"x": []}),
+        jcs.jcs_n({"x": {}}),
+    }
+    assert len(digests) == 1
+
+
+def test_exclusion_set_is_applied_before_normalisation():
+    assert jcs.jcs_n({"a": 1, "id": "x"}, exclusion_set=["id"]) == jcs.jcs_n({"a": 1})
+
+
+def test_integers_beyond_exact_representation_are_rejected():
+    """str() diverges from ECMAScript Number::toString above 1e21."""
+    import pytest
+    from satroot1 import SatRootError
+
+    jcs.jcs_serialize(2 ** 53)
+    with pytest.raises(SatRootError):
+        jcs.jcs_serialize(10 ** 21)
+
+
+def test_nfc_and_nfd_fixtures_are_genuinely_distinct():
+    """Guards against an editor silently normalising the source file."""
+    import unicodedata
+
+    cases = dict(jcs.divergence_cases())
+    record = cases["NFC vs NFD keys"]
+    assert len(record) == 2, "fixture collapsed - the case would be vacuous"
+    keys = list(record)
+    assert unicodedata.normalize("NFC", keys[0]) == unicodedata.normalize("NFC", keys[1])
+    assert keys[0] != keys[1]

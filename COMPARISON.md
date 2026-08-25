@@ -172,34 +172,33 @@ ledger grows without bound and replay cost grows with it.
 
 ---
 
-## Canonicalisation, measured against RFC 8785
+## Canonicalisation, measured
 
 Full result in `docs/CANONICALISATION.md`; reproduce with
 `PYTHONPATH=src python src/satroot_jcs.py`.
 
-Several drafts in the SCITT orbit use RFC 8785 (JCS) for the same
-digest-binding purpose SATROOT uses its canonical JSON for, so whether the
-two agree is worth measuring rather than assuming.
+Against plain **RFC 8785 (JCS)**, 13 of 15 cases agree. The two that diverge
+do so because JCS sorts object keys by UTF-16 code unit while Python sorts by
+code point — orders that can differ for certain mixtures of astral-plane and
+high-BMP names. Unreachable through a schema-valid SATROOT record, since
+field names are ASCII, but that is a property of the schema rather than the
+canonicalisation.
 
-**13 of 15 cases agree.** The two that diverge do so for one reason: JCS
-sorts object keys by **UTF-16 code unit**, Python's `sort_keys=True` sorts by
-**Unicode code point**, and those orders differ whenever a key contains a
-character outside the Basic Multilingual Plane, since UTF-16 encodes those as
-surrogate pairs that sort below ordinary BMP characters.
+Against **`jcs-n`** (`draft-mih-sokolov-scitt-payload-binding-01`), digests
+differ because that scheme strips members whose value is null or an empty
+collection, which SATROOT's fixed-shape snapshot carries. **That is
+arithmetic rather than a finding** — the draft states the equivalence is a
+payload-class decision, and that digests are only comparable within one
+digest context.
 
-The divergence is unreachable through any schema-valid SATROOT record,
-because field names come from a fixed ASCII vocabulary — but that is a
-property of the schema, not of the canonicalisation. Any profile permitting
-user-supplied object keys must choose a scheme explicitly.
+Implementing it did surface three things worth knowing, recorded in the
+canonicalisation document: an ambiguity about whether an emptied object
+inside an array is pruned, a falsiness trap that would make a JavaScript
+implementation strip `false`, `0` and `""`, and the fact that the collapse is
+unconditional, so a profile binding record *shape* cannot use `jcs-n`.
 
-Neither scheme normalises Unicode: NFC and NFD forms remain distinct keys
-under both, and both emit identical bytes. Normalisation is therefore a
-producer-side concern that no canonicalisation scheme reconciles.
-
-Numbers are out of scope in this comparison: RFC 8785 requires ECMAScript
-`Number::toString` semantics, and `satroot_jcs` rejects floats rather than
-approximating it. SATROOT never emits a JSON number for a quantity, so the
-result is unaffected.
+Neither scheme normalises Unicode, making normalisation a producer-side
+concern.
 
 ## Relationship to SCITT
 
