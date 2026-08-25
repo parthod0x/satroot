@@ -30,6 +30,7 @@ normative:
 informative:
   RFC6902:
   RFC6962:
+  I-D.sato-soos-sov:
 
 --- abstract
 
@@ -73,10 +74,22 @@ without modifying it.
 
 The general pattern is state machine replication, and it is not new. Several
 systems implement ordered signed logs with deterministic replay to typed
-state: blockchain execution layers specify a transition function and commit
-to the resulting state root; the Key Event Logs of KERI replay to key state;
-Sidetree replays anchored operations to DID Document state; and Verifiable
-Log-Derived Maps derive key/value state from an input log.
+state. Blockchain execution layers, including Ethereum and applications built
+on CometBFT/ABCI, specify a transition function and commit to the resulting
+state root. The Key Event Logs of KERI replay to key state, and its
+Transaction Event Logs to registry state. Sidetree replays anchored
+operations to DID Document state. Verifiable Log-Derived Maps derive
+key/value state from an input log. Automerge replays an operation log to
+document state, and AT Protocol repositories are signed, deterministically
+encoded, and verifiable offline from an exported file, though their Merkle
+Search Tree root commits to the current record set rather than to state
+derived by a transition relation.
+
+Within the SCITT community specifically, {{I-D.sato-soos-sov}} defines an
+object type carrying a state machine and schema, an append-only causally
+ordered signed event stream, and state derived from that stream. It is the
+closest existing work to what this document describes, and readers should
+consider the two together.
 
 Standards-track work also exists for the transition mechanism alone: JSON
 Patch {{RFC6902}} defines typed operations applied sequentially to structured
