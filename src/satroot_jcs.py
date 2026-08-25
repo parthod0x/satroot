@@ -139,3 +139,55 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# ---------------------------------------------------------------------------
+# jcs-n, per draft-mih-sokolov-scitt-payload-binding-01
+# ---------------------------------------------------------------------------
+
+
+def strip_absent(value: Any) -> Any:
+    """Remove, bottom-up and recursively, members whose value is null, an
+    empty array, or an empty object.
+
+    This is step 1 of ``jcs-n`` in draft-mih-sokolov-scitt-payload-binding-01.
+    Note that the "n" denotes *absent-field* normalisation, not Unicode
+    normalisation: the draft applies RFC 8785 without adding NFC or any other
+    Unicode normalisation step.
+    """
+    if isinstance(value, dict):
+        cleaned = {}
+        for k, v in value.items():
+            v = strip_absent(v)
+            if v is None or v == {} or v == []:
+                continue
+            cleaned[k] = v
+        return cleaned
+    if isinstance(value, list):
+        return [strip_absent(v) for v in value]
+    return value
+
+
+def jcs_n(value: Any) -> str:
+    """The ``jcs-n`` digest: strip absent members, canonicalise, SHA-256, hex."""
+    import hashlib
+
+    canonical = jcs_serialize(strip_absent(value))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def satroot_digest(value: Any) -> str:
+    """SATROOT's equivalent: canonicalise as-is, SHA-256, hex."""
+    import hashlib
+
+    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def compare_jcs_n(value: Any) -> Dict[str, Any]:
+    """Compare a jcs-n digest against SATROOT's over the same record."""
+    return {
+        "agree": jcs_n(value) == satroot_digest(value),
+        "jcs_n": jcs_n(value),
+        "satroot": satroot_digest(value),
+        "stripped": strip_absent(value) != value,
+    }

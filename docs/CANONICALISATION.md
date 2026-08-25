@@ -83,6 +83,66 @@ digit string, bounded to 512 digits. Integers used for `sequence` and
 An implementation seeking general JCS conformance must handle numbers
 properly and should not use this module for that purpose.
 
+## Compared against `jcs-n`
+
+`draft-mih-sokolov-scitt-payload-binding-01` (Mih, Action State Group;
+Sokolov, Tyche Institute; 27 July 2026) defines **`jcs-n`**, a digest over
+JSON payloads. Implemented here from the draft text, in `satroot_jcs.jcs_n`.
+
+The algorithm is:
+
+1. Remove, bottom-up and recursively, every member whose value is JSON
+   `null`, an empty array, or an empty object.
+2. Apply RFC 8785 (JCS).
+3. SHA-256.
+4. Lowercase hexadecimal.
+
+**Worth stating clearly, because it is easy to assume otherwise: the "n" is
+*absent-field* normalisation, not Unicode normalisation.** The draft adds no
+NFC or NFD step. So `jcs-n` inherits the behaviour measured above — NFC and
+NFD forms remain distinct — and normalisation stays a producer-side concern.
+
+### Result: the schemes disagree on the ordinary SATROOT snapshot
+
+Not on exotic input. On the common case:
+
+```
+commitment snapshot of an unprofiled ledger, no frozen accounts
+
+  jcs-n   : de0e21d70f84fd91e5919cdd5399d178...
+  satroot : c2c8ba71dc82384ce11547e47f5f0b10...
+```
+
+`jcs-n` strips three members that SATROOT retains:
+
+| Member | Value in an ordinary snapshot | jcs-n |
+|---|---|---|
+| `frozen_accounts` | `[]` when nothing is frozen | removed |
+| `profile` | `null` when the ledger has no profile | removed |
+| `profile_mode` | `null` likewise | removed |
+| `max_supply` | `null` when no cap is set | removed |
+
+Records containing none of these agree.
+
+### Why this matters beyond the two implementations
+
+The two schemes encode different answers to a real modelling question:
+**is an absent member the same as an empty one?**
+
+`jcs-n` says yes — `{"frozen_accounts": []}` and `{}` denote the same state,
+so they should digest identically, which makes digests stable across
+producers that differ only in whether they emit empty collections.
+
+SATROOT says no — the snapshot is a fixed shape, and every member is present
+whether or not it holds anything, so the digest binds the shape as well as
+the contents.
+
+Both are defensible. Neither is a bug. But a profile that digests a payload
+under one scheme and verifies it under the other will fail, and the failure
+will look like corruption rather than a specification mismatch. **Any profile
+combining SCITT payload binding with a state commitment should state which
+convention it uses.**
+
 ## What this is offered as
 
 A small, reproducible cross-implementation result, of the kind that is useful
