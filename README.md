@@ -82,6 +82,7 @@ This repository ships the `SATROOT-1` kernel, six registered profiles, the publi
 - `SECURITY_REVIEW.md` - record of internal adversarial passes over the kernel: what was attacked, what held, what was fixed.
 - `ROADMAP.md` - project scope, deliverables, and released plus planned protocol profiles.
 - `ANCHORS.md` - the only checked-in record of real on-chain outpoints and transaction ids.
+- `src/satroot_cose.py` - encodes SATROOT events as COSE_Sign1 Signed Statements (RFC 9052), the payload form SCITT transparency services carry; includes a dependency-free deterministic CBOR encoder checked against RFC 8949 vectors.
 - `COMPARISON.md` - how SATROOT relates to SCITT, in-toto/SLSA, C2PA, W3C VC, KERI, Certificate Transparency, Sigstore and git: what it composes from existing standards, the one gap it fills, and where those systems are better than it.
 - `INTEGRATION.md` - integrator's guide: how to build an application on the package (provisioning, appending, verifiable exports, envelope commitments) and the pitfalls the kernel enforces.
 - `docs/CLI.md` - complete `satroot1` command and smoke-lane reference.
