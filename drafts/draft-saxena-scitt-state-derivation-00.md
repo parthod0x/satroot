@@ -30,7 +30,6 @@ normative:
 informative:
   RFC6902:
   RFC6962:
-  RFC3161:
 
 --- abstract
 
@@ -78,6 +77,10 @@ state: blockchain execution layers specify a transition function and commit
 to the resulting state root; the Key Event Logs of KERI replay to key state;
 Sidetree replays anchored operations to DID Document state; and Verifiable
 Log-Derived Maps derive key/value state from an input log.
+
+Standards-track work also exists for the transition mechanism alone: JSON
+Patch {{RFC6902}} defines typed operations applied sequentially to structured
+state, lacking only signatures, a log, and a commitment.
 
 What those systems have in common is that state derivation is bound either
 to a consensus system, to a sequencing system, or to a single fixed domain.
@@ -165,11 +168,14 @@ derived state, the inclusion proof mechanisms of {{RFC9943}} and
 
 # Implementation Experience
 
-The author has implemented this pattern in two independent implementations,
-in Python and TypeScript, which agree byte-for-byte on canonical
+The author has implemented this pattern twice, in Python and TypeScript.
+The second implementation was written from the specification text rather
+than ported from the first, and the two agree byte-for-byte on canonical
 serialisation, event digests, and state commitments across a shared
 conformance corpus of 33 vectors covering both accepted and rejected inputs.
-The implementations and corpus are available under Apache-2.0.
+Both were written by the same author, so this demonstrates that the
+specification is implementable from its text; it is not independent
+validation. The implementations and corpus are available under Apache-2.0.
 
 Three findings may be useful to others attempting the same thing.
 
