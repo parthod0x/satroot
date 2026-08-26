@@ -165,12 +165,24 @@ def extract_message_imprint(token_der: bytes) -> bytes:
 
 
 def verify_timestamp_token(token_der: bytes, root_id: str, state_hash: str) -> Dict[str, Any]:
-    """Check a timestamp token commits to exactly this namespace state.
+    """Check that a timestamp token's messageImprint is this commitment.
 
-    Offline and self-contained. This confirms the binding between the token
-    and the commitment; it deliberately does not validate the TSA's
-    certificate chain, which is the relying party's trust decision and
-    requires their own root store.
+    **This performs no cryptographic verification of the token.** It parses
+    out the SHA-256 messageImprint and compares it against the digest of the
+    commitment document. It does not check the TSA's signature over the
+    TSTInfo, and it does not validate any certificate chain. A token forged
+    by anyone, carrying the right imprint, passes this check.
+
+    What it establishes is therefore one half of the question - *which*
+    namespace state a token is about - and none of the other half, which is
+    whether the token is authentic. Authenticity requires verifying the CMS
+    SignedData signature and a trust decision about the TSA, both of which
+    need a certificate store and an X.509 stack this dependency-free module
+    deliberately does not carry. Pass the token to a real CMS verifier
+    (``openssl ts -verify``, or the ``cryptography`` package) for that.
+
+    Named ``verify_`` for continuity with the v1.7 release; ``binding_matches``
+    in the returned mapping is the accurate name for what it answers.
     """
     commitment = build_commitment_bytes(root_id, state_hash)
     expected = commitment_digest(commitment)
@@ -178,11 +190,18 @@ def verify_timestamp_token(token_der: bytes, root_id: str, state_hash: str) -> D
     return {
         "backend": "rfc3161",
         "commitment_matches": found == expected,
+        "binding_matches": found == expected,
+        "signature_verified": False,
+        "chain_validated": False,
         "expected_digest": expected.hex(),
         "token_digest": found.hex(),
         "root_id": root_id,
         "state_hash": state_hash,
-        "note": "TSA certificate chain validation is the relying party's trust decision.",
+        "note": (
+            "binding only: the TSA signature over TSTInfo is NOT checked and no "
+            "certificate chain is validated, so this says which state the token "
+            "is about and nothing about whether the token is authentic"
+        ),
     }
 
 
@@ -200,7 +219,10 @@ def describe_backends() -> Dict[str, Any]:
             },
             "rfc3161": {
                 "publishes": "the SHA-256 digest of the commitment, to a Time-Stamp Authority",
-                "verifier": "satroot_commitment.verify_timestamp_token",
+                "binding_checker": "satroot_commitment.verify_timestamp_token",
+                "authenticity": (
+                    "not checked here; needs a CMS verifier and a TSA trust decision"
+                ),
                 "requires_chain": False,
             },
         },

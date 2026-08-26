@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Corrects an overstatement in `satroot_commitment.verify_timestamp_token`. It performs no cryptographic verification of a timestamp token: it parses out the SHA-256 `messageImprint` and compares it against the commitment digest, and nothing in the module checks the TSA's signature over `TSTInfo` or validates a certificate chain. The previous docstring said only that certificate chain validation was left to the relying party, which invites the reading that the signature *is* checked. A forged token carrying the right imprint passes, and `tests/test_commitment_backends.py` now pins exactly that. The returned mapping gained `binding_matches`, `signature_verified` and `chain_validated`, and `describe_backends` no longer calls the function a "verifier".
+
 ## v1.7-standards-alignment - 2026-08-26
 
 - Publishes the package for the first time since `v1.4-prepublication-hardening`, closing a two-milestone gap between the repository and PyPI. `pip install satroot` now resolves to 1.7.0; it previously resolved to 1.4.0, which predated the v1.6 determinism fix: the `MAX_AMOUNT_DIGITS` bound whose absence made the accept/reject decision for long digit strings depend on CPython's host-configurable integer-conversion limit. Installed users therefore had a host-dependent kernel boundary that the repository had already fixed, and had none of `satroot_commitment`, `satroot_cose` or `satroot_jcs`. `pyproject.toml` and `CITATION.cff` now both carry the milestone version, as `RELEASE_CHECKLIST.md` requires - `CITATION.cff` previously carried no version field at all.

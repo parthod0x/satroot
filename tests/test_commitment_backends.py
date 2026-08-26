@@ -73,3 +73,29 @@ def test_described_backends_stay_in_sync_with_reality():
     # Exactly one backend requires a blockchain; that is the property that
     # makes "optional anchoring backend" a true statement.
     assert [k for k, v in described.items() if not v["requires_chain"]] == ["rfc3161"]
+
+
+def test_rfc3161_binding_check_makes_no_authenticity_claim():
+    """A forged token with the right imprint still passes the binding check.
+
+    Pins the honesty of `verify_timestamp_token`: it answers *which* state a
+    token is about, and says nothing about whether the token is authentic.
+    Nothing in this module verifies a TSA signature or a certificate chain.
+    """
+    commitment = sc.build_commitment_bytes(ROOT, STATE)
+    digest = sc.commitment_digest(commitment)
+
+    # Not a TSA response at all - a bare request we built ourselves, carrying
+    # the correct messageImprint and no signature of any kind.
+    forged = sc.build_timestamp_request(digest, cert_req=False)
+
+    result = sc.verify_timestamp_token(forged, ROOT, STATE)
+    assert result["binding_matches"] is True
+    assert result["commitment_matches"] is True
+    assert result["signature_verified"] is False
+    assert result["chain_validated"] is False
+    assert "NOT checked" in result["note"]
+
+    described = sc.describe_backends()["backends"]["rfc3161"]
+    assert "authenticity" in described
+    assert "verifier" not in described
