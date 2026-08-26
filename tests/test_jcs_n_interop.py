@@ -10,8 +10,11 @@ ordinary SATROOT state snapshot, because that snapshot carries members jcs-n
 removes.
 """
 
+import pytest
+
 import satroot1 as sr
 import satroot_jcs as jcs
+from satroot1 import SatRootError
 
 
 def _snapshot(**kwargs):
@@ -138,3 +141,43 @@ def test_nfc_and_nfd_fixtures_are_genuinely_distinct():
     keys = list(record)
     assert unicodedata.normalize("NFC", keys[0]) == unicodedata.normalize("NFC", keys[1])
     assert keys[0] != keys[1]
+
+
+def test_lone_surrogate_in_a_value_raises_satroot_error():
+    """RFC 8785 3.2.2.2 - and symmetrically with keys.
+
+    The guard used to cover keys only, so a lone surrogate in a value passed
+    jcs_serialize and surfaced as UnicodeEncodeError from inside jcs_n.
+    """
+    lone = "\ud800"
+    with pytest.raises(SatRootError):
+        jcs.jcs_serialize({"a": lone})
+    with pytest.raises(SatRootError):
+        jcs.jcs_serialize({lone: "a"})
+    with pytest.raises(SatRootError):
+        jcs.jcs_n({"a": lone})
+
+
+def test_deep_nesting_raises_satroot_error_not_recursion_error():
+    deep = {}
+    node = deep
+    for _ in range(jcs.MAX_JSON_DEPTH + 10):
+        node["a"] = {}
+        node = node["a"]
+    with pytest.raises(SatRootError):
+        jcs.jcs_serialize(deep)
+    with pytest.raises(SatRootError):
+        jcs.strip_absent(deep)
+
+
+def test_exclusion_set_is_top_level_name_scoped():
+    """Pins the reading the draft does not settle.
+
+    Section 13.2's only registered example is {capsule_id, chain}, which
+    cannot distinguish name-scoped from path-scoped exclusion. This
+    implementation excludes top-level names only; a nested member sharing
+    the name survives. Recorded so the choice is visible rather than
+    accidental.
+    """
+    payload = {"chain": "drop me", "inner": {"chain": "keep me"}}
+    assert jcs.jcs_n(payload, ["chain"]) == jcs.jcs_n({"inner": {"chain": "keep me"}})

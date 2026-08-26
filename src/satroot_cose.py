@@ -21,7 +21,7 @@ Transparency Service is the next step, not something this module does.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from satroot1 import (
     SatRootError,
@@ -32,17 +32,51 @@ from satroot1 import (
 
 # COSE header labels (RFC 9052) and the CWT claims label used by RFC 9943.
 HDR_ALG = 1
-HDR_CRIT = 2
 HDR_CONTENT_TYPE = 3
 HDR_KID = 4
 HDR_CWT_CLAIMS = 15
 
-ALG_EDDSA = -8
+# RFC 9864 (Oct 2025) registers fully-specified Ed25519 as -19 and marks the
+# polymorphic EdDSA identifier -8 Deprecated, because -8 alone does not say
+# which curve is in use. Emit -19; accept -8 on the way in, since statements
+# signed before that RFC exist and the signature does not depend on the label.
+ALG_ED25519 = -19
+ALG_EDDSA_DEPRECATED = -8
+ACCEPTED_ALGS = (ALG_ED25519, ALG_EDDSA_DEPRECATED)
 CWT_ISS = 1
 CWT_SUB = 2
 
 COSE_SIGN1_TAG = 18
 SATROOT_CONTENT_TYPE = "application/satroot1+json"
+
+# Guards the CBOR decoder against deeply nested attacker input, which would
+# otherwise surface as RecursionError rather than SatRootError.
+MAX_CBOR_DEPTH = 32
+
+
+class CBORTag:
+    """A CBOR tagged value (major type 6).
+
+    Needed because RFC 9943 defines ``Signed_Statement = #6.18(COSE_Sign1)``:
+    the tag is part of the type, so it has to survive both encoding and
+    decoding rather than being discarded.
+    """
+
+    __slots__ = ("tag", "value")
+
+    def __init__(self, tag: int, value: Any) -> None:
+        self.tag = tag
+        self.value = value
+
+    def __eq__(self, other: Any) -> bool:
+        return (
+            isinstance(other, CBORTag)
+            and self.tag == other.tag
+            and self.value == other.value
+        )
+
+    def __repr__(self) -> str:
+        return f"CBORTag({self.tag}, {self.value!r})"
 
 
 # ---------------------------------------------------------------------------
@@ -77,12 +111,19 @@ def cbor_encode(value: Any) -> bytes:
         return _head(4, len(value)) + b"".join(cbor_encode(v) for v in value)
     if isinstance(value, dict):
         # RFC 8949 4.2.1: keys sorted by their encoded byte sequences.
+        # Bytewise on the *encoding*, which is not numeric order and not
+        # RFC 7049 s3.9 length-first order. For {10, 100, -1} the three
+        # rules disagree and this one gives 0a, 1864, 20.
         items = sorted(((cbor_encode(k), v) for k, v in value.items()), key=lambda kv: kv[0])
         return _head(5, len(items)) + b"".join(k + cbor_encode(v) for k, v in items)
+    if isinstance(value, CBORTag):
+        return _head(6, value.tag) + cbor_encode(value.value)
     raise SatRootError(f"unsupported CBOR type: {type(value).__name__}")
 
 
-def _read(buf: bytes, i: int) -> Tuple[Any, int]:
+def _read(buf: bytes, i: int, depth: int = 0) -> Tuple[Any, int]:
+    if depth > MAX_CBOR_DEPTH:
+        raise SatRootError("CBOR nesting exceeds the permitted depth")
     if i >= len(buf):
         raise SatRootError("truncated CBOR")
     initial = buf[i]
@@ -111,19 +152,24 @@ def _read(buf: bytes, i: int) -> Tuple[Any, int]:
     if major == 4:
         out: List[Any] = []
         for _ in range(value):
-            item, i = _read(buf, i)
+            item, i = _read(buf, i, depth + 1)
             out.append(item)
         return out, i
     if major == 5:
         obj: Dict[Any, Any] = {}
         for _ in range(value):
-            k, i = _read(buf, i)
-            v, i = _read(buf, i)
+            k, i = _read(buf, i, depth + 1)
+            v, i = _read(buf, i, depth + 1)
+            if k in obj:
+                # RFC 9052 s9: applications must not parse or process
+                # maps with duplicate labels. Silently keeping the last
+                # one lets a second alg override the first.
+                raise SatRootError(f"duplicate CBOR map label: {k!r}")
             obj[k] = v
         return obj, i
     if major == 6:
-        inner, i = _read(buf, i)  # tag content
-        return inner, i
+        inner, i = _read(buf, i, depth + 1)
+        return CBORTag(value, inner), i
     raise SatRootError(f"unsupported CBOR major type {major}")
 
 
@@ -139,10 +185,20 @@ def cbor_decode(buf: bytes) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def protected_header(*, issuer: str, subject: str, key_id: str) -> bytes:
-    """Protected header bstr: alg, content type, kid and CWT claims."""
+def protected_header(
+    *, issuer: str, subject: str, key_id: str, alg: int = ALG_ED25519
+) -> bytes:
+    """Protected header bstr: alg, content type, kid and CWT claims.
+
+    ``alg`` defaults to the fully-specified Ed25519 identifier -19
+    (RFC 9864). Pass ``ALG_EDDSA_DEPRECATED`` to emit the deprecated
+    polymorphic -8 instead, which is what deployed COSE libraries
+    currently understand - see ``docs/COSE_INTEROP.md``.
+    """
+    if alg not in ACCEPTED_ALGS:
+        raise SatRootError(f"unsupported COSE alg for SATROOT: {alg}")
     header = {
-        HDR_ALG: ALG_EDDSA,
+        HDR_ALG: alg,
         HDR_CONTENT_TYPE: SATROOT_CONTENT_TYPE,
         HDR_KID: key_id.encode("utf-8"),
         HDR_CWT_CLAIMS: {CWT_ISS: issuer, CWT_SUB: subject},
@@ -161,14 +217,22 @@ def event_payload(event: Dict[str, Any]) -> bytes:
 
 
 def sign_statement(
-    event: Dict[str, Any], *, issuer: str, subject: str, key_id: str, private_key_hex: str
+    event: Dict[str, Any],
+    *,
+    issuer: str,
+    subject: str,
+    key_id: str,
+    private_key_hex: str,
+    alg: int = ALG_ED25519,
 ) -> bytes:
     """Encode one SATROOT event as a COSE_Sign1 Signed Statement."""
     if not ed25519_available():
         raise SatRootError("ed25519 support unavailable; install satroot[crypto]")
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-    protected = protected_header(issuer=issuer, subject=subject, key_id=key_id)
+    protected = protected_header(
+        issuer=issuer, subject=subject, key_id=key_id, alg=alg
+    )
     payload = event_payload(event)
     to_be_signed = signature_structure(protected, payload)
     # COSE signs the raw Sig_structure bytes. The kernel's ed25519_sign takes
@@ -176,12 +240,32 @@ def sign_statement(
     # which would not interoperate with any other COSE implementation.
     key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_key_hex))
     signature = key.sign(to_be_signed)
-    return cbor_encode([protected, {}, payload, signature])
+    # RFC 9943: Signed_Statement = #6.18(COSE_Sign1). The tag is part of
+    # the type, so a SCITT decoder is entitled to reject an untagged array.
+    return cbor_encode(CBORTag(COSE_SIGN1_TAG, [protected, {}, payload, signature]))
+
+
+def _payload_event(payload: bytes) -> Dict[str, Any]:
+    """The JSON payload, with decoding failures kept inside SatRootError."""
+    try:
+        return json.loads(payload.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise SatRootError(f"statement payload is not SATROOT JSON: {exc}") from exc
 
 
 def parse_statement(statement: bytes) -> Dict[str, Any]:
     """Decode a Signed Statement into its parts, without verifying."""
     decoded = cbor_decode(statement)
+    if not isinstance(decoded, CBORTag):
+        raise SatRootError(
+            "SCITT Signed Statement must be CBOR tag 18; found an untagged "
+            "value (RFC 9943: Signed_Statement = #6.18(COSE_Sign1))"
+        )
+    if decoded.tag != COSE_SIGN1_TAG:
+        raise SatRootError(
+            f"expected COSE_Sign1 tag {COSE_SIGN1_TAG}, found {decoded.tag}"
+        )
+    decoded = decoded.value
     if not isinstance(decoded, list) or len(decoded) != 4:
         raise SatRootError("COSE_Sign1 must be a 4-element array")
     protected, unprotected, payload, signature = decoded
@@ -196,7 +280,7 @@ def parse_statement(statement: bytes) -> Dict[str, Any]:
         "issuer": claims.get(CWT_ISS),
         "subject": claims.get(CWT_SUB),
         "payload": payload,
-        "event": json.loads(payload.decode("utf-8")),
+        "event": _payload_event(payload),
         "signature": signature,
         "protected": protected,
         "unprotected": unprotected,
@@ -208,7 +292,7 @@ def verify_statement(statement: bytes, public_key_hex: str) -> Dict[str, Any]:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
     parsed = parse_statement(statement)
-    if parsed["alg"] != ALG_EDDSA:
+    if parsed["alg"] not in ACCEPTED_ALGS:
         raise SatRootError(f"unexpected COSE alg: {parsed['alg']}")
     if parsed["content_type"] != SATROOT_CONTENT_TYPE:
         raise SatRootError(f"unexpected content type: {parsed['content_type']}")
@@ -236,12 +320,17 @@ def encode_ledger(
     issuer: str,
     private_keys: Dict[str, str],
     signer_key_ids: Dict[str, str],
+    alg: int = ALG_ED25519,
 ) -> List[bytes]:
     """Encode a whole SATROOT ledger as a sequence of Signed Statements.
 
     The subject is the namespace root_id, so every statement in a ledger
-    shares a subject - which is how a Transparency Service would group
-    them into one Statement Sequence.
+    shares a subject - which is how a relying party groups statements
+    about one namespace.
+
+    Note this is a *subject grouping*, not a SCITT Statement Sequence:
+    RFC 9943 s3 uses that term for the Transparency Service's own ordered
+    registration history, which nothing here produces.
     """
     if not events:
         raise SatRootError("cannot encode an empty ledger")
@@ -250,6 +339,17 @@ def encode_ledger(
         raise SatRootError("genesis event has no root_id")
     out = []
     for event in events:
+        # Every statement is about to be labelled with the genesis root_id.
+        # Without this check, events from two ledgers encode into
+        # well-formed, correctly signed statements asserting a namespace
+        # they do not belong to - no crash, no failed signature, a
+        # plausible and wrong result.
+        event_root = event.get("root_id")
+        if event_root is not None and event_root != subject:
+            raise SatRootError(
+                f"event {event.get('sequence')} belongs to namespace "
+                f"{event_root!r}, not {subject!r}; a ledger encodes as one subject"
+            )
         # A signed event already declares which key signed it; fall back to
         # the signer map, then to the genesis mint authority.
         key_id = event.get("signature_key_id")
@@ -268,6 +368,7 @@ def encode_ledger(
                 subject=subject,
                 key_id=key_id,
                 private_key_hex=private_keys[key_id],
+                alg=alg,
             )
         )
     return out

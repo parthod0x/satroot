@@ -162,6 +162,28 @@ precondition would describe:
 {}   {"x": null}   {"x": []}   {"x": {}}     ->  44136fa355b3678a...
 ```
 
+### A fifth input, and a better one
+
+**The draft does not say whether the exclusion set is name-scoped or
+path-scoped.** Section 13.2's only registered example is the bare pair
+`{capsule_id, chain}`, which cannot distinguish the two readings, and section
+3.1 says only "minus exclusion_set". Given
+
+```
+{"chain": "drop me", "inner": {"chain": "keep me"}}
+```
+
+a name-scoped implementation removes both members and a top-level-scoped one
+removes the first. Two conforming-looking implementations produce different
+digests for the same payload class.
+
+`satroot_jcs.jcs_n` excludes **top-level member names only**, and now says so.
+That is a choice, not a reading of the text.
+
+This is a better contribution than the four below, because the other four are
+things a careful implementer gets right from the prose and a vector would
+confirm. This one the prose does not settle at all.
+
 ### Limits of this implementation
 
 - Integers above 2**53 are **rejected**, not rendered. RFC 8785 requires
@@ -253,7 +275,33 @@ result. It was wrong to.
 
 What this is: a restricted implementation of `jcs-n` written from the draft
 text, whose construction surfaced four things a published test vector would
-prevent, plus one point about the rationale in section 11.3.
+prevent, one question the prose does not settle at all - whether exclusion is
+name-scoped or path-scoped - plus one point about the rationale in section
+11.3.
 
-The value, if any, lies in the vectors and that note. The digest comparison
-which prompted the work is not the contribution.
+The value, if any, lies in the vectors and the scoping question. The digest
+comparison which prompted the work is not the contribution.
+
+## A note on the surrounding code
+
+The two modules this document leans on were reviewed externally on 26 August
+2026, and the review found a defect worth recording here because it bears on
+how much any of the above should be trusted.
+
+`satroot_commitment.extract_message_imprint` could not parse a real RFC 3161
+timestamp token. It searched for a structure shaped like a `messageImprint`,
+descending only into SEQUENCEs - and the path from `ContentInfo` to `TSTInfo`
+crosses a context-specific `[0]`, a SET and an OCTET STRING. So it rejected
+every genuine token, while accepting any DER that happened to contain a
+matching shape, including a bare `TimeStampReq`.
+
+It survived because no test had ever handed it a real token: every fixture
+was a request the module had built and fed back to its own parser, so the
+implementation and its tests shared one wrong model of the ASN.1. It is now
+a structural parse, and two genuine tokens - from freetsa.org and DigiCert -
+are checked in under `tests/fixtures/rfc3161/`.
+
+The lesson generalises to this document: a conformance corpus written by the
+author of the implementation tests the author's understanding, not the
+specification. The RFC 8785 results above are worth more than the `jcs-n`
+ones precisely because the vectors came from someone else.

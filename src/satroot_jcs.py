@@ -29,21 +29,37 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from satroot1 import SatRootError, canonical_json
 
 
+MAX_JSON_DEPTH = 64
+
+
+def _check_surrogates(text: str, what: str) -> None:
+    """RFC 8785 s3.2.2.2: a lone surrogate must terminate processing.
+
+    Applied to values as well as keys. It used to guard keys only, so a
+    lone surrogate in a value passed jcs_serialize and surfaced later as
+    a UnicodeEncodeError from .encode("utf-8") inside jcs_n - the wrong
+    exception type, from the wrong place, and asymmetric with keys.
+    """
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise SatRootError(f"lone surrogate in {what}: {text!r}") from exc
+
+
 def _utf16_sort_key(name: str) -> bytes:
     """RFC 8785 section 3.2.3: sort by UTF-16 code units.
 
     Lone surrogates are rejected: RFC 8785 requires them to be an error,
     and ``surrogatepass`` would sort them silently.
     """
-    try:
-        name.encode("utf-8")
-    except UnicodeEncodeError as exc:
-        raise SatRootError(f"lone surrogate in object key: {name!r}") from exc
+    _check_surrogates(name, "object key")
     return name.encode("utf-16-be")
 
 
-def jcs_serialize(value: Any) -> str:
+def jcs_serialize(value: Any, _depth: int = 0) -> str:
     """Serialise per RFC 8785, for the value types SATROOT permits."""
+    if _depth > MAX_JSON_DEPTH:
+        raise SatRootError("JSON nesting exceeds the permitted depth")
     if value is None:
         return "null"
     if value is True:
@@ -68,16 +84,17 @@ def jcs_serialize(value: Any) -> str:
             )
         return str(value)
     if isinstance(value, str):
+        _check_surrogates(value, "string value")
         # JSON string escaping is identical between RFC 8785 and Python's
         # json module: short escapes for \\b \\t \\n \\f \\r \\" \\\\, \\uXXXX
         # for other control characters, everything else literal UTF-8.
         return json.dumps(value, ensure_ascii=False)
     if isinstance(value, list):
-        return "[" + ",".join(jcs_serialize(v) for v in value) + "]"
+        return "[" + ",".join(jcs_serialize(v, _depth + 1) for v in value) + "]"
     if isinstance(value, dict):
         keys = sorted(value.keys(), key=_utf16_sort_key)
         return "{" + ",".join(
-            json.dumps(k, ensure_ascii=False) + ":" + jcs_serialize(value[k])
+            json.dumps(k, ensure_ascii=False) + ":" + jcs_serialize(value[k], _depth + 1)
             for k in keys
         ) + "}"
     raise SatRootError(f"unsupported type for JCS: {type(value).__name__}")
@@ -166,7 +183,7 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 
 
-def strip_absent(value: Any) -> Any:
+def strip_absent(value: Any, _depth: int = 0) -> Any:
     """Remove, bottom-up and recursively, members whose value is null, an
     empty array, or an empty object.
 
@@ -175,16 +192,18 @@ def strip_absent(value: Any) -> Any:
     normalisation: the draft applies RFC 8785 without adding NFC or any other
     Unicode normalisation step.
     """
+    if _depth > MAX_JSON_DEPTH:
+        raise SatRootError("JSON nesting exceeds the permitted depth")
     if isinstance(value, dict):
         cleaned = {}
         for k, v in value.items():
-            v = strip_absent(v)
+            v = strip_absent(v, _depth + 1)
             if v is None or v == {} or v == []:
                 continue
             cleaned[k] = v
         return cleaned
     if isinstance(value, list):
-        return [strip_absent(v) for v in value]
+        return [strip_absent(v, _depth + 1) for v in value]
     return value
 
 
@@ -200,6 +219,15 @@ def jcs_n(value: Any, exclusion_set: Optional[Iterable[str]] = None) -> str:
     a chain, so that a record's content address stays stable regardless of
     what later chains to it. Omitting it computes only steps 1-4 of section
     3.1, which is not the complete construction.
+
+    **Exclusion is applied to top-level member names only.** The draft does
+    not say whether the exclusion set is name-scoped or path-scoped: the
+    only registered example, in section 13.2, is the bare pair
+    ``{capsule_id, chain}``, which cannot distinguish the two readings. A
+    nested member sharing a name with an excluded top-level field is
+    therefore kept here. That is a choice, not a reading of the text, and
+    an implementation choosing the other one would produce different
+    digests for the same payload class.
     """
     import hashlib
 

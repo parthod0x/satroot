@@ -2,6 +2,79 @@
 
 ## Unreleased
 
+## v1.7.1-review-corrections - 2026-08-26
+
+- **Fixes a defect that made the `rfc3161` backend non-functional against real
+  timestamp tokens.** `satroot_commitment.extract_message_imprint` searched for
+  a structure shaped like a `messageImprint`, descending only into SEQUENCEs.
+  The path from `ContentInfo` to `TSTInfo` crosses a context-specific `[0]`, a
+  SET and an OCTET STRING (RFC 5652 s3, s5.1, s5.2), so it could not reach the
+  imprint in any genuine token - and it accepted any DER carrying a matching
+  shape, including a bare `TimeStampReq`. It is now a structural parse that
+  reads `messageImprint` at its defined position, and two real tokens, from
+  freetsa.org and DigiCert, are checked in under `tests/fixtures/rfc3161/`
+  along with the request-is-not-a-token regression. Every previous fixture was
+  a request this module had built and handed back to its own parser, so the
+  code and its tests shared one wrong model of the ASN.1. Found independently
+  by two external reviewers.
+
+- **First verification by an implementation this author did not write.** `scripts/check_cose_interop.py` signs a statement with `satroot_cose` and asks pycose to verify it; pycose 1.1.0 decodes it and confirms the Ed25519 signature, which tests the `Sig_structure` (RFC 9052 s4.4), the protected-header encoding, the deterministic CBOR and the `#6.18` tag against software with no shared assumptions. Two findings came out of it, recorded in `docs/COSE_INTEROP.md`: pycose 1.1.0 rejects the RFC 9864 identifier `-19` as unknown, so fully-specified algorithms are ahead of deployed tooling and `alg` is now selectable; and pycose 1.1.0 cannot decode its own output under cbor2 6.x, which is why the script runs a control before drawing any conclusion about SATROOT's bytes.
+
+- Widens the lossless-encoding evidence from one machine-credit ledger to three profiles, after both reviewers called the single-ledger test thin.
+
+- Emits SCITT Signed Statements as `#6.18(COSE_Sign1)`. RFC 9943 defines
+  `Signed_Statement = #6.18(COSE_Sign1)`, so the CBOR tag is part of the type
+  and a conforming decoder may reject an untagged array. `satroot_cose`
+  previously declared `COSE_SIGN1_TAG = 18` and never emitted it, while its
+  decoder discarded tags - so the round trip could not reveal the omission.
+  Tags now survive encoding and decoding via `CBORTag`, and `parse_statement`
+  requires tag 18.
+
+- Switches the COSE algorithm identifier from `-8` to `-19`. RFC 9864 registers
+  fully-specified Ed25519 as `-19` and marks the polymorphic EdDSA identifier
+  `-8` Deprecated, since `-8` alone does not say which curve is in use. `-8` is
+  still accepted on parse.
+
+- Rejects mixed-namespace input in `satroot_cose.encode_ledger`. The subject
+  was taken from `events[0]` and applied to every statement without checking
+  that the rest agreed, so events from two ledgers encoded into well-formed,
+  correctly signed statements asserting a namespace they did not belong to -
+  no crash, no failed signature, a plausible and wrong result. Also stops
+  describing the result as a SCITT "Statement Sequence", which RFC 9943 s3
+  reserves for the Transparency Service's own registration history.
+
+- Hardens both parsers against hostile input: the DER reader now rejects
+  non-minimal lengths, indefinite lengths and high-tag-number identifiers (DER,
+  not BER); the CBOR decoder rejects duplicate map labels per RFC 9052 s9,
+  which previously let a second `alg` silently override the first; and the CBOR
+  decoder, `jcs_serialize` and `strip_absent` all bound recursion depth so
+  deeply nested input raises `SatRootError` rather than `RecursionError`. A
+  negative RFC 3161 nonce and a non-JSON statement payload now raise
+  `SatRootError` rather than `OverflowError` and `JSONDecodeError`.
+
+- Extends the RFC 8785 lone-surrogate guard to string values, not just object
+  keys. A lone surrogate in a value previously passed `jcs_serialize` and
+  surfaced as a `UnicodeEncodeError` from inside `jcs_n`.
+
+- Uses `canonical_json` in `satroot_commitment.build_commitment_bytes` instead
+  of a second `json.dumps` call. The two differ in their `ensure_ascii`
+  default, so the canonical form was defined twice with divergent behaviour -
+  unreachable while every field is hex-validated, and a trap for the first
+  field that is not.
+
+- Records in `docs/CANONICALISATION.md` that `jcs-n`'s exclusion set has no
+  specified scope. Section 13.2's only registered example, `{capsule_id,
+  chain}`, cannot distinguish name-scoped from path-scoped exclusion, so two
+  conforming-looking implementations can digest the same payload differently.
+  This is a better note for the draft authors than the four already recorded,
+  because the prose does not settle it.
+
+- Strengthens the tests that were passing for the wrong reason. The CBOR
+  map-ordering test used keys 1, 2, 3, where bytewise, numeric and RFC 7049
+  length-first ordering all coincide; it now uses `{10, 100, -1}`, which
+  separates all three. Adds the integer head-width boundaries the
+  hand-transcribed vector list never reached, including 2**64-1.
+
 - Corrects an overstatement in `satroot_commitment.verify_timestamp_token`. It performs no cryptographic verification of a timestamp token: it parses out the SHA-256 `messageImprint` and compares it against the commitment digest, and nothing in the module checks the TSA's signature over `TSTInfo` or validates a certificate chain. The previous docstring said only that certificate chain validation was left to the relying party, which invites the reading that the signature *is* checked. A forged token carrying the right imprint passes, and `tests/test_commitment_backends.py` now pins exactly that. The returned mapping gained `binding_matches`, `signature_verified` and `chain_validated`, and `describe_backends` no longer calls the function a "verifier".
 
 ## v1.7-standards-alignment - 2026-08-26

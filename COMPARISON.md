@@ -135,6 +135,14 @@ March 2026; Rekor v2 checkpoints carry witness cosignatures.
 multiple independent implementations, and institutional governance. SATROOT
 has two implementations by one author.
 
+One narrow exception, added 2026-08-26 so the sentence above is not read as
+broader than it is: **pycose verified a SATROOT Signed Statement**, which is
+the first time software written by someone else has checked any output of
+this project. It validates the COSE_Sign1 encoding - `Sig_structure`,
+protected headers, deterministic CBOR, the `#6.18` tag - and nothing about
+the SATROOT kernel, the reducer or the state commitment, which remain
+single-author. See `docs/COSE_INTEROP.md`.
+
 ---
 
 ## Weaknesses a domain expert would ask about
@@ -191,10 +199,14 @@ arithmetic rather than a finding** — the draft states the equivalence is a
 payload-class decision, and that digests are only comparable within one
 digest context.
 
-Implementing it did surface three things worth knowing, recorded in the
-canonicalisation document: an ambiguity about whether an emptied object
-inside an array is pruned, a falsiness trap that would make a JavaScript
-implementation strip `false`, `0` and `""`, and the fact that the collapse is
+Implementing it did surface things worth knowing, recorded in the
+canonicalisation document. The strongest is that **the draft does not specify
+whether the exclusion set is name-scoped or path-scoped** - its only registered
+example cannot distinguish the two, so two conforming-looking implementations
+can digest the same payload differently. The rest are implementer traps rather
+than gaps in the text: a generic recursive prune that also filters arrays
+diverges, though RFC 8259 settles which reading is correct; a falsiness-based
+implementation would strip `false`, `0` and `""`; and the collapse is
 unconditional, so a profile binding record *shape* cannot use `jcs-n`.
 
 Neither scheme normalises Unicode, making normalisation a producer-side
