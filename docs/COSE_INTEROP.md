@@ -18,7 +18,11 @@ This is the first check against software written by someone else.
 
 pycose verified a signature produced by `satroot_cose`. That is the claim
 "signatures are over the raw `Sig_structure`, so they interoperate with other
-COSE implementations" tested rather than asserted: the `Sig_structure`
+COSE implementations" tested rather than asserted — **with one clause the
+result does not carry on its own: the verified path is not the default one.**
+`satroot_cose` emits `-19` by default and pycose rejects it, so in its shipped
+configuration the output does not interoperate with the only independent
+library tested. Both are true; neither should be read without the other: the `Sig_structure`
 construction (RFC 9052 s4.4), the protected-header encoding, the deterministic
 CBOR and the `#6.18` tag are all confirmed by software that has never seen this
 repository.
