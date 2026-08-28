@@ -65,20 +65,63 @@ before submission.
 
 ### The sequence both reviewers recommended instead
 
-1. **Run a cross-implementation canonicalisation comparison** against the
-   payload-binding draft's JCS implementations on a shared record, and report
-   the result - agreement or disagreement, both are useful. That draft credits
-   contributors by name. Costs an afternoon, requires no standing, and is
-   unambiguously not self-promotion.
-2. **Review an existing draft** - `draft-fassbender-scitt-time-anchor` is
-   directly adjacent to the anchoring work already implemented here.
-3. **Post a short technical question** to the list about whether there is
-   interest in a common application-sequencing convention across the existing
-   profiles, proposing a specific answer.
+1. **Run a cross-implementation canonicalisation comparison** and report the
+   result. **DONE** - `docs/COSE_INTEROP.md`: pycose, an implementation this
+   author did not write, verified a SATROOT Signed Statement. It validates the
+   COSE encoding only. Two findings came out of it, including that pycose
+   1.1.0 rejects the RFC 9864 identifier -19, so conformance and compatibility
+   currently point in opposite directions.
+2. **Review an existing draft.** **DONE, awaiting send** -
+   `SCITT_DRAFT_REVIEW.md` in the workspace root reviews
+   `draft-fassbender-scitt-time-anchor-05`. It reports an implementation
+   finding that strengthens that draft's own contrast with RFC 3161, offers a
+   sentence for its section 2.6.6, and asks one genuine question about step 4.
+3. **Post a short technical question to the list.** Not done. This is a manual
+   send and should follow (2), not precede it.
 4. **Then** write a real specification, if there is interest.
 
-The implementation experience section is genuine content of a kind these
-drafts are short of. The self-limiting statement - that two implementations by
-one author demonstrate the specification is implementable but are not
-independent validation - was singled out by both reviewers as the strongest
-line in the document. Keep it.
+## draft-saxena-scitt-state-derivation-01
+
+**Status: BETTER, STILL NOT READY.** The -01 rewrite addresses every defect
+the reviewers named. It should still not be submitted until step 3 above has
+happened and produced some signal.
+
+### What -01 changed
+
+- **The central question is replaced.** The -00 asked whether the reducer's
+  order should come from registration or from payloads. That is settled -
+  SCITT permits registering one statement with several Services, so state
+  derived from registration order depends on which Service you ask. The -01
+  states it as settled in the requirements section and asks the question both
+  reviewers proposed instead: **where should a state commitment be carried so
+  a Transparency Service can attest to it without interpreting the payload?**
+  Four placements are compared.
+- **Working-group citations added**: `draft-mih-sokolov-scitt-payload-binding`,
+  `draft-noa-scitt-ai-agent-receipt`, `draft-emirdag-scitt-ai-agent-execution`,
+  and KEYTRANS, which was the most conspicuous omission - an active IETF group
+  doing log-derived state, absent from a draft surveying log-derived state.
+- **The truncation threat has its own section**, and it is now the section
+  that motivates the placement question. A prefix of a valid signed sequence
+  is a valid signed sequence; signatures do not help when the presenter holds
+  the keys; what helps is an external dated attestation, because a presenter
+  can obtain a fresh one but not a backdated one.
+- **Real implementation experience replaces the thin version.** Ten rounds of
+  adversarial review produced four findings sharing one shape - *a
+  verification check whose trust anchor was supplied by the party being
+  checked* - and two of those findings were introduced by the fix for the one
+  before. That is content of a kind these drafts are short of, and it bears
+  directly on the placement question: a commitment in a payload is supplied by
+  the sequence's author.
+- **The scope question is stated rather than dodged.** RFC 9943 describes
+  single-issuer transparency; custody-transfer examples involve several. Two
+  readings are offered and neither is asserted.
+- **The self-limiting statement is kept**, in the reviewers' own framing, and
+  the acknowledgements credit them for the classification.
+
+### What would make it submittable
+
+A reason to exist that comes from someone else. Post the question in step 3,
+and if anyone says "yes, we have this problem too", the draft has standing it
+does not currently have. If nobody does, the honest conclusion is that this is
+implementation experience worth writing down and not a specification anyone
+needs, which is a fine outcome and cheaper than finding out after submission.
