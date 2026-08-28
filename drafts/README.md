@@ -125,3 +125,59 @@ and if anyone says "yes, we have this problem too", the draft has standing it
 does not currently have. If nobody does, the honest conclusion is that this is
 implementation experience worth writing down and not a specification anyone
 needs, which is a fine outcome and cheaper than finding out after submission.
+
+
+## Round 11: the -01 is also not ready, for different reasons
+
+**2026-08-28. Two reviewers, NO-GO on all three documents.** Every point below
+was verified against the primary source rather than taken on the reviewers'
+word.
+
+- **The RFC 3161 claim in section "What repeated review found" is wrong.**
+  "an RFC 3161 token carries its signing certificate" is not a property of the
+  protocol: certReq is DEFAULT FALSE (RFC 3161 s2.4.1) and when absent the
+  certificates field MUST NOT be present. True of our tokens because we ask
+  for it. Corrected in the implementation; the draft still states it.
+- **The four placements are not a taxonomy.** A CWT claim *is* carried in the
+  protected header, so options 2 and 3 are one structural location. A
+  "distinct registered statement type" still carries its commitment in a
+  payload, so option 4 is a form of option 1. And the Receipt extension - which
+  this file itself named as one of the four alternatives - is missing from the
+  draft entirely.
+- **The central security argument is wrong.** Placement does not determine who
+  supplied a commitment: the issuer supplies it in a payload, a header and a
+  CWT claim alike, and a Service that copies a value does not become its
+  source. The real distinction is issuer assertion / Service observation /
+  Service validation, and only the third is what the draft wants - which a
+  payload-blind Service cannot provide.
+- **"A single field cannot bind multiple artifacts" is false.** One digest can
+  commit to a canonical document holding any number of heads. Our own
+  checkpoint already does exactly that.
+- **Two cited drafts already do what the draft says is unaddressed.**
+  `draft-noa-scitt-ai-agent-receipt-01` defines highestSeq and headHash with
+  answered/unanswered/unusable checkpoint states, and says truncation is
+  detectable only against an authenticated checkpoint.
+  `draft-emirdag-scitt-ai-agent-execution-00` puts chain_hash,
+  prev_chain_hash and sequence_number in the protected header, has the Service
+  validate continuity, and echoes them in a Receipt.
+- **RFC 9943 already addresses completeness** via a shared `sub`: relying
+  parties can use it to identify all Transparent Statements for a Subject and
+  assess completeness and non-equivocation. The truncation framing needs the
+  offline-subset threat model stated explicitly or it overstates the problem.
+- **KEYTRANS is mischaracterised**, and "trust anchor" is used for a state
+  commitment, which is hazardous in an IETF document where the term has a
+  settled meaning.
+- **The COSE interop result omits its limitation**: pycose verified the
+  deprecated alg -8 path; the default -19 was rejected before signature
+  verification. Stating the result without that invites the wrong inference.
+
+### What this means
+
+The -01 does not need community signal. It needs its central model rebuilt,
+and after reading the two drafts properly there may be nothing left to
+propose that they do not already do. That is a real possible outcome.
+
+**The honest next step is not a -02.** It is the one artefact that survived
+round 11 intact: the jcs-n vectors and the exclusion-scope question, which is
+new, checkable, and about the specification rather than about us. See
+`SCITT_JCS_N_OFFER.md` in the workspace root.
