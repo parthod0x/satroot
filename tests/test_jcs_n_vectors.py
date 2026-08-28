@@ -1,10 +1,12 @@
-"""The published `jcs-n` vectors, pinned so they cannot drift.
+"""Historical `jcs-n` vectors, pinned so they cannot drift.
 
-`vectors/jcs_n/vectors.json` is offered to the authors of
-draft-mih-sokolov-scitt-payload-binding-01, which publishes none of its own.
-If these digests change, either the implementation changed or the vectors are
-wrong - and an offered vector that quietly changed would be worse than no
-vector at all.
+`jcs-n` was withdrawn in draft-mih-sokolov-scitt-payload-binding-02
+(2026-08-24), which registers plain `jcs` in its place. These vectors record
+an implementation of the -01 text; they are not an interoperability
+contribution and are not offered to anyone.
+
+They are kept, and pinned, because the implementation still ships `jcs_n` and
+a silent change to what it computes would be worse than deleting it.
 """
 
 import json
@@ -35,15 +37,30 @@ def test_collapse_vector_really_collapses():
     assert len(vector["cases"]) == 4
 
 
-def test_the_open_question_is_marked_as_such():
-    """Exactly one vector records a reading the draft does not settle.
+def test_the_scope_vector_records_both_readings_and_which_one_won():
+    """-01 left exclusion scope open; -02 section 4.1 settles it.
 
-    If a future draft revision settles exclusion scope, this vector is the one
-    to revisit - and it must stay flagged until then, so nobody mistakes our
-    choice for the specification.
+    The vector must carry both candidate readings, not just the one this
+    implementation chose, or the ambiguity it documents is invisible. The
+    reading -02 made normative is the one that was chosen here - which is
+    worth recording precisely because it was a guess at the time.
     """
-    unsettled = [v for v in CORPUS["vectors"] if not v["settled_by_the_draft"]]
-    assert [v["name"] for v in unsettled] == ["exclusion-scope-is-unspecified"]
+    unsettled = [v for v in CORPUS["vectors"] if not v["settled_by_01_text"]]
+    assert [v["name"] for v in unsettled] == ["exclusion-scope-resolved-in-02"]
+
+    readings = unsettled[0]["readings"]
+    assert readings["top_level_member_names"]["specified_by_02"] is True
+    assert readings["recursive_member_names"]["specified_by_02"] is False
+    # The two readings must actually differ, or the vector shows nothing.
+    assert readings["top_level_member_names"]["digest"] != readings[
+        "recursive_member_names"
+    ]["digest"]
+
+
+def test_the_corpus_declares_itself_historical():
+    """Nobody should mistake these for current interoperability vectors."""
+    assert "HISTORICAL" in CORPUS["status"]
+    assert "withdrawn" in CORPUS["algorithm"]
 
 
 def test_the_array_element_vector_keeps_the_emptied_object():

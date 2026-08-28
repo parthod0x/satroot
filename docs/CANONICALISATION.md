@@ -83,7 +83,45 @@ digit string, bounded to 512 digits. Integers used for `sequence` and
 An implementation seeking general JCS conformance must handle numbers
 properly and should not use this module for that purpose.
 
-## Compared against `jcs-n`
+## `jcs-n` was withdrawn on 2026-08-24 — read this section as history
+
+`draft-mih-sokolov-scitt-payload-binding-02` **withdraws `jcs-n`** (§4.2) and
+registers plain `jcs` — RFC 8785 with no normalization pass — in its place
+(§4.1), prohibiting new declarations using `jcs-n`.
+
+Everything below describes implementing the **-01** text and remains accurate
+about that text. It is no longer a description of anything current.
+
+**Two things are worth carrying forward.**
+
+**The scope question resolved the way this implementation guessed.** -01 said
+only "the set of fields declared by the payload class" (§4, *The Derived
+Identifier* — an earlier version of this document cited §5, which is *Envelope
+Conventions*, and was wrong). -02 §4.1 states it outright:
+
+> The exclusion set is matched against the top-level member names of P only; a
+> member of the same name nested inside a member's value is not removed.
+
+That is what `satroot_jcs.jcs_n` does. It was a guess when it was written, and
+recording that it was a guess matters more than recording that it was right.
+
+**The withdrawal rationale rests on an implementer census** that found "the
+reference implementation was the only implementer of the normalization step it
+added". This implementation was a second. That is a footnote to the premise
+and changes nothing about the conclusion: the byte audit reported alongside it
+found 191 of 203 records byte-identical under plain `jcs`, and that is the
+substantive reason.
+
+**How this was found is the uncomfortable part.** Six test vectors and a
+message asking the scope question were prepared and reviewed internally before
+sending. Two reviewers independently established that -02 had been published
+**four days before the message was written**, answering the question and
+withdrawing the algorithm. The draft had been fetched at -01 without checking
+for a newer revision — the same failure that a previous round had already
+caught with a different document, where the revision landed the day it was
+read.
+
+## Compared against `jcs-n` (as defined in -01, now withdrawn)
 
 `draft-mih-sokolov-scitt-payload-binding-01` defines **`jcs-n`**. The full
 construction is:
