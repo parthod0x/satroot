@@ -42,7 +42,7 @@ unusable as written, and stopping was the correct response to it.
 | 10 | `supply` is committed by §7 and defined nowhere — circulating or cumulative-minted. No vector distinguishes them, so two implementations can disagree and both score 33/33. | confirmed `supply == sum(balances)` in every valid vector | **fixed** — §7 defines it as circulating |
 | 11 | Smaller: §8 omits mint- and freeze-by-non-authority; "a ledger must begin with genesis" is only implied; §8.1 reads as permitting a second genesis under a different `root_id`; `decimals` typing was unstated, so `true` passing as an integer is a corpus-only rule. | — | **fixed** — `decimals` typed, §8 gaps closed by the new vectors |
 
-**Nine of the eleven are fixed, the corpus grew from 33 vectors to 44, and
+**Ten of the eleven are closed, the corpus grew from 33 vectors to 44, and
 both implementations gained a rule they were missing.** Profiles (§8.10)
 remain unexercised — there is no profile vector — and that is the one item
 from this report still genuinely open.
