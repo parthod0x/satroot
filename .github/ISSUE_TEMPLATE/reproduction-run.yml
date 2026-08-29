@@ -1,0 +1,68 @@
+name: Reproduction run
+description: You cloned the repository and ran the conformance corpus on your machine.
+title: "Reproduction run: 33 vectors on <your OS>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for running it.
+
+        To be clear about what this records: a reproduction run shows that a
+        stranger can clone this repository and get the documented result on a
+        different machine. It exercises our implementation, not yours, so it
+        is **not** an independent verification of the protocol — that needs a
+        second implementation, and there is a separate template for it.
+
+        Both are useful. This one is just useful for a narrower reason, and
+        the project would rather be precise about that than flattered.
+
+  - type: textarea
+    id: output
+    attributes:
+      label: What the runner printed
+      description: >
+        The last few lines of `python3 run.py` are enough. Paste the whole
+        thing if you prefer.
+      render: text
+      placeholder: "33 vectors, 0 failures"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Python version
+      placeholder: "Ubuntu 24.04, Python 3.12.3"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Which commit you tested
+      description: "Output of `git rev-parse --short HEAD`."
+      placeholder: "b5777bf"
+    validations:
+      required: false
+
+  - type: textarea
+    id: friction
+    attributes:
+      label: Anything that was confusing, broken, or slower than it should have been
+      description: >
+        This is the most valuable box on the form. The instructions were
+        written by the person who wrote the code, so the places they are
+        wrong are exactly the places he cannot see. A missing step, a
+        misleading sentence, an error message that did not help — all worth
+        reporting, however small.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: naming
+    attributes:
+      label: Attribution
+      options:
+        - label: >
+            You may name me in vectors/INDEPENDENT_RUNS.md as having run this.
+          required: false

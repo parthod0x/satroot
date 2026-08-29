@@ -1,0 +1,82 @@
+name: Independent implementation run
+description: You wrote your own SATROOT-1 implementation and ran it against the corpus.
+title: "Independent run: <your implementation> against the 33 vectors"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the report the corpus exists for, and the project has never
+        had one. Thank you.
+
+        A run that found problems is more useful than a clean one, and will
+        be recorded as found rather than quietly fixed.
+
+  - type: input
+    id: implementation
+    attributes:
+      label: Your implementation
+      description: "Name, language, and a link or commit if it is public."
+      placeholder: "satroot-rs, Rust, github.com/you/satroot-rs @ a1b2c3d"
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: >
+        How many of the 33 matched. Paste the full text of any that did not —
+        `python3 run.py --impl "<your command>" --emit > mine.txt` then
+        `diff mine.txt EXPECTED.txt` produces exactly the discrepancy list.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS and runtime version
+      placeholder: "Debian 12, rustc 1.83.0"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Which SATROOT commit you tested against
+      description: "Output of `git rev-parse --short HEAD`."
+      placeholder: "b5777bf"
+    validations:
+      required: true
+
+  - type: textarea
+    id: unchecked
+    attributes:
+      label: What you could not check
+      description: >
+        Said plainly. A partial run is worth reporting; a partial run
+        described as a complete one is not.
+    validations:
+      required: false
+
+  - type: textarea
+    id: spec_problems
+    attributes:
+      label: Where the specification was ambiguous, wrong, or hard to implement
+      description: >
+        Equal in value to the run itself. Every place you had to guess, or
+        had to read the reference implementation to work out what SPEC.md
+        meant, is a defect in the specification regardless of whether your
+        guess turned out right.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: naming
+    attributes:
+      label: Attribution
+      options:
+        - label: >
+            You may name me and my implementation in
+            vectors/INDEPENDENT_RUNS.md.
+          required: false

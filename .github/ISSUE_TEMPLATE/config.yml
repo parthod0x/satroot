@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report privately
+    url: https://github.com/parthod0x/satroot/blob/main/vectors/INDEPENDENT_RUNS.md
+    about: Prefer email? INDEPENDENT_RUNS.md has the address and what a report should contain.
