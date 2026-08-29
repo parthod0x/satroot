@@ -396,11 +396,25 @@ rejected rather than treated as unsigned. For `signature_key_id`:
 Stated as two cases because the single unqualified sentence this replaces
 contradicted the `demo` rule.
 
-The scheme-match check is defence in depth rather than an independently
-observable rule: a verifier that ignored `signature_scheme` entirely would
-still fail to verify a signature produced under a different scheme, because
-the signature bytes differ and each scheme prefixes its own name. No
-conformance vector can isolate it, and none claims to.
+**The scheme-match check is load-bearing, and easy to omit.** The tempting
+argument for skipping it is that a verifier ignoring `signature_scheme`
+would still fail on a signature made under another scheme, because the bytes
+differ and each scheme prefixes its own name. That covers only the case
+where the signature and the declared scheme agree with each other but not
+with the verifier.
+
+It misses the opposite case: **a signature that is valid for the verifier in
+use, while the declared scheme lies.** A `demo` record carrying
+`signature: "demo"` but `signature_scheme: "ed25519"` presents bytes the
+demo verifier would otherwise accept; only the scheme check rejects it.
+Without it a record can misrepresent its own provenance and still validate.
+
+`reject-genesis-scheme-mismatch` pins this: an implementation whose demo
+verifier ignores `signature_scheme` accepts it and fails that vector alone.
+
+An earlier revision of this paragraph asserted the rule could not be
+isolated by any vector. That was wrong, and the danger of the claim was that
+it told implementers a rule was unobservable and therefore skippable.
 
 **The HMAC key is the secret's UTF-8 bytes, not a decoding of them.** Where
 a shared secret is written as a 64-character hex string, the MAC key is

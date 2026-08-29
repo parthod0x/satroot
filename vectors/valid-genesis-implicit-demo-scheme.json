@@ -1,0 +1,35 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-genesis-implicit-demo-scheme",
+  "description": "an omitted signature_scheme defaults to demo",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature": "demo",
+      "event_id": "sha256:1088d2bdf741fde890b23698e7c68d1c4060b05b1a57bc0b7fe09d2fc9da9222"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:1d4f081640876b29d44f1eacfeda83bd1d0b04f043012afaf891ea7098600d3d",
+    "balances": {
+      "issuer": "1000"
+    },
+    "record_count": 1
+  }
+}

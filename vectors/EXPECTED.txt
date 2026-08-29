@@ -49,6 +49,7 @@ reject-zero-amount.json REJECT
 valid-all-actions-ed25519.json ACCEPT sha256:841a450b951324738429d7efffd2376a10e587c60023722f2a7f772428012dc7 5 alice=50 issuer=1000
 valid-freeze-account-demo.json ACCEPT sha256:7cd9424e0c9b0efda6fd93979fe0f59429c8cad0dd6ce54ba28b296551d38066 2 issuer=1000
 valid-freeze-then-unfreeze-demo.json ACCEPT sha256:cf9df004886f91b4af4ad02246ab0ad5872dd83f709ef4ea053defa70a78397a 3 issuer=1000
+valid-genesis-implicit-demo-scheme.json ACCEPT sha256:1d4f081640876b29d44f1eacfeda83bd1d0b04f043012afaf891ea7098600d3d 1 issuer=1000
 valid-genesis-only-demo.json ACCEPT sha256:9277f8492d3f2fde9987963438aa33ea378e0f7c0f4e7540066be0a1029f8a04 1 issuer=1000
 valid-lifecycle-demo.json ACCEPT sha256:d09565b12e4d3bcae9e232ffde1f62904f1e5e73e872a505c7c059dffeffa28a 4 alice=300 issuer=600
 valid-lifecycle-ed25519.json ACCEPT sha256:b5b892057c21b487e9b7882a5d72e894bfa747afebe695e55bfb2c83db8c3aa9 4 alice=300 issuer=600

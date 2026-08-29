@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- **Corrects a section 6.6.1 rationale that told implementers to skip a
+  load-bearing check.** The previous revision claimed the `signature_scheme`
+  match was "defence in depth rather than an independently observable rule"
+  and that "no conformance vector can isolate it". The argument covered only
+  the case where a signature and its declared scheme agree with each other
+  but not with the verifier. It missed the opposite one: **a signature valid
+  for the verifier in use while the declared scheme lies** - a `demo` record
+  carrying `signature: "demo"` but `signature_scheme: "ed25519"` presents
+  bytes the demo verifier would otherwise accept, and only the scheme check
+  rejects it.
+
+  Confirmed by ablation: an implementation whose demo verifier ignores
+  `signature_scheme` fails exactly one vector, and it is the already-shipped
+  `reject-genesis-scheme-mismatch`. The rule is observable, the corpus does
+  pin it, and the paragraph saying otherwise was an invitation to omit it.
+
+- **Adds `valid-genesis-implicit-demo-scheme`.** Section 5.1 permits a
+  `demo` genesis to omit `signature_scheme` and default to `demo`, but every
+  genesis in the corpus stated it explicitly, so the default was portable by
+  luck rather than by test. An implementation that requires the field
+  instead of defaulting it now fails that vector alone. Corpus 63 -> 64.
+
 - **An orphan `profile_mode` put arbitrary JSON into the state hash.** A
   genesis carrying `profile_mode` with no `profile` was validated against
   nothing, and section 7 committed the value verbatim - `"total garbage"`,

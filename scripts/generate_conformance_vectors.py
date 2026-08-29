@@ -689,6 +689,16 @@ def build_vectors():
         "demo", over_allocated,
         _expect_error(over_allocated, sr.demo_signature_verifier, "initial supply exceeds max supply"))
 
+    # SPEC 5.1: signature_scheme is optional on a demo record and defaults to
+    # demo. Every other genesis in the corpus states it explicitly, so the
+    # default was specified but never exercised - portable only by luck.
+    implicit = sr.sign_event_record(_genesis(), scheme="demo", key_id=None, signer=None)
+    implicit.pop("signature_scheme", None)
+    implicit = _rechain([implicit], 0)
+    add("valid-genesis-implicit-demo-scheme",
+        "an omitted signature_scheme defaults to demo",
+        "demo", implicit, _expect_ok(implicit, sr.demo_signature_verifier))
+
     return vectors
 
 

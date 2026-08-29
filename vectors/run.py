@@ -26,7 +26,7 @@ only stdout is read, and only its last non-empty line. Anything on stderr
 is shown when a vector fails, so debug output there is free.
 
 Print REJECT when replay must fail. That is not an error condition: 48 of
-the 63 vectors are rejection cases, and refusing them correctly is most of
+the 64 vectors are rejection cases, and refusing them correctly is most of
 what conformance means.
 
 --------------------------------------------------------------------------

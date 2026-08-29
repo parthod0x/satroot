@@ -7,7 +7,7 @@ repository and did not have the author walk them through it.
 
 | date | who | implementation | language | result | report |
 |---|---|---|---|---|---|
-| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 57/57 at `e26ef0b` — **and eighteen specification defects across three rounds** | below |
+| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 63/63 at `e758309` — **and twenty specification defects across four rounds** | below |
 
 **The passing score is the least important thing in that row**, and the
 implementer said so first, asking that it not be recorded as a clean result
@@ -158,6 +158,55 @@ were *present*. Empty strings, `null`, `42` and `[]` all passed. Nothing in
 the corpus had a present-but-empty field, so the corpus could not see it,
 and it was found only by probing the new specification text against both
 implementations. The vectors above close that hole.
+
+## Round four: the corpus caught an implementer, and the spec was wrong about itself
+
+Two runs against `e758309` (63 vectors). One reported **62/63 on the first
+attempt** — the failure was theirs, `reject-profile-field-blank`, and it was
+the exact ambiguity they had flagged the round before and guessed wrong on.
+§5.2 resolved it as non-blank, the new vector found their literal reading
+immediately, and they fixed it to 63/63. **That is the first time the corpus
+has caught a defect in an independent implementation**, and it is the loop
+working in the intended direction rather than only inward.
+
+The other reported a clean **63/63**, byte-identical under
+`PYTHONHASHSEED=1` and `999`.
+
+### The §6.6.1 rationale was wrong, and dangerously so
+
+Last round I wrote that the scheme-match check was "defence in depth rather
+than an independently observable rule" and that "no conformance vector can
+isolate it". The argument was that a verifier ignoring `signature_scheme`
+would still fail on a signature made under another scheme, since the bytes
+differ.
+
+**That covers only half the cases.** It misses a signature that is valid for
+the verifier in use while the declared scheme lies — a `demo` record with
+`signature: "demo"` but `signature_scheme: "ed25519"` presents bytes the demo
+verifier would otherwise accept, and only the scheme check rejects it.
+
+Verified here by ablation: an implementation whose demo verifier ignores
+`signature_scheme` fails exactly one vector out of 64, and it is the shipped
+`reject-genesis-scheme-mismatch`. So the rule is observable, the corpus does
+pin it, and the paragraph asserting otherwise was telling implementers a
+rule was unobservable and therefore skippable. Replaced with the real reason
+it is easy to miss.
+
+**The report's own claim was also wrong**, in the other direction: it said
+the shipped vector does not isolate the check and that deleting the check
+still scores 63/63. It does not — deleting it fails that vector. Their
+contributed replacement, which drops `signature_key_id`, is decided by
+`signature_key_id is required for ed25519` rather than by scheme-match, so
+it is not the isolation it was offered as, and it is not merged. The finding
+that mattered — that my justification was false — stands and is fixed.
+
+### A specified rule nothing exercised
+
+§5.1 permits a `demo` genesis to omit `signature_scheme`, defaulting to
+`demo`. Every genesis in the corpus stated it explicitly, so the default was
+portable by luck. `valid-genesis-implicit-demo-scheme` closes it: an
+implementation that requires the field instead of defaulting it fails that
+vector alone. Both implementations already defaulted correctly.
 
 ### The contributed vectors
 
