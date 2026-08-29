@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- **An orphan `profile_mode` put arbitrary JSON into the state hash.** A
+  genesis carrying `profile_mode` with no `profile` was validated against
+  nothing, and section 7 committed the value verbatim - `"total garbage"`,
+  `12345`, `{"a": 1}` were all accepted, each producing a different state
+  hash. Two ledgers identical but for an orphan mode replayed as valid with
+  different commitments: one logical state with many spellings, which is the
+  leading-zero defect again in a different field. Both implementations now
+  reject it; section 5.2 states that `profile` and `profile_mode` are a pair
+  and that both commit `null` only when neither is present.
+
+- **Section 5.1 was wrong about genesis signature metadata**, and stopped an
+  independent implementation before it wrote any protocol logic. It said a
+  genesis carries `signature_scheme` "where the scheme is not `demo`", while
+  every valid genesis in the corpus carries one and section 6.6.1 selects
+  the verifier by it. The field is in fact optional and defaults to `demo`.
+  Section 5.1 now states the metadata rules directly, and section 6.6.1
+  splits its `signature_key_id` sentence into the two cases it always was -
+  required under the real schemes, forbidden under `demo` - which the single
+  unqualified sentence had contradicted.
+
+- **Defines account control (new section 6.7).** "Signer controls sender
+  account" was never defined; two independent implementations guessed
+  byte-for-byte string equality and the corpus agreed with both, but the
+  document did not say so.
+
+- **Section 5.2 now says non-blank rather than non-empty**, matching the
+  reference, which has always rejected a whitespace-only profile field. The
+  two would have diverged on a real ledger and no vector separated them.
+
+- **Corpus 57 -> 63.** Adds the orphan-mode cases; a required profile field
+  that is present but empty, blank, or not a string - previously untested,
+  since the existing vector deletes the field, which let an implementation
+  checking presence only score full marks; and a genesis allocation
+  exceeding `max_supply`, which the existing vector never decided because
+  its 513-digit balance tripped the amount bound first.
+
+- Documents that the `signature_scheme` match check **cannot be isolated by
+  any vector**: a verifier ignoring the field would still fail to verify a
+  signature made under another scheme, since the bytes differ and each
+  scheme prefixes its name. It is defence in depth, and section 6.6.1 now
+  says so rather than leaving a vector that appears to test it.
+
 - **The genesis record was never authenticated.** `replay` called
   `apply_genesis` without passing the verifier at all, so a genesis with a
   forged, empty or entirely absent signature replayed clean under `demo`,

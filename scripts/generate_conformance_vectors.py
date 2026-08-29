@@ -640,6 +640,55 @@ def build_vectors():
         "demo", burn_ledger,
         _expect_error(burn_ledger, burn_verifier, "signer does not control account"))
 
+    # ------------------------------------------------------------------
+    # Round 3. Two independent implementations at 57 vectors; findings that
+    # the corpus could not previously distinguish.
+    # ------------------------------------------------------------------
+
+    # SPEC 5.2: an orphan profile_mode was validated against nothing and
+    # committed verbatim into the section 7 state hash, so arbitrary JSON
+    # reached the commitment and one logical state had many spellings.
+    for label, mode in (("string", "reference-only"), ("object", {"a": 1})):
+        orphan = _genesis()
+        orphan["profile_mode"] = mode
+        orphan = _rechain(
+            [sr.sign_event_record(orphan, scheme="demo", key_id=None, signer=None)], 0
+        )
+        add(f"reject-orphan-profile-mode-{label}",
+            "profile_mode without profile is rejected, not committed verbatim",
+            "demo", orphan,
+            _expect_error(orphan, sr.demo_signature_verifier, "orphan profile_mode"))
+
+    # SPEC 5.2: a required profile field that is present but empty, blank or
+    # not a string. reject-profile-missing-genesis-field deletes the field,
+    # so nothing exercised a present-but-invalid one - which let a second
+    # implementation score full marks while checking presence only.
+    for label, value in (("empty", ""), ("blank", "   "), ("non-string", 42)):
+        bad_field = _genesis()
+        bad_field.update(STABLE)
+        bad_field["reserve_model"] = value
+        bad_field = _rechain(
+            [sr.sign_event_record(bad_field, scheme="demo", key_id=None, signer=None)], 0
+        )
+        add(f"reject-profile-field-{label}",
+            "required profile fields are non-blank strings, not merely present",
+            "demo", bad_field,
+            _expect_error(bad_field, sr.demo_signature_verifier, "invalid profile field"))
+
+    # SPEC 8.4 at genesis. reject-genesis-balance-exceeds-digit-bound uses a
+    # 513-digit balance, so 6.1a decides it and the supply rule is never the
+    # deciding check.
+    over_allocated = _genesis()
+    over_allocated["max_supply"] = "1000000"
+    over_allocated["initial_balances"] = {"issuer": "2000000"}
+    over_allocated = _rechain(
+        [sr.sign_event_record(over_allocated, scheme="demo", key_id=None, signer=None)], 0
+    )
+    add("reject-genesis-balances-exceed-max-supply",
+        "the opening allocation cannot exceed max_supply",
+        "demo", over_allocated,
+        _expect_error(over_allocated, sr.demo_signature_verifier, "initial supply exceeds max supply"))
+
     return vectors
 
 

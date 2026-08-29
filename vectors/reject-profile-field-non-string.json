@@ -1,0 +1,39 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-profile-field-non-string",
+  "description": "required profile fields are non-blank strings, not merely present",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "profile": "SATROOT-STABLE-1",
+      "profile_mode": "reference-only",
+      "reference_unit": "USD",
+      "redemption": "none",
+      "reserve_model": 42,
+      "intended_use": "reference-only accounting unit",
+      "event_id": "sha256:2de1caa7dc53a906fae8f387e8afb658350da2e2d62d6145fc7184a0ee53a12f"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "invalid profile field reserve_model: expected a non-blank string",
+    "note": "invalid profile field"
+  }
+}

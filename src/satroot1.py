@@ -12234,6 +12234,15 @@ def validate_stated_event_id(event: Dict[str, Any]) -> None:
 def validate_profile_genesis(event: Dict[str, Any]) -> None:
     profile = event.get("profile")
     if profile is None:
+        # `profile_mode` without `profile` was validated against nothing and
+        # committed verbatim by section 7, so an arbitrary JSON value - a
+        # number, an object - reached the state hash. Two ledgers identical
+        # but for an orphan mode produced different state hashes and both
+        # replayed as valid: one logical state with many spellings, the same
+        # defect class as a leading-zero amount.
+        # Found by the second independent implementation, 2026-08-29.
+        if "profile_mode" in event and event["profile_mode"] is not None:
+            raise SatRootError("profile_mode requires a profile")
         return
 
     rules = load_profile_registry().get(profile)
@@ -12251,7 +12260,7 @@ def _validate_profile_metadata_fields(event: Mapping[str, Any], field_names: Seq
     for field_name in field_names:
         value = event.get(field_name)
         if not isinstance(value, str) or not value.strip():
-            raise SatRootError(f"invalid profile field {field_name}: expected non-empty string")
+            raise SatRootError(f"invalid profile field {field_name}: expected a non-blank string")
 
 
 def _validate_profile_specific_genesis(profile: str, event: Mapping[str, Any]) -> None:

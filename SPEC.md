@@ -205,11 +205,24 @@ ledger in existence.
 
 ### 5.1 Genesis MUST be signed
 
-**A genesis record carries `signature`, and `signature_scheme` where the
-scheme is not `demo`, and a conforming implementation MUST verify it with
-the same verifier and the same rules it applies to every other event
-(sections 2.7 and 6.6).** A genesis whose signature is absent, empty,
-forged, or made under a scheme the verifier does not accept is rejected.
+**A genesis record carries `signature`, and a conforming implementation MUST
+verify it with the same verifier and the same rules it applies to every
+other event (sections 2.7 and 6.6).** A genesis whose signature is absent,
+empty, forged, or made under a scheme the verifier does not accept is
+rejected.
+
+Its signature metadata follows section 6.6.1 exactly as a non-genesis event
+does:
+
+- `signature_scheme` is OPTIONAL and defaults to `demo` when absent. Every
+  genesis in the conformance corpus states it explicitly; both spellings are
+  valid, and they are different records with different `event_id` values.
+- `signature_key_id` is REQUIRED for `hmac-sha256` and `ed25519`, and MUST
+  be absent for `demo`.
+
+An earlier revision of this paragraph said a genesis carries
+`signature_scheme` "where the scheme is not `demo`", which read as though a
+demo genesis must omit it while every vector in the corpus carries one.
 
 Genesis does not carry `signer`; the signing key is identified by
 `signature_key_id` under the real schemes, and `demo` records carry neither.
@@ -237,8 +250,14 @@ A genesis MAY declare a profile. When it does it carries:
   `protocol/satroot1.profile-registry.json`;
 - `profile_mode` — the mode that registry pairs with that profile, not a
   free choice;
-- the `required_genesis_fields` that registry entry names, each a non-empty
-  string.
+- the `required_genesis_fields` that registry entry names, each a **non-blank
+  string** — non-empty after trimming whitespace, so `"   "` is rejected.
+
+A `profile_mode` **without** a `profile` is rejected. The two are a pair:
+either the genesis declares both, or it declares neither and both members
+commit JSON `null` (section 7). An unpaired mode was previously validated
+against nothing and committed verbatim, so an arbitrary JSON value reached
+the state hash and one logical state acquired many spellings.
 
 An unknown profile, a `profile_mode` the registry does not pair with it, or
 a missing or empty required field is rejected (section 8.10). Both members
@@ -291,7 +310,7 @@ It is valid only if:
 
 - sender has sufficient balance,
 - amount is a positive integer string,
-- signer controls sender account,
+- signer controls the sender account (section 6.7),
 - sequence is valid.
 
 ### 6.3 Burn
@@ -302,7 +321,7 @@ It is valid only if:
 
 - burner has sufficient balance,
 - amount is a positive integer string,
-- signer controls burner account.
+- signer controls the account being burned from (section 6.7).
 
 ### 6.4 Rotate authority
 
@@ -366,9 +385,22 @@ or domain separator is added. Ed25519 public keys are raw 32-byte keys as
 lowercase hex; RFC 8032 signing is deterministic, so a correct implementation
 reproduces the corpus signatures byte for byte.
 
-An event whose `signature_scheme` does not match the verifier in use, or
-whose `signature_key_id` is missing, empty, or unknown to the verifier, is
-rejected rather than treated as unsigned.
+An event whose `signature_scheme` does not match the verifier in use is
+rejected rather than treated as unsigned. For `signature_key_id`:
+
+- under `hmac-sha256` and `ed25519`, a missing, empty, or unknown
+  `signature_key_id` is rejected;
+- under `demo`, `signature_key_id` MUST be absent, and an event carrying one
+  is rejected.
+
+Stated as two cases because the single unqualified sentence this replaces
+contradicted the `demo` rule.
+
+The scheme-match check is defence in depth rather than an independently
+observable rule: a verifier that ignored `signature_scheme` entirely would
+still fail to verify a signature produced under a different scheme, because
+the signature bytes differ and each scheme prefixes its own name. No
+conformance vector can isolate it, and none claims to.
 
 **The HMAC key is the secret's UTF-8 bytes, not a decoding of them.** Where
 a shared secret is written as a 64-character hex string, the MAC key is
@@ -449,6 +481,22 @@ The reference engine currently recognizes these signature metadata rules:
 - `demo`: `signature` must be `demo` and `signature_key_id` must be absent.
 - `hmac-sha256`: `signature_key_id` is required and the signature must use the `hmac-sha256:` prefix.
 - `ed25519`: `signature_key_id` is required and the signature must use the `ed25519:` prefix.
+
+### 6.7 Account control
+
+**A signer controls an account when `signer` equals the account name
+exactly** — byte-for-byte string equality, with no normalisation.
+
+That is the whole rule at this layer. Section 9 says binding a cryptographic
+key to an account is an application-level concern, and it remains so: this
+specification checks only that a record's `signer` names the account whose
+balance moves, and that the record's signature verifies under the configured
+verifier for the key it names.
+
+It is stated because "signer controls sender account" was previously left
+undefined. Two independent implementations both had to guess it; both
+guessed equality and the corpus agreed with them, but the document did not
+say so.
 
 ## 7. State commitment
 

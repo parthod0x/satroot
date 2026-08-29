@@ -7,7 +7,7 @@ repository and did not have the author walk them through it.
 
 | date | who | implementation | language | result | report |
 |---|---|---|---|---|---|
-| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 against the corpus as it then stood — **and eleven specification defects** | below |
+| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 57/57 at `e26ef0b` — **and eighteen specification defects across three rounds** | below |
 
 **The passing score is the least important thing in that row**, and the
 implementer said so first, asking that it not be recorded as a clean result
@@ -103,6 +103,61 @@ The residual he flagged is closed too: §7 referred to the profile fields
 "carried by the genesis record (section 5)" while §5 named neither, so the
 forward reference dangled and the field names had to be inferred from §7's
 own table. That guess was right, and it was still a guess. Now **§5.2**.
+
+## Round three: a stop, and arbitrary JSON in the state hash
+
+Two more runs against `e26ef0b` (57 vectors).
+
+**One stopped before implementing**, on §5.1: the sentence said a genesis
+carries `signature_scheme` "where the scheme is not `demo`", while all 15
+valid genesis records in the corpus carry one and §6.6.1 selects the
+verifier by it. No vector distinguished the readings. Reproduced: the
+reference *accepts* a demo genesis with the field absent, defaulting to
+`demo`, so the field is optional and the sentence was simply wrong. Stopping
+was the correct response, and §5.1 now states the metadata rules explicitly.
+
+The same report found §6.6.1's `signature_key_id` sentence contradicted §6:
+it said a missing key id is always rejected, while `demo` requires it
+absent. Now split into the two cases it always was.
+
+**The other passed 57/57 and found the significant one:**
+
+**A `profile_mode` with no `profile` was validated against nothing and
+committed verbatim into the §7 state hash.** Confirmed here: `"reference-only"`,
+`"total garbage"`, `12345` and `{"a": 1}` were all accepted, each producing a
+different state hash, with the raw value committed rather than `null`.
+Arbitrary JSON — including a nested object — reached the state commitment,
+so two ledgers identical but for an orphan mode replayed as valid with
+different hashes. That is the leading-zero defect again: one logical state
+with many spellings. Both implementations now reject it, and §5.2 states the
+pair rule.
+
+| also found | status |
+|---|---|
+| The reference rejects a whitespace-only profile field while §5.2 said "non-empty", so the two would diverge on a real ledger and no vector separated them | **fixed** — §5.2 now says non-blank, and a `"   "` vector pins it |
+| `reject-profile-missing-genesis-field` deletes a field, so nothing exercised one present-but-invalid — which let an implementation checking presence only score 57/57 | **fixed** — empty, blank and non-string vectors added |
+| `reject-genesis-balance-exceeds-digit-bound` uses a 513-digit balance, so §6.1a decides it and the genesis supply rule was never the deciding check | **fixed** — isolated with a 2,000,000 allocation against a 1,000,000 cap |
+| §§6.2–6.3 said "signer controls sender account" without defining control; two implementations independently guessed string equality and the corpus agreed, but the text did not say so | **fixed** — §6.7 |
+| `reject-genesis-scheme-mismatch` is still not isolated | **won't fix, documented** — see below |
+
+### The scheme-match check cannot be isolated, and §6.6.1 now says so
+
+Both attempts to isolate it — ours and the contributed one — trip a
+different rule first. That is not a corpus defect. **A verifier that ignored
+`signature_scheme` entirely would still fail to verify a signature produced
+under a different scheme**, because the bytes differ and every scheme
+prefixes its own name. The check is defence in depth, not an independently
+observable rule, and §6.6.1 now states that rather than leaving a vector
+that appears to test something it does not.
+
+### An implementer's own defect the corpus missed
+
+Worth recording because it cuts both ways: the second implementation passed
+57/57 while violating §5.2, having checked only that required profile fields
+were *present*. Empty strings, `null`, `42` and `[]` all passed. Nothing in
+the corpus had a present-but-empty field, so the corpus could not see it,
+and it was found only by probing the new specification text against both
+implementations. The vectors above close that hole.
 
 ### The contributed vectors
 

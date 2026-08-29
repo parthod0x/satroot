@@ -295,7 +295,15 @@ function loadProfileRegistry(): Map<string, ProfileRules> {
 
 function validateProfileGenesis(event: Event): void {
   const profile = event["profile"];
-  if (profile === undefined || profile === null) return;
+  if (profile === undefined || profile === null) {
+    // An orphan profile_mode was validated against nothing and committed
+    // verbatim by section 7, so arbitrary JSON reached the state hash.
+    const orphan = event["profile_mode"];
+    if (orphan !== undefined && orphan !== null) {
+      throw new SatRootError("profile_mode requires a profile");
+    }
+    return;
+  }
   if (typeof profile !== "string") throw new SatRootError("invalid profile");
 
   const rules = loadProfileRegistry().get(profile);
@@ -309,7 +317,7 @@ function validateProfileGenesis(event: Event): void {
   for (const field of needed) {
     const value = event[field];
     if (typeof value !== "string" || value.trim() === "") {
-      throw new SatRootError(`invalid profile field ${field}: expected non-empty string`);
+      throw new SatRootError(`invalid profile field ${field}: expected a non-blank string`);
     }
   }
 }

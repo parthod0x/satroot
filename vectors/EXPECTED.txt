@@ -14,6 +14,7 @@ reject-forged-genesis-signature-hmac-sha256.json REJECT
 reject-forged-signature-demo.json REJECT
 reject-freeze-by-non-authority.json REJECT
 reject-genesis-balance-exceeds-digit-bound.json REJECT
+reject-genesis-balances-exceed-max-supply.json REJECT
 reject-genesis-scheme-mismatch.json REJECT
 reject-invalid-profile-mode.json REJECT
 reject-leading-zero-amount.json REJECT
@@ -21,7 +22,12 @@ reject-mint-by-non-authority.json REJECT
 reject-mint-exceeds-max-supply.json REJECT
 reject-mint-to-frozen-account.json REJECT
 reject-negative-amount.json REJECT
+reject-orphan-profile-mode-object.json REJECT
+reject-orphan-profile-mode-string.json REJECT
 reject-overspend.json REJECT
+reject-profile-field-blank.json REJECT
+reject-profile-field-empty.json REJECT
+reject-profile-field-non-string.json REJECT
 reject-profile-missing-genesis-field.json REJECT
 reject-reordered-events.json REJECT
 reject-rotate-by-non-authority.json REJECT

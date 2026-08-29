@@ -1,0 +1,36 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-orphan-profile-mode-object",
+  "description": "profile_mode without profile is rejected, not committed verbatim",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "profile_mode": {
+        "a": 1
+      },
+      "event_id": "sha256:6007fdcb29b597e15f86755bb6ef9050616398fc009bfa985f9a55a586e7c2c3"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "profile_mode requires a profile",
+    "note": "orphan profile_mode"
+  }
+}
