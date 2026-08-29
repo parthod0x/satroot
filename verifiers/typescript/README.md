@@ -16,7 +16,7 @@ npm install
 npm test
 ```
 
-Expected output ends with `31 vectors, 0 failures`.
+Expected output ends with `33 vectors, 0 failures`.
 
 ## What implementing this surfaced
 

@@ -1,0 +1,16 @@
+# The conformance corpus is byte-compared, so its line endings are part of
+# the artifact rather than a local preference.
+#
+# Without this, a clone on Windows (core.autocrlf=true is the default there)
+# checks EXPECTED.txt out as CRLF while `run.py --emit` writes LF, so the
+# first thing an external implementer runs -
+#
+#     python3 run.py --impl "..." --emit > mine.txt && diff mine.txt EXPECTED.txt
+#
+# - reports all 33 lines as differing, for no reason at all. The generator
+# already writes the vectors with newline="\n"; this keeps checkout agreeing
+# with it, and keeps test_corpus_matches_generator_output honest on Windows.
+
+vectors/EXPECTED.txt text eol=lf
+vectors/*.json      text eol=lf
+vectors/*.py        text eol=lf
