@@ -94,6 +94,46 @@ When a profile draft defines explicit safe-mode guardrails, replay engines may a
 
 Likewise, machine and single-object profiles may enforce compact identifier formatting for fields such as `service_scope`, `document_type`, `identity_type`, `license_type`, and related usage metadata, while `single-receipt`, `single-identity`, and `single-license` modes may require a zero-decimal, one-unit genesis so the ledger unambiguously anchors one object.
 
+### 2.6 Canonical JSON
+
+Every hash and every signature in this specification is taken over
+*canonical JSON*. Two implementations that disagree on this serialisation
+will disagree on every event id, state hash and signature, so it is defined
+exactly:
+
+- **Object keys are sorted** by Unicode code point, at every level of nesting.
+- **No insignificant whitespace.** The separator between a key and its value
+  is `:` and between members is `,`, with no spaces.
+- **Non-ASCII characters are emitted raw**, as UTF-8, not as `\uXXXX`
+  escapes. Characters that JSON requires to be escaped are still escaped.
+- **The result is encoded as UTF-8** before hashing or signing.
+
+Equivalent to Python's
+`json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`.
+
+Protocol amounts, balances and supply values are carried as **digit
+strings**, not JSON numbers, so serialisation never depends on a language's
+floating-point or big-integer formatting. See section 6.1a.
+
+### 2.7 Event identity
+
+The event id is the canonical hash of the record with `event_id` and
+`state_hash` removed:
+
+```text
+event_id = "sha256:" + hex(sha256(canonical_json(event - {event_id, state_hash})))
+```
+
+The `sha256:` prefix is part of the value. Hex digits are lowercase.
+
+The **signing payload** is the same construction with `signature` also
+removed, and is *not* hashed before signing - it is the canonical JSON
+string itself, UTF-8 encoded:
+
+```text
+signing_payload = canonical_json(event - {signature, event_id, state_hash})
+```
+
 ## 3. Boundary rule
 
 A SATROOT-1 event MUST NOT claim that tokens are sub-satoshis.
@@ -248,6 +288,29 @@ An `ed25519` path is available when the `cryptography` package is installed; it 
 
 The reference implementation also exposes helper functions and a small CLI for replaying ledgers plus signing single events or whole event arrays against those reference schemes.
 
+#### 6.6.1 Concrete encodings
+
+A verifier is selected by the event's `signature_scheme`, and the key by its
+`signature_key_id`. Each scheme carries its result in the `signature` field
+as a prefixed lowercase-hex string, so the scheme is recoverable from the
+value alone:
+
+| `signature_scheme` | `signature` value |
+|---|---|
+| `demo` | the literal string `demo` |
+| `hmac-sha256` | `"hmac-sha256:" + hex(HMAC-SHA256(key, signing_payload))` |
+| `ed25519` | `"ed25519:" + hex(Ed25519-Sign(key, signing_payload))`, 64 bytes |
+
+In both real schemes the message signed is the **`signing_payload` string of
+section 2.7, UTF-8 encoded** - it is not hashed first, and no length prefix
+or domain separator is added. Ed25519 public keys are raw 32-byte keys as
+lowercase hex; RFC 8032 signing is deterministic, so a correct implementation
+reproduces the corpus signatures byte for byte.
+
+An event whose `signature_scheme` does not match the verifier in use, or
+whose `signature_key_id` is missing, empty, or unknown to the verifier, is
+rejected rather than treated as unsigned.
+
 CLI replay may be configured against the same reference verification models, so signed ledgers can be validated end to end without dropping into the Python API.
 
 The reference implementation also exposes schema validation helpers and a CLI validation path so raw event JSON can be checked against `protocol/satroot1.schema.json` before replay.
@@ -325,10 +388,36 @@ The reference engine currently recognizes these signature metadata rules:
 Each event SHOULD include a `state_hash` after application:
 
 ```text
-sha256(canonical_json({balances, supply, sequence, prev_event_id}))
+state_hash = "sha256:" + hex(sha256(canonical_json(commitment_snapshot)))
 ```
 
-This lets lightweight clients check that independent indexers agree on the same state.
+where `commitment_snapshot` is exactly these thirteen members:
+
+| member | form |
+|---|---|
+| `root_id` | string |
+| `symbol` | string |
+| `name` | string |
+| `decimals` | number |
+| `max_supply` | digit string, or `null` if unbounded |
+| `mint_authority` | string |
+| `profile` | the genesis profile, or `null` |
+| `profile_mode` | the genesis profile mode, or `null` |
+| `balances` | object of account to digit string, **accounts with a zero balance omitted** |
+| `frozen_accounts` | array of account strings, sorted |
+| `supply` | digit string |
+| `sequence` | number |
+| `last_event_id` | the `event_id` of the most recently applied event |
+
+Key order in the serialised form is imposed by canonical JSON (section 2.6),
+so the table order above is descriptive rather than normative.
+
+This lets lightweight clients check that independent indexers agree on the
+same state.
+
+An implementation may keep richer replay state for its own tooling -
+transfer models, preserved genesis metadata - but anything outside the
+thirteen members above is not committed to and must not affect the hash.
 
 An event MAY also carry an `event_id`. If present, it MUST equal the canonical event hash calculated from the record content excluding the `event_id` and `state_hash` fields. This avoids a circular dependency between event identity and post-application state commitment.
 

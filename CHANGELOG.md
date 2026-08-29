@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- **Corrects SPEC.md's state commitment, which named the wrong fields.**
+  Section 7 described the commitment as `sha256(canonical_json({balances,
+  supply, sequence, prev_event_id}))`. The real commitment covers thirteen
+  members - `root_id`, `symbol`, `name`, `decimals`, `max_supply`,
+  `mint_authority`, `profile`, `profile_mode`, `balances`,
+  `frozen_accounts`, `supply`, `sequence`, `last_event_id` - carries a
+  `sha256:` prefix, and names `last_event_id` rather than `prev_event_id`.
+  Anyone implementing the specification faithfully produced a different hash
+  for every ledger and would have failed all twelve accept-vectors. Both
+  existing implementations and the whole conformance corpus were unaffected
+  and remain byte-identical, because both were written against the code; the
+  document they are supposed to be implementations *of* was the thing that
+  was wrong, and the corpus cannot detect that by construction, being
+  generated from the code rather than from the text.
+
+- **Defines canonical JSON, which every hash and signature depends on and
+  which the specification used without ever specifying** (new section 2.6):
+  keys sorted by code point at every level, no insignificant whitespace,
+  non-ASCII emitted raw as UTF-8. Also adds section 2.7 for event identity
+  and the signing payload, and section 6.6.1 for the concrete signature
+  encodings - the `hmac-sha256:` and `ed25519:` prefixes, hex, and the fact
+  that the payload is signed directly rather than hashed first. None of this
+  was recoverable from the specification; a second implementer had to read
+  the reference, which makes an "independent" implementation a port.
+
+  `tests/test_spec_matches_reference.py` now checks SPEC.md against the
+  reference directly, including rebuilding the state hash from the
+  document's own construction and comparing it to the corpus.
+
+  Found while writing instructions for the first prospective independent
+  implementer, before he started.
+
 ## v1.7.1-review-corrections - 2026-08-26
 
 - **Fixes a defect that made the `rfc3161` backend non-functional against real
