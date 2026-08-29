@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Corpus 64 -> 67, closing two coverage gaps rather than defects.** 58 of
+  64 vectors ran on the `demo` placeholder scheme, so the real signature
+  paths were the thinnest-covered area in the corpus - a second full
+  lifecycle under each of `hmac-sha256` and `ed25519` takes real-scheme
+  vectors from 6 to 8. And no ledger exceeded five events, so sequence and
+  `prev_event_id` were only exercised at trivial depth;
+  `valid-long-chain-demo` runs 21. Both gaps were raised by the independent
+  implementer as gaps, not findings.
+
+- Two wording defects, both in prose and neither affecting an
+  implementation: section 5.1 said every corpus genesis carries "a real
+  signature", when 13 of 16 valid genesis records carry the placeholder
+  `demo` and 112 of 133 signatures across the corpus are that literal
+  string; and section 6.6.1 said every scheme carries its result "as a
+  prefixed lowercase-hex string", when `demo` carries the literal `demo`.
+
+- Records, in `vectors/INDEPENDENT_RUNS.md`, a correction the implementer
+  volunteered against their own headline number: the ablation counts this
+  project has been quoting measure one implementation's decomposition of the
+  rules, not coverage in any implementation-independent sense. The direction
+  was real and every step produced a merged vector, but "ten checks
+  deletable" was never as objective as it was presented, here or there.
+
 - **reject-genesis-scheme-mismatch now pins the rule it is named for.** It
   carried a `signature_key_id` alongside its mismatched `signature_scheme`,
   so it tested two rules at once - and the corpus already covers the other

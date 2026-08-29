@@ -235,8 +235,8 @@ was load-bearing. Section 2.5 lists `signer` and `signature` among the
 fields "every non-genesis event must reference", and section 5's field list
 named neither — so nothing in this document ever said a genesis was
 authenticated, while section 8.7 rejects when "a required signature check
-fails" and every genesis in the conformance corpus carries a real
-signature. Both readings were defensible, and **both reference
+fails" and every genesis in the conformance corpus carries a `signature`
+field its selected verifier accepts. Both readings were defensible, and **both reference
 implementations independently took the wrong one**: each replayed a genesis
 with a forged or missing signature under all three schemes.
 
@@ -373,8 +373,8 @@ The reference implementation also exposes helper functions and a small CLI for r
 
 A verifier is selected by the event's `signature_scheme`, and the key by its
 `signature_key_id`. Each scheme carries its result in the `signature` field
-as a prefixed lowercase-hex string, so the scheme is recoverable from the
-value alone:
+so the scheme is recoverable from the value alone — the two real schemes as
+a prefixed lowercase-hex string, `demo` as the literal string `demo`:
 
 | `signature_scheme` | `signature` value |
 |---|---|

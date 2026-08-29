@@ -54,11 +54,14 @@ valid-genesis-only-demo.json ACCEPT sha256:9277f8492d3f2fde9987963438aa33ea378e0
 valid-lifecycle-demo.json ACCEPT sha256:d09565b12e4d3bcae9e232ffde1f62904f1e5e73e872a505c7c059dffeffa28a 4 alice=300 issuer=600
 valid-lifecycle-ed25519.json ACCEPT sha256:b5b892057c21b487e9b7882a5d72e894bfa747afebe695e55bfb2c83db8c3aa9 4 alice=300 issuer=600
 valid-lifecycle-hmac-sha256.json ACCEPT sha256:df71a9309175e78444acd5906d892acf7be63c8f65bc2953e4fb0fa6927a9a5f 4 alice=300 issuer=600
+valid-long-chain-demo.json ACCEPT sha256:5e2c72b29674c9206986a944805186d85abad82c787508d22a349ac31a8994e4 21 alice=100 issuer=900
 valid-mint-after-rotation-demo.json ACCEPT sha256:2bc0e7fb02d16e14d20d0369ad0985194ac0500adaf4a439a96181d932b6d195 3 alice=10 issuer=1000
 valid-mint-demo.json ACCEPT sha256:87ae2defde4af8bdf6ef2cd438aa8d30bac89bd4ece0fb1616f7eda4546ba996 2 alice=50 issuer=1000
 valid-non-ascii-metadata-demo.json ACCEPT sha256:244037d3fd5529fd3437856c7b7d6c30fc4beaed2c1a28198a8bcfcdaf713490 1 issuer=1000
 valid-profile-stable-demo.json ACCEPT sha256:101fe1c55a314ad1cfe8fc43ad4679b6bd7bf1a09c70db3ca31850fdf32badb7 1 issuer=1000
 valid-repeated-transfers-demo.json ACCEPT sha256:39f9cf937990ee19cc70b788c3d3eb5f38a51bedff8db545fdfc2ef4e01ed2e3 4 alice=501 issuer=499
 valid-rotate-authority-demo.json ACCEPT sha256:e87cc2ba1bf1274520673a2aa59d5a699b780186724c5a7fe6fd56a60a1c4a7e 2 issuer=1000
+valid-second-lifecycle-ed25519.json ACCEPT sha256:b874f7e9aaf8db7e8b417f301ae990cc13001ebfda602940ebaf227de6120b17 6 alice=400 issuer=625
+valid-second-lifecycle-hmac-sha256.json ACCEPT sha256:ca4a20fbf430cf7490b85a11564a49d822ef5d24d80bec76ee263dd30dc7d4a1 6 alice=400 issuer=625
 valid-transfer-entire-balance-demo.json ACCEPT sha256:0c7632870b69a6a0f98fab8b64fd90816e43679624171e19e54cc2eb4eaaf215 2 alice=1000
 valid-unbounded-max-supply-demo.json ACCEPT sha256:139f25459875c404a82118ad385a56ca0058672c2dbb21a06fde6702071c4445 2 alice=99999999999999999999 issuer=1000

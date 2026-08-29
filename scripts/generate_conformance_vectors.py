@@ -705,6 +705,41 @@ def build_vectors():
         "an omitted signature_scheme defaults to demo",
         "demo", implicit, _expect_ok(implicit, sr.demo_signature_verifier))
 
+    # ------------------------------------------------------------------
+    # Round 6 coverage, from the independent implementer's own review of
+    # what the corpus does *not* reach - not defects, gaps.
+    # ------------------------------------------------------------------
+
+    # 58 of 64 vectors ran on `demo`, so the real signature paths were the
+    # thinnest-covered area by vector count: one hmac lifecycle and two
+    # ed25519 ones carried every non-placeholder signature in the corpus.
+    for scheme in ("hmac-sha256", "ed25519"):
+        events, verifier = _build_ledger(
+            scheme,
+            [FREEZE, UNFREEZE, TRANSFER,
+             dict(action="rotate-authority", signer="issuer", new_mint_authority="alice"),
+             dict(action="mint", signer="alice", to_account="issuer", amount="25")],
+        )
+        add(f"valid-second-lifecycle-{scheme}",
+            "freeze, unfreeze, transfer, rotate and mint under a real signature scheme",
+            scheme, events, _expect_ok(events, verifier))
+
+    # No ledger exceeded five events, so sequence and chain handling were
+    # only ever exercised at small depth. Twenty transfers alternating
+    # direction keep every balance positive while advancing the chain.
+    long_actions = []
+    for i in range(20):
+        if i % 2 == 0:
+            long_actions.append(dict(action="transfer", signer="issuer",
+                                     from_account="issuer", to_account="alice", amount="20"))
+        else:
+            long_actions.append(dict(action="transfer", signer="alice",
+                                     from_account="alice", to_account="issuer", amount="10"))
+    long_events, long_verifier = _build_ledger("demo", long_actions)
+    add("valid-long-chain-demo",
+        "sequence and prev_event_id across a ledger deeper than a handful of events",
+        "demo", long_events, _expect_ok(long_events, long_verifier))
+
     return vectors
 
 

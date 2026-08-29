@@ -7,7 +7,7 @@ repository and did not have the author walk them through it.
 
 | date | who | implementation | language | result | report |
 |---|---|---|---|---|---|
-| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 64/64 at `1beacfa` — **and twenty-two specification defects across five rounds** | below |
+| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 64/64 at `074de10` — **and twenty-four specification defects across six rounds** | below |
 
 **The passing score is the least important thing in that row**, and the
 implementer said so first, asking that it not be recorded as a clean result
@@ -249,6 +249,76 @@ Adding `valid-genesis-implicit-demo-scheme` made §5.1's "every genesis in
 the conformance corpus states it explicitly" false the moment it shipped.
 Corrected to describe both forms, with the historical note scoped to the
 then-current corpus.
+
+## Round six: no defects, and a caveat on every number quoted above
+
+Two runs against `074de10`. Both **64/64** unchanged. The one-field vector
+fix is confirmed working from both sides: an ablation removing only the
+declared-scheme/verifier-scheme comparison now fails
+`reject-genesis-scheme-mismatch` and nothing else. Third round on that
+vector, closed.
+
+### The ablation counts were never as objective as they were presented
+
+The implementer volunteered a correction against their own headline number,
+and it is the most useful thing in this round:
+
+> my ablation deletes one named check at a time from my implementation's
+> structure. It was never a model of a plausible independent
+> implementation... The same caveat applies retroactively to every ablation
+> number I've quoted, including the headline "ten checks deletable" from
+> round 1. Those measure my decomposition of the rules, not an
+> implementation-independent notion of coverage.
+
+**That is right, and this file has been quoting those counts as though they
+were objective.** The 10 → 6 → 3 → 2 → 1 progression measures one
+implementation's decomposition of the rules, not coverage in any absolute
+sense. The direction was real and every step produced a merged vector, but
+the numbers describe a relationship between two specific implementations.
+Recorded here rather than corrected away, because the temptation to keep
+quoting a clean-looking series is exactly how an unchecked claim survives.
+
+### The more important observation: convergence weakens the signal
+
+> an independent implementation that has converged with yours is no longer
+> generating much information about the spec, because I'm now reading it the
+> way you do... I'd treat a clean result from me as weaker evidence now than
+> it was in round 1.
+
+This is the sharpest point anyone has made across six rounds, and it should
+govern what happens next. The findings that mattered most — a forgeable
+genesis, arbitrary JSON in the state hash, leading zeros — came from
+*unconstrained first guesses*, before the implementer had absorbed the
+document's assumptions. Those are spent.
+
+**A clean pass from a converged implementation is close to no evidence.**
+What would produce signal is an implementation that has not converged: a
+different language, a different structure, someone reaching for a JSON
+library that orders keys differently or a bignum type that normalises digit
+strings. That is the argument for the human implementer run, and it is why
+one is worth more than another round here.
+
+### Two coverage gaps closed, neither a defect
+
+Both raised by the implementer as gaps rather than findings:
+
+- **58 of 64 vectors ran on `demo`**, so the real signature paths were the
+  thinnest-covered area in the corpus. Added a second full lifecycle under
+  each of `hmac-sha256` and `ed25519`; real-scheme vectors 6 → 8.
+- **No ledger exceeded five events**, so sequence and `prev_event_id` were
+  only ever exercised at trivial depth. `valid-long-chain-demo` runs 21
+  events; longest ledger 5 → 21.
+
+### Two wording defects in the specification
+
+Both in prose, neither affecting any implementation:
+
+- §5.1 said every corpus genesis carries "a real signature". 13 of 16 valid
+  genesis records carry the placeholder `demo`; across the whole corpus 112
+  of 133 signatures are the literal string. Now "a `signature` field its
+  selected verifier accepts".
+- §6.6.1 said every scheme carries its result "as a prefixed lowercase-hex
+  string". `demo` carries the literal `demo`. Now stated per scheme.
 
 ### The contributed vectors
 
