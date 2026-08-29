@@ -7,6 +7,10 @@ rotate-authority - is exercised, across all three signature schemes.
 
 ## Testing your own implementation
 
+Writing one from scratch? **`IMPLEMENTER_BRIEF.md`** is the self-contained
+version of everything below, plus the order to build in and the score to
+expect at each stage.
+
 Two commands. No dependencies beyond Python 3.8+; nothing to install.
 
 ```bash
