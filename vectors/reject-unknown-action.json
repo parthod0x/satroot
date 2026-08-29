@@ -37,12 +37,12 @@
       "to": "alice",
       "amount": "400",
       "signature_scheme": "demo",
-      "event_id": "sha256:ebbc12c7dc4a997060d865e81e1712534e28ef90af6a67a5d902b605ba85ba2a"
+      "event_id": "sha256:944f1fc3ea44b81a15c8a78ec7d21934ae37b8fb16ccfec54d26a065bcd6c261"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "event_id mismatch",
+    "reference_error": "unsupported action: teleport",
     "note": "unknown action"
   }
 }

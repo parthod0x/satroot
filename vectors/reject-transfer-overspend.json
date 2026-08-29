@@ -1,7 +1,7 @@
 {
   "vector_format": "satroot1-conformance/1",
-  "name": "reject-forged-signature-demo",
-  "description": "signatures are checked, not merely present",
+  "name": "reject-transfer-overspend",
+  "description": "a transfer cannot move more than the sender holds",
   "scheme": "demo",
   "events": [
     {
@@ -32,17 +32,17 @@
       "sequence": 1,
       "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
       "signer": "issuer",
-      "signature": "demo:not-a-real-signature",
+      "signature": "demo",
       "from": "issuer",
       "to": "alice",
-      "amount": "400",
+      "amount": "999999",
       "signature_scheme": "demo",
-      "event_id": "sha256:168ee74c4d60bddc6a888eddd61b879ef54fefc799bc9894c0ab1d1490fe70c5"
+      "event_id": "sha256:a3257b44ba85082580bbba45b5e2ad25d4a4caa1a817a9f87b61762a2e210011"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "signature verification failed",
-    "note": "bad signature"
+    "reference_error": "insufficient balance",
+    "note": "insufficient balance"
   }
 }

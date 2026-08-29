@@ -1,7 +1,7 @@
 {
   "vector_format": "satroot1-conformance/1",
-  "name": "reject-forged-signature-demo",
-  "description": "signatures are checked, not merely present",
+  "name": "reject-foreign-root-id",
+  "description": "every event must carry the ledger's own root_id",
   "scheme": "demo",
   "events": [
     {
@@ -28,21 +28,21 @@
       "protocol": "SATROOT-1",
       "version": "0.1",
       "action": "transfer",
-      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "root_id": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd:0",
       "sequence": 1,
       "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
       "signer": "issuer",
-      "signature": "demo:not-a-real-signature",
+      "signature": "demo",
       "from": "issuer",
       "to": "alice",
       "amount": "400",
       "signature_scheme": "demo",
-      "event_id": "sha256:168ee74c4d60bddc6a888eddd61b879ef54fefc799bc9894c0ab1d1490fe70c5"
+      "event_id": "sha256:99c17dcc5668fe277eace9d5061046595a3583c9f9902e3b6e257cfe4b3031d9"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "signature verification failed",
-    "note": "bad signature"
+    "reference_error": "root_id mismatch",
+    "note": "root_id mismatch"
   }
 }

@@ -174,7 +174,7 @@ A deterministic offline builder and an offline raw-transaction verifier for this
 
 A genesis record defines the token universe.
 
-Required fields:
+Required fields — all of the following, and `sequence`, which MUST be `0`:
 
 ```json
 {
@@ -190,11 +190,18 @@ Required fields:
   "transfer_model": "account-ledger",
   "initial_balances": {
     "issuer": "1000000000"
-  },
-  "rules_hash": "sha256:<hash>",
-  "nonce": "<unique nonce>"
+  }
 }
 ```
+
+`decimals` MUST be a non-negative JSON integer. A JSON boolean is not an
+integer for this purpose, even in languages where `true` compares equal to
+`1`.
+
+`rules_hash` and `nonce` are OPTIONAL. Earlier revisions of this section
+listed them among the required fields; no conforming ledger has ever carried
+either, and an implementation that required them would reject every valid
+ledger in existence.
 
 ## 6. Event rules
 
@@ -209,6 +216,11 @@ It is valid only if:
 - sequence is exactly previous sequence + 1.
 
 ### 6.1a Amount encoding
+
+Amounts are written in **canonical form**: no leading zeros. `"400"` is
+valid, `"0400"` and `"00"` are not, and `"0"` is the only representation of
+zero. Without this a single ledger state has many spellings, and two
+byte-distinct ledgers replay identically.
 
 Every amount, balance, and supply value is a base-10 ASCII digit string,
 never a JSON number. Amounts carry at most **512 digits**.
@@ -311,6 +323,14 @@ An event whose `signature_scheme` does not match the verifier in use, or
 whose `signature_key_id` is missing, empty, or unknown to the verifier, is
 rejected rather than treated as unsigned.
 
+**The HMAC key is the secret's UTF-8 bytes, not a decoding of them.** Where
+a shared secret is written as a 64-character hex string, the MAC key is
+those 64 ASCII characters, *not* the 32 bytes they encode. This is the one
+place in this specification where the obvious reading is the wrong one, so
+it is stated rather than implied: a conforming implementation that
+hex-decodes the secret produces a different MAC for every event and cannot
+be made to agree by any other means.
+
 CLI replay may be configured against the same reference verification models, so signed ledgers can be validated end to end without dropping into the Python API.
 
 The reference implementation also exposes schema validation helpers and a CLI validation path so raw event JSON can be checked against `protocol/satroot1.schema.json` before replay.
@@ -411,6 +431,22 @@ where `commitment_snapshot` is exactly these thirteen members:
 
 Key order in the serialised form is imposed by canonical JSON (section 2.6),
 so the table order above is descriptive rather than normative.
+
+Three of these members need defining because they are committed to but not
+established elsewhere:
+
+- **`supply` is circulating supply** — the sum of all balances — not
+  cumulative minted. Mint increases it, burn decreases it, and `max_supply`
+  bounds *it*, so a burn followed by a mint is permitted even where the
+  cumulative total minted would exceed `max_supply`.
+- **`profile` and `profile_mode`** are the values carried by the genesis
+  record (section 5). They are optional there, and when absent the committed
+  value is JSON `null` — **the member is still present in the snapshot**.
+  Omitting the key instead would change every state hash, so the distinction
+  is normative.
+- **`last_event_id`** is the `event_id` of the most recently applied event,
+  computed per section 2.7 whether or not the event carried one. For a
+  ledger of one genesis record it is that record's id, not `null`.
 
 This lets lightweight clients check that independent indexers agree on the
 same state.

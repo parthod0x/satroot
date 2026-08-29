@@ -79,6 +79,28 @@ def _build_ledger(scheme, actions):
     return events, verifier
 
 
+def _rechain(events, index=-1):
+    """Recompute the `event_id` of a record after tampering with it.
+
+    Mutating a field of a signed record leaves its stated `event_id` stale,
+    and the reference checks the id before it checks anything semantic - so
+    a vector named for an amount rule, an action allow-list or a signature
+    was really testing `event_id` and nothing else. Seven vectors were in
+    that state, which let an implementation with no amount grammar, no
+    action allow-list and no demo signature check score full marks.
+
+    `event_id` covers `signature`, so this is applied after any signature
+    tampering too, leaving the signature check as the deciding one.
+
+    Found by the first independent implementation, 2026-08-29.
+    """
+    events = copy.deepcopy(events)
+    event = events[index]
+    event.pop("event_id", None)
+    event["event_id"] = sr.event_id(event)
+    return events
+
+
 def _expect_ok(events, verifier):
     state = sr.replay(events, verifier=verifier)
     snapshot = state.snapshot()
@@ -173,6 +195,7 @@ def build_vectors():
 
     unicode_amount = copy.deepcopy(events)
     unicode_amount[1]["amount"] = "４００"  # fullwidth 400
+    unicode_amount = _rechain(unicode_amount, 1)
     add("reject-unicode-digits", "amounts must be ASCII digit strings",
         "demo", unicode_amount, _expect_error(unicode_amount, verifier, "non-ASCII digits rejected"))
 
@@ -186,6 +209,7 @@ def build_vectors():
 
     unknown = copy.deepcopy(events)
     unknown[1]["action"] = "teleport"
+    unknown = _rechain(unknown, 1)
     add("reject-unknown-action", "actions outside the frozen kernel set",
         "demo", unknown, _expect_error(unknown, verifier, "unknown action"))
 
@@ -267,16 +291,19 @@ def build_vectors():
     # -- amount and chain-integrity rejections ---------------------------
     zero_amount = copy.deepcopy(base)
     zero_amount[1]["amount"] = "0"
+    zero_amount = _rechain(zero_amount, 1)
     add("reject-zero-amount", "transfers must move a positive quantity",
         "demo", zero_amount, _expect_error(zero_amount, verifier, "zero amount"))
 
     negative_amount = copy.deepcopy(base)
     negative_amount[1]["amount"] = "-5"
+    negative_amount = _rechain(negative_amount, 1)
     add("reject-negative-amount", "amounts are unsigned digit strings",
         "demo", negative_amount, _expect_error(negative_amount, verifier, "negative amount"))
 
     overlong_amount = copy.deepcopy(base)
     overlong_amount[1]["amount"] = "9" * (sr.MAX_AMOUNT_DIGITS + 1)
+    overlong_amount = _rechain(overlong_amount, 1)
     add("reject-amount-exceeds-digit-bound",
         "amounts are bounded so the decision never depends on host integer limits",
         "demo", overlong_amount,
@@ -294,6 +321,7 @@ def build_vectors():
 
     leading_zero = copy.deepcopy(base)
     leading_zero[1]["amount"] = "0400"
+    leading_zero = _rechain(leading_zero, 1)
     add("reject-leading-zero-amount", "amounts must be in canonical form",
         "demo", leading_zero, _expect_error(leading_zero, verifier, "non-canonical amount"))
 
@@ -310,6 +338,7 @@ def build_vectors():
 
     forged_sig = copy.deepcopy(base)
     forged_sig[1]["signature"] = "demo:not-a-real-signature"
+    forged_sig = _rechain(forged_sig, 1)
     add("reject-forged-signature-demo", "signatures are checked, not merely present",
         "demo", forged_sig, _expect_error(forged_sig, verifier, "bad signature"))
 
@@ -326,6 +355,137 @@ def build_vectors():
     forged_ledger = copy.deepcopy(ed_events) + [forged]
     add("reject-wrong-key-ed25519", "valid signature under an unregistered key",
         "ed25519", forged_ledger, _expect_error(forged_ledger, ed_verifier, "wrong key rejected"))
+
+    # ------------------------------------------------------------------
+    # Coverage added 2026-08-29 after the first independent implementation
+    # showed ten protocol checks could be deleted at once while the corpus
+    # still reported 33/33. Each vector below is the deciding check for a
+    # rule that nothing previously exercised.
+    # ------------------------------------------------------------------
+
+    # SPEC 2.6: non-ASCII must be emitted raw, not escaped. Nothing tested
+    # this - and it is the rule most likely to fork across languages, since
+    # Python escapes by default and JavaScript does not. A valid ledger
+    # whose committed state contains non-ASCII makes the two serialisations
+    # produce different state hashes.
+    nonascii_genesis = _genesis(symbol="VECÉ", name="Conformance unit café — naïve")
+    nonascii = [sr.sign_event_record(nonascii_genesis, scheme="demo", key_id=None, signer=None)]
+    add("valid-non-ascii-metadata-demo",
+        "canonical JSON emits non-ASCII raw, so escaping it forks the state hash",
+        "demo", nonascii, _expect_ok(nonascii, sr.demo_signature_verifier))
+
+    # SPEC 8.8: with the seven tampered vectors rechained, nothing else
+    # exercised the stated-event_id check. This vector is it.
+    stale_id = copy.deepcopy(base)
+    stale_id[1]["event_id"] = "sha256:" + "00" * 32
+    add("reject-stale-event-id", "a stated event_id must match the record",
+        "demo", stale_id, _expect_error(stale_id, verifier, "event_id mismatch"))
+
+    # SPEC 8.9: no event in the corpus carried a state_hash at all.
+    bad_state = copy.deepcopy(base)
+    bad_state[1]["state_hash"] = "sha256:" + "11" * 32
+    bad_state = _rechain(bad_state, 1)
+    add("reject-wrong-per-event-state-hash",
+        "a stated state_hash must match replayed state",
+        "demo", bad_state, _expect_error(bad_state, verifier, "state_hash mismatch"))
+
+    # SPEC 8.3 for a transfer - reject-overspend is a burn, so the transfer
+    # arm of the balance check was never exercised.
+    over_events, over_verifier = _build_ledger("demo", [])
+    big_transfer = sr.scaffold_event_from_ledger(
+        over_events, verifier=over_verifier, action="transfer", signer="issuer",
+        from_account="issuer", to_account="alice", amount="999999",
+    )
+    over_ledger = copy.deepcopy(over_events) + [
+        sr.sign_event_record(big_transfer, scheme="demo", key_id=None, signer=None)
+    ]
+    add("reject-transfer-overspend", "a transfer cannot move more than the sender holds",
+        "demo", over_ledger, _expect_error(over_ledger, over_verifier, "insufficient balance"))
+
+    # SPEC 8.5: no vector used a foreign root_id.
+    foreign = copy.deepcopy(base)
+    foreign[1]["root_id"] = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd:0"
+    foreign = _rechain(foreign, 1)
+    add("reject-foreign-root-id", "every event must carry the ledger's own root_id",
+        "demo", foreign, _expect_error(foreign, verifier, "root_id mismatch"))
+
+    # SPEC 8.4: no vector minted past max_supply.
+    cap_events, cap_verifier = _build_ledger("demo", [])
+    ok_mint = sr.scaffold_event_from_ledger(
+        cap_events, verifier=cap_verifier, action="mint", signer="issuer",
+        to_account="alice", amount="1",
+    )
+    cap_ledger = copy.deepcopy(cap_events) + [
+        sr.sign_event_record(ok_mint, scheme="demo", key_id=None, signer=None)
+    ]
+    # Scaffolding refuses to build an over-cap mint, so raise the amount
+    # afterwards and rechain, leaving the supply check as the deciding one.
+    cap_ledger[-1]["amount"] = "9" * 12
+    cap_ledger = _rechain(cap_ledger, -1)
+    add("reject-mint-exceeds-max-supply", "minting cannot take supply past max_supply",
+        "demo", cap_ledger, _expect_error(cap_ledger, cap_verifier, "mint exceeds max supply"))
+
+    # SPEC 6.5: the freeze check was only exercised on the sending side.
+    for label, action_kwargs, note in (
+        ("mint", dict(action="mint", signer="issuer", to_account="alice", amount="10"),
+         "a frozen account cannot receive a mint"),
+        ("transfer", dict(action="transfer", signer="issuer", from_account="issuer",
+                          to_account="alice", amount="10"),
+         "a frozen account cannot receive a transfer"),
+    ):
+        fr_events, fr_verifier = _build_ledger(
+            "demo", [dict(action="freeze", signer="issuer", account="alice", frozen="true")]
+        )
+        blocked = sr.scaffold_event_from_ledger(fr_events, verifier=fr_verifier, **action_kwargs)
+        fr_ledger = copy.deepcopy(fr_events) + [
+            sr.sign_event_record(blocked, scheme="demo", key_id=None, signer=None)
+        ]
+        add(f"reject-{label}-to-frozen-account", note,
+            "demo", fr_ledger, _expect_error(fr_ledger, fr_verifier, "recipient is frozen"))
+
+    # max_supply: null - the unbounded branch never appeared in the corpus.
+    # scaffold_genesis_record's max_supply=None means "use the default",
+    # not "unbounded", so the null has to be set explicitly.
+    unbounded_genesis = _genesis()
+    unbounded_genesis["max_supply"] = None
+    unbounded = [sr.sign_event_record(unbounded_genesis, scheme="demo", key_id=None, signer=None)]
+    unbounded_mint = sr.scaffold_event_from_ledger(
+        unbounded, verifier=sr.demo_signature_verifier, action="mint",
+        signer="issuer", to_account="alice", amount="9" * 20,
+    )
+    unbounded = unbounded + [
+        sr.sign_event_record(unbounded_mint, scheme="demo", key_id=None, signer=None)
+    ]
+    add("valid-unbounded-max-supply-demo",
+        "max_supply null means no cap, and is committed to as JSON null",
+        "demo", unbounded, _expect_ok(unbounded, sr.demo_signature_verifier))
+
+    # SPEC 8.2 in isolation. reject-sequence-gap drops an event, which also
+    # breaks prev_event_id, so the sequence check is redundant with the
+    # chain check there and an implementation missing it still passes.
+    # Here the chain is intact and only `sequence` is wrong.
+    seq_ledger = copy.deepcopy(base)
+    seq_ledger[1]["sequence"] = 7
+    seq_ledger = _rechain(seq_ledger, 1)
+    add("reject-bad-sequence-intact-chain",
+        "sequence must be checked even when prev_event_id is correct",
+        "demo", seq_ledger, _expect_error(seq_ledger, verifier, "bad sequence"))
+
+    # SPEC 8.1 in isolation. reject-duplicate-genesis appends a copy of the
+    # genesis record, which lacks prev_event_id and signer, so it is decided
+    # by the missing-field check rather than by the one-genesis rule. This
+    # second genesis is well-formed as a non-genesis record would be.
+    dup_ledger = copy.deepcopy(base)
+    second_genesis = copy.deepcopy(base[0])
+    second_genesis["sequence"] = 2
+    second_genesis["prev_event_id"] = sr.event_id(base[1])
+    second_genesis["signer"] = "issuer"
+    second_genesis.pop("event_id", None)
+    second_genesis["event_id"] = sr.event_id(second_genesis)
+    dup_ledger = dup_ledger + [second_genesis]
+    add("reject-second-genesis-well-formed",
+        "a ledger has exactly one genesis, however well-formed the second is",
+        "demo", dup_ledger, _expect_error(dup_ledger, verifier, "one genesis only"))
 
     return vectors
 

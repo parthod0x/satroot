@@ -2649,6 +2649,14 @@ def signing_payload(event: Dict[str, Any]) -> str:
 def parse_amount(value: str) -> int:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9]+", value):
         raise SatRootError(f"invalid amount: {value!r}")
+    # Canonical form only: "0400" and "400" must not both be spellable, or
+    # two byte-distinct ledgers replay to identical state. The corpus has
+    # asserted this since reject-leading-zero-amount was written, but that
+    # vector was decided by a stale event_id, so the rule was never actually
+    # enforced here. Found by the first independent implementation, which
+    # read the rule off the vector name and diverged from this parser.
+    if len(value) > 1 and value[0] == "0":
+        raise SatRootError(f"amount has a leading zero: {value!r}")
     # Bounded so the accept/reject decision never depends on the host's
     # integer-string conversion limit (CPython's is configurable and its
     # floor is 640 digits), which would otherwise make replay

@@ -37,12 +37,12 @@
       "to": "alice",
       "amount": "0",
       "signature_scheme": "demo",
-      "event_id": "sha256:ebbc12c7dc4a997060d865e81e1712534e28ef90af6a67a5d902b605ba85ba2a"
+      "event_id": "sha256:6302463d1f83b8b2ae10a462cdc97886df2ecbf63cc8c835e8c665b5e265c64a"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "event_id mismatch",
+    "reference_error": "amount must be positive: '0'",
     "note": "zero amount"
   }
 }

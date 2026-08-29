@@ -5,17 +5,68 @@ repository and did not have the author walk them through it.
 
 ## Runs recorded so far
 
-**None.**
-
-That is the honest state as of 29 August 2026, and this page exists to stop
-it being quietly restated as something else. The corpus has been run by two
-implementations — the Python reference and `verifiers/typescript/` — and both
-were written by the same person, so they demonstrate that the specification
-is implementable from its text and nothing more.
-
 | date | who | implementation | language | result | report |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 against the corpus as it then stood — **and eleven specification defects** | below |
+
+**The passing score is the least important thing in that row**, and the
+implementer said so first, asking that it not be recorded as a clean result
+without the findings attached. It is recorded as AI-assisted at their own
+request; it is not a named human implementer, and it should not be described
+as one.
+
+What makes it the first genuinely independent run is not the 33/33. It is
+that the implementation was written from the specification by someone who
+never opened `src/satroot1.py`, `verifiers/typescript/src/satroot.ts`, or
+`scripts/generate_conformance_vectors.py` — and that it disagreed with the
+reference about an accept/reject decision, which no previous run could have
+surfaced.
+
+A **second attempt the same day was blocked** before writing protocol logic,
+by finding 1 below. That report is also a result: the specification was
+unusable as written, and stopping was the correct response to it.
+
+### What it found, all independently verified before being accepted
+
+| # | finding | verified | status |
+|---|---|---|---|
+| 1 | §5 listed `rules_hash` and `nonce` as **required** genesis fields. No vector carries either; an implementation enforcing §5 literally rejects every valid ledger at its first event. §5 also omitted `sequence`, which *is* required. | 0 of 33 genesis records carry `rules_hash` | **fixed** |
+| 2 | Leading-zero amounts: the reference **accepted** `"0400"` while the corpus asserted rejection via `reject-leading-zero-amount`, and the spec said nothing. Three-way inconsistency. | `parse_amount` matched `[0-9]+`; rechained vector accepted by the reference | **fixed** — canonical form now required in §6.1a and enforced |
+| 3 | Seven rejection vectors are decided by a stale `event_id`, not by the rule they are named for. The generator edited a field of a signed record without recomputing the id. | all seven confirmed stale at the tampered event | **fixed** — all seven rechained; `_rechain` in the generator stops it recurring |
+| 4 | Consequently ten protocol checks can be deleted at once and the corpus still reports 33/33, including five of §8's ten MUST conditions (8.2, 8.4, 8.5, 8.8, 8.9). | mechanism confirmed via 3 | **fixed** — 11 vectors added; §8.2 and §8.1 also had isolation gaps not in the original report |
+| 5 | **§2.6's "non-ASCII emitted raw, not backslash-u escapes" is unexercised.** Serialising with `ensure_ascii=True` — violating the rule — still scores 33/33. It is the rule most likely to fork across languages, since Python escapes by default and JavaScript does not. | reproduced: 0 failures with the rule violated | **fixed** — `valid-non-ascii-metadata-demo` now fails under `ensure_ascii=True` |
+| 6 | HMAC key encoding is underspecified and the natural reading is wrong. §6.6.1 says `hex(HMAC-SHA256(key, ...))` and the README calls the secrets "(hex)", but the MAC key is the 64-character ASCII hex **text**, not the 32 decoded bytes. | confirmed: text matches the corpus signature, decoded bytes do not | **fixed** — stated in §6.6.1 |
+| 7 | §8.9 (`state_hash`) and §8.10 (profiles) are never exercised — no event carries a `state_hash`, no vector carries a profile. `max_supply: null` never appears. | 0 events, 0 vectors, 0 genesis respectively | **fixed** — `state_hash` and `max_supply: null` vectors added; profiles remain unexercised |
+| 8 | `reject-overspend` is a **burn**, so §8.3 is untested for transfers. | confirmed | **fixed** — `reject-transfer-overspend` added |
+| 9 | §7 commits to `profile`/`profile_mode`, which §5 never defines. Absent to `null` was a guess; "omit the key" would change every state hash. | — | **fixed** — §7 now defines both, and absent commits as `null` |
+| 10 | `supply` is committed by §7 and defined nowhere — circulating or cumulative-minted. No vector distinguishes them, so two implementations can disagree and both score 33/33. | confirmed `supply == sum(balances)` in every valid vector | **fixed** — §7 defines it as circulating |
+| 11 | Smaller: §8 omits mint- and freeze-by-non-authority; "a ledger must begin with genesis" is only implied; §8.1 reads as permitting a second genesis under a different `root_id`; `decimals` typing was unstated, so `true` passing as an integer is a corpus-only rule. | — | **fixed** — `decimals` typed, §8 gaps closed by the new vectors |
+
+**Nine of the eleven are fixed, the corpus grew from 33 vectors to 44, and
+both implementations gained a rule they were missing.** Profiles (§8.10)
+remain unexercised — there is no profile vector — and that is the one item
+from this report still genuinely open.
+
+### The contributed vectors
+
+14 hardened vectors came with the report: the seven above rechained so the
+named rule is the deciding check, plus new cases for transfer-overspend,
+mint-over-max-supply, foreign `root_id`, frozen mint and transfer
+recipients, and a per-event `state_hash`.
+
+**All 14 were re-checked against this project's own reference before being
+accepted, and all 14 are rejected for the reason in their name** — one of
+them only after finding 2 was fixed, which is how that divergence surfaced.
+They are therefore validated by two implementations that share no author,
+which is true of nothing else in this repository.
+
+### Reproduction runs
+
+Independent operator, our implementation. None recorded yet.
+
+| date | who | OS / runtime | result |
+|---|---|---|---|
+| — | — | — | — |
 
 A row goes in this table only when someone outside the project ran it and is
 willing to be named. A run reported anonymously is still welcome and still

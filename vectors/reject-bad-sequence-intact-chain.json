@@ -1,7 +1,7 @@
 {
   "vector_format": "satroot1-conformance/1",
-  "name": "reject-forged-signature-demo",
-  "description": "signatures are checked, not merely present",
+  "name": "reject-bad-sequence-intact-chain",
+  "description": "sequence must be checked even when prev_event_id is correct",
   "scheme": "demo",
   "events": [
     {
@@ -29,20 +29,20 @@
       "version": "0.1",
       "action": "transfer",
       "root_id": "abababababababababababababababababababababababababababababababab:0",
-      "sequence": 1,
+      "sequence": 7,
       "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
       "signer": "issuer",
-      "signature": "demo:not-a-real-signature",
+      "signature": "demo",
       "from": "issuer",
       "to": "alice",
       "amount": "400",
       "signature_scheme": "demo",
-      "event_id": "sha256:168ee74c4d60bddc6a888eddd61b879ef54fefc799bc9894c0ab1d1490fe70c5"
+      "event_id": "sha256:a526e64b35476c8df2e21b46f8b032662962d18fda812ed4a781baa9b10df427"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "signature verification failed",
-    "note": "bad signature"
+    "reference_error": "bad sequence",
+    "note": "bad sequence"
   }
 }

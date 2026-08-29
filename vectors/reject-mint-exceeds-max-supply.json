@@ -1,7 +1,7 @@
 {
   "vector_format": "satroot1-conformance/1",
-  "name": "reject-forged-signature-demo",
-  "description": "signatures are checked, not merely present",
+  "name": "reject-mint-exceeds-max-supply",
+  "description": "minting cannot take supply past max_supply",
   "scheme": "demo",
   "events": [
     {
@@ -27,22 +27,21 @@
     {
       "protocol": "SATROOT-1",
       "version": "0.1",
-      "action": "transfer",
+      "action": "mint",
       "root_id": "abababababababababababababababababababababababababababababababab:0",
       "sequence": 1,
       "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
       "signer": "issuer",
-      "signature": "demo:not-a-real-signature",
-      "from": "issuer",
+      "signature": "demo",
       "to": "alice",
-      "amount": "400",
+      "amount": "999999999999",
       "signature_scheme": "demo",
-      "event_id": "sha256:168ee74c4d60bddc6a888eddd61b879ef54fefc799bc9894c0ab1d1490fe70c5"
+      "event_id": "sha256:700eeccec9c6ef78eb73f4a9cfe39395dce94f6d8c85a89e46347097293f9d7d"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "signature verification failed",
-    "note": "bad signature"
+    "reference_error": "mint exceeds max supply",
+    "note": "mint exceeds max supply"
   }
 }

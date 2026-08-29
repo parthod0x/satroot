@@ -1,7 +1,7 @@
 {
   "vector_format": "satroot1-conformance/1",
-  "name": "reject-forged-signature-demo",
-  "description": "signatures are checked, not merely present",
+  "name": "reject-second-genesis-well-formed",
+  "description": "a ledger has exactly one genesis, however well-formed the second is",
   "scheme": "demo",
   "events": [
     {
@@ -32,17 +32,39 @@
       "sequence": 1,
       "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
       "signer": "issuer",
-      "signature": "demo:not-a-real-signature",
+      "signature": "demo",
       "from": "issuer",
       "to": "alice",
       "amount": "400",
       "signature_scheme": "demo",
-      "event_id": "sha256:168ee74c4d60bddc6a888eddd61b879ef54fefc799bc9894c0ab1d1490fe70c5"
+      "event_id": "sha256:ebbc12c7dc4a997060d865e81e1712534e28ef90af6a67a5d902b605ba85ba2a"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 2,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "prev_event_id": "sha256:ebbc12c7dc4a997060d865e81e1712534e28ef90af6a67a5d902b605ba85ba2a",
+      "signer": "issuer",
+      "event_id": "sha256:d3ab7c2c29aa360e73b09dd1b25951df23e6d9c2c39ae6f3ff7fc2e6ff819e4d"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "signature verification failed",
-    "note": "bad signature"
+    "reference_error": "unsupported action: genesis",
+    "note": "one genesis only"
   }
 }

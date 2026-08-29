@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+- **The first independent implementation, and what it cost.** On 2026-08-29
+  someone wrote a ~540-line replay from `SPEC.md` alone, having never opened
+  `src/satroot1.py`, `verifiers/typescript/src/satroot.ts` or the vector
+  generator. It scored 33/33 against the corpus as it then stood, and found eleven
+  specification defects. A
+  second attempt the same day was **blocked** before writing protocol logic.
+  Recorded in `vectors/INDEPENDENT_RUNS.md` as an AI-assisted, anonymous
+  run at the implementer's own request.
+
+  The two that mattered most:
+
+  - **§5 listed `rules_hash` and `nonce` as required genesis fields**, and
+    omitted `sequence`, which is required. No ledger has ever carried
+    either; an implementation enforcing §5 literally rejects every valid
+    ledger at its first event. Now corrected, with `decimals` typed as a
+    non-negative integer excluding booleans.
+  - **Leading-zero amounts.** The reference *accepted* `"0400"`, the corpus
+    asserted rejection via `reject-leading-zero-amount`, and the
+    specification said nothing. Two implementations disagreeing about an
+    accept/reject decision is precisely what this corpus exists to detect,
+    and it was invisible. Canonical form is now required (§6.1a) and
+    enforced in both implementations - the TypeScript verifier had the same
+    gap, for the same reason.
+
+- **The corpus was far weaker than 33 vectors suggested, and is now 44.**
+  Seven rejection vectors were decided by a stale `event_id` rather than the
+  rule in their name: the generator edited a field of a signed record
+  without recomputing the id, so an implementation with no amount grammar,
+  no action allow-list and no demo signature check scored full marks. All
+  seven are rechained, and `_rechain` in the generator prevents it
+  recurring.
+
+  Nine vectors added for rules nothing exercised: a stated `event_id`
+  (§8.8), a per-event `state_hash` (§8.9 - no event carried one at all), a
+  transfer overspend (§8.3 was only tested via a burn), a foreign `root_id`
+  (§8.5), a mint past `max_supply` (§8.4), frozen mint and transfer
+  recipients (§6.5's receiving arms), an unbounded `max_supply: null`
+  ledger, and - the one that would have bitten hardest - **a valid ledger
+  carrying non-ASCII metadata**, because §2.6's "emit raw, not escaped" rule
+  was added a week ago and no vector could detect its violation.
+  Serialising with `ensure_ascii=True` used to score 33/33; it now fails.
+  That is the rule most likely to fork across languages, since Python
+  escapes by default and JavaScript does not.
+
+- Defines `supply` (circulating, so `max_supply` bounds it and burn-then-mint
+  is permitted), `profile`/`profile_mode` (absent commits as JSON `null`,
+  with the member still present), and `last_event_id`, all of which §7
+  committed to without defining. Documents that the HMAC key is the
+  secret's UTF-8 bytes, not a hex decoding of them - the one place where the
+  obvious reading is wrong, and the only finding the implementer could not
+  have resolved from the document at all.
+
 - **Corrects SPEC.md's state commitment, which named the wrong fields.**
   Section 7 described the commitment as `sha256(canonical_json({balances,
   supply, sequence, prev_event_id}))`. The real commitment covers thirteen

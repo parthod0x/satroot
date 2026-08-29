@@ -1,7 +1,7 @@
 # Brief: writing an independent SATROOT-1 implementation
 
 **What is being asked:** write your own program that replays a SATROOT-1
-ledger, from the specification alone, and run it against the 33 conformance
+ledger, from the specification alone, and run it against the 44 conformance
 vectors in this directory. Report what happens.
 
 **Roughly a day**, more if the specification fights you. Any language.
@@ -11,24 +11,33 @@ vectors in this directory. Report what happens.
 ## 1. Why this is worth your time, stated honestly
 
 SATROOT has two implementations — Python and TypeScript — 1,751 tests, and a
-33-vector conformance corpus. All of it was written by one person. So the
+44-vector conformance corpus. All of it was written by one person. So the
 corpus demonstrates that the specification is implementable *by its author*,
 which is not the interesting claim.
 
-Nobody has ever implemented this from the text. Whether it can be done is
-unknown, and the honest answer might be no.
+**A run that fails is a better outcome than one that passes.** Every place
+the specification is ambiguous, incomplete or wrong is a real defect, and
+you are the only instrument that can detect it — the tests cannot, because
+they were written against the code, and the vectors cannot, because they are
+generated from it.
 
-**Which means a run that fails is a better outcome than one that passes.**
-Every place the specification is ambiguous, incomplete or wrong is a real
-defect, and you are the only instrument that can detect it — the tests
-cannot, because they were written against the code, and the vectors cannot,
-because they are generated from it.
+This is not hypothetical. One implementation has been written from this
+specification, on 29 August 2026. It scored 33/33 against the corpus as it then
+stood, and found **eleven defects**, two of which would have stopped a careful reader outright:
 
-Two such defects were found the day before this brief was written, while
-preparing it: the state commitment in §7 named four fields when it commits
-to thirteen, and canonical JSON — which every hash and signature depends on
-— was never defined anywhere in the document. Both are fixed. **Assume more
-remain.**
+- §5 listed `rules_hash` and `nonce` as *required* genesis fields. Nothing
+  has ever carried either. An implementation enforcing §5 literally rejects
+  every valid ledger at its first event, and a second attempt that day was
+  blocked on exactly this.
+- The reference **accepted** the amount `"0400"` while the corpus asserted
+  it must be rejected and the specification said nothing. Two
+  implementations disagreeing about an accept/reject decision — which is
+  the entire thing this corpus exists to detect, and it had been invisible.
+
+All eleven are fixed or recorded in `INDEPENDENT_RUNS.md`, and the corpus
+grew from 33 vectors to 44 closing the gaps that run exposed. **Assume more
+remain.** The last run found eleven; the corpus was thought to be in good
+shape before it.
 
 ---
 
@@ -60,7 +69,7 @@ no protocol logic in them).
 ```bash
 git clone https://github.com/parthod0x/satroot.git
 cd satroot/vectors
-python3 run.py            # expect: 33 vectors, 0 failures
+python3 run.py            # expect: 44 vectors, 0 failures
 git rev-parse --short HEAD
 ```
 
@@ -147,9 +156,13 @@ vector = json.load(open(sys.argv[1], encoding="utf-8"))
 print("REJECT")
 ```
 
-Run it. You should see **21 ok, 12 FAIL** — the 21 rejection vectors pass,
-the 12 acceptance vectors fail. That is the correct starting score and it
+Run it. You should see **30 ok, 14 FAIL** — the 30 rejection vectors pass,
+the 14 acceptance vectors fail. That is the correct starting score and it
 means your plumbing works.
+
+Those 30 will not all stay passing. Some are decided by rules you have not
+written yet, and a few may flip to FAIL as you go before flipping back. The
+number to watch is the acceptance count.
 
 If you instead see `printed nothing to stdout`, it is a path or quoting
 problem, not a protocol one.
@@ -160,19 +173,19 @@ problem, not a protocol one.
 
 | build | read | passing |
 |---|---|---|
-| stub above | — | **21** |
-| canonical JSON, `event_id`, genesis, `demo` verifier, state hash | §2.6, §2.7, §5, §6.6, §7 | 22 |
-| transfer | §6.2, §6.1a | 24 |
-| mint | §6.1 | 25 |
-| burn | §6.3 | 26 |
-| freeze / unfreeze | §6.5 | 28 |
-| rotate-authority | §6.4 | 30 |
-| `hmac-sha256` verifier | §6.6.1 | 31 |
-| `ed25519` verifier | §6.6.1 | **33** |
+| stub above | — | **30** |
+| canonical JSON, `event_id`, genesis, `demo` verifier, state hash | §2.6, §2.7, §5, §6.6, §7 | 32 |
+| transfer | §6.2, §6.1a | 34 |
+| mint | §6.1 | 36 |
+| burn | §6.3 | 37 |
+| freeze / unfreeze | §6.5 | 39 |
+| rotate-authority | §6.4 | 41 |
+| `hmac-sha256` verifier | §6.6.1 | 42 |
+| `ed25519` verifier | §6.6.1 | **44** |
 
 Cross-check the rejection conditions in §8 throughout.
 
-**21 → 22 is by far the hardest step.** It means your canonical JSON, event
+**30 → 32 is by far the hardest step.** It means your canonical JSON, event
 ids and state commitment are all byte-exact. Everything after it is one
 action at a time.
 
@@ -181,7 +194,7 @@ serialiser: if it fails, the runner's `expected:` / `got:` lines tell you
 whether your hash is wrong (hash differs) or your replay is (balances or
 count differ).
 
-29 of the 33 vectors use the `demo` scheme, so real cryptography can wait
+40 of the 44 vectors use the `demo` scheme, so real cryptography can wait
 until the very end.
 
 ---

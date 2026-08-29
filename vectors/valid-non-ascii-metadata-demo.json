@@ -1,0 +1,36 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-non-ascii-metadata-demo",
+  "description": "canonical JSON emits non-ASCII raw, so escaping it forks the state hash",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VECÉ",
+      "name": "Conformance unit café — naïve",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "event_id": "sha256:cf94d899ebb1577c0507d9b5ea05d858566b3ee4a8df0a447fb7af02493a6e3d"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:244037d3fd5529fd3437856c7b7d6c30fc4beaed2c1a28198a8bcfcdaf713490",
+    "balances": {
+      "issuer": "1000"
+    },
+    "record_count": 1
+  }
+}

@@ -1,7 +1,7 @@
 {
   "vector_format": "satroot1-conformance/1",
-  "name": "reject-forged-signature-demo",
-  "description": "signatures are checked, not merely present",
+  "name": "valid-unbounded-max-supply-demo",
+  "description": "max_supply null means no cap, and is committed to as JSON null",
   "scheme": "demo",
   "events": [
     {
@@ -13,7 +13,7 @@
       "symbol": "VEC1",
       "name": "Conformance vector unit",
       "decimals": 0,
-      "max_supply": "1000000",
+      "max_supply": null,
       "mint_authority": "issuer",
       "transfer_model": "account-ledger",
       "initial_balances": {
@@ -22,27 +22,30 @@
       "nonce": "satroot-scaffold-0000000000000000",
       "signature_scheme": "demo",
       "signature": "demo",
-      "event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2"
+      "event_id": "sha256:5397d94f35815282396e454c4deae7c09b2b3f333f6967366f3beaaf14fbb938"
     },
     {
       "protocol": "SATROOT-1",
       "version": "0.1",
-      "action": "transfer",
+      "action": "mint",
       "root_id": "abababababababababababababababababababababababababababababababab:0",
       "sequence": 1,
-      "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
+      "prev_event_id": "sha256:5397d94f35815282396e454c4deae7c09b2b3f333f6967366f3beaaf14fbb938",
       "signer": "issuer",
-      "signature": "demo:not-a-real-signature",
-      "from": "issuer",
+      "signature": "demo",
       "to": "alice",
-      "amount": "400",
+      "amount": "99999999999999999999",
       "signature_scheme": "demo",
-      "event_id": "sha256:168ee74c4d60bddc6a888eddd61b879ef54fefc799bc9894c0ab1d1490fe70c5"
+      "event_id": "sha256:a0522662096e909fee1016a4eaea30c1df92a5c72e66f1dd16823680ea617b87"
     }
   ],
   "expect": {
-    "ok": false,
-    "reference_error": "signature verification failed",
-    "note": "bad signature"
+    "ok": true,
+    "final_state_hash": "sha256:139f25459875c404a82118ad385a56ca0058672c2dbb21a06fde6702071c4445",
+    "balances": {
+      "alice": "99999999999999999999",
+      "issuer": "1000"
+    },
+    "record_count": 2
   }
 }

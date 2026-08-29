@@ -25,8 +25,8 @@ Accounts in any order (this runner sorts them). Exit status is ignored;
 only stdout is read, and only its last non-empty line. Anything on stderr
 is shown when a vector fails, so debug output there is free.
 
-Print REJECT when replay must fail. That is not an error condition: 21 of
-the 33 vectors are rejection cases, and refusing them correctly is most of
+Print REJECT when replay must fail. That is not an error condition: 30 of
+the 44 vectors are rejection cases, and refusing them correctly is most of
 what conformance means.
 
 --------------------------------------------------------------------------

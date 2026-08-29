@@ -54,7 +54,7 @@ class VectorRunnerTest(unittest.TestCase):
         vector_count = len(list(VECTORS_DIR.glob("*.json")))
         lines = [ln for ln in EXPECTED.read_text(encoding="utf-8").splitlines() if ln]
         self.assertEqual(len(lines), vector_count)
-        self.assertGreaterEqual(vector_count, 33)
+        self.assertGreaterEqual(vector_count, 42)
 
     def test_reference_mode_agrees_with_declared_expectations(self):
         result = run_runner()

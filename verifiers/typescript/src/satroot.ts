@@ -180,6 +180,12 @@ function parseAmount(value: Json): bigint {
   if (value.length > MAX_AMOUNT_DIGITS) {
     throw new SatRootError(`amount exceeds ${MAX_AMOUNT_DIGITS} digits`);
   }
+  // Canonical form only - SPEC.md section 6.1a. This verifier had the same
+  // gap as the Python reference, and for the same reason: the vector that
+  // was supposed to test it was decided by a stale event_id instead.
+  if (value.length > 1 && value[0] === "0") {
+    throw new SatRootError(`amount has a leading zero: ${JSON.stringify(value)}`);
+  }
   return BigInt(value);
 }
 
