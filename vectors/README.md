@@ -46,6 +46,10 @@ https://github.com/parthod0x/satroot/issues. The corpus has never been run
 by anyone other than its author, so a genuine independent run is more
 useful to this project than a clean one.
 
+**Where runs are recorded:** `INDEPENDENT_RUNS.md`, which also says what a
+run report should contain and where to send it. The table there is currently
+empty, and stays that way until it honestly isn't.
+
 ## Vector format
 
 Each `*.json` file is one vector:
