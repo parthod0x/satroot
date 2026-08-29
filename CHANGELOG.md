@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **reject-genesis-scheme-mismatch now pins the rule it is named for.** It
+  carried a `signature_key_id` alongside its mismatched `signature_scheme`,
+  so it tested two rules at once - and the corpus already covers the other
+  separately. An implementation that never reads `signature_scheme` rejected
+  it via the demo/key-id rule and the vector detected nothing. Dropping the
+  field fixes it: measured, a scheme-blind implementation now accepts the
+  record and the corpus catches it there.
+
+  Two consecutive revisions of the section 6.6.1 rationale were wrong about
+  this, in opposite directions - first that no vector could isolate the
+  rule, then that this one already did. The second was measured against an
+  incoherent ablation that dropped the check from the verifier while still
+  applying scheme-dependent metadata rules, which is not an implementation
+  anyone would write. Both claims are corrected, and the history is recorded
+  in the section rather than quietly replaced.
+
+- Corrects a sentence that the previous release made false as it shipped:
+  section 5.1 said every genesis in the corpus states `signature_scheme`
+  explicitly, which stopped being true the moment
+  `valid-genesis-implicit-demo-scheme` was added in the same commit.
+
 - **Corrects a section 6.6.1 rationale that told implementers to skip a
   load-bearing check.** The previous revision claimed the `signature_scheme`
   match was "defence in depth rather than an independently observable rule"

@@ -214,15 +214,18 @@ rejected.
 Its signature metadata follows section 6.6.1 exactly as a non-genesis event
 does:
 
-- `signature_scheme` is OPTIONAL and defaults to `demo` when absent. Every
-  genesis in the conformance corpus states it explicitly; both spellings are
-  valid, and they are different records with different `event_id` values.
+- `signature_scheme` is OPTIONAL and defaults to `demo` when absent. The
+  conformance corpus carries both forms — genesis records that state
+  `"signature_scheme": "demo"` explicitly, and one that relies on the
+  implicit default. Both are valid, and they are different records with
+  different `event_id` values.
 - `signature_key_id` is REQUIRED for `hmac-sha256` and `ed25519`, and MUST
   be absent for `demo`.
 
 An earlier revision of this paragraph said a genesis carries
 `signature_scheme` "where the scheme is not `demo`", which read as though a
-demo genesis must omit it while every vector in the corpus carries one.
+demo genesis must omit it while every vector in the then-current corpus
+carried one.
 
 Genesis does not carry `signer`; the signing key is identified by
 `signature_key_id` under the real schemes, and `demo` records carry neither.
@@ -409,12 +412,20 @@ use, while the declared scheme lies.** A `demo` record carrying
 demo verifier would otherwise accept; only the scheme check rejects it.
 Without it a record can misrepresent its own provenance and still validate.
 
-`reject-genesis-scheme-mismatch` pins this: an implementation whose demo
-verifier ignores `signature_scheme` accepts it and fails that vector alone.
+`reject-genesis-scheme-mismatch` pins this. An implementation that never
+reads `signature_scheme` — and therefore cannot apply the scheme-dependent
+`signature_key_id` rules either — accepts that record, and the corpus
+catches it there.
 
-An earlier revision of this paragraph asserted the rule could not be
-isolated by any vector. That was wrong, and the danger of the claim was that
-it told implementers a rule was unobservable and therefore skippable.
+Two earlier revisions of this paragraph were wrong, in opposite directions.
+The first asserted the rule could not be isolated by any vector, which told
+implementers it was unobservable and therefore skippable. The second claimed
+the vector already pinned it, which was measured against an incoherent
+ablation: one that dropped the check from the verifier while still applying
+scheme-dependent metadata rules. The vector genuinely did not pin the rule
+until it stopped carrying a `signature_key_id`, because that field made a
+scheme-blind implementation reject it for a reason the corpus already tests
+elsewhere.
 
 **The HMAC key is the secret's UTF-8 bytes, not a decoding of them.** Where
 a shared secret is written as a 64-character hex string, the MAC key is

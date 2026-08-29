@@ -22,13 +22,12 @@
       "nonce": "satroot-scaffold-0000000000000000",
       "signature_scheme": "ed25519",
       "signature": "demo",
-      "signature_key_id": "issuer-key",
-      "event_id": "sha256:78ab2c54fcc9c0edf20cbb1c84a2b93b8fca4d4abd2507f68d456a8c575c4c4b"
+      "event_id": "sha256:6140b43f1c2fee38fdd5d481425ee6da7515e67486ec288ad4be8399c0c73ec4"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "signature verification failed",
+    "reference_error": "signature_key_id is required for ed25519",
     "note": "scheme mismatch"
   }
 }

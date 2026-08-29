@@ -523,7 +523,13 @@ def build_vectors():
         _genesis(), scheme="demo", key_id=None, signer=None
     )
     mismatched["signature_scheme"] = "ed25519"
-    mismatched["signature_key_id"] = "issuer-key"   # so metadata validation passes
+    # No signature_key_id. Carrying one made this vector test two rules at
+    # once, and the corpus already covers the other separately
+    # (reject-demo-genesis-with-key-id) - so an implementation that never
+    # reads signature_scheme rejected this for the wrong reason and the
+    # vector detected nothing. Without the field, a scheme-blind
+    # implementation accepts it and this vector alone catches that.
+    mismatched.pop("signature_key_id", None)
     mismatched = _rechain([mismatched], 0)
     add("reject-genesis-scheme-mismatch",
         "signature_scheme must match the verifier in use",

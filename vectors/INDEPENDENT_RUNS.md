@@ -7,7 +7,7 @@ repository and did not have the author walk them through it.
 
 | date | who | implementation | language | result | report |
 |---|---|---|---|---|---|
-| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 63/63 at `e758309` — **and twenty specification defects across four rounds** | below |
+| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 64/64 at `1beacfa` — **and twenty-two specification defects across five rounds** | below |
 
 **The passing score is the least important thing in that row**, and the
 implementer said so first, asking that it not be recorded as a clean result
@@ -207,6 +207,48 @@ that mattered — that my justification was false — stands and is fixed.
 portable by luck. `valid-genesis-implicit-demo-scheme` closes it: an
 implementation that requires the field instead of defaulting it fails that
 vector alone. Both implementations already defaulted correctly.
+
+## Round five: the same vector, third time, and the reason it kept recurring
+
+Two runs against `1beacfa` (64 vectors). Both passed **64/64** unchanged.
+
+**The §6.6.1 prose was fixed last round; the vector was not.** The report
+was blunt about the pattern, and correctly: `reject-genesis-scheme-mismatch`
+was generated with two defects at once — it declared a mismatched scheme
+*and* carried a `signature_key_id` — and three rounds of discussion went to
+the rule rather than to how the vector was built. The rule was never in
+doubt; both implementations had it right throughout.
+
+My claim last round that the vector already pinned the rule was measured
+against an **incoherent ablation**: I removed the check from the verifier
+while leaving scheme-*dependent* metadata validation in place, which is not
+an implementation anyone would write. Measured properly — an implementation
+that never reads `signature_scheme`, and so cannot apply scheme-dependent
+`signature_key_id` rules either — the shipped vector rejected via the
+demo/key-id rule and detected nothing.
+
+Verified both ways before changing anything:
+
+| | shipped vector | with `signature_key_id` removed |
+|---|---|---|
+| conforming reference | REJECT | REJECT |
+| scheme-blind implementation | REJECT (wrong reason) | **ACCEPT** |
+
+So the one-field edit is the fix, and it is now in the generator. Adopted as
+a replacement rather than a second near-identical vector, as the report
+suggested.
+
+**Two consecutive rounds of mine were wrong about this same rule**, in
+opposite directions — first that no vector could isolate it, then that one
+already did. Both were prose written to close a round, and neither was
+checked by anything until someone else measured it.
+
+### A stale sentence introduced by the previous fix
+
+Adding `valid-genesis-implicit-demo-scheme` made §5.1's "every genesis in
+the conformance corpus states it explicitly" false the moment it shipped.
+Corrected to describe both forms, with the historical note scoped to the
+then-current corpus.
 
 ### The contributed vectors
 
