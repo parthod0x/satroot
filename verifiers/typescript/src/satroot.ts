@@ -11,6 +11,9 @@
  */
 
 import { createHash, createHmac, createPublicKey, verify as cryptoVerify } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export class SatRootError extends Error {}
 
@@ -254,10 +257,68 @@ function validateSignatureMetadata(event: Event): void {
 /* Replay                                                              */
 /* ------------------------------------------------------------------ */
 
-function applyGenesis(event: Event): State {
+/**
+ * Registry-level profile rules - SPEC.md section 8.10.
+ *
+ * This verifier accepted any profile at all until the conformance corpus
+ * grew vectors for it, because the committed profile/profile_mode members
+ * were always null and nothing exercised the registry. Scope note: the
+ * registry-level rules are implemented here (known profile, the mode the
+ * registry pairs with it, required genesis fields present and non-empty).
+ * The per-profile semantic constraints the reference also enforces are not,
+ * and no vector currently distinguishes them.
+ */
+interface ProfileRules {
+  profile_mode: string;
+  required_genesis_fields: string[];
+}
+
+let profileRegistry: Map<string, ProfileRules> | null = null;
+
+function loadProfileRegistry(): Map<string, ProfileRules> {
+  if (profileRegistry !== null) return profileRegistry;
+  const here = dirname(fileURLToPath(import.meta.url));
+  const path = join(here, "..", "..", "..", "protocol", "satroot1.profile-registry.json");
+  const raw = JSON.parse(readFileSync(path, "utf8")) as {
+    protocol?: string;
+    version?: string;
+    profiles?: Array<ProfileRules & { profile: string }>;
+  };
+  if (raw.protocol !== "SATROOT-1" || raw.version !== "0.1") {
+    throw new SatRootError("unsupported profile registry version");
+  }
+  const out = new Map<string, ProfileRules>();
+  for (const entry of raw.profiles ?? []) out.set(entry.profile, entry);
+  profileRegistry = out;
+  return out;
+}
+
+function validateProfileGenesis(event: Event): void {
+  const profile = event["profile"];
+  if (profile === undefined || profile === null) return;
+  if (typeof profile !== "string") throw new SatRootError("invalid profile");
+
+  const rules = loadProfileRegistry().get(profile);
+  if (rules === undefined) throw new SatRootError(`unsupported profile: ${profile}`);
+
+  const needed = ["profile_mode", ...rules.required_genesis_fields];
+  requireFields(event, needed);
+  if (event["profile_mode"] !== rules.profile_mode) {
+    throw new SatRootError(`bad profile_mode for ${profile}`);
+  }
+  for (const field of needed) {
+    const value = event[field];
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new SatRootError(`invalid profile field ${field}: expected non-empty string`);
+    }
+  }
+}
+
+function applyGenesis(event: Event, verifier: Verifier = demoVerifier): State {
   requireFields(event, [
     "protocol", "version", "action", "root_id", "sequence", "symbol", "name",
     "decimals", "max_supply", "mint_authority", "initial_balances",
+    "signature",
   ]);
   if (event["protocol"] !== "SATROOT-1" || event["version"] !== "0.1") {
     throw new SatRootError("unsupported protocol/version");
@@ -270,6 +331,16 @@ function applyGenesis(event: Event): State {
     throw new SatRootError("invalid root_id");
   }
   validateStatedEventId(event);
+  // Genesis fixes mint_authority, max_supply and the whole initial
+  // allocation, and this verifier never authenticated it - applyGenesis
+  // took no verifier at all, exactly as the Python reference did. Two
+  // implementations with the same hole, because SPEC.md scoped its
+  // signature requirement to non-genesis events. See SPEC.md section 5.
+  validateSignatureMetadata(event);
+  if (!verifier(event, signingPayload(event))) {
+    throw new SatRootError("signature verification failed");
+  }
+  validateProfileGenesis(event);
   if (event["transfer_model"] !== "account-ledger") {
     throw new SatRootError("unsupported transfer_model");
   }
@@ -406,7 +477,7 @@ function applyEvent(prev: State, event: Event, verifier: Verifier): State {
 /** Replay a full ledger. Throws SatRootError on any rule violation. */
 export function replay(events: Event[], verifier: Verifier = demoVerifier): State {
   if (events.length === 0) throw new SatRootError("empty ledger");
-  let state = applyGenesis(events[0]);
+  let state = applyGenesis(events[0], verifier);
   for (const event of events.slice(1)) {
     if (event["action"] === "genesis") throw new SatRootError("duplicate genesis");
     state = applyEvent(state, event, verifier);

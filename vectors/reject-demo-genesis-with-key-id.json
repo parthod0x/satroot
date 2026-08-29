@@ -1,0 +1,34 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-demo-genesis-with-key-id",
+  "description": "demo signatures carry no signature_key_id",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "signature_key_id": "issuer-key",
+      "event_id": "sha256:3f5f99eb2a1925362d390beb78238c4a3a7de5b54fa55d94ce0ae7eed6a8f88a"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "signature_key_id is not allowed for demo signatures",
+    "note": "key_id not allowed for demo"
+  }
+}

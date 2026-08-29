@@ -328,6 +328,7 @@ def build_vectors():
     broken_chain, verifier2 = _build_ledger("demo", [TRANSFER, BURN])
     broken_chain = copy.deepcopy(broken_chain)
     broken_chain[2]["prev_event_id"] = "sha256:" + "00" * 32
+    broken_chain = _rechain(broken_chain, 2)
     add("reject-broken-prev-event-id", "each event commits to its predecessor",
         "demo", broken_chain, _expect_error(broken_chain, verifier2, "hash chain broken"))
 
@@ -486,6 +487,158 @@ def build_vectors():
     add("reject-second-genesis-well-formed",
         "a ledger has exactly one genesis, however well-formed the second is",
         "demo", dup_ledger, _expect_error(dup_ledger, verifier, "one genesis only"))
+
+    # ------------------------------------------------------------------
+    # SPEC 5.1. Genesis was never authenticated by either implementation,
+    # and no vector touched a genesis signature - reject-forged-signature
+    # forges a transfer. Genesis fixes mint_authority, max_supply and the
+    # whole initial allocation, so this is the hinge the rest hangs on.
+    # ------------------------------------------------------------------
+    for scheme in ("demo", "hmac-sha256", "ed25519"):
+        signer, sch_verifier = _signing_context(scheme)
+        signed_genesis = sr.sign_event_record(
+            _genesis(), scheme=scheme, key_id=SIGNER_KEY_IDS["issuer"], signer=signer
+        )
+        forged_genesis = copy.deepcopy(signed_genesis)
+        forged_genesis["signature"] = (
+            "demo:forged" if scheme == "demo" else f"{scheme}:" + "00" * 32
+        )
+        forged_genesis = _rechain([forged_genesis], 0)
+        add(f"reject-forged-genesis-signature-{scheme}",
+            "a genesis signature is checked like any other",
+            scheme, forged_genesis,
+            _expect_error(forged_genesis, sch_verifier, "genesis signature forged"))
+
+    unsigned_genesis = _genesis()
+    unsigned_genesis.pop("signature", None)
+    unsigned_genesis.pop("signature_scheme", None)
+    unsigned_genesis = _rechain([unsigned_genesis], 0)
+    add("reject-unsigned-genesis", "a genesis without a signature is not a ledger",
+        "demo", unsigned_genesis,
+        _expect_error(unsigned_genesis, sr.demo_signature_verifier, "genesis unsigned"))
+
+    # SPEC 6.6.1: no vector carried a signature_scheme the verifier rejects,
+    # which is how the genesis hole stayed hidden.
+    mismatched = sr.sign_event_record(
+        _genesis(), scheme="demo", key_id=None, signer=None
+    )
+    mismatched["signature_scheme"] = "ed25519"
+    mismatched["signature_key_id"] = "issuer-key"   # so metadata validation passes
+    mismatched = _rechain([mismatched], 0)
+    add("reject-genesis-scheme-mismatch",
+        "signature_scheme must match the verifier in use",
+        "demo", mismatched,
+        _expect_error(mismatched, sr.demo_signature_verifier, "scheme mismatch"))
+
+    # SPEC 6.2/6.3: no vector had signer != from, so an implementation that
+    # lets anyone move anyone's balance scored full marks.
+    imp_events, imp_verifier = _build_ledger("demo", [])
+    impostor = sr.scaffold_event_from_ledger(
+        imp_events, verifier=imp_verifier, action="transfer", signer="issuer",
+        from_account="issuer", to_account="alice", amount="10",
+    )
+    imp_ledger = copy.deepcopy(imp_events) + [
+        sr.sign_event_record(impostor, scheme="demo", key_id=None, signer=None)
+    ]
+    imp_ledger[-1]["signer"] = "alice"           # alice moves the issuer's balance
+    imp_ledger = _rechain(imp_ledger, -1)
+    add("reject-transfer-signed-by-non-holder",
+        "the signer must control the sending account",
+        "demo", imp_ledger,
+        _expect_error(imp_ledger, imp_verifier, "signer does not control sender"))
+
+    # SPEC 6.1a: both existing digit-bound vectors also overspend, so the
+    # bound is never the deciding check. max_supply null makes it isolable.
+    bound_genesis = _genesis()
+    bound_genesis["max_supply"] = None
+    bound_genesis["initial_balances"] = {"issuer": "9" * (sr.MAX_AMOUNT_DIGITS + 1)}
+    bound_only = _rechain(
+        [sr.sign_event_record(bound_genesis, scheme="demo", key_id=None, signer=None)], 0
+    )
+    add("reject-digit-bound-unbounded-supply",
+        "the digit bound applies even where no max_supply constrains the amount",
+        "demo", bound_only,
+        _expect_error(bound_only, sr.demo_signature_verifier, "amount digit bound"))
+
+    # ------------------------------------------------------------------
+    # SPEC 8.10. Profiles were the last rule with no vector at all: the
+    # committed profile/profile_mode members were always null, so nothing
+    # exercised the registry in protocol/satroot1.profile-registry.json.
+    # Contributed by the second independent implementation, whose own
+    # profile vectors produced a byte-identical state hash to ours.
+    # ------------------------------------------------------------------
+    STABLE = dict(
+        profile="SATROOT-STABLE-1",
+        profile_mode="reference-only",
+        reference_unit="USD",
+        redemption="none",
+        reserve_model="none",
+        intended_use="reference-only accounting unit",
+    )
+
+    def _profile_genesis(**overrides):
+        g = _genesis()
+        g.update(STABLE)
+        g.update(overrides)
+        return _rechain(
+            [sr.sign_event_record(g, scheme="demo", key_id=None, signer=None)], 0
+        )
+
+    good_profile = _profile_genesis()
+    add("valid-profile-stable-demo",
+        "a profiled genesis, so profile and profile_mode are committed as values not null",
+        "demo", good_profile, _expect_ok(good_profile, sr.demo_signature_verifier))
+
+    unknown_profile = _profile_genesis(profile="SATROOT-NOT-A-PROFILE-1")
+    add("reject-unknown-profile", "profiles come from the registry",
+        "demo", unknown_profile,
+        _expect_error(unknown_profile, sr.demo_signature_verifier, "unknown profile"))
+
+    bad_mode = _profile_genesis(profile_mode="prepaid-credit")
+    add("reject-invalid-profile-mode",
+        "a profile_mode must be the one the registry pairs with that profile",
+        "demo", bad_mode,
+        _expect_error(bad_mode, sr.demo_signature_verifier, "bad profile_mode"))
+
+    missing_field = _genesis()
+    missing_field.update(STABLE)
+    del missing_field["reserve_model"]
+    missing_field = _rechain(
+        [sr.sign_event_record(missing_field, scheme="demo", key_id=None, signer=None)], 0
+    )
+    add("reject-profile-missing-genesis-field",
+        "a profile's required genesis fields are required",
+        "demo", missing_field,
+        _expect_error(missing_field, sr.demo_signature_verifier, "missing profile field"))
+
+    # SPEC 6: demo records carry no signature_key_id.
+    demo_key_id = _genesis()
+    demo_key_id["signature_key_id"] = "issuer-key"
+    demo_key_id = _rechain(
+        [sr.sign_event_record(demo_key_id, scheme="demo", key_id=None, signer=None)], 0
+    )
+    demo_key_id[0]["signature_key_id"] = "issuer-key"
+    demo_key_id = _rechain(demo_key_id, 0)
+    add("reject-demo-genesis-with-key-id",
+        "demo signatures carry no signature_key_id",
+        "demo", demo_key_id,
+        _expect_error(demo_key_id, sr.demo_signature_verifier, "key_id not allowed for demo"))
+
+    # SPEC 6.3: the burn arm of "signer controls the account".
+    burn_events, burn_verifier = _build_ledger("demo", [TRANSFER])
+    burn_ev = sr.scaffold_event_from_ledger(
+        burn_events, verifier=burn_verifier, action="burn",
+        signer="alice", from_account="alice", amount="10",
+    )
+    burn_ledger = copy.deepcopy(burn_events) + [
+        sr.sign_event_record(burn_ev, scheme="demo", key_id=None, signer=None)
+    ]
+    burn_ledger[-1]["signer"] = "issuer"
+    burn_ledger = _rechain(burn_ledger, -1)
+    add("reject-burn-signed-by-non-holder",
+        "the signer must control the account being burned from",
+        "demo", burn_ledger,
+        _expect_error(burn_ledger, burn_verifier, "signer does not control account"))
 
     return vectors
 

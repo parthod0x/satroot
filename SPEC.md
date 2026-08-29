@@ -203,6 +203,32 @@ listed them among the required fields; no conforming ledger has ever carried
 either, and an implementation that required them would reject every valid
 ledger in existence.
 
+### 5.1 Genesis MUST be signed
+
+**A genesis record carries `signature`, and `signature_scheme` where the
+scheme is not `demo`, and a conforming implementation MUST verify it with
+the same verifier and the same rules it applies to every other event
+(sections 2.7 and 6.6).** A genesis whose signature is absent, empty,
+forged, or made under a scheme the verifier does not accept is rejected.
+
+Genesis does not carry `signer`; the signing key is identified by
+`signature_key_id` under the real schemes, and `demo` records carry neither.
+
+This is stated because the earlier text did not state it, and the omission
+was load-bearing. Section 2.5 lists `signer` and `signature` among the
+fields "every non-genesis event must reference", and section 5's field list
+named neither — so nothing in this document ever said a genesis was
+authenticated, while section 8.7 rejects when "a required signature check
+fails" and every genesis in the conformance corpus carries a real
+signature. Both readings were defensible, and **both reference
+implementations independently took the wrong one**: each replayed a genesis
+with a forged or missing signature under all three schemes.
+
+Genesis is the record that fixes `mint_authority`, `max_supply` and the
+entire initial allocation. Leaving it unauthenticated authenticates every
+later event against a root anyone can author — a chain that is sound above
+a hinge that is not.
+
 ## 6. Event rules
 
 ### 6.1 Mint
@@ -469,7 +495,8 @@ A SATROOT-1 indexer MUST reject a ledger if:
 4. a mint exceeds max supply,
 5. an event uses a different root_id,
 6. an authority rotation is attempted by a non-authority signer,
-7. a required signature check fails,
+7. a required signature check fails, on any event including the genesis
+   record (section 5.1),
 8. canonical JSON hashing does not match the stated event ID,
 9. a stated `state_hash` does not match replayed state,
 10. an unknown profile or invalid profile mode is used.

@@ -2,18 +2,27 @@ reject-amount-exceeds-digit-bound.json REJECT
 reject-bad-sequence-intact-chain.json REJECT
 reject-bool-decimals.json REJECT
 reject-broken-prev-event-id.json REJECT
+reject-burn-signed-by-non-holder.json REJECT
+reject-demo-genesis-with-key-id.json REJECT
+reject-digit-bound-unbounded-supply.json REJECT
 reject-duplicate-genesis.json REJECT
 reject-first-event-not-genesis.json REJECT
 reject-foreign-root-id.json REJECT
+reject-forged-genesis-signature-demo.json REJECT
+reject-forged-genesis-signature-ed25519.json REJECT
+reject-forged-genesis-signature-hmac-sha256.json REJECT
 reject-forged-signature-demo.json REJECT
 reject-freeze-by-non-authority.json REJECT
 reject-genesis-balance-exceeds-digit-bound.json REJECT
+reject-genesis-scheme-mismatch.json REJECT
+reject-invalid-profile-mode.json REJECT
 reject-leading-zero-amount.json REJECT
 reject-mint-by-non-authority.json REJECT
 reject-mint-exceeds-max-supply.json REJECT
 reject-mint-to-frozen-account.json REJECT
 reject-negative-amount.json REJECT
 reject-overspend.json REJECT
+reject-profile-missing-genesis-field.json REJECT
 reject-reordered-events.json REJECT
 reject-rotate-by-non-authority.json REJECT
 reject-second-genesis-well-formed.json REJECT
@@ -22,9 +31,12 @@ reject-stale-event-id.json REJECT
 reject-tampered-amount.json REJECT
 reject-transfer-from-frozen-account.json REJECT
 reject-transfer-overspend.json REJECT
+reject-transfer-signed-by-non-holder.json REJECT
 reject-transfer-to-frozen-account.json REJECT
 reject-unicode-digits.json REJECT
 reject-unknown-action.json REJECT
+reject-unknown-profile.json REJECT
+reject-unsigned-genesis.json REJECT
 reject-wrong-key-ed25519.json REJECT
 reject-wrong-per-event-state-hash.json REJECT
 reject-zero-amount.json REJECT
@@ -38,6 +50,7 @@ valid-lifecycle-hmac-sha256.json ACCEPT sha256:df71a9309175e78444acd5906d892acf7
 valid-mint-after-rotation-demo.json ACCEPT sha256:2bc0e7fb02d16e14d20d0369ad0985194ac0500adaf4a439a96181d932b6d195 3 alice=10 issuer=1000
 valid-mint-demo.json ACCEPT sha256:87ae2defde4af8bdf6ef2cd438aa8d30bac89bd4ece0fb1616f7eda4546ba996 2 alice=50 issuer=1000
 valid-non-ascii-metadata-demo.json ACCEPT sha256:244037d3fd5529fd3437856c7b7d6c30fc4beaed2c1a28198a8bcfcdaf713490 1 issuer=1000
+valid-profile-stable-demo.json ACCEPT sha256:101fe1c55a314ad1cfe8fc43ad4679b6bd7bf1a09c70db3ca31850fdf32badb7 1 issuer=1000
 valid-repeated-transfers-demo.json ACCEPT sha256:39f9cf937990ee19cc70b788c3d3eb5f38a51bedff8db545fdfc2ef4e01ed2e3 4 alice=501 issuer=499
 valid-rotate-authority-demo.json ACCEPT sha256:e87cc2ba1bf1274520673a2aa59d5a699b780186724c5a7fe6fd56a60a1c4a7e 2 issuer=1000
 valid-transfer-entire-balance-demo.json ACCEPT sha256:0c7632870b69a6a0f98fab8b64fd90816e43679624171e19e54cc2eb4eaaf215 2 alice=1000

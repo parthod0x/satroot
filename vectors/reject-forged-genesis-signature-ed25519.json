@@ -1,0 +1,34 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-forged-genesis-signature-ed25519",
+  "description": "a genesis signature is checked like any other",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "ed25519",
+      "signature": "ed25519:0000000000000000000000000000000000000000000000000000000000000000",
+      "signature_key_id": "issuer-key",
+      "event_id": "sha256:bda5c186d8ec7868117e658f35afa4f916fae8e9d70913280077ea30b03c7898"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "signature verification failed",
+    "note": "genesis signature forged"
+  }
+}

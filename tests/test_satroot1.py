@@ -149,6 +149,31 @@ from satroot1 import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+
+def _sign_genesis_hmac(events, signer_keys, secrets):
+    """Sign the genesis under hmac-sha256 (SPEC.md 5.1).
+
+    Genesis carries no `signer`; the key is the mint authority's, since
+    genesis is the record that appoints it.
+    """
+    genesis = events[0]
+    genesis["signature_scheme"] = "hmac-sha256"
+    genesis["signature_key_id"] = signer_keys[genesis["mint_authority"]]
+    genesis["signature"] = hmac_sha256_sign(
+        signing_payload(genesis), secrets[genesis["signature_key_id"]]
+    )
+
+
+def _sign_genesis_ed25519(events, signer_keys, secrets):
+    """Sign the genesis under ed25519 (SPEC.md 5.1)."""
+    genesis = events[0]
+    genesis["signature_scheme"] = "ed25519"
+    genesis["signature_key_id"] = signer_keys[genesis["mint_authority"]]
+    genesis["signature"] = ed25519_sign(
+        signing_payload(genesis), secrets[genesis["signature_key_id"]]
+    )
+
+
 def load_events(name="events_floor1.json"):
     return json.loads((ROOT / "examples" / name).read_text())
 
@@ -3137,7 +3162,7 @@ def test_accept_matching_event_id_and_state_hash():
 
 def test_floor1_state_hash_regression():
     state = replay(load_events())
-    assert state.state_hash() == "sha256:1b8db2e38125abc6cab4f05c63056b7821ee441154939de11431282370bfe2fc"
+    assert state.state_hash() == "sha256:fb7fcbfa76caef09302c6c5a9ce22ad21f26c467b1e1aacd01834156797f7c05"
 
 
 def test_profile_registry_contains_supported_profiles():
@@ -5987,6 +6012,7 @@ def test_annotate_ledger_events_preserves_hmac_replay():
     events = load_events()
     secrets = {"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}
     signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    _sign_genesis_hmac(events, signer_keys, secrets)
     prev = event_id(events[0])
     for event in events[1:]:
         event["prev_event_id"] = prev
@@ -6029,6 +6055,8 @@ def test_signing_payload_excludes_unsigned_fields():
 
 def test_replay_with_custom_signature_verifier():
     events = load_events()
+    # Genesis is signed under the same verifier as everything else (5.1).
+    events[0]["signature"] = "sha256:" + sha256_hex(signing_payload(events[0]))
     prev = event_id(events[0])
     for event in events[1:]:
         event["prev_event_id"] = prev
@@ -6046,6 +6074,7 @@ def test_replay_with_hmac_sha256_verifier():
     events = load_events()
     secrets = {"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}
     signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    _sign_genesis_hmac(events, signer_keys, secrets)
     prev = event_id(events[0])
     for event in events[1:]:
         event["prev_event_id"] = prev
@@ -6063,6 +6092,7 @@ def test_hmac_sha256_verifier_rejects_wrong_secret():
     events = load_events()
     secrets = {"issuer-key": "issuer-secret", "alice-key": "alice-secret", "bob-key": "bob-secret"}
     signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    _sign_genesis_hmac(events, signer_keys, secrets)
     prev = event_id(events[0])
     for event in events[1:]:
         event["prev_event_id"] = prev
@@ -6078,6 +6108,9 @@ def test_hmac_sha256_verifier_rejects_wrong_secret():
 
 def test_reject_hmac_signature_without_key_id():
     events = load_events()
+    _sign_genesis_hmac(
+        events, {"issuer": "issuer-key"}, {"issuer-key": "shared-secret"}
+    )
     prev = event_id(events[0])
     for event in events[1:]:
         event["prev_event_id"] = prev
@@ -6106,6 +6139,7 @@ def test_ed25519_availability_or_sign_verify_roundtrip():
     public_keys = {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in secrets.items()}
     events = load_events()
     signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    _sign_genesis_ed25519(events, signer_keys, secrets)
     prev = event_id(events[0])
     for event in events[1:]:
         event["prev_event_id"] = prev
@@ -6134,6 +6168,7 @@ def test_ed25519_verifier_rejects_wrong_key_when_available():
     public_keys = {key_id: ed25519_public_key_hex(private_key_hex) for key_id, private_key_hex in secrets.items()}
     events = load_events()
     signer_keys = {"issuer": "issuer-key", "alice": "alice-key", "bob": "bob-key"}
+    _sign_genesis_ed25519(events, signer_keys, secrets)
     prev = event_id(events[0])
     for event in events[1:]:
         event["prev_event_id"] = prev
@@ -60528,7 +60563,9 @@ def test_cli_bootstrap_genesis_bundle_hmac(tmp_path, capsys):
     secrets = json.loads((output_dir / "secrets.json").read_text(encoding="utf-8"))
     signed_events = json.loads((output_dir / "signed_events.json").read_text(encoding="utf-8"))
     assert genesis["profile"] == "SATROOT-MACHINE-1"
-    assert signer_key_map == {}
+    # The genesis is signed by the mint authority it appoints (SPEC.md 5.1),
+    # so even a genesis-only bundle now needs one key.
+    assert signer_key_map == {"issuer": "issuer-key"}
     assert secrets == {}
     assert len(signed_events) == 1
 

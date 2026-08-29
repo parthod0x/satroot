@@ -21,8 +21,8 @@
       },
       "nonce": "satroot-scaffold-0000000000000000",
       "signature_scheme": "hmac-sha256",
-      "signature_key_id": "issuer-key",
       "signature": "hmac-sha256:839992c74797b1197211d89eaffd08b196ee5f0bf3855c2c1aaf98e4abc36df1",
+      "signature_key_id": "issuer-key",
       "event_id": "sha256:80d39b0d7231478a8c34f43f377618be098d35db088f04c306d90cd95e2f9d88"
     },
     {

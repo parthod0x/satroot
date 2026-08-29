@@ -573,6 +573,12 @@ def scaffold_genesis_record(
         genesis["profile_mode"] = profile_mode
         genesis.update(selected_profile_fields)
 
+    # Genesis must be signed (SPEC.md section 5.1), so the scaffold emits a
+    # demo-signed record rather than an invalid draft. A caller signing with
+    # a real scheme calls sign_event_record, which overwrites both fields and
+    # recomputes event_id.
+    genesis["signature_scheme"] = "demo"
+    genesis["signature"] = "demo"
     apply_genesis(copy.deepcopy(genesis))
     return genesis
 
@@ -2876,6 +2882,14 @@ def build_signer_key_map(
         raise SatRootError("empty ledger")
 
     signer_key_map: Dict[str, str] = {}
+
+    # The genesis is signed by the mint authority it appoints (SPEC.md
+    # section 5.1) and carries no `signer`, so it needs a key even when that
+    # authority signs nothing else.
+    authority = events[0].get("mint_authority")
+    if isinstance(authority, str) and authority.strip():
+        signer_key_map.setdefault(authority, f"{key_prefix}{authority}{key_suffix}")
+
     for index, event in enumerate(events[1:], start=1):
         signer = event.get("signer")
         if not isinstance(signer, str) or not signer.strip():
@@ -4242,18 +4256,14 @@ def bootstrap_signed_ledger_bundle(
     if not events:
         raise SatRootError("empty ledger")
 
+    # A genesis-only ledger used to need no key material at all; it needs the
+    # mint authority's now, because the genesis itself is signed (SPEC.md 5.1).
     if scheme == "hmac-sha256":
-        if len(events) == 1:
-            material = {"signer_key_map": {}, "shared_secrets": {}}
-        else:
-            material = bootstrap_hmac_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
+        material = bootstrap_hmac_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
         verifier = make_hmac_sha256_verifier(material["shared_secrets"])
         signer = make_hmac_sha256_signer(material["shared_secrets"])
     elif scheme == "ed25519":
-        if len(events) == 1:
-            material = {"signer_key_map": {}, "private_keys": {}, "public_keys": {}}
-        else:
-            material = bootstrap_ed25519_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
+        material = bootstrap_ed25519_workflow(events, key_prefix=key_prefix, key_suffix=key_suffix)
         verifier = make_ed25519_verifier(material["public_keys"])
         signer = make_ed25519_signer(material["private_keys"])
     else:
@@ -12383,7 +12393,11 @@ class SatRootState:
         return "sha256:" + sha256_hex(canonical_json(self.commitment_snapshot()))
 
 
-def apply_genesis(event: Dict[str, Any]) -> SatRootState:
+def apply_genesis(
+    event: Dict[str, Any],
+    verifier: SignatureVerifier = demo_signature_verifier,
+) -> SatRootState:
+    """Apply a genesis record, authenticating it (SPEC.md section 5.1)."""
     require_fields(
         event,
         [
@@ -12398,6 +12412,7 @@ def apply_genesis(event: Dict[str, Any]) -> SatRootState:
             "max_supply",
             "mint_authority",
             "initial_balances",
+            "signature",
         ],
     )
     if event.get("protocol") != "SATROOT-1" or event.get("version") != "0.1":
@@ -12408,6 +12423,15 @@ def apply_genesis(event: Dict[str, Any]) -> SatRootState:
         raise SatRootError("genesis sequence must be 0")
     validate_root_id(event["root_id"])
     validate_stated_event_id(event)
+    # Genesis is the record that fixes mint_authority, max_supply and the
+    # entire initial allocation, and it was never authenticated: `replay`
+    # called this function without a verifier at all, so a genesis with a
+    # forged, empty or absent signature replayed clean under every scheme.
+    # Every downstream event was authenticated against a root anyone could
+    # author - the chain was sound above a hinge that was not.
+    # Found by the second independent implementation, 2026-08-29.
+    validate_signature_metadata(event)
+    verify_signature(event, verifier)
     validate_profile_genesis(event)
     if event.get("transfer_model") != "account-ledger":
         raise SatRootError("unsupported transfer_model")
@@ -12549,7 +12573,7 @@ def replay(events: Iterable[Dict[str, Any]], verifier: SignatureVerifier = demo_
     except StopIteration as exc:
         raise SatRootError("empty ledger") from exc
 
-    state = apply_genesis(first)
+    state = apply_genesis(first, verifier=verifier)
     for event in iterator:
         state = apply_event(state, event, verifier=verifier)
     return state
@@ -12592,7 +12616,27 @@ def sign_ledger_events(
         raise SatRootError("empty ledger")
 
     signed_events = copy.deepcopy(list(events))
-    state = apply_genesis(signed_events[0])
+
+    # Genesis is signed too (SPEC.md section 5.1). It carries no `signer`,
+    # so the key is the mint authority's - it is the record that appoints
+    # that authority. Previously the genesis was left demo-signed while the
+    # rest of the ledger moved to a real scheme, which replayed only because
+    # nothing ever verified it.
+    genesis = signed_events[0]
+    if scheme == "demo":
+        signed_events[0] = sign_event_record(genesis, scheme="demo")
+    else:
+        authority = genesis.get("mint_authority")
+        if signer_key_ids is None:
+            raise SatRootError("signer_key_ids are required for non-demo signatures")
+        genesis_key_id = signer_key_ids.get(authority)
+        if genesis_key_id is None:
+            raise SatRootError(f"missing signer_key_id for mint_authority: {authority}")
+        signed_events[0] = sign_event_record(
+            genesis, scheme=scheme, key_id=genesis_key_id, signer=signer
+        )
+
+    state = apply_genesis(signed_events[0], verifier=verifier)
     previous_event_id = state.last_event_id
 
     for event in signed_events[1:]:
@@ -12635,7 +12679,7 @@ def annotate_ledger_events(
     genesis = annotated_events[0]
     if include_event_id:
         genesis["event_id"] = event_id(genesis)
-    state = apply_genesis(genesis)
+    state = apply_genesis(genesis, verifier=verifier)
     if include_state_hash:
         genesis["state_hash"] = state.state_hash()
 

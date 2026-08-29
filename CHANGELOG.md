@@ -2,6 +2,65 @@
 
 ## Unreleased
 
+- **The genesis record was never authenticated.** `replay` called
+  `apply_genesis` without passing the verifier at all, so a genesis with a
+  forged, empty or entirely absent signature replayed clean under `demo`,
+  `hmac-sha256` and `ed25519` alike. The TypeScript verifier had the
+  identical hole, with the same signature and the same omission at the call
+  site.
+
+  Genesis fixes `mint_authority`, `max_supply` and the whole initial
+  allocation, so every downstream event was authenticated against a root
+  anyone could author - a chain sound above a hinge that was not.
+  `reject-forged-signature-demo` forges a transfer; nothing in 44 vectors
+  touched a genesis signature.
+
+  A specification defect first: section 2.5 scoped its `signer`/`signature`
+  requirement to *non-genesis* events and section 5's field list named
+  neither, so the document never said a genesis was signed - while section
+  8.7 rejects when "a required signature check fails" and every corpus
+  genesis carries a real signature. Both readings were defensible, which is
+  why two implementations written months apart both took the wrong one.
+  Resolved toward **genesis MUST be signed**: new section 5.1, section 8.7
+  amended, both implementations fixed, seven vectors added.
+
+  Found independently by two further clean-room runs, both of which passed
+  44/44 unmodified first.
+
+  **This is a breaking change to committed state.** Signing the genesis
+  changes its `event_id`, so `last_event_id` and therefore every state hash
+  in a ledger changes. The seven shipped example ledgers under `examples/`
+  are migrated (genesis signed, chain recomputed) and the pinned
+  `events_floor1.json` state hash moves from
+  `sha256:1b8db2e3...` to `sha256:fb7fcbfa...`. Any ledger written before
+  this change replays under the old rules only. The alternative was leaving
+  the root of every ledger forgeable, which is not a trade.
+
+  Three further call sites had the same defect and are fixed:
+  `annotate_ledger_events` also called `apply_genesis` with the default
+  verifier rather than the caller's; `sign_ledger_events` signed
+  `events[1:]`, leaving a demo-signed genesis on a ledger otherwise signed
+  under a real scheme; and `build_signer_key_map` derived keys only from
+  event `signer` fields, so the mint authority - which signs the genesis and
+  may sign nothing else - got no key.
+
+- **Profiles, the last untested rule, are covered - and the TypeScript
+  verifier turned out to have no profile validation at all.** Unknown
+  profiles, mismatched modes and missing required genesis fields were all
+  accepted there, because the committed `profile`/`profile_mode` members had
+  always been `null` and nothing exercised
+  `protocol/satroot1.profile-registry.json`. Registry-level validation is
+  now implemented, and a contributed `SATROOT-STABLE-1` vector produced a
+  byte-identical state hash across implementations sharing no author.
+
+- **Corpus 44 -> 57.** Also closes: the last stale `event_id`
+  (`reject-broken-prev-event-id`, so the chain check is finally
+  load-bearing); `signer != from` for both transfer and burn, which nothing
+  tested, so an implementation letting anyone move anyone's balance scored
+  full marks; the 512-digit bound, previously never the deciding check
+  because both bound vectors also overspent; a `signature_scheme` the
+  verifier rejects; and a `demo` genesis carrying `signature_key_id`.
+
 - **The first independent implementation, and what it cost.** On 2026-08-29
   someone wrote a ~540-line replay from `SPEC.md` alone, having never opened
   `src/satroot1.py`, `verifiers/typescript/src/satroot.ts` or the vector

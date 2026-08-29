@@ -23,7 +23,8 @@
       "issuer": "1"
     },
     "rules_hash": "sha256:license1-demo",
-    "nonce": "satroot-license-v0.1-demo"
+    "nonce": "satroot-license-v0.1-demo",
+    "signature": "demo"
   },
   {
     "protocol": "SATROOT-1",
@@ -31,7 +32,7 @@
     "action": "transfer",
     "root_id": "5555555555555555555555555555555555555555555555555555555555555555:0",
     "sequence": 1,
-    "prev_event_id": "sha256:481924092f15d1e539ebf79d32df77f546fc7febe8dda2bcff703e09394eb82f",
+    "prev_event_id": "sha256:7adcf8f7aac95e0bc0385c53f39752a9f3329af1398184e438162201f6eb5198",
     "from": "issuer",
     "to": "customer",
     "amount": "1",
@@ -44,7 +45,7 @@
     "action": "transfer",
     "root_id": "5555555555555555555555555555555555555555555555555555555555555555:0",
     "sequence": 2,
-    "prev_event_id": "sha256:015dc674bbe5ba4e6b4eab8d8c3c85f70f2bdb9a20ff94325828b7958470abcb",
+    "prev_event_id": "sha256:43ad479df866037840b7c05412aa096b953eb19a34a9c6bbe5798d647ccedbc0",
     "from": "customer",
     "to": "archive",
     "amount": "1",
@@ -57,7 +58,7 @@
     "action": "burn",
     "root_id": "5555555555555555555555555555555555555555555555555555555555555555:0",
     "sequence": 3,
-    "prev_event_id": "sha256:109632acc15d30aaac0b9eb80658bb094d4e03e79d9b5fc47c28b0e2d3503237",
+    "prev_event_id": "sha256:610edb38e6f884e9072ee6df78881e91a029b518322bffb6a2f1eb782ba2e2b3",
     "from": "archive",
     "amount": "1",
     "signer": "archive",

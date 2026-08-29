@@ -172,7 +172,7 @@ claim of GDPR *suitability* has to be qualified by this.
 **No formal semantics.** The transition relation is specified in **prose and
 pinned by test vectors**, not formally verified. There is no type system, no
 machine-checked specification, no proof of determinism. Two implementations
-agreeing on 44 vectors is evidence, not proof — and both were written by the
+agreeing on 57 vectors is evidence, not proof — and both were written by the
 same author.
 
 **Scale.** No sharding, no compaction, no snapshot-with-proof. A long-lived

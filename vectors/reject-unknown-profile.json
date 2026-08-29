@@ -1,0 +1,39 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-unknown-profile",
+  "description": "profiles come from the registry",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "profile": "SATROOT-NOT-A-PROFILE-1",
+      "profile_mode": "reference-only",
+      "reference_unit": "USD",
+      "redemption": "none",
+      "reserve_model": "none",
+      "intended_use": "reference-only accounting unit",
+      "event_id": "sha256:5a4062915066de539afec5ad778de2af1837247836ea9ff7dd6a0f077eb0f9e7"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "unsupported profile: SATROOT-NOT-A-PROFILE-1",
+    "note": "unknown profile"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-profile-missing-genesis-field",
+  "description": "a profile's required genesis fields are required",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "profile": "SATROOT-STABLE-1",
+      "profile_mode": "reference-only",
+      "reference_unit": "USD",
+      "redemption": "none",
+      "intended_use": "reference-only accounting unit",
+      "event_id": "sha256:3886109a40cd3e34c5e2e0c33c7f9d438eca38ba6fdfdef285fdbdf371a8815c"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "missing required field(s): reserve_model",
+    "note": "missing profile field"
+  }
+}

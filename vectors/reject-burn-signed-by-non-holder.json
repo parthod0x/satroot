@@ -1,7 +1,7 @@
 {
   "vector_format": "satroot1-conformance/1",
-  "name": "reject-broken-prev-event-id",
-  "description": "each event commits to its predecessor",
+  "name": "reject-burn-signed-by-non-holder",
+  "description": "the signer must control the account being burned from",
   "scheme": "demo",
   "events": [
     {
@@ -45,18 +45,18 @@
       "action": "burn",
       "root_id": "abababababababababababababababababababababababababababababababab:0",
       "sequence": 2,
-      "prev_event_id": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "signer": "alice",
+      "prev_event_id": "sha256:ebbc12c7dc4a997060d865e81e1712534e28ef90af6a67a5d902b605ba85ba2a",
+      "signer": "issuer",
       "signature": "demo",
       "from": "alice",
-      "amount": "150",
+      "amount": "10",
       "signature_scheme": "demo",
-      "event_id": "sha256:4a0cc969726b767f263032f98538613f2b30a1a634c9032c6db583be544d2626"
+      "event_id": "sha256:7471ab77104c97b117a25731ef361b7efa0d09edf9a688ae045b1a65fbc14f6c"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "bad prev_event_id",
-    "note": "hash chain broken"
+    "reference_error": "unauthorized burn",
+    "note": "signer does not control account"
   }
 }

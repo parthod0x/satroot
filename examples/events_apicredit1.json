@@ -21,7 +21,8 @@
       "issuer": "100000000"
     },
     "rules_hash": "sha256:apicredit1-demo",
-    "nonce": "satroot-machine-v0.1-demo"
+    "nonce": "satroot-machine-v0.1-demo",
+    "signature": "demo"
   },
   {
     "protocol": "SATROOT-1",
@@ -29,7 +30,7 @@
     "action": "transfer",
     "root_id": "2222222222222222222222222222222222222222222222222222222222222222:0",
     "sequence": 1,
-    "prev_event_id": "sha256:a797c3cb991db21e961b154608f318dc67cd773d86bbbfb9f5cdadad4145fb30",
+    "prev_event_id": "sha256:e0eaa0742d92df8cda740a767b6a9b20c3a0b1c7b33f8e45703c0ca71aa55608",
     "from": "issuer",
     "to": "tenant_a",
     "amount": "5000000",
@@ -42,7 +43,7 @@
     "action": "transfer",
     "root_id": "2222222222222222222222222222222222222222222222222222222222222222:0",
     "sequence": 2,
-    "prev_event_id": "sha256:82228cbd25a9b2c0388a47db9b4af742073ab839e82e9ed7daf756d46515b14f",
+    "prev_event_id": "sha256:97b4cff78bd98c8f2ac82d36b48d374fb120f0e465a8e64674d07fad6a1c8192",
     "from": "tenant_a",
     "to": "worker_node",
     "amount": "1200000",
@@ -55,7 +56,7 @@
     "action": "burn",
     "root_id": "2222222222222222222222222222222222222222222222222222222222222222:0",
     "sequence": 3,
-    "prev_event_id": "sha256:f88c7c8099c658552555423e6daf598a464e9483b3f591dc3a16d3d729682119",
+    "prev_event_id": "sha256:82dbf579ea424d5e35205636a4cc961d7b8734943846a4b8296ba1eaee6e9045",
     "from": "worker_node",
     "amount": "200000",
     "signer": "worker_node",

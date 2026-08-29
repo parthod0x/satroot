@@ -22,7 +22,8 @@
       "issuer": "1"
     },
     "rules_hash": "sha256:identity1-demo",
-    "nonce": "satroot-identity-v0.1-demo"
+    "nonce": "satroot-identity-v0.1-demo",
+    "signature": "demo"
   },
   {
     "protocol": "SATROOT-1",
@@ -30,7 +31,7 @@
     "action": "transfer",
     "root_id": "4444444444444444444444444444444444444444444444444444444444444444:0",
     "sequence": 1,
-    "prev_event_id": "sha256:211366e6425c90cd9aaa398cbc8b52131d57a87709634d40e28790cb6bee1bf6",
+    "prev_event_id": "sha256:e5e4b648c6720bdafcc1e72f91d3da8a8fbc74223a61abc9bc62dc9d3256c713",
     "from": "issuer",
     "to": "node_alpha",
     "amount": "1",
@@ -43,7 +44,7 @@
     "action": "transfer",
     "root_id": "4444444444444444444444444444444444444444444444444444444444444444:0",
     "sequence": 2,
-    "prev_event_id": "sha256:f2cf2028a28246f54160cead69e3b1b288b1d5f05bf2615d78308fc49844c89c",
+    "prev_event_id": "sha256:479f485eb65a7f462828ade76904f392d9cb1ad971435df2225c17f6fbc3a3ff",
     "from": "node_alpha",
     "to": "rotated_controller",
     "amount": "1",
@@ -56,7 +57,7 @@
     "action": "burn",
     "root_id": "4444444444444444444444444444444444444444444444444444444444444444:0",
     "sequence": 3,
-    "prev_event_id": "sha256:13e2158273a42e6def65d9082c370f7fb63dcb96e2edc7e8459a982931893545",
+    "prev_event_id": "sha256:5af79c21e2793f34d0f060504c45ddd8fe397d6b254148e04e4cd2d661fa3576",
     "from": "rotated_controller",
     "amount": "1",
     "signer": "rotated_controller",

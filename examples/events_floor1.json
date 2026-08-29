@@ -15,7 +15,8 @@
       "issuer": "1000000000"
     },
     "rules_hash": "sha256:demo",
-    "nonce": "satroot-v0.1-demo"
+    "nonce": "satroot-v0.1-demo",
+    "signature": "demo"
   },
   {
     "protocol": "SATROOT-1",
@@ -23,7 +24,7 @@
     "action": "transfer",
     "root_id": "0000000000000000000000000000000000000000000000000000000000000000:0",
     "sequence": 1,
-    "prev_event_id": "sha256:bef0c81caf4b16f6eb0a836fdfe0aa4cf1cb6a6acd117029ead9cccd56da2209",
+    "prev_event_id": "sha256:bec633b7a72b36b4bce629865e16958e74e0378823bb3d820f409703a0f8490e",
     "from": "issuer",
     "to": "alice",
     "amount": "250000000",
@@ -36,7 +37,7 @@
     "action": "transfer",
     "root_id": "0000000000000000000000000000000000000000000000000000000000000000:0",
     "sequence": 2,
-    "prev_event_id": "sha256:b771b61cc95022c9bf0321dc2ed39ae59879463e62ba14b340af9f010ea414d0",
+    "prev_event_id": "sha256:6e8e4f31498fac59a0c939596ebb26dc726bcf763588bcb734949c41d008e378",
     "from": "alice",
     "to": "bob",
     "amount": "100000000",
@@ -49,7 +50,7 @@
     "action": "burn",
     "root_id": "0000000000000000000000000000000000000000000000000000000000000000:0",
     "sequence": 3,
-    "prev_event_id": "sha256:431ebb70a68e2e7f37369597523e2b7b75c1409f0d8bd5c6c520c65285970ce3",
+    "prev_event_id": "sha256:373381a9ee97fc629a35e1dcc3ed19c8bda9eb69cbdbc79a6cb90f75d404d4c8",
     "from": "bob",
     "amount": "1000000",
     "signer": "bob",

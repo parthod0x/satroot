@@ -23,7 +23,8 @@
       "issuer": "1"
     },
     "rules_hash": "sha256:receipt1-demo",
-    "nonce": "satroot-receipt-v0.1-demo"
+    "nonce": "satroot-receipt-v0.1-demo",
+    "signature": "demo"
   },
   {
     "protocol": "SATROOT-1",
@@ -31,7 +32,7 @@
     "action": "transfer",
     "root_id": "3333333333333333333333333333333333333333333333333333333333333333:0",
     "sequence": 1,
-    "prev_event_id": "sha256:21c4cb500adeef91e33201bcd31ecfac98785b93773912481ed4e7a436fd6e26",
+    "prev_event_id": "sha256:e70955f9b000b0fb374faa8df834ee2b5af7a9ead6342f9d57f2df605fdb739e",
     "from": "issuer",
     "to": "buyer",
     "amount": "1",
@@ -44,7 +45,7 @@
     "action": "transfer",
     "root_id": "3333333333333333333333333333333333333333333333333333333333333333:0",
     "sequence": 2,
-    "prev_event_id": "sha256:bfed6e16a6d0d2eb36e330309356eba060d8325d45de29ec7ed1eba7fffec80a",
+    "prev_event_id": "sha256:30d020e7da8eb24539f60e2a8ce33fab05fe3b4bf5641e59ed33cfbee6fa86f3",
     "from": "buyer",
     "to": "archive",
     "amount": "1",
@@ -57,7 +58,7 @@
     "action": "burn",
     "root_id": "3333333333333333333333333333333333333333333333333333333333333333:0",
     "sequence": 3,
-    "prev_event_id": "sha256:83f199a0840effc473e2cc343427f3470a1275756a4579c7eb4f6491b9da583f",
+    "prev_event_id": "sha256:8ebaf2d0145033be597e604d02d0d39e6f19d64616434a5d26d2221ebe0c0f63",
     "from": "archive",
     "amount": "1",
     "signer": "archive",

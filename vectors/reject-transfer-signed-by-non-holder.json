@@ -1,7 +1,7 @@
 {
   "vector_format": "satroot1-conformance/1",
-  "name": "reject-broken-prev-event-id",
-  "description": "each event commits to its predecessor",
+  "name": "reject-transfer-signed-by-non-holder",
+  "description": "the signer must control the sending account",
   "scheme": "demo",
   "events": [
     {
@@ -31,32 +31,18 @@
       "root_id": "abababababababababababababababababababababababababababababababab:0",
       "sequence": 1,
       "prev_event_id": "sha256:61f1cd3e3b646175e0e9f48f7250e8a683829163e0a1cfe9ea4db102115c49e2",
-      "signer": "issuer",
+      "signer": "alice",
       "signature": "demo",
       "from": "issuer",
       "to": "alice",
-      "amount": "400",
+      "amount": "10",
       "signature_scheme": "demo",
-      "event_id": "sha256:ebbc12c7dc4a997060d865e81e1712534e28ef90af6a67a5d902b605ba85ba2a"
-    },
-    {
-      "protocol": "SATROOT-1",
-      "version": "0.1",
-      "action": "burn",
-      "root_id": "abababababababababababababababababababababababababababababababab:0",
-      "sequence": 2,
-      "prev_event_id": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "signer": "alice",
-      "signature": "demo",
-      "from": "alice",
-      "amount": "150",
-      "signature_scheme": "demo",
-      "event_id": "sha256:4a0cc969726b767f263032f98538613f2b30a1a634c9032c6db583be544d2626"
+      "event_id": "sha256:ff085a42286f2487015b7b67a70c43ed4c3acaad8cf4e9086d64bdd1a2f5690e"
     }
   ],
   "expect": {
     "ok": false,
-    "reference_error": "bad prev_event_id",
-    "note": "hash chain broken"
+    "reference_error": "unauthorized transfer",
+    "note": "signer does not control sender"
   }
 }

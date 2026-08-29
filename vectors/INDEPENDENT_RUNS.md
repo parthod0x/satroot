@@ -47,6 +47,63 @@ both implementations gained a rule they were missing.** Profiles (§8.10)
 remain unexercised — there is no profile vector — and that is the one item
 from this report still genuinely open.
 
+## Round two, same day: the genesis record was never authenticated
+
+Two further independent runs against `b947519` (44 vectors). Both passed
+44/44 unmodified — one of them a **separate clean-room implementation**, so
+three independent implementations now agree — and both flagged the same
+thing.
+
+**`replay` called `apply_genesis` without passing the verifier at all.** A
+genesis with a forged, empty or entirely absent signature replayed clean
+under `demo`, `hmac-sha256` and `ed25519` alike. Reproduced here before
+acting on it.
+
+Genesis is the record that fixes `mint_authority`, `max_supply` and the
+whole initial allocation, so every downstream event was being authenticated
+against a root anyone could author — a chain that was sound above a hinge
+that was not. `reject-forged-signature-demo` forges a *transfer*; nothing in
+44 vectors touched a genesis signature.
+
+**The TypeScript verifier had the identical hole**, with the same signature
+and the same omission at the call site. Two implementations, written months
+apart, both read §2.5 the same way — which is why this is a specification
+defect first: §2.5 scoped its `signer`/`signature` requirement to
+*non-genesis* events, and §5's field list named neither. Nothing in the
+document ever said a genesis was signed, while §8.7 rejects when "a required
+signature check fails" and every corpus genesis carries a real signature.
+Both readings were defensible. That is exactly why no vector caught it.
+
+Resolved toward **genesis MUST be signed** — new §5.1, with §8.7 naming it.
+Both implementations fixed, seven vectors added.
+
+| also found | status |
+|---|---|
+| `reject-broken-prev-event-id` still carried a stale `event_id` — one survivor of the earlier sweep, so the chain check was still not load-bearing | **fixed** — rechained |
+| No vector had `signer != from`, so an implementation letting anyone move anyone's balance scored full marks | **fixed** — transfer and burn arms both covered |
+| Both digit-bound vectors also overspend, so the bound was never the deciding check | **fixed** — isolated using `max_supply: null` |
+| No vector carried a `signature_scheme` the verifier rejects, which is how the genesis hole stayed hidden | **fixed** |
+| A `demo` genesis carrying `signature_key_id` was accepted (§6 says it must be absent) | **fixed** |
+| §8.10 profiles — the last open item from round one | **closed**, see below |
+
+### Profiles: the last finding, closed by agreement
+
+The second implementation wrote four profile vectors against
+`protocol/satroot1.profile-registry.json` and reported a **byte-identical
+state hash** to ours for a `SATROOT-STABLE-1` reference-only genesis. All
+four were re-checked here and agree.
+
+Adding them immediately found a third divergence: **the TypeScript verifier
+performed no profile validation at all** — unknown profiles, wrong modes and
+missing required fields were all accepted, because the committed
+`profile`/`profile_mode` members had always been `null` and nothing
+exercised the registry. Now implemented at registry level.
+
+One residual, honestly recorded: §7 refers to the profile fields "carried by
+the genesis record (section 5)", but §5 still does not list them. The
+forward reference dangles, and the field names had to be inferred from §7's
+own table. That guess was right, and it was still a guess.
+
 ### The contributed vectors
 
 14 hardened vectors came with the report: the seven above rechained so the

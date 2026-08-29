@@ -1,0 +1,34 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-genesis-scheme-mismatch",
+  "description": "signature_scheme must match the verifier in use",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "ed25519",
+      "signature": "demo",
+      "signature_key_id": "issuer-key",
+      "event_id": "sha256:78ab2c54fcc9c0edf20cbb1c84a2b93b8fca4d4abd2507f68d456a8c575c4c4b"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "signature verification failed",
+    "note": "scheme mismatch"
+  }
+}

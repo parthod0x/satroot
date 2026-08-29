@@ -1,0 +1,31 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-unsigned-genesis",
+  "description": "a genesis without a signature is not a ledger",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "event_id": "sha256:5eaadc7fb2987ef702ac10e23a548d2eb31b5b41963909fc61463f72ce3042e5"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "missing required field(s): signature",
+    "note": "genesis unsigned"
+  }
+}

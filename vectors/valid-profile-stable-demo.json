@@ -1,0 +1,42 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "valid-profile-stable-demo",
+  "description": "a profiled genesis, so profile and profile_mode are committed as values not null",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "profile": "SATROOT-STABLE-1",
+      "profile_mode": "reference-only",
+      "reference_unit": "USD",
+      "redemption": "none",
+      "reserve_model": "none",
+      "intended_use": "reference-only accounting unit",
+      "event_id": "sha256:d0cf6abc2202361ab05c512270f0389ca7eca07602ae411c1a3b50f07383c59e"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "final_state_hash": "sha256:101fe1c55a314ad1cfe8fc43ad4679b6bd7bf1a09c70db3ca31850fdf32badb7",
+    "balances": {
+      "issuer": "1000"
+    },
+    "record_count": 1
+  }
+}
