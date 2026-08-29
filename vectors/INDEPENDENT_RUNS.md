@@ -99,10 +99,10 @@ missing required fields were all accepted, because the committed
 `profile`/`profile_mode` members had always been `null` and nothing
 exercised the registry. Now implemented at registry level.
 
-One residual, honestly recorded: §7 refers to the profile fields "carried by
-the genesis record (section 5)", but §5 still does not list them. The
-forward reference dangles, and the field names had to be inferred from §7's
-own table. That guess was right, and it was still a guess.
+The residual he flagged is closed too: §7 referred to the profile fields
+"carried by the genesis record (section 5)" while §5 named neither, so the
+forward reference dangled and the field names had to be inferred from §7's
+own table. That guess was right, and it was still a guess. Now **§5.2**.
 
 ### The contributed vectors
 

@@ -229,6 +229,27 @@ entire initial allocation. Leaving it unauthenticated authenticates every
 later event against a root anyone can author — a chain that is sound above
 a hinge that is not.
 
+### 5.2 Profile fields
+
+A genesis MAY declare a profile. When it does it carries:
+
+- `profile` — a profile name listed in
+  `protocol/satroot1.profile-registry.json`;
+- `profile_mode` — the mode that registry pairs with that profile, not a
+  free choice;
+- the `required_genesis_fields` that registry entry names, each a non-empty
+  string.
+
+An unknown profile, a `profile_mode` the registry does not pair with it, or
+a missing or empty required field is rejected (section 8.10). Both members
+are committed to by section 7; a genesis that declares no profile commits
+JSON `null` for each, with the member still present.
+
+This subsection exists because section 7 referred to "the values carried by
+the genesis record (section 5)" while section 5 named neither field — a
+dangling forward reference an implementer had to resolve by inferring the
+names from section 7's own table.
+
 ## 6. Event rules
 
 ### 6.1 Mint

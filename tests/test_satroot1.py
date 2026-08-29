@@ -5645,8 +5645,10 @@ def test_bootstrap_signed_ledger_bundle_accepts_genesis_only_hmac():
         nonce="genesis-only-hmac",
     )
     bundle = bootstrap_signed_ledger_bundle([genesis], scheme="hmac-sha256")
-    assert bundle["material"]["signer_key_map"] == {}
-    assert bundle["material"]["shared_secrets"] == {}
+    # Even a genesis-only ledger needs key material now: the genesis is
+    # signed by the mint authority it appoints (SPEC.md 5.1).
+    assert bundle["material"]["signer_key_map"] == {"issuer": "issuer-key"}
+    assert sorted(bundle["material"]["shared_secrets"]) == ["issuer-key"]
     assert len(bundle["signed_events"]) == 1
     assert bundle["final_state_snapshot"]["symbol"] == "GENHMAC1"
 
@@ -60566,7 +60568,7 @@ def test_cli_bootstrap_genesis_bundle_hmac(tmp_path, capsys):
     # The genesis is signed by the mint authority it appoints (SPEC.md 5.1),
     # so even a genesis-only bundle now needs one key.
     assert signer_key_map == {"issuer": "issuer-key"}
-    assert secrets == {}
+    assert sorted(secrets) == ["issuer-key"]
     assert len(signed_events) == 1
 
     summary = verify_signed_ledger_bundle(output_dir)
