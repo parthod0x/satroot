@@ -21,8 +21,16 @@ ACCEPT <final_state_hash> <record_count> <account>=<balance> ...
 REJECT
 ```
 
-That is the entire interface. `example_adapter.py` is a thirty-line worked
-example of it. To diff instead of relying on the runner's report:
+That is the entire interface. There are two worked examples of it:
+`example_adapter.py` here, and `../verifiers/typescript/src/adapter.ts` in
+another language - run the second with
+
+```bash
+(cd ../verifiers/typescript && npm install && npm run build)
+python3 run.py --impl "node ../verifiers/typescript/dist/adapter.js"
+```
+
+To diff instead of relying on the runner's report:
 
 ```bash
 python3 run.py --impl "<your command>" --emit > mine.txt

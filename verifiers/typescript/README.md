@@ -18,6 +18,29 @@ npm test
 
 Expected output ends with `33 vectors, 0 failures`.
 
+## Running it through the corpus's adapter contract
+
+`npm test` checks the corpus internally. `src/adapter.ts` does the other
+thing - one vector per invocation, one line of stdout - so this
+implementation goes through exactly the same harness an external
+implementer would use:
+
+```bash
+npm install && npm run build
+cd ../../vectors
+python3 run.py --impl "node ../verifiers/typescript/dist/adapter.js"
+python3 run.py --impl "node ../verifiers/typescript/dist/adapter.js" --emit > ts.txt
+diff ts.txt EXPECTED.txt
+```
+
+The build step is required: `dist/` is not checked in.
+
+That this passes is a statement about the *harness*, not about the
+verifier - `npm test` already covered the verifier. It demonstrates the
+adapter contract works from Node and not only from Python, which is what
+an implementer in a third language needs before trusting the interface.
+Both implementations here share an author, so neither run is independent.
+
 ## What implementing this surfaced
 
 These are the details a second implementer must get exactly right; they

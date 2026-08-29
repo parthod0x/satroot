@@ -78,6 +78,31 @@ def expected_line(vector):
     )
 
 
+def bundled_adapter_caveat(command):
+    """Why a run through one of our own adapters is not independent.
+
+    Both bundled adapters wrap an implementation written by this project's
+    author, so a clean run through either says nothing about independent
+    implementability - and the runner must not imply otherwise. Returns
+    None for anything we did not ship.
+    """
+    lowered = command.lower().replace("\\", "/")
+    if "example_adapter" in lowered:
+        return (
+            "that was the bundled example adapter, which is the reference\n"
+            "implementation behind a different command line. It shows the\n"
+            "harness and the corpus agree with themselves, and nothing more."
+        )
+    if "dist/adapter.js" in lowered:
+        return (
+            "that was the bundled TypeScript verifier. It is a genuinely\n"
+            "separate implementation, but it shares an author with the\n"
+            "reference, so it demonstrates that the specification is\n"
+            "implementable from its text - not that anyone else has done it."
+        )
+    return None
+
+
 def normalise(line):
     """Sort balance terms so account order in an adapter's output is free."""
     fields = line.strip().split()
@@ -249,12 +274,23 @@ def main():
         )
         return 1
     if args.impl:
-        print(
-            "\nAll %d matched. If you are willing to be named as having run "
-            "this\nindependently, that would be the first external "
-            "verification the\nproject has had - please say so on the issue "
-            "tracker or by email." % len(vectors)
-        )
+        print("\nAll %d matched." % len(vectors))
+        caveat = bundled_adapter_caveat(args.impl)
+        if caveat is not None:
+            # Do not congratulate someone for running our own code. This
+            # message previously invited exactly the claim it should refuse.
+            print(
+                "\nNote: %s\n\nThis is NOT an independent run and must not be "
+                "reported as one -\nsee INDEPENDENT_RUNS.md for what does count."
+                % caveat
+            )
+        else:
+            print(
+                "\nIf that was your own implementation and you are willing to\n"
+                "be named, it would be the first independent verification this\n"
+                "project has had. Please say so on the issue tracker or by\n"
+                "email - see INDEPENDENT_RUNS.md."
+            )
     return 0
 
 

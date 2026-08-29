@@ -10,6 +10,7 @@ cannot fail is worse than none, because it manufactures agreement - which
 is the exact defect class this corpus exists to catch.
 """
 
+import shutil
 import subprocess
 import sys
 import unittest
@@ -20,6 +21,7 @@ VECTORS_DIR = REPO_ROOT / "vectors"
 RUNNER = VECTORS_DIR / "run.py"
 EXPECTED = VECTORS_DIR / "EXPECTED.txt"
 EXAMPLE_ADAPTER = VECTORS_DIR / "example_adapter.py"
+TS_ADAPTER = REPO_ROOT / "verifiers" / "typescript" / "dist" / "adapter.js"
 
 
 def run_runner(*args):
@@ -77,6 +79,46 @@ class VectorRunnerTest(unittest.TestCase):
         result = run_runner("--impl", f'"{sys.executable}" -c "print(\'REJECT\')"')
         self.assertNotEqual(result.returncode, 0, "runner passed a lying adapter")
         self.assertIn("FAIL", result.stdout)
+
+    @unittest.skipUnless(
+        shutil.which("node") and TS_ADAPTER.exists(),
+        "needs node and a built TypeScript verifier "
+        "(cd verifiers/typescript && npm install && npm run build)",
+    )
+    def test_typescript_implementation_satisfies_the_same_contract(self):
+        """The contract must work from another language, not just Python.
+
+        CI covers this in the Node job; locally it runs only when the
+        verifier has already been built, so the suite stays fast.
+        """
+        result = run_runner("--impl", f'node "{TS_ADAPTER}"', "--emit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, EXPECTED.read_text(encoding="utf-8"))
+
+    def test_bundled_adapters_are_not_reported_as_independent(self):
+        """A clean run through our own code must refuse the independence claim.
+
+        The runner originally congratulated any passing --impl as a possible
+        "first external verification", including someone running the bundled
+        example adapter. That is the manufactured-credential failure built
+        into the tool meant to avoid it.
+        """
+        result = run_runner("--impl", f'"{sys.executable}" "{EXAMPLE_ADAPTER}"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("NOT an independent run", result.stdout)
+        self.assertNotIn("first independent verification", result.stdout)
+
+    def test_an_unrecognised_adapter_is_invited_to_report(self):
+        """The invitation must still reach a genuine third-party run."""
+        script = (
+            "import json,sys;"
+            "v=json.load(open(sys.argv[1]));"
+            "print('REJECT')"
+        )
+        result = run_runner("--impl", f'"{sys.executable}" -c "{script}"')
+        # It fails the 12 accept vectors, but the point is the classification:
+        # nothing about an unknown command should be treated as bundled.
+        self.assertNotIn("NOT an independent run", result.stdout)
 
     def test_a_silent_adapter_is_reported_not_ignored(self):
         result = run_runner("--impl", f'"{sys.executable}" -c "pass"')

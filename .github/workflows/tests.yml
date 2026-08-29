@@ -40,7 +40,7 @@ jobs:
           python -m satroot_release_gate_smoke --output-dir .tmp_release_gate_smoke_ci --skip-import-smoke
 
   conformance-typescript:
-    name: Conformance corpus (independent TypeScript verifier)
+    name: Conformance corpus (second implementation, TypeScript)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -60,3 +60,13 @@ jobs:
       - name: Replay the corpus with the TypeScript verifier
         working-directory: verifiers/typescript
         run: npm test
+
+      - name: Drive the TypeScript verifier through the adapter contract
+        working-directory: vectors
+        run: python3 run.py --impl "node ../verifiers/typescript/dist/adapter.js"
+
+      - name: Adapter output must match EXPECTED.txt byte for byte
+        working-directory: vectors
+        run: |
+          python3 run.py --impl "node ../verifiers/typescript/dist/adapter.js" --emit > ts.txt
+          diff ts.txt EXPECTED.txt

@@ -22,6 +22,31 @@ willing to be named. A run reported anonymously is still welcome and still
 gets acted on; it just cannot be cited, so it belongs in the issue tracker
 rather than here.
 
+## Two different things, and only one of them is the point
+
+**Running our code on your machine** proves the corpus and the harness are
+portable and reproducible - that a stranger can clone the repository and get
+the documented result on a different OS. That is worth something, and worth
+recording, but it exercises no implementation but ours. `run.py` with no
+`--impl`, or with the bundled `example_adapter.py` or the bundled TypeScript
+adapter, is this and only this. The runner now says so on the way past.
+
+**Running your own implementation** is the thing this corpus exists for, and
+the thing the project has never had. It is what the table above records.
+
+The distinction is easy to blur and expensive to get wrong. A reproduction
+run described as an independent verification would be a claim whose trust
+anchor is supplied by the party being checked, which is the exact defect
+class this repository's review history is a record of catching.
+
+### Reproduction runs
+
+Independent operator, our implementation. None recorded yet.
+
+| date | who | OS / runtime | result |
+|---|---|---|---|
+| — | — | — | — |
+
 ## What a run report should contain
 
 Enough that a reader can repeat it and get the same answer:
