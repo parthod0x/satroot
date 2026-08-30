@@ -102,9 +102,11 @@ Accounts in any order. Exit status ignored. stderr is free for debugging.
 In Python that wrapper is:
 
 ```python
-import json, sys
+import json
+import sys
 
-vector = json.load(open(sys.argv[1], encoding="utf-8"))
+with open(sys.argv[1], encoding="utf-8") as f:
+    vector = json.load(f)
 
 try:
     state = replay(vector["events"], vector["scheme"])   # your work
@@ -151,8 +153,12 @@ Before any protocol code, write a program that ignores the vector and always
 prints `REJECT`:
 
 ```python
-import json, sys
-vector = json.load(open(sys.argv[1], encoding="utf-8"))
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as f:
+    vector = json.load(f)
+
 print("REJECT")
 ```
 
