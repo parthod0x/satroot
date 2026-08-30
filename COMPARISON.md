@@ -53,7 +53,7 @@ Contemporary systems implementing it:
 **Ethereum disproves any mechanism-level novelty claim outright.** Canonical
 serialisation, signed events in total order, a formally specified typed
 transition function, a state commitment third parties recompute — with
-cross-client differential testing far beyond a 33-vector corpus. Omitting it
+cross-client differential testing far beyond a corpus of this size. Omitting it
 from a comparison table, in a project whose flagship demonstration is a chain
 anchor, was indefensible.
 

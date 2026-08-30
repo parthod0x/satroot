@@ -10,34 +10,44 @@ vectors in this directory. Report what happens.
 
 ## 1. Why this is worth your time, stated honestly
 
-SATROOT has two implementations — Python and TypeScript — 1,751 tests, and a
-68-vector conformance corpus. All of it was written by one person. So the
-corpus demonstrates that the specification is implementable *by its author*,
-which is not the interesting claim.
+SATROOT has two implementations by its author — Python and TypeScript — 1,751
+tests, and a 68-vector conformance corpus. All of that was written by one
+person, so it demonstrates the specification is implementable *by its
+author*, which is not the interesting claim.
 
 **A run that fails is a better outcome than one that passes.** Every place
-the specification is ambiguous, incomplete or wrong is a real defect, and
-you are the only instrument that can detect it — the tests cannot, because
-they were written against the code, and the vectors cannot, because they are
+the specification is ambiguous, incomplete or wrong is a real defect, and you
+are the only instrument that can detect it — the tests cannot, because they
+were written against the code, and the vectors cannot, because they are
 generated from it.
 
-This is not hypothetical. One implementation has been written from this
-specification, on 29 August 2026. It scored 33/33 against the corpus as it then
-stood, and found **eleven defects**, two of which would have stopped a careful reader outright:
+This is not hypothetical. **Seven rounds of independent implementation have
+found twenty-six defects in this specification**, and the corpus has grown
+from 33 vectors to 68 closing the gaps they exposed. Among them:
 
 - §5 listed `rules_hash` and `nonce` as *required* genesis fields. Nothing
-  has ever carried either. An implementation enforcing §5 literally rejects
-  every valid ledger at its first event, and a second attempt that day was
-  blocked on exactly this.
-- The reference **accepted** the amount `"0400"` while the corpus asserted
-  it must be rejected and the specification said nothing. Two
-  implementations disagreeing about an accept/reject decision — which is
-  the entire thing this corpus exists to detect, and it had been invisible.
+  had ever carried either, so an implementation enforcing §5 literally
+  rejected every valid ledger at its first event. One attempt was blocked
+  outright on this.
+- The genesis record was **never authenticated at all** — a forged or absent
+  signature replayed clean under every scheme, so the record fixing
+  `mint_authority` and the entire opening allocation was forgeable.
+- An orphan `profile_mode` put **arbitrary JSON, including nested objects,
+  into the state commitment**, so two ledgers identical but for it replayed
+  as valid with different state hashes.
 
-All eleven are fixed or recorded in `INDEPENDENT_RUNS.md`, and the corpus
-grew from 33 vectors to 68 across seven rounds, closing the gaps that run exposed. **Assume more
-remain.** The last run found eleven; the corpus was thought to be in good
-shape before it.
+**The most recent finding is the one to take seriously.** A clean-room
+implementation matched every vector in the corpus as it then stood — a
+perfect pass — *and still disagreed with both of the author's
+implementations* about whether to accept a particular signed event, because
+the specification was silent on a case no vector covered. The 68th vector
+exists because of it, and that implementation fails it as written.
+
+**A full pass is not evidence that nothing is wrong.** It is evidence that
+the corpus and your reading agree, which is a narrower claim than it looks.
+
+**Assume more remain.** Every round so far has been told the corpus was in
+good shape beforehand.
 
 ---
 

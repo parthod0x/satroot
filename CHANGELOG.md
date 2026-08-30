@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+**Seven rounds of independent implementation, twenty-six specification
+defects, and a conformance corpus grown from 33 vectors to 68.**
+
+Nothing in the protocol changed shape. What changed is that the
+specification now says what the implementations always did, in the places
+where it previously said nothing or said it wrong. The two that mattered
+most:
+
+- **The genesis record was never authenticated.** A forged, empty or absent
+  signature replayed clean under every scheme, so the one record that fixes
+  `mint_authority`, `max_supply` and the entire opening allocation was
+  forgeable — and every later event was being authenticated against a root
+  anyone could author.
+- **An orphan `profile_mode` committed arbitrary JSON**, including nested
+  objects, into the section 7 state hash. Two ledgers identical but for it
+  replayed as valid with different state hashes.
+
+Neither was findable by 1,751 tests, two implementations, or twelve earlier
+review rounds, because all of those were written against the code. Both were
+found by reading the document instead.
+
+**This release also breaks state hashes.** Signing the genesis changes its
+`event_id`, so `last_event_id` and every state hash change with it. The
+shipped example ledgers are migrated. A ledger written before this replays
+under the old rules only. The alternative was leaving the root of every
+ledger forgeable, which is not a trade.
+
+The individual findings follow.
+
+
 - **An omitted `signature_scheme` means `demo` on every event, not just
   genesis, and never inherits the verifier in use.** The default was stated
   inside section 5.1, the genesis section, so it read as genesis-specific.
