@@ -16,7 +16,7 @@ npm install
 npm test
 ```
 
-Expected output ends with `67 vectors, 0 failures`.
+Expected output ends with `68 vectors, 0 failures`.
 
 ## Running it through the corpus's adapter contract
 

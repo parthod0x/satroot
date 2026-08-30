@@ -740,6 +740,28 @@ def build_vectors():
         "sequence and prev_event_id across a ledger deeper than a handful of events",
         "demo", long_events, _expect_ok(long_events, long_verifier))
 
+    # SPEC 6.6.1: an omitted signature_scheme means `demo` on EVERY event, not
+    # just genesis, and does not inherit the verifier in use. Nothing tested
+    # the non-genesis case, and the default was stated inside the genesis
+    # section - so a clean-room implementation scoped it to genesis and had
+    # non-genesis events inherit the configured scheme instead. It scored
+    # 67/67 while accepting a signed event this reference rejects.
+    signer, ed_verifier = _signing_context("ed25519")
+    implicit_events, _ = _build_ledger("ed25519", [TRANSFER])
+    inherit = copy.deepcopy(implicit_events)
+    tail = inherit[1]
+    tail.pop("signature_scheme", None)
+    tail.pop("event_id", None)
+    tail.pop("signature", None)
+    # Signed correctly over the payload that lacks the field, so only the
+    # default rule decides the outcome.
+    tail["signature"] = signer(sr.signing_payload(tail), tail["signature_key_id"])
+    inherit = _rechain(inherit, 1)
+    add("reject-non-genesis-implicit-scheme-under-ed25519",
+        "an omitted signature_scheme is demo everywhere, and never inherits the verifier",
+        "ed25519", inherit,
+        _expect_error(inherit, ed_verifier, "implicit scheme does not inherit the verifier"))
+
     return vectors
 
 

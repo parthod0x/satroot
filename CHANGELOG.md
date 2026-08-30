@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **An omitted `signature_scheme` means `demo` on every event, not just
+  genesis, and never inherits the verifier in use.** The default was stated
+  inside section 5.1, the genesis section, so it read as genesis-specific.
+  For a non-genesis event omitting the field the document said nothing at
+  all.
+
+  The first clean-room implementation resolved that silence as "the
+  externally selected verifier remains in force", flagged it in a code
+  comment as something the specification should state more directly, and
+  scored 67/67 anyway. Constructing the deciding case - an ed25519
+  non-genesis event omitting the field, re-signed over the payload that
+  lacks it - shows this reference and the TypeScript verifier reject it
+  while that implementation accepts it. A signed event two implementations
+  disagree about, invisible to the whole corpus.
+
+  Resolved toward `demo` everywhere. The alternative would make the same
+  bytes mean different things to different relying parties: a record must
+  describe its own provenance, and a verifier must not supply it - the same
+  argument section 6.6.1 already makes about a *lying* signature_scheme,
+  which applies identically to an absent one. The rule now lives in 6.6.1,
+  which governs every event, and 5.1 defers to it.
+  `reject-non-genesis-implicit-scheme-under-ed25519` pins it. Corpus
+  67 -> 68.
+
 - **Corpus 64 -> 67, closing two coverage gaps rather than defects.** 58 of
   64 vectors ran on the `demo` placeholder scheme, so the real signature
   paths were the thinnest-covered area in the corpus - a second full

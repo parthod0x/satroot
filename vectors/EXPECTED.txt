@@ -22,6 +22,7 @@ reject-mint-by-non-authority.json REJECT
 reject-mint-exceeds-max-supply.json REJECT
 reject-mint-to-frozen-account.json REJECT
 reject-negative-amount.json REJECT
+reject-non-genesis-implicit-scheme-under-ed25519.json REJECT
 reject-orphan-profile-mode-object.json REJECT
 reject-orphan-profile-mode-string.json REJECT
 reject-overspend.json REJECT

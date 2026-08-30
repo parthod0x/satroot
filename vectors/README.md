@@ -1,6 +1,6 @@
 # SATROOT-1 conformance vectors
 
-A deterministic corpus of 67 vectors (19 that must replay, 48 that
+A deterministic corpus of 68 vectors (19 that must replay, 49 that
 must be rejected) for testing any SATROOT-1 implementation against the
 reference. Every kernel action - transfer, mint, burn, freeze, and
 rotate-authority - is exercised, across all three signature schemes.
@@ -125,6 +125,6 @@ A second implementation demonstrates conformance by loading each vector,
 replaying `events` under `scheme` with the fixed material above, and
 comparing the outcome with `expect` - which is what `run.py --impl` does
 for you. `verifiers/typescript/` is a worked second implementation; it
-agrees on all 67, but it shares an author with the reference, so it
+agrees on all 68, but it shares an author with the reference, so it
 demonstrates that the specification is implementable from its text rather
 than providing independent validation.

@@ -1,6 +1,6 @@
 name: Independent implementation run
 description: You wrote your own SATROOT-1 implementation and ran it against the corpus.
-title: "Independent run: <your implementation> against the 33 vectors"
+title: "Independent run: <your implementation> against the conformance corpus"
 body:
   - type: markdown
     attributes:
@@ -25,7 +25,8 @@ body:
     attributes:
       label: Result
       description: >
-        How many of the 33 matched. Paste the full text of any that did not —
+        How many matched, out of the number `run.py` reports. Paste the full
+        text of any that did not —
         `python3 run.py --impl "<your command>" --emit > mine.txt` then
         `diff mine.txt EXPECTED.txt` produces exactly the discrepancy list.
       render: text

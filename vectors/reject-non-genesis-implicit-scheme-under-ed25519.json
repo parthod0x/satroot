@@ -1,0 +1,49 @@
+{
+  "vector_format": "satroot1-conformance/1",
+  "name": "reject-non-genesis-implicit-scheme-under-ed25519",
+  "description": "an omitted signature_scheme is demo everywhere, and never inherits the verifier",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "VEC1",
+      "name": "Conformance vector unit",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "signature_scheme": "ed25519",
+      "signature": "ed25519:a3f46794aace6b316d7f9ade3dea57d513b3f2dc17cb96553bd9a2450047d97e31d4bafba0bd55c9089ec2d9ff2b20cec3e74791ec6ba70162f1263c4c229a00",
+      "signature_key_id": "issuer-key",
+      "event_id": "sha256:884dda8b9913c85e8df8d0cca9bd21a544914c3c2cd8a2474d1a78b3fd7c0918"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "transfer",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:884dda8b9913c85e8df8d0cca9bd21a544914c3c2cd8a2474d1a78b3fd7c0918",
+      "signer": "issuer",
+      "from": "issuer",
+      "to": "alice",
+      "amount": "400",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:dc4363d46d597a12770998fe2fc21af3b324da2a1a7d3670a4fcf48d78e9f581fc0878584f375e0edc1ec1ee1c3b41b97f3df8d70192b694275dcf5a99eeee0c",
+      "event_id": "sha256:8b7a343ceb48023c7dda65cb2ef81d232cca1bda3c859da1deb71095ff7f1b35"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "reference_error": "signature_key_id is not allowed for demo signatures",
+    "note": "implicit scheme does not inherit the verifier"
+  }
+}

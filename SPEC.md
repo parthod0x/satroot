@@ -214,8 +214,9 @@ rejected.
 Its signature metadata follows section 6.6.1 exactly as a non-genesis event
 does:
 
-- `signature_scheme` is OPTIONAL and defaults to `demo` when absent. The
-  conformance corpus carries both forms — genesis records that state
+- `signature_scheme` is OPTIONAL and defaults to `demo` when absent, by the
+  universal rule in section 6.6.1 — this is not a genesis-specific default.
+  The conformance corpus carries both forms: genesis records that state
   `"signature_scheme": "demo"` explicitly, and one that relies on the
   implicit default. Both are valid, and they are different records with
   different `event_id` values.
@@ -370,6 +371,19 @@ An `ed25519` path is available when the `cryptography` package is installed; it 
 The reference implementation also exposes helper functions and a small CLI for replaying ledgers plus signing single events or whole event arrays against those reference schemes.
 
 #### 6.6.1 Concrete encodings
+
+**`signature_scheme` is OPTIONAL on every event, genesis or not, and when
+absent the event's scheme is `demo`.** The default does not follow the
+verifier in use: an event that omits the field is a `demo` event even when
+the relying party has configured an `ed25519` or `hmac-sha256` verifier, and
+is therefore rejected by that verifier.
+
+This matters because the alternative reading — that an omitted field inherits
+whatever verifier happens to be configured — would make the same bytes mean
+different things to different relying parties. A record must describe its
+own provenance; a verifier must not supply it. An implementation taking the
+other reading accepts a signed event that this one rejects, which two
+independent implementations did.
 
 A verifier is selected by the event's `signature_scheme`, and the key by its
 `signature_key_id`. Each scheme carries its result in the `signature` field

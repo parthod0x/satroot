@@ -7,13 +7,20 @@ repository and did not have the author walk them through it.
 
 | date | who | implementation | language | result | report |
 |---|---|---|---|---|---|
-| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 64/64 at `074de10` — **and twenty-four specification defects across six rounds** | below |
+| 2026-08-30 | **[@naxytra](https://github.com/naxytra)** | `satroot_verify.py` — clean-room, ~550 lines, stdlib only, with a purpose-written RFC 8032 Ed25519 verifier | Python 3.12.3 | **67/67 at `ddcae43`, byte-identical to `EXPECTED.txt` — and a divergence no vector could see** | [#1](https://github.com/parthod0x/satroot/issues/1) |
+| 2026-08-29 | anonymous, **AI-assisted** | ~540-line replay written from `SPEC.md` alone | Python 3.12 | 33/33 then, 67/67 at `ddcae43` — **and twenty-four specification defects across six rounds** | below |
 
-**The passing score is the least important thing in that row**, and the
-implementer said so first, asking that it not be recorded as a clean result
-without the findings attached. It is recorded as AI-assisted at their own
-request; it is not a named human implementer, and it should not be described
-as one.
+**The top row is the one this corpus was built for**, and it is the first of
+its kind here: an implementation written by someone outside the project,
+from the specification alone, filed under their own account. It scored
+67/67 — and the score is the least interesting part, because the same run
+disagreed with both of this project's implementations about a signed event
+none of the 67 vectors could distinguish. See round seven below.
+
+The second row is recorded as AI-assisted at that implementer's own request.
+It is not a named human implementer and must not be described as one; it
+earned its place by finding twenty-four defects across six rounds, not by
+passing.
 
 What makes it the first genuinely independent run is not the 33/33. It is
 that the implementation was written from the specification by someone who
@@ -319,6 +326,66 @@ Both in prose, neither affecting any implementation:
   selected verifier accepts".
 - §6.6.1 said every scheme carries its result "as a prefixed lowercase-hex
   string". `demo` carries the literal `demo`. Now stated per scheme.
+
+## Round seven: the first clean-room implementation, and it diverged
+
+A ~550-line Python implementation written from `SPEC.md` at `ddcae43`,
+including a **hand-rolled RFC 8032 Ed25519 verifier** — this reference uses
+the `cryptography` package, so that is structural evidence of independence
+no attestation could give. It scored **67/67**, byte-identical to
+`EXPECTED.txt`, verified here by running their file against our corpus
+rather than taking the report's word for it.
+
+**And it disagrees with both of ours on an input no vector covered.**
+
+`SPEC.md` stated the `signature_scheme` default — absent means `demo` —
+**inside §5.1, the genesis section**. So it read as a genesis-only rule. For
+a *non-genesis* event omitting the field, the document said nothing, and the
+implementer noted the gap in a code comment:
+
+> Section 5.1 explicitly supplies the demo default for genesis. For a
+> non-genesis event whose optional declaration is absent, the externally
+> selected verifier remains in force (section 2.5). ... the specification
+> could state this latter case more directly.
+
+They resolved it as *inherit the verifier in use*. Both of ours resolve it
+as *always `demo`*. Constructed the deciding case — an `ed25519` non-genesis
+event omitting `signature_scheme`, re-signed over the payload that lacks it,
+so only the default rule decides:
+
+| | result |
+|---|---|
+| this reference | **reject** — `signature_key_id is not allowed for demo signatures` |
+| TypeScript verifier | **reject** |
+| the clean-room implementation | **ACCEPT** |
+
+Both scored 67/67. A signed event that one implementation accepts and
+another rejects, invisible to the entire corpus.
+
+**Resolved as: `demo` everywhere, genesis or not.** The alternative reading —
+that an omitted field inherits whatever verifier the relying party
+configured — would make the same bytes mean different things to different
+readers. A record must describe its own provenance; a verifier must not
+supply it. That is the argument §6.6.1 already makes about a lying
+`signature_scheme`, and it applies identically to an absent one.
+
+The rule now lives in §6.6.1, which governs every event, and §5.1 defers to
+it instead of owning it. `reject-non-genesis-implicit-scheme-under-ed25519`
+pins it, and it catches the clean-room implementation as written.
+
+### Why this one mattered more than the six rounds before it
+
+Every prior round came from an implementation that had converged with this
+one. The previous implementer said so themselves, and predicted exactly this:
+
+> The next useful signal would come from someone whose implementation hasn't
+> converged — a different language, a different structure, someone who
+> reaches for a JSON library that orders keys differently.
+
+A different structure is precisely what produced it: this implementation
+carries the selected scheme through as a parameter, so "inherit the
+verifier" was the natural reading of a silent document. Neither of ours is
+built that way, so neither could have asked the question.
 
 ### The contributed vectors
 

@@ -1,6 +1,6 @@
 name: Reproduction run
 description: You cloned the repository and ran the conformance corpus on your machine.
-title: "Reproduction run: 33 vectors on <your OS>"
+title: "Reproduction run: the conformance corpus on <your OS>"
 body:
   - type: markdown
     attributes:
@@ -24,7 +24,7 @@ body:
         The last few lines of `python3 run.py` are enough. Paste the whole
         thing if you prefer.
       render: text
-      placeholder: "33 vectors, 0 failures"
+      placeholder: "68 vectors, 0 failures"
     validations:
       required: true
 
