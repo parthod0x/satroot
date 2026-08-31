@@ -53,3 +53,6 @@ build/
 *.egg-info/
 .DS_Store
 tests/vectors/rfc8785/
+
+# Never commit the offline archive, wherever it is placed.
+SAT-BACKUP/
