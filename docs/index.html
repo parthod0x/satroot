@@ -190,9 +190,19 @@ ul li { margin-bottom: 0.45rem; }
   <blockquote>The satoshi is not subdivided. The satoshi anchors a protocol-defined state space.</blockquote>
   <p>One specific one-satoshi UTXO becomes a <strong>root witness</strong> — the namespace handle for a ledger whose state is computed purely by replaying signed events. Token units, machine credits, receipts, identities, licenses, and event-stream custody all live as overlay state above that root. The chain provides the anchor and the publication; ordering comes from the events themselves, via sequence numbers and a hash chain. The protocol provides deterministic meaning. Nothing about the satoshi itself changes, and moving it is never mistaken for a semantic transfer: state follows valid signed events, not UTXO activity.</p>
 
+  <h2>v2.0.0 — the genesis record is now authenticated</h2>
+  <p>It never was. A forged, empty or absent signature on the genesis record — the one that fixes the mint authority, the max supply and the entire opening allocation — replayed clean under every scheme. So the root of every ledger was forgeable, and every later event was being verified against a root anyone could have written.</p>
+  <p>It was found by someone implementing the specification from scratch and reading only the document. Seven rounds of that produced <strong>twenty-six specification defects</strong> and grew the conformance corpus from 33 vectors to 68. None of the serious ones were reachable by 1,751 tests, two implementations or twelve earlier review rounds, because all of those were written against the code.</p>
+  <p>Authenticating genesis changes its <code class="inline">event_id</code>, and therefore every state hash, so <strong>a v1 ledger does not replay under v2</strong>. The alternative was leaving the root of every ledger forgeable, which is not a trade. See <a href="https://github.com/parthod0x/satroot/blob/main/MIGRATION.md">MIGRATION.md</a>.</p>
+
+  <h2>Break it yourself</h2>
+  <p>The corpus is the standing invitation: <strong>68 vectors — 19 that must replay, 49 that must be rejected</strong> — with a runner that needs nothing but Python.</p>
+  <pre><code>python vectors/run.py --impl your_verifier.py</code></pre>
+  <p>If your verifier disagrees with <code class="inline">EXPECTED.txt</code>, that disagreement is the most useful thing anyone can send this project — whichever of us turns out to be wrong. It is how v2.0.0 happened.</p>
+
   <h2>What shipped</h2>
-  <p>The reference implementation is a dependency-free, pure-Python kernel — a canonical event format, a replay engine with strict sequence and hash-chain enforcement, and three signature schemes (a demo placeholder, <code class="inline">hmac-sha256</code>, and <code class="inline">ed25519</code>). Above the kernel sit six released profiles — stable reference units, machine credits, receipts, identities, licenses, and event-stream heads. They add required genesis metadata and validation to the same token-and-account reducer; they do not define their own state or transitions. and a full publication ladder that packages ledgers into signed bundles, releases, catalogs, and registry workspaces, each layer carrying its own manifest hashes and verification tooling.</p>
-  <p>Fifteen tagged releases, ~1,700 tests behind a single release gate, and the protocol rules declared frozen as the v1 draft. Install it:</p>
+  <p>The reference implementation is a dependency-free, pure-Python kernel — a canonical event format, a replay engine with strict sequence and hash-chain enforcement, and three signature schemes (a demo placeholder, <code class="inline">hmac-sha256</code>, and <code class="inline">ed25519</code>). Above the kernel sit six released profiles — stable reference units, machine credits, receipts, identities, licenses, and event-stream heads. They add required genesis metadata and validation to the same token-and-account reducer; they do not define their own state or transitions. Above them sits a full publication ladder that packages ledgers into signed bundles, releases, catalogs, and registry workspaces, each layer carrying its own manifest hashes and verification tooling.</p>
+  <p>Nineteen tagged releases and ~1,766 tests behind a single release gate. Install it:</p>
   <pre><code>pip install satroot
 satroot1 replay examples/events_floor1.json</code></pre>
 
