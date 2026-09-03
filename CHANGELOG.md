@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## v2.0.0-genesis-authentication - 2026-09-03
+
+**BREAKING.** A major version, not a patch, because state hashes change and a
+ledger written under v1 does not replay under v2. See `MIGRATION.md`.
+
+The break is not a redesign. It is the cost of authenticating the genesis
+record, which had never been authenticated at all — so the alternative to
+breaking state hashes was leaving the root of every ledger forgeable.
 
 **Seven rounds of independent implementation, twenty-six specification
 defects, and a conformance corpus grown from 33 vectors to 68.**

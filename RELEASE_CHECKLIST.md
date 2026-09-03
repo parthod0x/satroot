@@ -1,6 +1,7 @@
 # SATROOT Release Checklist
 
-Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, `v1.1-event-streams`, `v1.2-event-matrix-promotion`, `v1.3-key-management`, `v1.4-prepublication-hardening`, `v1.5-integration-and-vectors`, `v1.6-mainnet-anchor`, or `v1.7-standards-alignment`:
+Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, `v1.1-event-streams`, `v1.2-event-matrix-promotion`, `v1.3-key-management`, `v1.4-prepublication-hardening`, `v1.5-integration-and-vectors`, `v1.6-mainnet-anchor`, `v1.7-standards-alignment`,
+or `v2.0.0-genesis-authentication`:
 
 - [ ] Confirm this repo contains no private keys, seed phrases, API tokens, or wallet files.
 - [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint. The four anchored lanes (anchored demo, anchored publication, on-chain envelope, and envelope verification) are the only lanes intended to ever carry a real outpoint or transaction id, and only via run-time flags, never in checked-in input files or presets; `ANCHORS.md` is the sole checked-in record of intentional anchored runs.
@@ -27,11 +28,40 @@ Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`,
 - [ ] Confirm README and SPEC do not claim subdivision below one satoshi.
 - [ ] Confirm README and SPEC do not claim redemption, reserves, securities, e-money, investment returns, or wallet/exchange compatibility.
 - [ ] Confirm `CHANGELOG.md` has a dated section for the milestone and `pyproject.toml` plus `CITATION.cff` carry the matching version.
-- [ ] Create the milestone git tag. For the current milestone: `v1.7-standards-alignment`.
+
+## Additional checks for a BREAKING release
+
+Only when state hashes, replay behaviour, or the wire format change. Skipping
+these on a major version is how a downstream service is broken by somebody
+else's upload.
+
+- [ ] Confirm the major version is bumped, not the minor. State hashes
+      changing is a major version by any reading of semver — a determinism
+      guarantee is the whole product, and understating a break in it is worse
+      than the break.
+- [ ] Confirm `MIGRATION.md` exists, is linked from `README.md`, and says what
+      a holder of an existing ledger should actually *do* — not only what
+      changed.
+- [ ] **Check every downstream consumer for an unbounded version range.**
+      `satledger` depends on `satroot`; an open `>=` there means the next
+      image rebuild silently pulls the breaking version and the service comes
+      up unable to replay its own data, with no code change, no deploy, and
+      nothing in any log to explain it. Pin the ceiling *before* publishing,
+      not after.
+- [ ] Confirm the previous release remains installable and documented as the
+      pin for anyone who only needs to keep verifying old ledgers.
+- [ ] Mint a new DOI. The old one archives the pre-fix version permanently and
+      cannot be corrected — so the new record is the only way a citation can
+      point at the fixed protocol.
+
+## Tagging
+
+- [ ] Create the milestone git tag. For the current milestone:
+      `v2.0.0-genesis-authentication`.
 - [ ] Preserve the release artifact hash after tagging.
 
 Suggested tag message for the current milestone:
 
 ```text
-SATROOT v1.4 pre-publication hardening: schema-conformance strictness, envelope-parser bounds, documented signer-key boundary, and installable package data, above one unchanged frozen one-satoshi kernel.
+SATROOT v2.0.0 genesis authentication: the genesis record is now signed and verified, closing a forgeable root that every later event was authenticated against. Twenty-six specification defects fixed across seven rounds of independent implementation; conformance corpus grown from 33 vectors to 68. BREAKING: genesis event_id changes, so every state hash changes and a v1 ledger does not replay under v2. See MIGRATION.md.
 ```

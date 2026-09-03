@@ -15,7 +15,38 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v1.4` is the pre-publication-hardening artifact for `SATROOT-1`.
+`v2.0.0-genesis-authentication` is the current release.
+
+It is the outcome of seven rounds of independent implementation — someone else
+building a verifier from `SPEC.md` alone — which found **twenty-six
+specification defects** and grew the conformance corpus from 33 vectors to 68.
+
+**It is a breaking release.** Authenticating the genesis record changes its
+`event_id`, and therefore every state hash. A v1 ledger does not replay under
+v2. See `MIGRATION.md`.
+
+The kernel rules are unchanged in shape. What changed is that the
+specification now says what the implementations always did, in the places
+where it previously said nothing or said it wrong. The defect that forced the
+major version: **genesis was never authenticated**, so the record fixing
+`mint_authority`, `max_supply` and the opening allocation was forgeable, and
+every later event was authenticated against a root anyone could author.
+
+Neither that nor the orphan `profile_mode` state-hash leak was findable by
+1,751 tests, two implementations, or twelve review rounds — because all of
+those were written against the code. Both were found by reading the document.
+
+### Preceding releases
+
+- `v1.7.1-review-corrections` and `v1.7-standards-alignment` — field survey
+  and standards positioning corrections.
+- `v1.6-mainnet-anchor` — **the anchoring loop repeated on BSV mainnet**, not
+  only testnet. Recorded in `ANCHORS.md`.
+- `v1.5-integration-and-vectors` — the integration surface and the first
+  conformance vector corpus.
+- `v1.4-prepublication-hardening` — schema-conformance strictness,
+  envelope-parser bounds, the documented signer-key boundary, installable
+  package data.
 
 It is the outcome of a full pre-publication review: schema-conformance strictness for amount, decimals, and sequence inputs the JSON schema already forbade (no valid artifact changes); bounds-checking of the standalone envelope parser; explicit documentation of the signer-to-key-binding boundary across `BOUNDARIES.md`, `KEY_MANAGEMENT.md`, and `SPEC.md` with a pinning test; and packaging the protocol schemas and example ledgers as installable package data so a published wheel is self-contained. The frozen `SATROOT-1` kernel rules are unchanged.
 
@@ -276,13 +307,38 @@ Current status:
 
 ## Beyond the freeze
 
-Post-freeze work stays profile-driven and out-of-band, taken up only when intentionally chosen:
+Post-freeze work stays profile-driven and out-of-band, taken up only when
+intentionally chosen:
 
 - additional object classes beyond the six registered profiles,
-- a mainnet anchor for a namespace meant to persist, using the same anchored lanes and `ANCHORS.md` discipline,
 - bridge layers for regulated or redeemable systems if ever needed.
 
-Key-management guidance shipped in `v1.3-key-management` as `KEY_MANAGEMENT.md`. None of the remaining directions change the frozen `SATROOT-1` kernel rules.
+Key-management guidance shipped in `v1.3-key-management` as
+`KEY_MANAGEMENT.md`. A **mainnet anchor** was listed here as future work until
+`v1.6-mainnet-anchor` did it; the whole loop — anchored namespace, anchored
+publication, on-chain envelope, offline envelope verification — has now run on
+BSV mainnet, recorded in `ANCHORS.md`. None of the remaining directions change
+the frozen `SATROOT-1` kernel rules.
+
+## What this project is short of
+
+Not features, and not review. Stated plainly because a reader deserves it
+before they invest time:
+
+- **No external users.** Nobody outside this project runs it.
+- **No outside contributors**, though one independent reviewer implemented the
+  spec from scratch, found twenty-six defects, and contributed an adversarial
+  test that is now permanent.
+- **`SPEC.md` is a frozen v1 draft, not a final v1.** It waits on exactly the
+  kind of external implementation that produced v2.0.0 — one more of those and
+  it can be declared final.
+
+The conformance corpus is a standing invitation: 68 vectors, 19 expected to
+pass and 49 to be rejected, with a standalone runner. If you implement
+SATROOT and your verifier disagrees with `EXPECTED.txt`, that disagreement is
+the most useful thing anyone can send this project.
+
+    python vectors/run.py --impl your_verifier.py
 
 ## Core architectural rule
 

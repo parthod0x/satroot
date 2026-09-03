@@ -56,3 +56,7 @@ tests/vectors/rfc8785/
 
 # Never commit the offline archive, wherever it is placed.
 SAT-BACKUP/
+
+# Release-gate output. Megabytes of publication-workspace JSON, useful for
+# ten minutes after a failed run and never again.
+.release-logs/

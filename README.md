@@ -4,6 +4,21 @@
 [![PyPI](https://img.shields.io/pypi/v/satroot.svg)](https://pypi.org/project/satroot/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+> ### v2.0.0 is a breaking release — read this before upgrading
+>
+> Genesis records are now authenticated. They never were: a forged, empty or
+> absent signature replayed clean under every scheme, so the record fixing
+> `mint_authority`, `max_supply` and the opening allocation was **forgeable**,
+> and every later event was authenticated against a root anyone could author.
+>
+> Fixing it changes genesis's `event_id`, and therefore **every state hash**. A
+> v1 ledger does not replay under v2. See **[MIGRATION.md](MIGRATION.md)**.
+>
+> Found by seven rounds of someone else implementing the spec from scratch —
+> twenty-six defects in all, none of them findable by 1,751 tests, two
+> implementations, or twelve review rounds, because those were written against
+> the code rather than the document.
+
 **SATROOT is a signed, hash-linked, append-only event log with deterministic
 replay to a typed state.**
 
