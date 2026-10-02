@@ -10,7 +10,7 @@ vectors in this directory. Report what happens.
 
 ## 1. Why this is worth your time, stated honestly
 
-SATROOT has two implementations by its author — Python and TypeScript — 1,751
+SATROOT has two implementations by its author — Python and TypeScript — 1,766
 tests, and a 68-vector conformance corpus. All of that was written by one
 person, so it demonstrates the specification is implementable *by its
 author*, which is not the interesting claim.
