@@ -134,3 +134,31 @@ def test_parse_envelope_script_rejects_truncated_pushdata():
         parse_envelope_script(bytes.fromhex("006a4c"))
     with pytest.raises(SatRootError):
         parse_envelope_script(bytes.fromhex("006a4d01"))
+
+
+def test_parse_envelope_script_accepts_only_the_four_opcodes_it_needs():
+    """The envelope allowlist is OP_FALSE, OP_RETURN, PUSHDATA1, PUSHDATA2.
+
+    A SATROOT envelope carries a root_id and a state hash - under a hundred
+    bytes - so PUSHDATA4 can never appear in a legitimate one. It is rejected
+    today, but nothing held it there: the existing tests cover truncation and
+    the push-length ranges, so widening the allowlist later would not fail
+    anything.
+
+    PUSHDATA4 is the case worth pinning rather than any other unused opcode,
+    because it declares its length in four bytes. Accepting it would mean a
+    four-gigabyte length prefix read from a hostile script, which is the one
+    unused opcode whose mishandling costs memory rather than correctness.
+
+    The trailing-byte case is here for the same reason: a complete, valid push
+    followed by anything else must not be read as a second item.
+    """
+    # OP_FALSE OP_RETURN OP_PUSHDATA4 <declares 0xffffffff bytes> <one byte>
+    with pytest.raises(SatRootError):
+        parse_envelope_script(bytes.fromhex("006a4effffffff41"))
+    # A complete 1-byte push, then a stray opcode.
+    with pytest.raises(SatRootError):
+        parse_envelope_script(bytes.fromhex("006a0141ff"))
+    # OP_FALSE OP_RETURN with nothing at all.
+    with pytest.raises(SatRootError):
+        parse_envelope_script(bytes.fromhex("006a"))
