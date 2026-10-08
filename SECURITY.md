@@ -1,10 +1,14 @@
 # Reporting a security issue
 
-**Email parthms.id@gmail.com.** Put "SATROOT security" in the subject.
+**Use GitHub's private vulnerability reporting:**
+[Security → Report a vulnerability](https://github.com/parthod0x/satroot/security/advisories/new).
+It is enabled on this repository, it is private until you and I agree to
+publish, and it gives us both a tracked thread rather than a mail I might
+miss.
 
-If you would rather not use email, GitHub's private vulnerability reporting
-is enabled on this repository: **Security → Report a vulnerability**. Both
-reach the same person.
+If you cannot use it — no account, or you would rather not have one — open a
+public issue saying only that you have something private to report, with no
+detail, and I will come to you.
 
 Please do not open a public issue for something exploitable until it has been
 fixed. For anything else — a spec ambiguity, a conformance disagreement, a

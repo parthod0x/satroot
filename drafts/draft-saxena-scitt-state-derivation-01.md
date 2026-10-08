@@ -16,7 +16,9 @@ pi: [toc, sortrefs, symrefs]
 author:
   - ins: P. M. Saxena
     name: Parth Mauria Saxena
-    email: parthms.id@gmail.com
+    # email: filled in at submission. These drafts are unsent
+    # (see SCITT_ENGAGEMENT.md), and an author address in a
+    # public repo serves nobody until there is a submission.
 
 normative:
   RFC9943:

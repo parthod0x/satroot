@@ -462,7 +462,11 @@ discrepancy list.
   the corpus regardless of who misread it.
 - **A clean run you are willing to be named for** → open an issue, or a pull
   request adding your row to the table above. Either is fine.
-- **Privately** → parthms.id@gmail.com.
+- **Privately** → GitHub's
+  [private vulnerability reporting](https://github.com/parthod0x/satroot/security/advisories/new),
+  which is private until both of us agree to publish. If you cannot use
+  it, open a public issue saying only that you have something private,
+  and I will come to you.
 
 ## A note on what this page is for
 
