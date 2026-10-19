@@ -236,8 +236,8 @@ The individual findings follow.
   generator. It scored 33/33 against the corpus as it then stood, and found eleven
   specification defects. A
   second attempt the same day was **blocked** before writing protocol logic.
-  Recorded in `vectors/INDEPENDENT_RUNS.md` as an AI-assisted, anonymous
-  run at the implementer's own request.
+  Recorded in `vectors/INDEPENDENT_RUNS.md` as an anonymous run; the
+  attribution the implementer asked for is kept there, in their own record.
 
   The two that mattered most:
 
