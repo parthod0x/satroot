@@ -1,3 +1,58 @@
+# Migrating to SATROOT v3
+
+## From v2 to v3 (3.0.0)
+
+**v3.0.0 changes what a real-scheme ledger must contain, not how a v2 ledger
+hashes.** A `demo` ledger replays unchanged, with the same state hashes. A
+ledger signed under `ed25519` or `hmac-sha256` is either rebuilt as a bound
+ledger or replayed, knowingly, as an unbound one.
+
+### Why
+
+Under v2, any key the verifier held could sign as any account. The kernel
+compared the `signer` string and checked the signature under whatever key
+`signature_key_id` named, so the holder of any registered key could move the
+issuer's balance, mint, rotate the authority, sign a genesis, or re-sign an
+entire ledger. An external review demonstrated each. This document and
+`SECURITY_REVIEW.md` had called it a tip-only exposure; it was not.
+
+### What changed
+
+- **Ledger version `0.2`.** A genesis under a real scheme declares
+  `account_keys`, account to `signature_key_id`, and is signed with the mint
+  authority's bound key. Every later record must be signed with its signer's
+  bound key. `bind-key` changes a binding; `rotate-authority` requires the new
+  authority to be bound. The bindings are part of the state hash.
+- **Version `0.1` under a real scheme is refused by default.**
+  `replay(..., allow_unbound_keys=True)` and
+  `verify-bundle --allow-unbound-keys` accept it and say so
+  (`keys_bound: false`).
+- **Pins.** `replay(..., expected_genesis_event_id=...)` and
+  `verify-bundle --expect-genesis ... --public-keys-json ...` check the
+  genesis and keys you hold rather than those the bundle carries, and the
+  result reports `genesis_pinned` and `keys_pinned`.
+- **Input profile (SPEC section 2.6a).** Floats, integers past 2^53, NaN,
+  duplicate member names, lone surrogates, control-character or blank names,
+  uppercase or leading-zero `root_id`, an explicit `null` scheme, and sloppy
+  signature hex are rejected. A v2 ledger that used any of these does not
+  replay under v3; every one of them was read differently by the two
+  implementations, so its state hash was never well defined.
+- **Malformed input is a `SatRootError`**, never a crash.
+
+### What to do
+
+- **New ledgers:** nothing. `sign_ledger_events` writes a bound ledger from
+  the `signer_key_ids` you already pass, and `bind_genesis_keys` turns an
+  unsigned genesis into a bound one for callers that sign it themselves.
+- **Existing real-scheme ledgers you produced:** re-sign them as bound
+  ledgers. The state hashes change, because the bindings are committed. Keep
+  the old ledger and its anchors as the record of what was published under v2.
+- **Existing ledgers you only verify:** replay with `allow_unbound_keys=True`
+  only if you trust every key your verifier holds not to sign as another
+  account, and record that you did.
+
+---
+
 # Migrating from SATROOT v1 to v2
 
 **v2.0.0 breaks state hashes.** A ledger written under v1 does not replay

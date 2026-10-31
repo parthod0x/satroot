@@ -1,0 +1,34 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-machine-non-compact-field",
+  "description": "machine profile fields are compact identifiers",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "PROF1",
+      "name": "Profile vector",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "profile": "SATROOT-MACHINE-1",
+      "profile_mode": "prepaid-credit",
+      "service_scope": "Batch Inference",
+      "billing_unit": "request",
+      "consumption_model": "burn-on-use",
+      "intended_use": "machine-credit",
+      "signature_scheme": "demo",
+      "signature": "demo"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "invalid profile field service_scope: expected compact identifier"}
+}

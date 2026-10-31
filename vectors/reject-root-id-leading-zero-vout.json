@@ -1,0 +1,27 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-root-id-leading-zero-vout",
+  "description": "one outpoint, two spellings of its vout",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:00",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "signature_scheme": "demo",
+      "signature": "demo"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "invalid root_id: 'abababababababababababababababababababababababababababababababab:00'"}
+}

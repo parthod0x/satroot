@@ -13,6 +13,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   replay,
+  parseLedgerJson,
+  compareCodePoints,
   stateHash,
   demoVerifier,
   hmacVerifier,
@@ -61,6 +63,7 @@ interface Vector {
   name: string;
   scheme: string;
   events: Event[];
+  options?: { allow_unbound_keys?: boolean; expected_genesis_event_id?: string };
   expect: {
     ok: boolean;
     final_state_hash?: string;
@@ -69,12 +72,17 @@ interface Vector {
   };
 }
 
-function checkVector(vector: Vector): string[] {
+function checkVector(vector: Vector, text: string): string[] {
   const problems: string[] = [];
-  const verifier = verifierFor(vector.scheme);
   let state;
   try {
-    state = replay(vector.events, verifier);
+    // Replay parses the text under the input profile (SPEC.md section 2.6a),
+    // whatever was used to read the expectation.
+    const strict = parseLedgerJson(text) as unknown as Vector;
+    state = replay(strict.events, verifierFor(strict.scheme), {
+      allowUnboundKeys: strict.options?.allow_unbound_keys === true,
+      expectedGenesisEventId: strict.options?.expected_genesis_event_id,
+    });
   } catch (err) {
     if (vector.expect.ok) {
       const msg = err instanceof SatRootError ? err.message : String(err);
@@ -90,8 +98,8 @@ function checkVector(vector: Vector): string[] {
   if (hash !== vector.expect.final_state_hash) {
     problems.push(`state hash mismatch: ${hash} != ${vector.expect.final_state_hash}`);
   }
-  const balances: Record<string, string> = {};
-  for (const [k, v] of [...state.balances.entries()].sort()) {
+  const balances = Object.create(null) as Record<string, string>;
+  for (const [k, v] of [...state.balances.entries()].sort((x, y) => compareCodePoints(x[0], y[0]))) {
     if (v !== 0n) balances[k] = v.toString();
   }
   const expected = vector.expect.balances ?? {};
@@ -112,8 +120,18 @@ function main(): number {
   }
   let failures = 0;
   for (const file of files) {
-    const vector = JSON.parse(readFileSync(join(VECTORS_DIR, file), "utf8")) as Vector;
-    const problems = checkVector(vector);
+    const text = readFileSync(join(VECTORS_DIR, file), "utf8");
+    // The expectation is read leniently: a vector may hold NaN or a duplicate
+    // member on purpose, which JSON.parse refuses or flattens. When it cannot
+    // be read at all, the file name says what is expected.
+    let vector: Vector;
+    try {
+      vector = JSON.parse(text) as Vector;
+    } catch {
+      vector = { name: file.replace(/\.json$/, ""), scheme: "demo", events: [],
+                 expect: { ok: !file.startsWith("reject-") } };
+    }
+    const problems = checkVector(vector, text);
     console.log(`${problems.length === 0 ? "ok  " : "FAIL"} ${vector.name}`);
     for (const p of problems) {
       console.log(`       - ${p}`);

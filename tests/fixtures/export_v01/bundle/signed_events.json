@@ -1,0 +1,29 @@
+[
+  {
+    "protocol": "SATROOT-1",
+    "version": "0.1",
+    "action": "genesis",
+    "root_id": "637d0f544a2db1f4b02bfe46859505da96ef6b26b70c71768500c9d4f2a8ecc2:0",
+    "sequence": 0,
+    "symbol": "CRFIXTUREAGENT",
+    "name": "fixture",
+    "decimals": 0,
+    "max_supply": "1000000",
+    "mint_authority": "issuer",
+    "transfer_model": "account-ledger",
+    "initial_balances": {
+      "issuer": "5"
+    },
+    "nonce": "satroot-scaffold-306582a22b788258",
+    "profile": "SATROOT-MACHINE-1",
+    "profile_mode": "prepaid-credit",
+    "service_scope": "api-compute",
+    "billing_unit": "request",
+    "consumption_model": "burn-on-use",
+    "intended_use": "machine-api-credit",
+    "signature_scheme": "ed25519",
+    "signature_key_id": "issuer-key",
+    "signature": "ed25519:008e4703718806cf325a404c0059d0ec5cd3e87e05c417e385e91cc9767c5d8618c8031b568b454a4fe9bf7c23a1e1c394a8b175a4e370c48c041491bcf4e508",
+    "event_id": "sha256:0156bb78c9da352c8f9a465cf1be161724bfe473d8363791d56b6fa776af6cec"
+  }
+]

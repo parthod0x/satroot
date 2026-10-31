@@ -5,7 +5,7 @@ SATROOT-1 is a protocol primitive, not a financial product.
 ## What SATROOT-1 claims
 
 - A native Bitcoin/BSV satoshi is the smallest native accounting unit.
-- A specific one-satoshi UTXO can act as a root witness, namespace, or authority handle.
+- A specific one-satoshi UTXO's outpoint can name a namespace. The name is a label: SATROOT-1 checks `root_id` for form only, does not tie a ledger or its keys to whoever controls the UTXO, and does not require commitments to spend it. Authority over a ledger comes from its genesis and the keys bound there.
 - Protocol-defined token balances can be computed above that root by replaying events.
 - The semantic token supply can be arbitrary if the protocol rules permit it.
 - The same root model already supports six registered profiles without changing the base primitive.
@@ -19,7 +19,9 @@ SATROOT-1 is a protocol primitive, not a financial product.
 - It does not create a stablecoin, security token, e-money token, deposit, or redemption right.
 - It does not promise reserves, price stability, exchange support, wallet support, profit, or legal rights.
 - It defines `hmac-sha256` and `ed25519` verification paths but makes no production key-management, custody, or HSM claims; the `demo` scheme remains an explicit placeholder.
-- It does not, in the frozen v1 draft, bind a signing key to the account it acts for: authorization compares the `signer` string only, so any key registered in a verifier can sign as any account. In a stored ledger the practical exposure is narrower than that statement alone suggests — every event is bound into the next one's `prev_event_id`, so re-signing an interior event with a different registered key breaks the chain and is rejected. The **final** event carries no such successor, so it is the record actually exposed by this boundary. Deploy each namespace under keys held by a single trust domain, or add an application-level key-to-account policy above the kernel; see `KEY_MANAGEMENT.md`.
+- It does not make the root satoshi a witness, an authority, or a floor of value. A one-satoshi output is worth less than the fee needed to spend it.
+- It does not bind keys in a version `0.1` ledger. Since 3.0.0 a ledger signed under a real scheme is version `0.2`: genesis binds each signing account to its key and every record must be signed with its signer's bound key (SPEC section 6.7). A `0.1` ledger under a real scheme replays only when the caller explicitly accepts unbound keys. Before 3.0.0 this document said only the final record was exposed; that was wrong, because a holder of any registered key can re-sign every record, not just the last.
+- It does not make a ledger authentic on its own. A forger can write a whole new ledger, from a genesis binding the authority to the forger's key, and it is valid; it is a different ledger. Pin the genesis `event_id` you trust (kept from an earlier copy, or anchored) and supply the public keys yourself; see `KEY_MANAGEMENT.md`.
 
 ## Stable-value work
 

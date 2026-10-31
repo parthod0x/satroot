@@ -15,7 +15,11 @@
       "const": "SATROOT-1"
     },
     "version": {
-      "const": "0.1"
+      "enum": [
+        "0.1",
+        "0.2"
+      ],
+      "description": "0.1: no signing key is bound to any account (legacy). 0.2: account_keys binds each signer to its key (SPEC.md section 6.6)."
     },
     "action": {
       "enum": [
@@ -24,7 +28,8 @@
         "transfer",
         "burn",
         "rotate-authority",
-        "freeze"
+        "freeze",
+        "bind-key"
       ]
     },
     "root_id": {
@@ -163,8 +168,7 @@
       "minLength": 1
     },
     "symbol": {
-      "type": "string",
-      "pattern": "^[A-Z0-9]{1,16}$"
+      "type": "string"
     },
     "name": {
       "type": "string",
@@ -176,8 +180,11 @@
       "maximum": 18
     },
     "max_supply": {
-      "type": "string",
-      "pattern": "^[0-9]+$",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^(0|[1-9][0-9]*)$",
       "maxLength": 512
     },
     "mint_authority": {
@@ -251,6 +258,18 @@
     "state_hash": {
       "type": "string",
       "pattern": "^sha256:[a-fA-F0-9]{64}$"
+    },
+    "account_keys": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Genesis, version 0.2: account -> signature_key_id that account signs with."
+    },
+    "key_id": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "allOf": [
@@ -498,9 +517,7 @@
           "max_supply",
           "mint_authority",
           "transfer_model",
-          "initial_balances",
-          "rules_hash",
-          "nonce"
+          "initial_balances"
         ],
         "not": {
           "required": [
@@ -609,6 +626,27 @@
           "prev_event_id",
           "account",
           "frozen",
+          "signer",
+          "signature"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "bind-key"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "required": [
+          "prev_event_id",
+          "account",
+          "key_id",
           "signer",
           "signature"
         ]

@@ -1,0 +1,28 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-profile-float-metadata",
+  "description": "a float in genesis metadata hashes as 1.0 in one language and 1 in another",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "memo": 1.0
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "input profile: non-integer number 1.0"}
+}

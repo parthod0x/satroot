@@ -1,0 +1,49 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-bind-key-takeover-by-authority",
+  "description": "the authority cannot rebind an account that has a key",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "issuer-key",
+        "alice": "alice-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:c2f5654c259f5aa2928f7faf01425a233b81218b3c1c0584055be5170dea2d3631600ca9aea79d8bbb9131beb7f958724b16dfc9fec14a6401a3ec14bcc3f30a",
+      "event_id": "sha256:f40df7c489c1e59a288e475f2506844c568db1bd59ab791a90be801b3767c06c"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:f40df7c489c1e59a288e475f2506844c568db1bd59ab791a90be801b3767c06c",
+      "action": "bind-key",
+      "signer": "issuer",
+      "account": "alice",
+      "key_id": "issuer-key",
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:e46cc9be5b52defd346991863f8fab99739ae789b161bf3a652eedcd39478e8b96e2697cdd2caf9ceb0594988cd6f62cdf3dfec3c607b37fbbd99f75e22b5f00",
+      "event_id": "sha256:75a14525dd370836600c2b935ac5fc146e62049d826b19060ab46fa63dab5ef4"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "only the account can rebind its own key"}
+}

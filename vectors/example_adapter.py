@@ -28,7 +28,12 @@ HMAC_SECRETS = {"issuer-key": "33" * 32, "alice-key": "44" * 32}
 
 
 def main():
-    vector = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    try:
+        # The input profile (SPEC.md section 2.6a) applies to the whole text.
+        vector = sr.loads_ledger_json(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    except sr.SatRootError:
+        print("REJECT")
+        return
 
     scheme = vector["scheme"]
     if scheme == "demo":
@@ -43,7 +48,10 @@ def main():
         sys.exit("unknown scheme: %s" % scheme)
 
     try:
-        state = sr.replay(vector["events"], verifier=verifier)
+        options = vector.get("options", {})
+        state = sr.replay(vector["events"], verifier=verifier,
+                          allow_unbound_keys=options.get("allow_unbound_keys") is True,
+                          expected_genesis_event_id=options.get("expected_genesis_event_id"))
     except sr.SatRootError:
         print("REJECT")
         return

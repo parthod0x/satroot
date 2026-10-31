@@ -1,6 +1,14 @@
 reject-amount-exceeds-digit-bound.json REJECT
 reject-bad-sequence-intact-chain.json REJECT
+reject-bind-key-takeover-by-authority.json REJECT
+reject-blank-mint-authority.json REJECT
 reject-bool-decimals.json REJECT
+reject-bound-genesis-credits-unbound-account.json REJECT
+reject-bound-genesis-not-by-authority-key.json REJECT
+reject-bound-mint-to-unbound-account.json REJECT
+reject-bound-other-key-mints.json REJECT
+reject-bound-other-key-signs-as-issuer.json REJECT
+reject-bound-transfer-to-unbound-account.json REJECT
 reject-broken-prev-event-id.json REJECT
 reject-burn-signed-by-non-holder.json REJECT
 reject-demo-genesis-with-key-id.json REJECT
@@ -16,53 +24,92 @@ reject-freeze-by-non-authority.json REJECT
 reject-genesis-balance-exceeds-digit-bound.json REJECT
 reject-genesis-balances-exceed-max-supply.json REJECT
 reject-genesis-scheme-mismatch.json REJECT
+reject-initial-balances-array.json REJECT
 reject-invalid-profile-mode.json REJECT
 reject-leading-zero-amount.json REJECT
+reject-machine-non-compact-field.json REJECT
 reject-mint-by-non-authority.json REJECT
 reject-mint-exceeds-max-supply.json REJECT
 reject-mint-to-frozen-account.json REJECT
+reject-name-0x1c.json REJECT
+reject-name-0x85.json REJECT
+reject-name-bom.json REJECT
+reject-name-nbsp-only.json REJECT
 reject-negative-amount.json REJECT
 reject-non-genesis-implicit-scheme-under-ed25519.json REJECT
+reject-null-signature-scheme.json REJECT
 reject-orphan-profile-mode-object.json REJECT
 reject-orphan-profile-mode-string.json REJECT
 reject-overspend.json REJECT
+reject-profile-array.json REJECT
+reject-profile-duplicate-member.json REJECT
 reject-profile-field-blank.json REJECT
+reject-profile-field-control-character.json REJECT
 reject-profile-field-empty.json REJECT
 reject-profile-field-non-string.json REJECT
+reject-profile-float-decimals.json REJECT
+reject-profile-float-metadata.json REJECT
+reject-profile-float-sequence.json REJECT
+reject-profile-integer-beyond-2-53.json REJECT
+reject-profile-lone-surrogate.json REJECT
 reject-profile-missing-genesis-field.json REJECT
+reject-profile-nan.json REJECT
+reject-profile-nesting-too-deep.json REJECT
+reject-receipt-two-units.json REJECT
 reject-reordered-events.json REJECT
+reject-rewritten-genesis-against-pin.json REJECT
+reject-root-id-leading-zero-vout.json REJECT
+reject-rotate-authority-to-unbound.json REJECT
 reject-rotate-by-non-authority.json REJECT
 reject-second-genesis-well-formed.json REJECT
 reject-sequence-gap.json REJECT
+reject-signature-hex-embedded-space.json REJECT
+reject-signature-hex-odd-nibble.json REJECT
+reject-signature-hex-trailing-junk.json REJECT
+reject-signature-hex-uppercase.json REJECT
+reject-stable-lowercase-reference-unit.json REJECT
+reject-stable-reference-only-with-redemption.json REJECT
 reject-stale-event-id.json REJECT
 reject-tampered-amount.json REJECT
 reject-transfer-from-frozen-account.json REJECT
 reject-transfer-overspend.json REJECT
 reject-transfer-signed-by-non-holder.json REJECT
 reject-transfer-to-frozen-account.json REJECT
+reject-unbound-ed25519-by-default.json REJECT
 reject-unicode-digits.json REJECT
 reject-unknown-action.json REJECT
 reject-unknown-profile.json REJECT
 reject-unsigned-genesis.json REJECT
+reject-uppercase-root-id.json REJECT
 reject-wrong-key-ed25519.json REJECT
 reject-wrong-per-event-state-hash.json REJECT
 reject-zero-amount.json REJECT
-valid-all-actions-ed25519.json ACCEPT sha256:841a450b951324738429d7efffd2376a10e587c60023722f2a7f772428012dc7 5 alice=50 issuer=1000
+valid-all-actions-ed25519.json ACCEPT sha256:e37dee2b356ded6d5616705b104c53a532d89bd13722260ae255f7a9e798d7c2 5 alice=50 issuer=1000
+valid-astral-account-names.json ACCEPT sha256:90b687338de43736ffb5e192af973d47820b74f5eced472e8126607c2a9f6c6b 1 =1 😀=2
+valid-astral-frozen-order.json ACCEPT sha256:4317d4fddefa022bf930043359df6299dcd52c1e1707761321f66d26c17d2f45 3 issuer=1000
+valid-bind-key-by-authority.json ACCEPT sha256:af7b7f9a39bab3f84f3811bf59eae327c55e5c5383f381453ebeb7da6e40beae 2 alice=1 issuer=1000
+valid-bind-key-own-rotation.json ACCEPT sha256:2418b1108e307674efdc752923ce41a29137e3334cb84326fe2f264e68088672 2 alice=1 issuer=1000
+valid-bound-account-keys-proto.json ACCEPT sha256:c1fbe412437572b792fd94544a6c201e032d2b434e2490926dbb1ed0b8c9e9f3 1 alice=1 issuer=1000
+valid-bound-genesis-ed25519.json ACCEPT sha256:710ee7c8628dfb15d1bd19be40bcbbcd549c62c2aecef7884f2e50bc0a1d73d9 1 alice=1 issuer=1000
 valid-freeze-account-demo.json ACCEPT sha256:7cd9424e0c9b0efda6fd93979fe0f59429c8cad0dd6ce54ba28b296551d38066 2 issuer=1000
 valid-freeze-then-unfreeze-demo.json ACCEPT sha256:cf9df004886f91b4af4ad02246ab0ad5872dd83f709ef4ea053defa70a78397a 3 issuer=1000
 valid-genesis-implicit-demo-scheme.json ACCEPT sha256:1d4f081640876b29d44f1eacfeda83bd1d0b04f043012afaf891ea7098600d3d 1 issuer=1000
 valid-genesis-only-demo.json ACCEPT sha256:9277f8492d3f2fde9987963438aa33ea378e0f7c0f4e7540066be0a1029f8a04 1 issuer=1000
 valid-lifecycle-demo.json ACCEPT sha256:d09565b12e4d3bcae9e232ffde1f62904f1e5e73e872a505c7c059dffeffa28a 4 alice=300 issuer=600
-valid-lifecycle-ed25519.json ACCEPT sha256:b5b892057c21b487e9b7882a5d72e894bfa747afebe695e55bfb2c83db8c3aa9 4 alice=300 issuer=600
-valid-lifecycle-hmac-sha256.json ACCEPT sha256:df71a9309175e78444acd5906d892acf7be63c8f65bc2953e4fb0fa6927a9a5f 4 alice=300 issuer=600
+valid-lifecycle-ed25519.json ACCEPT sha256:29c582c4092d3321ae53dab1a097844a485c4fdf8a6f7fa1189eb98c56e60e9c 4 alice=300 issuer=600
+valid-lifecycle-hmac-sha256.json ACCEPT sha256:53155932c2b38bd3def0e4fe412ccbd4635957b397e64f37920506f638a01187 4 alice=300 issuer=600
 valid-long-chain-demo.json ACCEPT sha256:5e2c72b29674c9206986a944805186d85abad82c787508d22a349ac31a8994e4 21 alice=100 issuer=900
 valid-mint-after-rotation-demo.json ACCEPT sha256:2bc0e7fb02d16e14d20d0369ad0985194ac0500adaf4a439a96181d932b6d195 3 alice=10 issuer=1000
 valid-mint-demo.json ACCEPT sha256:87ae2defde4af8bdf6ef2cd438aa8d30bac89bd4ece0fb1616f7eda4546ba996 2 alice=50 issuer=1000
 valid-non-ascii-metadata-demo.json ACCEPT sha256:244037d3fd5529fd3437856c7b7d6c30fc4beaed2c1a28198a8bcfcdaf713490 1 issuer=1000
 valid-profile-stable-demo.json ACCEPT sha256:101fe1c55a314ad1cfe8fc43ad4679b6bd7bf1a09c70db3ca31850fdf32badb7 1 issuer=1000
+valid-proto-account.json ACCEPT sha256:d2d51b2bc154cfce2cb3e2812ff5885eb0a36af2d670ad9f7ff8296dc62f08aa 1 __proto__=5 issuer=1000
 valid-repeated-transfers-demo.json ACCEPT sha256:39f9cf937990ee19cc70b788c3d3eb5f38a51bedff8db545fdfc2ef4e01ed2e3 4 alice=501 issuer=499
+valid-rewritten-genesis-without-pin.json ACCEPT sha256:85b7ac8eac95fa0f3e3ebebb967f783740484bcfa2f6af03b50c417dd9453a70 1 alice=1 issuer=1000
 valid-rotate-authority-demo.json ACCEPT sha256:e87cc2ba1bf1274520673a2aa59d5a699b780186724c5a7fe6fd56a60a1c4a7e 2 issuer=1000
-valid-second-lifecycle-ed25519.json ACCEPT sha256:b874f7e9aaf8db7e8b417f301ae990cc13001ebfda602940ebaf227de6120b17 6 alice=400 issuer=625
-valid-second-lifecycle-hmac-sha256.json ACCEPT sha256:ca4a20fbf430cf7490b85a11564a49d822ef5d24d80bec76ee263dd30dc7d4a1 6 alice=400 issuer=625
+valid-second-lifecycle-ed25519.json ACCEPT sha256:9116c4b9255c2b5204ec3c0d7c889e2e486736efcea4edd241ff14f783101c60 6 alice=400 issuer=625
+valid-second-lifecycle-hmac-sha256.json ACCEPT sha256:9c8c751781084330478bd949ed749bb1dfaf5194471d74f8cb1a5c51962a790f 6 alice=400 issuer=625
+valid-stable-usd-with-zero-decimals.json ACCEPT sha256:63c0d92fa3c2ab15498241ff931c4a29f81eb9172667071caf579225692478b5 1 issuer=1000000
 valid-transfer-entire-balance-demo.json ACCEPT sha256:0c7632870b69a6a0f98fab8b64fd90816e43679624171e19e54cc2eb4eaaf215 2 alice=1000
+valid-unbound-ed25519-when-allowed.json ACCEPT sha256:de76680727714baccfa73a2b690dbfd0668d2292d351c2b4139d4ca73a95c746 1 issuer=1000
 valid-unbounded-max-supply-demo.json ACCEPT sha256:139f25459875c404a82118ad385a56ca0058672c2dbb21a06fde6702071c4445 2 alice=99999999999999999999 issuer=1000

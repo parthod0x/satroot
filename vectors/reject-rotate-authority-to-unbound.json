@@ -1,0 +1,48 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-rotate-authority-to-unbound",
+  "description": "authority handed to an account nobody can sign as",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "issuer-key",
+        "alice": "alice-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:c2f5654c259f5aa2928f7faf01425a233b81218b3c1c0584055be5170dea2d3631600ca9aea79d8bbb9131beb7f958724b16dfc9fec14a6401a3ec14bcc3f30a",
+      "event_id": "sha256:f40df7c489c1e59a288e475f2506844c568db1bd59ab791a90be801b3767c06c"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:f40df7c489c1e59a288e475f2506844c568db1bd59ab791a90be801b3767c06c",
+      "action": "rotate-authority",
+      "signer": "issuer",
+      "new_mint_authority": "carol",
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:568f2757e07449077e14bc2a7d75bfe5401f54cb44cef7d2562256a2a1eaab310a904681296175db92b3ee022aedbc1d04ad33d29ca16dd877410a742bd3b100",
+      "event_id": "sha256:9cdb34600370337131fd9c9c01a0d2f14ac0ecfe3976161db9c5241e4e178ec6"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "new mint authority has no bound key"}
+}

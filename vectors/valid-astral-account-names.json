@@ -1,0 +1,28 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "valid-astral-account-names",
+  "description": "keys sort by code point: U+E000 before U+1F600",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "": "1",
+        "😀": "2"
+      },
+      "signature_scheme": "demo",
+      "signature": "demo"
+    }
+  ],
+  "expect": {"ok": true, "final_state_hash": "sha256:90b687338de43736ffb5e192af973d47820b74f5eced472e8126607c2a9f6c6b", "balances": {"": "1", "😀": "2"}, "record_count": 1}
+}

@@ -150,12 +150,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 
+def _bind(events, signer_keys):
+    """A real-scheme ledger is a bound (0.2) ledger: genesis declares each
+    signer's key and every record carries the ledger's version (SPEC 6.7)."""
+    for event in events:
+        event["version"] = "0.2"
+    events[0]["account_keys"] = dict(signer_keys)
+
+
 def _sign_genesis_hmac(events, signer_keys, secrets):
     """Sign the genesis under hmac-sha256 (SPEC.md 5.1).
 
     Genesis carries no `signer`; the key is the mint authority's, since
     genesis is the record that appoints it.
     """
+    _bind(events, signer_keys)
     genesis = events[0]
     genesis["signature_scheme"] = "hmac-sha256"
     genesis["signature_key_id"] = signer_keys[genesis["mint_authority"]]
@@ -166,6 +175,7 @@ def _sign_genesis_hmac(events, signer_keys, secrets):
 
 def _sign_genesis_ed25519(events, signer_keys, secrets):
     """Sign the genesis under ed25519 (SPEC.md 5.1)."""
+    _bind(events, signer_keys)
     genesis = events[0]
     genesis["signature_scheme"] = "ed25519"
     genesis["signature_key_id"] = signer_keys[genesis["mint_authority"]]
@@ -5779,7 +5789,8 @@ def test_bootstrap_stable_reference_demo_bundle_hmac():
     assert bundle["genesis"]["profile"] == "SATROOT-STABLE-1"
     assert bundle["genesis"]["reference_unit"] == "GBP"
     assert len(bundle["events"]) == 4
-    assert bundle["material"]["signer_key_map"] == {"issuer": "issuer-key", "merchant": "merchant-key"}
+    # Accounts that are credited are keyed too: a bound ledger pays only bound accounts (SPEC 6.7 rule 5).
+    assert bundle["material"]["signer_key_map"] == {"issuer": "issuer-key", "merchant": "merchant-key", "api_node": "api_node-key"}
     assert state.symbol == "USDBUNDLE1"
     assert state.genesis_metadata["reference_unit"] == "GBP"
 
@@ -60306,8 +60317,12 @@ def test_cli_archive_singleton_object_hmac(tmp_path):
     events = load_events("events_license1.json")[:2]
     events_path.write_text(json.dumps(events), encoding="utf-8")
     bootstrap_dir.mkdir()
-    write_json(signer_map_path, {"issuer": "issuer-key", "customer": "customer-key"})
-    write_json(secrets_path, {"issuer-key": "issuer-secret", "customer-key": "customer-secret"})
+    # A bound ledger pays only bound accounts, so the next holder and the
+    # archive account have keys too (SPEC.md 6.7 rule 5).
+    write_json(signer_map_path, {"issuer": "issuer-key", "customer": "customer-key",
+                                 "customer-v2": "customer-v2-key", "archive": "archive-key"})
+    write_json(secrets_path, {"issuer-key": "issuer-secret", "customer-key": "customer-secret",
+                              "customer-v2-key": "customer-v2-secret", "archive-key": "archive-secret"})
     assert (
         main(
             [
@@ -60395,8 +60410,12 @@ def test_cli_transfer_singleton_object_hmac(tmp_path):
     events = load_events("events_license1.json")[:2]
     events_path.write_text(json.dumps(events), encoding="utf-8")
     bootstrap_dir.mkdir()
-    write_json(signer_map_path, {"issuer": "issuer-key", "customer": "customer-key"})
-    write_json(secrets_path, {"issuer-key": "issuer-secret", "customer-key": "customer-secret"})
+    # A bound ledger pays only bound accounts, so the next holder and the
+    # archive account have keys too (SPEC.md 6.7 rule 5).
+    write_json(signer_map_path, {"issuer": "issuer-key", "customer": "customer-key",
+                                 "customer-v2": "customer-v2-key", "archive": "archive-key"})
+    write_json(secrets_path, {"issuer-key": "issuer-secret", "customer-key": "customer-secret",
+                              "customer-v2-key": "customer-v2-secret", "archive-key": "archive-secret"})
     assert (
         main(
             [
@@ -68088,6 +68107,7 @@ def test_cli_bootstrap_machine_demo_bundle_with_preset_json(tmp_path, capsys):
     assert signer_key_map == {
         "issuer": "issuer-key",
         "tenant_bundle": "tenant_bundle-key",
+        "worker_bundle": "worker_bundle-key",
     }
     assert manifest["symbol"] == "APIBUNPRE1"
     assert state.balances["tenant_bundle"] == 4_400_000
@@ -70639,7 +70659,8 @@ def test_cli_bootstrap_stable_demo_bundle_hmac(tmp_path, capsys):
     state = replay(signed_events, verifier=verifier)
     assert genesis["profile"] == "SATROOT-STABLE-1"
     assert genesis["reference_unit"] == "CHF"
-    assert signer_key_map == {"issuer": "issuer-key", "merchant": "merchant-key"}
+    # Accounts that are credited are keyed too: a bound ledger pays only bound accounts (SPEC 6.7 rule 5).
+    assert signer_key_map == {"issuer": "issuer-key", "merchant": "merchant-key", "api_node": "api_node-key"}
     assert state.symbol == "USDBUNDLE2"
     assert manifest["scheme"] == "hmac-sha256"
     assert manifest["files"]["genesis"] == "genesis.json"
@@ -70703,7 +70724,9 @@ def test_cli_bootstrap_stable_demo_bundle_with_preset_json(tmp_path, capsys):
     assert genesis["name"] == "Preset Stable Bundle"
     assert genesis["reference_unit"] == "CAD"
     assert genesis["intended_use"] == "preset-bundle-ledger"
-    assert signer_key_map == {"issuer": "issuer-key"}
+    # Accounts that are credited are keyed too: a bound ledger pays only bound accounts (SPEC 6.7 rule 5).
+    assert signer_key_map == {"issuer": "issuer-key", "merchant_bundle": "merchant_bundle-key",
+                              "service_bundle": "service_bundle-key"}
     assert manifest["symbol"] == "USDBUNPRE1"
     assert state.balances["merchant_bundle"] == 1_500_000
     assert state.balances["service_bundle"] == 250_000
@@ -71164,7 +71187,7 @@ def test_cli_bootstrap_stable_demo_release_ed25519(tmp_path, capsys):
     bundle_summary = verify_signed_ledger_bundle(bundle_dir)
     assert bundle_summary["symbol"] == "USDRELCLI2"
     assert bundle_summary["annotated_verified"] is True
-    assert set(bundle_public_keys) == {"issuer-key", "merchant-key"}
+    assert set(bundle_public_keys) == {"issuer-key", "merchant-key", "api_node-key"}
 
     release_summary = verify_signed_release_manifest(
         release_dir / "release_manifest.json",

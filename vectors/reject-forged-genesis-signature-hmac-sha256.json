@@ -6,7 +6,7 @@
   "events": [
     {
       "protocol": "SATROOT-1",
-      "version": "0.1",
+      "version": "0.2",
       "action": "genesis",
       "root_id": "abababababababababababababababababababababababababababababababab:0",
       "sequence": 0,
@@ -22,8 +22,12 @@
       "nonce": "satroot-scaffold-0000000000000000",
       "signature_scheme": "hmac-sha256",
       "signature": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "account_keys": {
+        "issuer": "issuer-key",
+        "alice": "alice-key"
+      },
       "signature_key_id": "issuer-key",
-      "event_id": "sha256:b1c9e8a21f6c73dead24a7f5641331b7db4a92dc8817389ee6dadbb76a4d2db3"
+      "event_id": "sha256:0fae38a66b2d9b02cfc59bb9d02dd8864133e5de1455d5228a88f528052f6bdd"
     }
   ],
   "expect": {

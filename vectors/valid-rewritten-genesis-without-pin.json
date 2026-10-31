@@ -1,0 +1,34 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "valid-rewritten-genesis-without-pin",
+  "description": "a forger's own genesis replays: a ledger is its genesis",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "alice-key",
+        "alice": "alice-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "alice-key",
+      "signature": "ed25519:19f091770ad4f591858d43d9b8113c9a2e0ea6d56f3f8fbbf99e8e021c3c4565486485bcd4237a4877ef2d95dcdb0afa47bf24428d615273314a9024a41f1202",
+      "event_id": "sha256:c7e6bd1702087fcbb83dd71c97ff5bdbaf4324b4e4456f554434211d772174b3"
+    }
+  ],
+  "expect": {"ok": true, "final_state_hash": "sha256:85b7ac8eac95fa0f3e3ebebb967f783740484bcfa2f6af03b50c417dd9453a70", "balances": {"alice": "1", "issuer": "1000"}, "record_count": 1}
+}

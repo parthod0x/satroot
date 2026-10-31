@@ -30,8 +30,9 @@ class ConformanceVectorTest(unittest.TestCase):
         vector_paths = sorted(VECTORS_DIR.glob("*.json"))
         self.assertGreaterEqual(len(vector_paths), 14)
         for path in vector_paths:
-            vector = json.loads(path.read_text(encoding="utf-8"))
-            problems = runner.check_vector(vector)
+            text = path.read_text(encoding="utf-8")
+            vector = json.loads(text)
+            problems = runner.check_vector(text)
             self.assertEqual(problems, [], f"{vector['name']}: {problems}")
 
     def test_corpus_matches_generator_output(self):

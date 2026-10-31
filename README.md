@@ -22,8 +22,10 @@
 **SATROOT is a signed, hash-linked, append-only event log with deterministic
 replay to a typed state.**
 
-Anyone holding the log and the public keys can recompute the exact state and
-its hash offline — no server, no database, no trust in whoever produced it.
+Anyone holding the log can recompute the exact state and its hash offline —
+no server, no database. Since 3.0.0 every record is signed by the key bound to
+the account it acts for, so with the public keys and the genesis you trust
+pinned on your side, you need not trust whoever handed you the copy.
 Two independent implementations (Python and TypeScript) reproduce every state
 hash byte for byte against a shared conformance corpus.
 
@@ -47,9 +49,10 @@ including where that work is better.
 <details>
 <summary>Where the name comes from, and the original framing</summary>
 
-Its base primitive, **SATROOT-1**, can treat one native BSV satoshi UTXO as
-an irreducible accounting floor, using that UTXO as a root witness, authority
-handle, and namespace anchor for deterministic protocol state.
+Its base primitive, **SATROOT-1**, names a deterministic protocol state space
+with the outpoint of one native BSV satoshi UTXO. The name is a label: it
+carries no authority, nothing ties a ledger's keys to whoever controls the
+UTXO, and the satoshi is not a floor of value (SPEC section 2.1).
 
 > The satoshi is not subdivided. The satoshi anchors a protocol-defined state space.
 
@@ -62,9 +65,9 @@ it.
 
 SATROOT starts from one idea:
 
-> A satoshi is the floor of value; it is not the ceiling of meaning.
+> One satoshi can name a ledger; it does not bound what the ledger can mean.
 
-That means one satoshi can anchor a replayable semantic ledger without pretending to create sub-satoshis. Token units, credits, receipts, rights, and other objects live as protocol-defined state above the native chain unit.
+That means one satoshi's outpoint can name a replayable semantic ledger without pretending to create sub-satoshis. Token units, credits, receipts, rights, and other objects live as protocol-defined state above the native chain unit.
 
 ## Quickstart
 

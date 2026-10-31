@@ -23,9 +23,9 @@ operationally too:
 - **Root satoshi custody** lives in the operator's wallet, entirely outside
   this repository. Moving the root satoshi never signs, and never needs, a
   SATROOT event.
-- **Event signing keys** authorize semantic state transitions. They belong to
-  the accounts named in `signer` fields and rotate with `rotate-authority`
-  events inside the ledger itself.
+- **Event signing keys** authorize semantic state transitions. In a version
+  `0.2` ledger each account's key is bound at genesis (`account_keys`) and
+  changed with `bind-key` events inside the ledger itself.
 - **Publication signing keys** (`release-key`, `catalog-key`, registry and
   index key ids) sign artifact manifests, not ledger events. Compromise of a
   publication key lets someone republish artifacts, not rewrite ledger state.
@@ -33,31 +33,35 @@ operationally too:
 A compromise in one layer must not be treated as a compromise of the others,
 and no key in any layer can move the root satoshi.
 
-## Signer-to-key binding is an application responsibility
+## Signer-to-key binding (3.0.0)
 
-The frozen v1 kernel authorizes each event by comparing the `signer` **string**
-against the account the action requires (for example `signer == mint_authority`
-for a mint). It verifies that the signature is valid under *some* registered
-key, but it does **not** verify that the signing key belongs to the account
-named in `signer`. Concretely: if two accounts' public keys are both present in
-a verifier's key map, either account's keyholder can produce events that the
-kernel accepts as the other account — including minting as the issuer.
+A version `0.2` ledger binds keys to accounts in the kernel (SPEC section
+6.7):
 
-This is a deliberate boundary of the v1 draft, not a defect to work around by
-misuse. Two safe deployment patterns:
+- **Genesis declares `account_keys`**, account to `signature_key_id`, and is
+  signed with the mint authority's bound key. `sign_ledger_events` and
+  `bind_genesis_keys` produce such a genesis.
+- **Every record must be signed with its signer's bound key.** A key the
+  verifier holds can no longer sign as an account it is not bound to.
+- **`bind-key` changes a binding.** The authority binds an account that has
+  no key; only the account itself can rebind its key. The authority cannot
+  take an account's key.
+- **Value sits only in bound accounts.** Genesis may credit only bound
+  accounts, and a mint or transfer to an unbound account is rejected. So the
+  authority's power to bind a new account never reaches one that holds funds.
+- **`rotate-authority`** requires the new authority to be bound already.
 
-- **Single trust domain per namespace.** Keep all signing keys for one
-  namespace under one operator, so "any registered key" and "the authorized
-  key" are the same set. This is the intended `hmac-sha256` model.
-- **Application-level key-to-account policy.** Above the kernel, maintain an
-  explicit map from `signature_key_id` to the account it is allowed to sign
-  for, and reject any event whose signing key is not the one bound to its
-  `signer`. Verify this before trusting a replayed state that crosses trust
-  boundaries.
+Before 3.0.0 the kernel compared the `signer` string only, so any registered
+key could sign as any account, and this document recommended an
+application-level key-to-account policy. That is no longer needed for `0.2`
+ledgers. A `0.1` ledger under a real scheme replays only with
+`allow_unbound_keys=True`, and the caller is then trusting every key its
+verifier holds.
 
-Do not present a multi-tenant namespace where mutually distrusting parties hold
-keys in a shared verifier map as if the kernel alone enforced account
-authority; it does not.
+Binding does not make a ledger authentic. Anyone can write a different
+ledger from a genesis of their own. Pin the genesis `event_id` you trust:
+`replay(..., expected_genesis_event_id=...)`, or
+`verify-bundle --expect-genesis`.
 
 ## Verifier-only distribution
 
@@ -75,8 +79,10 @@ tooling.
 
 ## Rotation
 
-- Rotate event-signing authority with the ledger's own `rotate-authority`
-  action, so the rotation itself is a verifiable protocol event.
+- Rotate an account's event-signing key with `bind-key`, signed by the
+  account's current key, so the rotation is a verifiable protocol event.
+  `rotate-authority` moves the mint authority to another account; it does
+  not change or retire any key.
 - Rotate publication keys by issuing new key ids in the next publication and
   letting consumers pin the registry manifest hashes recorded for each
   release; `ANCHORS.md` shows the pattern for hash-pinning published
@@ -96,8 +102,11 @@ cryptographic:
   manifest with a forged signature, can pass every lint. Lint answers "is this
   artifact tree well-formed", never "is this artifact tree authentic".
 - **`verify-*` commands are cryptographic.** `verify-bundle` re-hashes every
-  bundle file against the signed manifest and replays the ledger under the
-  signature verifier; `verify-release-manifest` checks the release signature
+  bundle file against the bundle manifest and replays the ledger under the
+  signature verifier. The manifest itself is **not signed**, and neither is the
+  key file beside it: pass `--public-keys-json` (or `--secrets-json`) with keys
+  you hold, and `--expect-genesis` with the genesis you kept. The result
+  reports `keys_pinned` and `genesis_pinned`; `verify-release-manifest` checks the release signature
   and the bundle-index hash. These are the mandatory gate for integrity and
   authenticity.
 

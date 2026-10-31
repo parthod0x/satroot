@@ -21,7 +21,7 @@ That means:
 
 The guiding phrase is:
 
-> A satoshi is the floor of value; it is not the ceiling of meaning.
+> One satoshi can name a ledger; it does not bound what the ledger can mean.
 
 ## Layered architecture
 
@@ -76,7 +76,7 @@ The base kernel stays small; profiles carry domain-specific semantics.
 
 ## Root lifecycle rules
 
-The root satoshi is an anchor and authority handle, not a magical autonomous asset.
+The root satoshi's outpoint is a namespace label, not an authority handle, a witness, or a magical autonomous asset: SATROOT-1 checks `root_id` for form only and ties no key to whoever controls the UTXO.
 
 Important discipline:
 

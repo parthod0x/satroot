@@ -1,0 +1,57 @@
+{
+  "protocol": "SATROOT-1",
+  "version": "0.1",
+  "bundle_type": "signed-ledger",
+  "scheme": "ed25519",
+  "verification_material_scope": "public-only",
+  "record_count": 1,
+  "root_id": "637d0f544a2db1f4b02bfe46859505da96ef6b26b70c71768500c9d4f2a8ecc2:0",
+  "symbol": "CRFIXTUREAGENT",
+  "final_event_id": "sha256:0156bb78c9da352c8f9a465cf1be161724bfe473d8363791d56b6fa776af6cec",
+  "final_state_snapshot": {
+    "root_id": "637d0f544a2db1f4b02bfe46859505da96ef6b26b70c71768500c9d4f2a8ecc2:0",
+    "symbol": "CRFIXTUREAGENT",
+    "name": "fixture",
+    "decimals": 0,
+    "max_supply": "1000000",
+    "mint_authority": "issuer",
+    "profile": "SATROOT-MACHINE-1",
+    "profile_mode": "prepaid-credit",
+    "balances": {
+      "issuer": "5"
+    },
+    "frozen_accounts": [],
+    "supply": "5",
+    "sequence": 0,
+    "last_event_id": "sha256:0156bb78c9da352c8f9a465cf1be161724bfe473d8363791d56b6fa776af6cec",
+    "transfer_model": "account-ledger",
+    "genesis_metadata": {
+      "nonce": "satroot-scaffold-306582a22b788258",
+      "profile": "SATROOT-MACHINE-1",
+      "profile_mode": "prepaid-credit",
+      "service_scope": "api-compute",
+      "billing_unit": "request",
+      "consumption_model": "burn-on-use",
+      "intended_use": "machine-api-credit",
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:008e4703718806cf325a404c0059d0ec5cd3e87e05c417e385e91cc9767c5d8618c8031b568b454a4fe9bf7c23a1e1c394a8b175a4e370c48c041491bcf4e508",
+      "event_id": "sha256:0156bb78c9da352c8f9a465cf1be161724bfe473d8363791d56b6fa776af6cec"
+    }
+  },
+  "final_state_hash": "sha256:04a4da090d3702b9460255b9b9d10187fe6c8c1ab416a2325d8c5feb242a8f25",
+  "annotated_output": true,
+  "files": {
+    "signer_key_map": "signer_key_map.json",
+    "signed_events": "signed_events.json",
+    "public_keys": "public_keys.json",
+    "annotated_signed_events": "annotated_signed_events.json",
+    "bundle_manifest": "bundle_manifest.json"
+  },
+  "file_hashes": {
+    "signer_key_map": "sha256:a2ecf5c4934ba627445bf42ca9357396f12e2ec61f61794bfbefd4274a7d25da",
+    "signed_events": "sha256:c52341a6383f3e1bf60bc86de449b84f92045668fc476f67c9f30e74d0c7be03",
+    "public_keys": "sha256:79265864da9ae0f49a70bf8bd9c7777f9fe7acd302b270bd6f286130ba4c26db",
+    "annotated_signed_events": "sha256:cf2d42a7fd56e2569ae0c6a135eee19694b0c51b5c6f7ee0c29ea888c2b09ddb"
+  }
+}

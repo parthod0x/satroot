@@ -24,7 +24,7 @@ import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 
 class SatRootError(ValueError):
@@ -36,7 +36,22 @@ class SatRootError(ValueError):
 # is deterministic on every host and in every implementation.
 MAX_AMOUNT_DIGITS = 512
 
-ROOT_ID_RE = re.compile(r"^[a-fA-F0-9]{64}:[0-9]+$")
+ROOT_ID_RE = re.compile(r"^[0-9a-f]{64}:(0|[1-9][0-9]{0,9})$")
+#: Signature encodings, exact: one signature, one spelling, so no third party
+#: can change an event id (and every state hash after it) without a key.
+ED25519_SIGNATURE_RE = re.compile(r"^ed25519:[0-9a-f]{128}$")
+ED25519_PUBLIC_KEY_RE = re.compile(r"^[0-9a-f]{64}$")
+HMAC_SIGNATURE_RE = re.compile(r"^hmac-sha256:[0-9a-f]{64}$")
+#: Input profile (SPEC.md section 2.6a): integers only, within +/-(2^53 - 1),
+#: so every implementation reads the same number from the same text.
+MAX_SAFE_INTEGER = 2**53 - 1
+#: Deepest nesting of arrays and objects a record may hold. Without it the
+#: two implementations disagreed: Python refused or crashed past its stack,
+#: and JavaScript accepted (cold review, 1 Nov 2026).
+MAX_NESTING_DEPTH = 64
+#: Characters that make a name blank when it consists only of them. Explicit,
+#: because Python's str.strip and JavaScript's String.trim disagree.
+NAME_BLANK_CODEPOINTS = frozenset([0x20, 0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000])
 REFERENCE_UNIT_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{1,15}$")
 COMPACT_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 
@@ -100,7 +115,16 @@ PUBLICATION_REGISTRY_MANIFEST_SCHEMA_PATH = _PROTOCOL_ROOT / "satroot1.publicati
 SignatureVerifier = Callable[[Dict[str, Any], str], bool]
 SignerFunction = Callable[[str, str], str]
 SUPPORTED_SIGNATURE_SCHEMES = {"demo", "hmac-sha256", "ed25519"}
+#: Ledger record versions. "0.1" binds no signing key to any account: any key
+#: the verifier holds can sign as any signer, so one key can re-sign a whole
+#: ledger. "0.2" declares `account_keys` at genesis and every event must be
+#: signed by its signer's bound key (SPEC.md section 6.6). A 0.1 ledger under a
+#: real scheme replays only with allow_unbound_keys=True.
+LEDGER_VERSION_UNBOUND = "0.1"
+LEDGER_VERSION_BOUND = "0.2"
+LEDGER_VERSIONS = (LEDGER_VERSION_UNBOUND, LEDGER_VERSION_BOUND)
 CORE_GENESIS_FIELDS = {
+    "account_keys",
     "protocol",
     "version",
     "action",
@@ -2356,8 +2380,12 @@ def scaffold_event_record(
     new_mint_authority: Optional[str] = None,
     profile: Optional[str] = None,
     profile_mode: Optional[str] = None,
+    key_id: Optional[str] = None,
+    version: str = LEDGER_VERSION_UNBOUND,
 ) -> Dict[str, Any]:
     validate_root_id(root_id)
+    if version not in LEDGER_VERSIONS:
+        raise SatRootError(f"unsupported ledger version: {version!r}")
     if not isinstance(sequence, int) or sequence <= 0:
         raise SatRootError(f"invalid event sequence: {sequence!r}")
     if not isinstance(prev_event_id, str) or not prev_event_id.startswith("sha256:"):
@@ -2366,7 +2394,7 @@ def scaffold_event_record(
 
     event: Dict[str, Any] = {
         "protocol": "SATROOT-1",
-        "version": "0.1",
+        "version": version,
         "action": action,
         "root_id": root_id,
         "sequence": sequence,
@@ -2403,6 +2431,10 @@ def scaffold_event_record(
     elif action == "rotate-authority":
         require_account_name(new_mint_authority, "new_mint_authority")
         event["new_mint_authority"] = new_mint_authority
+    elif action == "bind-key" and version == LEDGER_VERSION_BOUND:
+        require_account_name(account, "account")
+        event["account"] = account
+        event["key_id"] = _parse_key_id(key_id, "key_id")
     else:
         raise SatRootError(f"unsupported scaffold action: {action}")
 
@@ -2420,6 +2452,7 @@ def scaffold_event_from_ledger(
     amount: Optional[str] = None,
     frozen: Optional[str | bool] = None,
     new_mint_authority: Optional[str] = None,
+    key_id: Optional[str] = None,
     verifier: Optional[SignatureVerifier] = None,
 ) -> Dict[str, Any]:
     if not events:
@@ -2444,7 +2477,23 @@ def scaffold_event_from_ledger(
         new_mint_authority=new_mint_authority,
         profile=profile,
         profile_mode=profile_mode,
+        key_id=key_id,
+        version=state.version,
     )
+
+
+def bind_genesis_keys(genesis: Mapping[str, Any], account_keys: Mapping[str, str]) -> Dict[str, Any]:
+    """A copy of an unsigned genesis as a bound (version 0.2) genesis.
+
+    account_keys maps each account that will sign to the key id it signs with;
+    it must include the mint authority, whose key signs the genesis. Accounts
+    added later are bound by the authority with a bind-key event."""
+    bound = copy.deepcopy(dict(genesis))
+    bound["version"] = LEDGER_VERSION_BOUND
+    bound["account_keys"] = _parse_account_keys(dict(account_keys))
+    if bound.get("mint_authority") not in bound["account_keys"]:
+        raise SatRootError("account_keys must bind the mint authority")
+    return bound
 
 
 def scaffold_machine_credit_consumption_event(
@@ -2618,13 +2667,41 @@ def append_signed_event_to_ledger(
 
     appended_events = copy.deepcopy(list(events))
     unsigned_event = copy.deepcopy(dict(event))
+    # An event carries its ledger's version; a scaffold built elsewhere may not.
+    unsigned_event["version"] = appended_events[0].get("version", LEDGER_VERSION_UNBOUND)
+    state = replay(appended_events, verifier=verifier)
+
+    # Value moves only to bound accounts (SPEC.md 6.7 rule 5). A first credit
+    # to an account the key map names is preceded by the authority's bind-key
+    # for it; an account with no key at all cannot be paid.
+    recipient = unsigned_event.get("to")
+    if (scheme != "demo" and state.version == LEDGER_VERSION_BOUND
+            and unsigned_event.get("action") in ("mint", "transfer")
+            and isinstance(recipient, str) and recipient not in state.account_keys):
+        recipient_key = (signer_key_ids or {}).get(recipient)
+        if recipient_key is None:
+            raise SatRootError(f"recipient {recipient!r} has no bound key; name its key in the signer key map "
+                               "so the mint authority can bind it first")
+        bind = scaffold_event_record(
+            action="bind-key", root_id=state.root_id, sequence=state.sequence + 1,
+            prev_event_id=state.last_event_id, signer=state.mint_authority, account=recipient,
+            key_id=recipient_key, version=state.version, profile=state.profile, profile_mode=state.profile_mode)
+        bind["signature_scheme"] = scheme
+        signed_bind = sign_event_record(bind, scheme=scheme, key_id=state.account_keys[state.mint_authority], signer=signer)
+        state = apply_event(state, signed_bind, verifier=verifier)
+        if include_state_hash:
+            signed_bind["state_hash"] = state.state_hash()
+        appended_events.append(signed_bind)
+        unsigned_event["sequence"] = state.sequence + 1
+        unsigned_event["prev_event_id"] = state.last_event_id
+        unsigned_event.pop("event_id", None)
+
     if scheme == "demo":
         signed_event = sign_event_record(unsigned_event, scheme="demo")
     else:
         key_id = _resolve_event_signing_key_id(unsigned_event, explicit_key_id=explicit_key_id, signer_key_ids=signer_key_ids)
         signed_event = sign_event_record(unsigned_event, scheme=scheme, key_id=key_id, signer=signer)
 
-    state = replay(appended_events, verifier=verifier)
     next_state = apply_event(state, signed_event, verifier=verifier)
     if include_state_hash:
         signed_event["state_hash"] = next_state.state_hash()
@@ -2795,7 +2872,9 @@ def make_ed25519_verifier(public_keys: Mapping[str, str]) -> SignatureVerifier:
         if public_key_hex is None:
             return False
         signature = event.get("signature")
-        if not isinstance(signature, str) or not signature.startswith("ed25519:"):
+        if not isinstance(signature, str) or not ED25519_SIGNATURE_RE.fullmatch(signature):
+            return False
+        if not isinstance(public_key_hex, str) or not ED25519_PUBLIC_KEY_RE.fullmatch(public_key_hex):
             return False
         try:
             public_key = Ed25519PublicKey.from_public_bytes(_coerce_hex_bytes(public_key_hex, "public_key_hex", 32))
@@ -2895,6 +2974,19 @@ def build_signer_key_map(
         if not isinstance(signer, str) or not signer.strip():
             raise SatRootError(f"missing or invalid signer at record {index}")
         signer_key_map.setdefault(signer, f"{key_prefix}{signer}{key_suffix}")
+
+    # In a bound ledger value sits only in bound accounts (SPEC.md 6.7 rule
+    # 5), so every account that is credited or handed the authority gets a
+    # key too, not only the ones that sign.
+    holders = [a for a, amount in (events[0].get("initial_balances") or {}).items() if amount not in ("0", 0)]
+    for event in events[1:]:
+        if event.get("action") in ("mint", "transfer"):
+            holders.append(event.get("to"))
+        elif event.get("action") == "rotate-authority":
+            holders.append(event.get("new_mint_authority"))
+    for account in holders:
+        if isinstance(account, str) and is_valid_name(account):
+            signer_key_map.setdefault(account, f"{key_prefix}{account}{key_suffix}")
 
     if not signer_key_map:
         raise SatRootError("no non-genesis signer records found")
@@ -12099,7 +12191,20 @@ def lint_publication_registry_workspace(publication_registry_workspace_dir: str 
     }
 
 
-def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
+def verify_signed_ledger_bundle(
+    bundle_dir: str | Path,
+    *,
+    public_keys: Optional[Mapping[str, str]] = None,
+    secrets: Optional[Mapping[str, str]] = None,
+    expected_genesis_event_id: Optional[str] = None,
+    allow_unbound_keys: bool = False,
+) -> Dict[str, Any]:
+    """Verify a signed bundle against its manifest.
+
+    The manifest and the key file inside the bundle are not signed: whoever
+    produced the bundle chose them. Across a trust boundary, pass the keys
+    you hold (public_keys, or secrets for hmac-sha256) and the genesis event
+    id you kept; the result says which of the two were pinned."""
     bundle_path = Path(bundle_dir)
     manifest = _load_validated_bundle_manifest(bundle_path)
 
@@ -12130,16 +12235,29 @@ def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
     if not isinstance(signed_events, list):
         raise SatRootError("signed_events bundle file must contain a JSON array")
 
+    # The manifest is unsigned, so it must not decide how the bundle is
+    # checked: pinned ed25519 keys used to be dropped, silently, for any
+    # bundle whose manifest said hmac-sha256, and the bundle's own secret
+    # verified a forged genesis (cold review, 1 Nov 2026).
+    if public_keys is not None and scheme != "ed25519":
+        raise SatRootError(f"you pinned ed25519 public keys, but the bundle claims scheme {scheme!r}")
+    if secrets is not None and scheme != "hmac-sha256":
+        raise SatRootError(f"you pinned hmac-sha256 secrets, but the bundle claims scheme {scheme!r}")
+    if scheme not in ("hmac-sha256", "ed25519"):
+        raise SatRootError(f"unsupported bundle scheme: {scheme!r}")
     if scheme == "hmac-sha256":
-        secrets_path = require_bundle_file("secrets")
-        secrets = _load_json_object_file(str(secrets_path), label="secrets")
+        keys_pinned = secrets is not None
+        if secrets is None:
+            secrets = _load_json_object_file(str(require_bundle_file("secrets")), label="secrets")
         verifier = make_hmac_sha256_verifier(secrets)
     else:
-        public_keys_path = require_bundle_file("public_keys")
-        public_keys = _load_json_object_file(str(public_keys_path), label="public_keys")
+        keys_pinned = public_keys is not None
+        if public_keys is None:
+            public_keys = _load_json_object_file(str(require_bundle_file("public_keys")), label="public_keys")
         verifier = make_ed25519_verifier(public_keys)
 
-    final_state = replay(signed_events, verifier=verifier)
+    final_state = replay(signed_events, verifier=verifier, allow_unbound_keys=allow_unbound_keys,
+                         expected_genesis_event_id=expected_genesis_event_id)
     final_snapshot = final_state.snapshot()
 
     record_count = manifest.get("record_count")
@@ -12163,7 +12281,8 @@ def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
         annotated_events = _load_json_file(str(annotated_path))
         if not isinstance(annotated_events, list):
             raise SatRootError("annotated_signed_events bundle file must contain a JSON array")
-        annotated_state = replay(annotated_events, verifier=verifier)
+        annotated_state = replay(annotated_events, verifier=verifier, allow_unbound_keys=allow_unbound_keys,
+                                 expected_genesis_event_id=expected_genesis_event_id)
         if annotated_state.state_hash() != final_state.state_hash():
             raise SatRootError("annotated bundle final_state_hash mismatch")
         annotated_verified = True
@@ -12177,6 +12296,11 @@ def verify_signed_ledger_bundle(bundle_dir: str | Path) -> Dict[str, Any]:
         "final_event_id": final_snapshot["last_event_id"],
         "final_state_hash": final_state.state_hash(),
         "annotated_verified": annotated_verified,
+        "ledger_version": final_state.version,
+        "keys_bound": final_state.version == LEDGER_VERSION_BOUND,
+        "keys_pinned": keys_pinned,
+        "genesis_pinned": expected_genesis_event_id is not None,
+        "genesis_event_id": event_id(signed_events[0]),
     }
 
 
@@ -12204,10 +12328,78 @@ def parse_decimals(value: Any) -> int:
     return value
 
 
+def is_valid_name(name: Any) -> bool:
+    """A name (account or key id): a non-empty string with no control
+    character (C0, DEL, C1), no byte-order mark and no lone surrogate, that
+    is not made only of NAME_BLANK_CODEPOINTS. SPEC.md section 2.6a."""
+    if not isinstance(name, str) or not name:
+        return False
+    for ch in name:
+        cp = ord(ch)
+        if cp < 0x20 or 0x7F <= cp <= 0x9F or cp == 0xFEFF or 0xD800 <= cp <= 0xDFFF:
+            return False
+    return any(ord(ch) not in NAME_BLANK_CODEPOINTS for ch in name)
+
+
 def require_account_name(name: Any, field_name: str) -> str:
-    if not isinstance(name, str) or not name.strip():
+    if not is_valid_name(name):
         raise SatRootError(f"invalid account name for {field_name}: {name!r}")
     return name
+
+
+def check_input_profile(value: Any, where: str = "event", _depth: int = 0) -> None:
+    """Reject what two JSON implementations would read differently: floats
+    (including NaN and infinities), integers beyond +/-(2^53 - 1), and lone
+    surrogates in any string or key. Duplicate member names are refused when
+    the text is parsed (loads_ledger_json)."""
+    if isinstance(value, bool) or value is None:
+        return
+    if isinstance(value, float):
+        raise SatRootError(f"input profile: {where} holds a non-integer number")
+    if isinstance(value, int):
+        if abs(value) > MAX_SAFE_INTEGER:
+            raise SatRootError(f"input profile: {where} holds an integer beyond 2^53 - 1")
+        return
+    if isinstance(value, str):
+        if any(0xD800 <= ord(ch) <= 0xDFFF for ch in value):
+            raise SatRootError(f"input profile: {where} holds a lone surrogate")
+        return
+    if isinstance(value, (list, dict)) and _depth >= MAX_NESTING_DEPTH:
+        raise SatRootError(f"input profile: {where} nests deeper than {MAX_NESTING_DEPTH}")
+    if isinstance(value, list):
+        for item in value:
+            check_input_profile(item, where, _depth + 1)
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            check_input_profile(key, where, _depth + 1)
+            check_input_profile(item, where, _depth + 1)
+        return
+    raise SatRootError(f"input profile: {where} holds a {type(value).__name__}")
+
+
+def loads_ledger_json(text: str) -> Any:
+    """Parse ledger JSON under the input profile: no duplicate member names,
+    no NaN or infinities, no number with a fraction or exponent."""
+    def pairs(items: Sequence[Tuple[str, Any]]) -> Dict[str, Any]:
+        out: Dict[str, Any] = {}
+        for key, value in items:
+            if key in out:
+                raise SatRootError(f"input profile: duplicate member name {key!r}")
+            out[key] = value
+        return out
+
+    def refuse(literal: str) -> Any:
+        raise SatRootError(f"input profile: non-integer number {literal}")
+
+    try:
+        value = json.loads(text, object_pairs_hook=pairs, parse_float=refuse, parse_constant=refuse)
+    except SatRootError:
+        raise
+    except (ValueError, RecursionError) as exc:
+        raise SatRootError(f"not valid JSON under the input profile: {type(exc).__name__}") from exc
+    check_input_profile(value, "ledger")
+    return value
 
 
 def validate_signature_metadata(event: Dict[str, Any]) -> None:
@@ -12221,8 +12413,38 @@ def validate_signature_metadata(event: Dict[str, Any]) -> None:
             raise SatRootError("signature_key_id is not allowed for demo signatures")
         return
 
-    if not isinstance(key_id, str) or not key_id.strip():
+    if not is_valid_name(key_id):
         raise SatRootError(f"signature_key_id is required for {scheme}")
+
+
+def _parse_key_id(value: Any, field_name: str) -> str:
+    if not is_valid_name(value):
+        raise SatRootError(f"invalid key id for {field_name}: {value!r}")
+    return value
+
+
+def _parse_account_keys(value: Any) -> Dict[str, str]:
+    if not isinstance(value, dict):
+        raise SatRootError("account_keys must be an object mapping account -> key id")
+    return {require_account_name(account, "account_keys"): _parse_key_id(key_id, "account_keys")
+            for account, key_id in value.items()}
+
+
+def _require_bound_key(account_keys: Mapping[str, str], signer: Any, event: Mapping[str, Any]) -> None:
+    """The event must be signed by the key bound to the account it signs as."""
+    bound = account_keys.get(signer) if isinstance(signer, str) else None
+    if bound is None:
+        raise SatRootError(f"signer {signer!r} has no bound key")
+    if event.get("signature_key_id") != bound:
+        raise SatRootError(f"event for {signer!r} is not signed by its bound key {bound!r}")
+
+
+def _require_bound_recipient(state: "SatRootState", event: Mapping[str, Any], recipient: str) -> None:
+    """In a bound ledger value moves only to an account with a key: otherwise
+    the authority, which may bind any unbound account, could take it."""
+    if state.version == LEDGER_VERSION_BOUND and event.get("signature_scheme", "demo") != "demo" \
+            and recipient not in state.account_keys:
+        raise SatRootError(f"recipient {recipient!r} has no bound key")
 
 
 def validate_stated_event_id(event: Dict[str, Any]) -> None:
@@ -12233,6 +12455,8 @@ def validate_stated_event_id(event: Dict[str, Any]) -> None:
 
 def validate_profile_genesis(event: Dict[str, Any]) -> None:
     profile = event.get("profile")
+    if profile is not None and not isinstance(profile, str):
+        raise SatRootError("profile must be a string")
     if profile is None:
         # `profile_mode` without `profile` was validated against nothing and
         # committed verbatim by section 7, so an arbitrary JSON value - a
@@ -12259,7 +12483,9 @@ def validate_profile_genesis(event: Dict[str, Any]) -> None:
 def _validate_profile_metadata_fields(event: Mapping[str, Any], field_names: Sequence[str]) -> None:
     for field_name in field_names:
         value = event.get(field_name)
-        if not isinstance(value, str) or not value.strip():
+        # The name rule of section 2.6a, not str.strip: strip and String.trim
+        # disagree on U+001C, U+0085 and U+FEFF.
+        if not isinstance(value, str) or not is_valid_name(value):
             raise SatRootError(f"invalid profile field {field_name}: expected a non-blank string")
 
 
@@ -12374,8 +12600,19 @@ class SatRootState:
     supply: int = 0
     sequence: int = 0
     last_event_id: Optional[str] = None
+    version: str = LEDGER_VERSION_UNBOUND
+    account_keys: Dict[str, str] = field(default_factory=dict)
 
     def commitment_snapshot(self) -> Dict[str, Any]:
+        snapshot = self._core_commitment()
+        if self.version == LEDGER_VERSION_BOUND:
+            # Committed, so a ledger cannot be re-pointed at other keys without
+            # changing every state hash after the change. Absent for 0.1, whose
+            # state hashes stay what they were.
+            snapshot["account_keys"] = {k: self.account_keys[k] for k in sorted(self.account_keys)}
+        return snapshot
+
+    def _core_commitment(self) -> Dict[str, Any]:
         return {
             "root_id": self.root_id,
             "symbol": self.symbol,
@@ -12405,8 +12642,14 @@ class SatRootState:
 def apply_genesis(
     event: Dict[str, Any],
     verifier: SignatureVerifier = demo_signature_verifier,
+    *,
+    allow_unbound_keys: bool = False,
 ) -> SatRootState:
-    """Apply a genesis record, authenticating it (SPEC.md section 5.1)."""
+    """Apply a genesis record, authenticating it (SPEC.md section 5.1).
+
+    allow_unbound_keys admits a version-0.1 ledger under a real signature
+    scheme. Such a ledger binds no key to any account, so the caller must
+    trust every key its verifier holds not to sign as anyone else."""
     require_fields(
         event,
         [
@@ -12424,7 +12667,8 @@ def apply_genesis(
             "signature",
         ],
     )
-    if event.get("protocol") != "SATROOT-1" or event.get("version") != "0.1":
+    check_input_profile(event, "genesis")
+    if event.get("protocol") != "SATROOT-1" or event.get("version") not in LEDGER_VERSIONS:
         raise SatRootError("unsupported protocol/version")
     if event.get("action") != "genesis":
         raise SatRootError("first event must be genesis")
@@ -12440,15 +12684,44 @@ def apply_genesis(
     # author - the chain was sound above a hinge that was not.
     # Found by the second independent implementation, 2026-08-29.
     validate_signature_metadata(event)
+    version = event["version"]
+    scheme = event.get("signature_scheme", "demo")
+    account_keys: Dict[str, str] = {}
+    if version == LEDGER_VERSION_BOUND:
+        if "account_keys" in event or scheme != "demo":
+            account_keys = _parse_account_keys(event.get("account_keys"))
+        if scheme != "demo":
+            # Genesis has no signer: it is signed by the authority it appoints.
+            _require_bound_key(account_keys, event.get("mint_authority"), event)
+    else:
+        if "account_keys" in event:
+            raise SatRootError("account_keys requires ledger version 0.2")
+        if scheme != "demo" and not allow_unbound_keys:
+            raise SatRootError(
+                f"ledger version 0.1 under {scheme} binds no signing key to any account, so any key the "
+                "verifier holds can sign as any signer; replay it with allow_unbound_keys only if every "
+                "such key is trusted not to")
     verify_signature(event, verifier)
     validate_profile_genesis(event)
     if event.get("transfer_model") != "account-ledger":
         raise SatRootError("unsupported transfer_model")
+    require_account_name(event.get("mint_authority"), "mint_authority")
+    for text_field in ("symbol", "name"):
+        if not isinstance(event.get(text_field), str):
+            raise SatRootError(f"genesis {text_field} must be a string")
+    if not isinstance(event.get("initial_balances"), dict):
+        raise SatRootError("initial_balances must be an object")
 
     initial = {
         require_account_name(acct, "initial_balances"): parse_amount(amount)
         for acct, amount in event.get("initial_balances", {}).items()
     }
+    if version == LEDGER_VERSION_BOUND and scheme != "demo":
+        # Value sits only where a key can move it. An unbound account with a
+        # balance could be bound by the authority to its own key, and emptied.
+        for account, amount in initial.items():
+            if amount and account not in account_keys:
+                raise SatRootError(f"genesis credits {account!r}, which has no bound key")
     supply = sum(initial.values())
     max_supply = parse_amount(event["max_supply"]) if event.get("max_supply") is not None else None
     if max_supply is not None and supply > max_supply:
@@ -12470,6 +12743,8 @@ def apply_genesis(
         supply=supply,
         sequence=0,
         last_event_id=event_id(event),
+        version=version,
+        account_keys=account_keys,
     )
     validate_state_hash(event, state)
     return state
@@ -12482,9 +12757,12 @@ def verify_signature(event: Dict[str, Any], verifier: SignatureVerifier) -> None
 
 
 def require_next_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureVerifier) -> None:
+    check_input_profile(event, "event")
     require_fields(event, ["protocol", "version", "action", "root_id", "sequence", "prev_event_id", "signer", "signature"])
-    if event.get("protocol") != "SATROOT-1" or event.get("version") != "0.1":
+    if event.get("protocol") != "SATROOT-1" or event.get("version") not in LEDGER_VERSIONS:
         raise SatRootError("unsupported protocol/version")
+    if event.get("version") != state.version:
+        raise SatRootError("ledger version mismatch")
     if event.get("root_id") != state.root_id:
         raise SatRootError("root_id mismatch")
     if isinstance(event.get("sequence"), bool) or event.get("sequence") != state.sequence + 1:
@@ -12497,6 +12775,8 @@ def require_next_event(state: SatRootState, event: Dict[str, Any], verifier: Sig
         raise SatRootError("profile mismatch")
     if event.get("profile_mode") not in (None, state.profile_mode):
         raise SatRootError("profile_mode mismatch")
+    if state.version == LEDGER_VERSION_BOUND and event.get("signature_scheme", "demo") != "demo":
+        _require_bound_key(state.account_keys, event.get("signer"), event)
     verify_signature(event, verifier)
 
 
@@ -12512,6 +12792,7 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
         if event.get("signer") != next_state.mint_authority:
             raise SatRootError("unauthorized mint")
         to = require_account_name(event["to"], "to")
+        _require_bound_recipient(next_state, event, to)
         if to in next_state.frozen_accounts:
             raise SatRootError("account is frozen")
         if next_state.max_supply is not None and next_state.supply + amount > next_state.max_supply:
@@ -12524,6 +12805,7 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
         amount = parse_positive_amount(event["amount"])
         sender = require_account_name(event["from"], "from")
         recipient = require_account_name(event["to"], "to")
+        _require_bound_recipient(next_state, event, recipient)
         # v0.1 placeholder: signer must equal sender account string.
         if event.get("signer") != sender:
             raise SatRootError("unauthorized transfer")
@@ -12564,7 +12846,24 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
         require_fields(event, ["new_mint_authority"])
         if event.get("signer") != next_state.mint_authority:
             raise SatRootError("unauthorized authority rotation")
-        next_state.mint_authority = require_account_name(event["new_mint_authority"], "new_mint_authority")
+        new_authority = require_account_name(event["new_mint_authority"], "new_mint_authority")
+        if (next_state.version == LEDGER_VERSION_BOUND and event.get("signature_scheme", "demo") != "demo"
+                and new_authority not in next_state.account_keys):
+            # Otherwise the ledger is handed to an account nobody can sign as.
+            raise SatRootError("new mint authority has no bound key")
+        next_state.mint_authority = new_authority
+
+    elif action == "bind-key" and next_state.version == LEDGER_VERSION_BOUND:
+        require_fields(event, ["account", "key_id"])
+        account = require_account_name(event["account"], "account")
+        key_id = _parse_key_id(event["key_id"], "key_id")
+        if account in next_state.account_keys:
+            # A bound account rotates its own key; the authority cannot take it.
+            if event.get("signer") != account:
+                raise SatRootError("only the account can rebind its own key")
+        elif event.get("signer") != next_state.mint_authority:
+            raise SatRootError("unauthorized key binding")
+        next_state.account_keys[account] = key_id
 
     else:
         raise SatRootError(f"unsupported action: {action}")
@@ -12575,16 +12874,42 @@ def apply_event(state: SatRootState, event: Dict[str, Any], verifier: SignatureV
     return next_state
 
 
-def replay(events: Iterable[Dict[str, Any]], verifier: SignatureVerifier = demo_signature_verifier) -> SatRootState:
+def replay(
+    events: Iterable[Dict[str, Any]],
+    verifier: SignatureVerifier = demo_signature_verifier,
+    *,
+    allow_unbound_keys: bool = False,
+    expected_genesis_event_id: Optional[str] = None,
+) -> SatRootState:
+    """Replay a ledger.
+
+    Binding keys to accounts stops a key from signing as someone else inside
+    a ledger. It cannot stop a forger who rewrites the whole ledger from a
+    genesis of their own, which binds the authority to their key: a ledger's
+    identity is its genesis. Pass expected_genesis_event_id - kept from an
+    earlier copy, or anchored - to make that check (SPEC.md section 6.7)."""
     iterator = iter(events)
     try:
         first = next(iterator)
     except StopIteration as exc:
         raise SatRootError("empty ledger") from exc
 
-    state = apply_genesis(first, verifier=verifier)
-    for event in iterator:
-        state = apply_event(state, event, verifier=verifier)
+    try:
+        if not isinstance(first, dict):
+            raise SatRootError("genesis must be an object")
+        state = apply_genesis(first, verifier=verifier, allow_unbound_keys=allow_unbound_keys)
+        if expected_genesis_event_id is not None and state.last_event_id != expected_genesis_event_id:
+            raise SatRootError("genesis does not match the pinned genesis event id")
+        for event in iterator:
+            if not isinstance(event, dict):
+                raise SatRootError("event must be an object")
+            state = apply_event(state, event, verifier=verifier)
+    except SatRootError:
+        raise
+    except (TypeError, AttributeError, ValueError, KeyError, UnicodeError, RecursionError) as exc:
+        # Any input the rules above did not anticipate is a rejection, so two
+        # implementations can only disagree by accepting, never by crashing.
+        raise SatRootError(f"malformed ledger: {type(exc).__name__}") from exc
     return state
 
 
@@ -12625,6 +12950,14 @@ def sign_ledger_events(
         raise SatRootError("empty ledger")
 
     signed_events = copy.deepcopy(list(events))
+    if scheme != "demo":
+        # A ledger signed under a real scheme is a bound ledger: every signer's
+        # key is declared at genesis and enforced on every event.
+        if signer_key_ids is None:
+            raise SatRootError("signer_key_ids are required for non-demo signatures")
+        for event in signed_events:
+            event["version"] = LEDGER_VERSION_BOUND
+        signed_events[0].setdefault("account_keys", dict(signer_key_ids))
 
     # Genesis is signed too (SPEC.md section 5.1). It carries no `signer`,
     # so the key is the mint authority's - it is the record that appoints
@@ -27753,6 +28086,10 @@ def build_cli_parser() -> Any:
 
     verify_bundle_parser = subparsers.add_parser("verify-bundle", help="Verify a signed SATROOT-1 bundle directory against its manifest")
     verify_bundle_parser.add_argument("bundle_dir", help="Path to a signed SATROOT-1 bundle directory")
+    verify_bundle_parser.add_argument("--public-keys-json", help="Path to JSON mapping key_id -> Ed25519 public key hex that YOU hold; without it the bundle's own unsigned key file is used, and the result says keys_pinned=false")
+    verify_bundle_parser.add_argument("--secrets-json", help="Path to JSON mapping key_id -> shared secret that you hold, for hmac-sha256")
+    verify_bundle_parser.add_argument("--expect-genesis", help="Genesis event id you kept from an earlier copy or an anchor; without it a ledger rewritten from a new genesis cannot be told apart")
+    verify_bundle_parser.add_argument("--allow-unbound-keys", action="store_true", help="Accept a version-0.1 ledger, whose keys are not bound to accounts")
 
     verify_release_manifest_parser = subparsers.add_parser("verify-release-manifest", help="Verify a signed SATROOT-1 release manifest against its bundle index")
     verify_release_manifest_parser.add_argument("release_manifest_json", help="Path to release-manifest.json")
@@ -36718,7 +37055,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.command == "verify-bundle":
-        summary = verify_signed_ledger_bundle(args.bundle_dir)
+        summary = verify_signed_ledger_bundle(
+            args.bundle_dir,
+            public_keys=_load_json_object_file(args.public_keys_json, label="public_keys") if args.public_keys_json else None,
+            secrets=_load_json_object_file(args.secrets_json, label="secrets") if args.secrets_json else None,
+            expected_genesis_event_id=args.expect_genesis,
+            allow_unbound_keys=args.allow_unbound_keys,
+        )
         print(canonical_json(summary))
         return 0
 

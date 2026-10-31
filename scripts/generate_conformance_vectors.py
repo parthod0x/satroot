@@ -15,7 +15,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
+# src/, not the repository root: satroot1.py lives in src/, so the root put the
+# *installed* package first and the corpus was built by a stale engine.
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import satroot1 as sr
 
@@ -58,9 +60,14 @@ def _signing_context(scheme):
 
 
 def _build_ledger(scheme, actions):
-    """genesis + a list of (action_kwargs) appended via the reference path."""
+    """genesis + a list of (action_kwargs) appended via the reference path.
+
+    Under a real scheme the ledger is bound (version 0.2): every signer's key
+    is declared at genesis, as SPEC.md section 6.6 requires."""
     signer, verifier = _signing_context(scheme)
     genesis = _genesis()
+    if scheme != "demo":
+        genesis = sr.bind_genesis_keys(genesis, SIGNER_KEY_IDS)
     events = [
         sr.sign_event_record(
             genesis, scheme=scheme, key_id=SIGNER_KEY_IDS["issuer"], signer=signer
@@ -496,8 +503,9 @@ def build_vectors():
     # ------------------------------------------------------------------
     for scheme in ("demo", "hmac-sha256", "ed25519"):
         signer, sch_verifier = _signing_context(scheme)
+        genesis = _genesis() if scheme == "demo" else sr.bind_genesis_keys(_genesis(), SIGNER_KEY_IDS)
         signed_genesis = sr.sign_event_record(
-            _genesis(), scheme=scheme, key_id=SIGNER_KEY_IDS["issuer"], signer=signer
+            genesis, scheme=scheme, key_id=SIGNER_KEY_IDS["issuer"], signer=signer
         )
         forged_genesis = copy.deepcopy(signed_genesis)
         forged_genesis["signature"] = (
@@ -762,7 +770,209 @@ def build_vectors():
         "ed25519", inherit,
         _expect_error(inherit, ed_verifier, "implicit scheme does not inherit the verifier"))
 
+    vectors.extend(build_hostile_vectors())
     return vectors
+
+
+# ---------------------------------------------------------------------------
+# The hostile corpus (satroot 3.0.0)
+# ---------------------------------------------------------------------------
+#
+# The corpus above is what an honest producer writes, and both implementations
+# agreed on all of it while disagreeing on 18 of 23 inputs an outside reviewer
+# wrote in an afternoon: floats, integers past 2^53, lone surrogates, astral
+# account names, __proto__, control characters, sloppy hex, and any key
+# signing as any account. Each case below is decided by one rule, and its
+# expectation is computed from the vector's own text, parsed under the input
+# profile exactly as a runner must parse it.
+
+def _raw_genesis(**over):
+    g = {"protocol": "SATROOT-1", "version": "0.1", "action": "genesis", "root_id": FIXED_ROOT,
+         "sequence": 0, "symbol": "CX", "name": "cx", "decimals": 0, "max_supply": "1000000",
+         "mint_authority": "issuer", "transfer_model": "account-ledger",
+         "initial_balances": {"issuer": "1000"}, "signature_scheme": "demo", "signature": "demo"}
+    g.update(over)
+    return g
+
+
+def _raw_next(events, **fields):
+    e = {"protocol": "SATROOT-1", "version": events[0]["version"], "root_id": events[0]["root_id"],
+         "sequence": len(events), "prev_event_id": sr.event_id(events[-1]),
+         "signature_scheme": "demo", "signature": "demo"}
+    e.update(fields)
+    return e
+
+
+def _bound_genesis(**over):
+    g = _raw_genesis(version="0.2", symbol="TST", name="Test",
+                     initial_balances={"issuer": "1000", "alice": "1"}, account_keys=dict(SIGNER_KEY_IDS))
+    g.pop("signature_scheme")
+    g.pop("signature")
+    g.update(over)
+    return g
+
+
+def _ed(event, key):
+    signer, _ = _signing_context("ed25519")
+    event = {k: v for k, v in event.items() if k not in ("signature", "signature_scheme", "event_id")}
+    return sr.sign_event_record(event, scheme="ed25519", key_id=key, signer=signer)
+
+
+def build_hostile_vectors():
+    out = []
+
+    def add(name, description, scheme, events, text_patch=None, options=None):
+        vector = {"vector_format": "satroot1-conformance/2", "name": name, "description": description,
+                  "scheme": scheme, "events": events}
+        if options:
+            vector["options"] = options
+        if text_patch:
+            vector["_text_patch"] = text_patch
+        out.append(vector)
+
+    # Input profile: numbers.
+    add("reject-profile-float-decimals", "decimals written 2.0: JSON.parse reads 2, Python reads 2.0",
+        "demo", [_raw_genesis(decimals=777)], ('"decimals": 777', '"decimals": 2.0'))
+    add("reject-profile-float-metadata", "a float in genesis metadata hashes as 1.0 in one language and 1 in another",
+        "demo", [_raw_genesis(memo=777)], ('"memo": 777', '"memo": 1.0'))
+    add("reject-profile-integer-beyond-2-53", "an integer past 2^53 is rounded by IEEE-754 readers",
+        "demo", [_raw_genesis(memo=2**53 + 1)])
+    add("reject-profile-nan", "NaN is not JSON; Python's json reads it anyway",
+        "demo", [_raw_genesis(memo=777)], ('"memo": 777', '"memo": NaN'))
+    ev = [_raw_genesis()]
+    mint = _raw_next(ev, action="mint", signer="issuer", to="bob", amount="5")
+    mint["sequence"] = 777
+    add("reject-profile-float-sequence", "sequence written 1.0 compares equal to 1 and hashes differently",
+        "demo", [ev[0], mint], ('"sequence": 777', '"sequence": 1.0'))
+    # Input profile: strings and members.
+    add("reject-profile-lone-surrogate", "a lone surrogate cannot be encoded as UTF-8; one reader crashed",
+        "demo", [_raw_genesis(memo="X")], ('"memo": "X"', '"memo": "\\ud800"'))
+    add("reject-profile-duplicate-member", "two members with one name: every JSON reader keeps one silently",
+        "demo", [_raw_genesis(memo="a", memo_DUPLICATE="b")], ('"memo_DUPLICATE"', '"memo"'))
+    # Names.
+    for label, name in (("0x1c", "\x1c"), ("0x85", "\x85"), ("bom", "\ufeff"), ("nbsp-only", "\u00a0\u3000")):
+        add("reject-name-" + label, "an account name str.strip and String.trim judge differently",
+            "demo", [_raw_genesis(initial_balances={"issuer": "1000", name: "1"})])
+    add("reject-blank-mint-authority", "a blank mint authority, which rotation would refuse",
+        "demo", [_raw_genesis(mint_authority="  ")])
+    # Encodings: one spelling per value.
+    add("reject-uppercase-root-id", "one outpoint, two spellings of its root_id",
+        "demo", [_raw_genesis(root_id="AB" * 32 + ":0")])
+    add("reject-root-id-leading-zero-vout", "one outpoint, two spellings of its vout",
+        "demo", [_raw_genesis(root_id="ab" * 32 + ":00")])
+    add("reject-null-signature-scheme", "an explicit null scheme is not the omitted (demo) scheme",
+        "demo", [_raw_genesis(signature_scheme=None)])
+    add("reject-initial-balances-array", "initial_balances must be an object; one reader crashed",
+        "demo", [_raw_genesis(initial_balances=["issuer"])])
+    add("reject-profile-array", "profile must be a string; one reader crashed",
+        "demo", [_raw_genesis(profile=["x"], profile_mode="y")])
+    # Per-profile rules, which the TypeScript verifier used to skip.
+    def profiled(profile, **over):
+        g = sr.scaffold_genesis_record(symbol="PROF1", name="Profile vector", root_id=FIXED_ROOT,
+                                       profile=profile, nonce="satroot-scaffold-0000000000000000")
+        g["signature_scheme"] = "demo"
+        g["signature"] = "demo"
+        g.update(over)
+        return [g]
+    add("valid-stable-usd-with-zero-decimals", "decimals is the ledger's precision, not ISO 4217's minor unit",
+        "demo", profiled("SATROOT-STABLE-1", decimals=0))
+    add("reject-stable-lowercase-reference-unit", "the reference-unit pattern is a profile rule",
+        "demo", profiled("SATROOT-STABLE-1", reference_unit="usd"))
+    add("reject-stable-reference-only-with-redemption", "a reference-only stable unit promises no redemption",
+        "demo", profiled("SATROOT-STABLE-1", redemption="on-demand"))
+    add("reject-machine-non-compact-field", "machine profile fields are compact identifiers",
+        "demo", profiled("SATROOT-MACHINE-1", service_scope="Batch Inference"))
+    add("reject-receipt-two-units", "a receipt profile issues exactly one unit",
+        "demo", profiled("SATROOT-RECEIPT-1", initial_balances={"issuer": "2"}, max_supply="2"))
+    add("reject-profile-field-control-character", "profile fields follow the name rule of section 2.6a",
+        "demo", profiled("SATROOT-STABLE-1", intended_use=""))
+
+    # Ordering and prototypes.
+    add("valid-astral-account-names", "keys sort by code point: U+E000 before U+1F600",
+        "demo", [_raw_genesis(initial_balances={"\ue000": "1", "\U0001F600": "2"})])
+    ev = [_raw_genesis()]
+    ev.append(_raw_next(ev, action="freeze", signer="issuer", account="\ue000", frozen=True))
+    ev.append(_raw_next(ev, action="freeze", signer="issuer", account="\U0001F600", frozen=True))
+    add("valid-astral-frozen-order", "frozen_accounts sort by code point too", "demo", ev)
+    add("valid-proto-account", "an account named __proto__ is an account", "demo",
+        [_raw_genesis(initial_balances={"issuer": "1000", "__proto__": "5"})])
+    # Key binding (SPEC.md section 6.6).
+    honest = [_ed(_bound_genesis(), "issuer-key")]
+    add("valid-bound-genesis-ed25519", "a bound genesis signed by the authority's bound key", "ed25519", honest)
+
+    def then(event, key):
+        return honest + [_ed(_raw_next(honest, **event), key)]
+    add("reject-bound-other-key-signs-as-issuer", "alice's key signs a transfer as the issuer",
+        "ed25519", then({"action": "transfer", "signer": "issuer", "from": "issuer", "to": "alice", "amount": "1000"}, "alice-key"))
+    add("reject-bound-other-key-mints", "alice's key mints as the issuer",
+        "ed25519", then({"action": "mint", "signer": "issuer", "to": "alice", "amount": "998000"}, "alice-key"))
+    add("reject-bound-genesis-not-by-authority-key", "a genesis signed by a key the authority is not bound to",
+        "ed25519", [_ed(_bound_genesis(), "alice-key")])
+    add("valid-bind-key-by-authority", "the authority binds an account that had no key",
+        "ed25519", then({"action": "bind-key", "signer": "issuer", "account": "bob", "key_id": "alice-key"}, "issuer-key"))
+    add("reject-bind-key-takeover-by-authority", "the authority cannot rebind an account that has a key",
+        "ed25519", then({"action": "bind-key", "signer": "issuer", "account": "alice", "key_id": "issuer-key"}, "issuer-key"))
+    add("valid-bind-key-own-rotation", "an account rotates its own key",
+        "ed25519", then({"action": "bind-key", "signer": "alice", "account": "alice", "key_id": "issuer-key"}, "alice-key"))
+    add("reject-rotate-authority-to-unbound", "authority handed to an account nobody can sign as",
+        "ed25519", then({"action": "rotate-authority", "signer": "issuer", "new_mint_authority": "carol"}, "issuer-key"))
+    add("valid-bound-account-keys-proto", "__proto__ in account_keys is a member like any other",
+        "ed25519", [_ed(_bound_genesis(account_keys={"issuer": "issuer-key", "alice": "alice-key", "__proto__": "alice-key"}), "issuer-key")])
+    sig = honest[0]["signature"]
+    for label, mutated in (("trailing-junk", sig + "zz"), ("odd-nibble", sig + "0"),
+                           ("embedded-space", sig[:20] + " " + sig[20:]),
+                           ("uppercase", "ed25519:" + sig.split(":", 1)[1].upper())):
+        g = copy.deepcopy(honest[0])
+        g["signature"] = mutated
+        g["event_id"] = sr.event_id(g)
+        add("reject-signature-hex-" + label, "one signature, one spelling: a keyless edit must not verify", "ed25519", [g])
+    # Legacy: an unbound real-scheme ledger, refused by default and replayed only on request.
+    legacy_genesis = _raw_genesis()
+    legacy_genesis.pop("signature_scheme")
+    legacy_genesis.pop("signature")
+    legacy = [_ed(legacy_genesis, "issuer-key")]
+    add("reject-unbound-ed25519-by-default", "version 0.1 under ed25519 binds no key to any account", "ed25519", legacy)
+    add("valid-unbound-ed25519-when-allowed", "the same ledger, with the caller's explicit legacy opt-in",
+        "ed25519", legacy, options={"allow_unbound_keys": True})
+    # The genesis pin: the only defence against a whole-ledger rewrite.
+    forged = [_ed(_bound_genesis(account_keys={"issuer": "alice-key", "alice": "alice-key"}), "alice-key")]
+    add("reject-bound-genesis-credits-unbound-account", "value sits only where a key can move it",
+        "ed25519", [_ed(_bound_genesis(account_keys={"issuer": "issuer-key"}), "issuer-key")])
+    add("reject-bound-transfer-to-unbound-account", "a transfer to an account with no key",
+        "ed25519", then({"action": "transfer", "signer": "issuer", "from": "issuer", "to": "carol", "amount": "5"}, "issuer-key"))
+    add("reject-bound-mint-to-unbound-account", "a mint to an account with no key",
+        "ed25519", then({"action": "mint", "signer": "issuer", "to": "carol", "amount": "5"}, "issuer-key"))
+    deep = 0
+    for _ in range(70):
+        deep = [deep]
+    add("reject-profile-nesting-too-deep", "nesting past 64 levels: readers disagreed on how deep they go",
+        "demo", [_raw_genesis(memo=deep)])
+    add("valid-rewritten-genesis-without-pin", "a forger's own genesis replays: a ledger is its genesis",
+        "ed25519", forged)
+    add("reject-rewritten-genesis-against-pin", "the same forgery against the genesis a holder kept",
+        "ed25519", forged, options={"expected_genesis_event_id": sr.event_id(honest[0])})
+    return out
+
+
+def _verifier_for(scheme):
+    return _signing_context(scheme)[1]
+
+
+def _expect_from_text(text):
+    """Decide a vector from its own text, parsed under the input profile."""
+    try:
+        vector = sr.loads_ledger_json(text)
+    except sr.SatRootError as exc:
+        return {"ok": False, "reference_error": str(exc)}
+    options = vector.get("options", {})
+    try:
+        state = sr.replay(vector["events"], verifier=_verifier_for(vector["scheme"]),
+                          allow_unbound_keys=options.get("allow_unbound_keys") is True,
+                          expected_genesis_event_id=options.get("expected_genesis_event_id"))
+    except sr.SatRootError as exc:
+        return {"ok": False, "reference_error": str(exc)}
+    return {"ok": True, "final_state_hash": state.state_hash(), "balances": state.snapshot()["balances"],
+            "record_count": len(vector["events"])}
 
 
 def main():
@@ -772,8 +982,22 @@ def main():
     assert len(names) == len(set(names)), "duplicate vector names"
     for vector in vectors:
         path = VECTORS_DIR / f"{vector['name']}.json"
+        patch = vector.pop("_text_patch", None)
+        if "expect" in vector:
+            text = json.dumps(vector, indent=2, ensure_ascii=False) + "\n"
+        else:
+            # Expectation from the final text, so the text is what it describes.
+            vector["expect"] = None
+            text = json.dumps(vector, indent=2, ensure_ascii=False) + "\n"
+            if patch:
+                assert text.count(patch[0]) == 1, (vector["name"], patch[0])
+                text = text.replace(patch[0], patch[1])
+            expect = _expect_from_text(text)
+            want_ok = vector["name"].startswith("valid-")
+            assert expect["ok"] is want_ok, (vector["name"], expect)
+            text = text.replace('"expect": null', '"expect": ' + json.dumps(expect, ensure_ascii=False), 1)
         with path.open("w", encoding="utf-8", newline="\n") as f:
-            f.write(json.dumps(vector, indent=2, ensure_ascii=False) + "\n")
+            f.write(text)
     print(f"wrote {len(vectors)} vectors to {VECTORS_DIR}")
 
 

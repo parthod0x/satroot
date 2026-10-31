@@ -1,8 +1,10 @@
 # SATROOT-1 conformance vectors
 
-A deterministic corpus of 68 vectors (19 that must replay, 49 that
+A deterministic corpus of 115 vectors (29 that must replay, 86 that
 must be rejected) for testing any SATROOT-1 implementation against the
-reference. Every kernel action - transfer, mint, burn, freeze, and
+reference. 47 of them, added in satroot 3.0.0, are hostile: inputs chosen
+because two implementations read them differently, or because a key could
+act for an account it is not bound to, most of them by outside reviewers. Every kernel action - transfer, mint, burn, freeze, and
 rotate-authority - is exercised, across all three signature schemes.
 
 ## Testing your own implementation
@@ -68,11 +70,12 @@ Each `*.json` file is one vector:
 
 ```json
 {
-  "vector_format": "satroot1-conformance/1",
+  "vector_format": "satroot1-conformance/1 | satroot1-conformance/2",
   "name": "...",
   "description": "...",
   "scheme": "demo | hmac-sha256 | ed25519",
   "events": [ ...the ledger to replay, exactly as stored... ],
+  "options": { "allow_unbound_keys": true, "expected_genesis_event_id": "sha256:..." },
   "expect": {
     "ok": true,
     "final_state_hash": "sha256:...",
@@ -81,6 +84,16 @@ Each `*.json` file is one vector:
   }
 }
 ```
+
+**Parse the vector file under the input profile** (SPEC section 2.6a): no
+floats, no integers past 2^53, no NaN, no duplicate member names, no lone
+surrogates. Several hostile vectors are decided by the text alone - one holds
+`NaN`, one a duplicate member, one `2.0` - so a reader that accepts them
+cannot pass. Your `JSON.parse` or `json.load` is not enough on its own.
+
+`options` (format `/2`, optional) passes two replay inputs: `allow_unbound_keys`,
+the caller's explicit acceptance of a version-`0.1` ledger under a real
+scheme, and `expected_genesis_event_id`, a genesis pin (SPEC section 6.7).
 
 Rejection vectors carry `"expect": {"ok": false, ...}` — a conforming
 implementation must refuse to replay them. `reference_error` records the

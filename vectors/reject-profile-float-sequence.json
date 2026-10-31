@@ -1,0 +1,40 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-profile-float-sequence",
+  "description": "sequence written 1.0 compares equal to 1 and hashes differently",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "signature_scheme": "demo",
+      "signature": "demo"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1.0,
+      "prev_event_id": "sha256:000779113655e0ffda9383f115ae24741fea758d9dd1ddcb2e5f35f573a84f56",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "action": "mint",
+      "signer": "issuer",
+      "to": "bob",
+      "amount": "5"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "input profile: non-integer number 1.0"}
+}

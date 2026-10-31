@@ -1,0 +1,29 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-profile-duplicate-member",
+  "description": "two members with one name: every JSON reader keeps one silently",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "memo": "a",
+      "memo": "b"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "input profile: duplicate member name 'memo'"}
+}

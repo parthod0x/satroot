@@ -1,0 +1,36 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-receipt-two-units",
+  "description": "a receipt profile issues exactly one unit",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "PROF1",
+      "name": "Profile vector",
+      "decimals": 0,
+      "max_supply": "2",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "2"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "profile": "SATROOT-RECEIPT-1",
+      "profile_mode": "single-receipt",
+      "document_type": "invoice-receipt",
+      "reference_id": "receipt-0001",
+      "issuer_entity": "issuer-co",
+      "counterparty_entity": "counterparty-co",
+      "settlement_unit": "USD",
+      "intended_use": "receipt-ledger",
+      "signature_scheme": "demo",
+      "signature": "demo"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "receipt profile requires max_supply=1"}
+}

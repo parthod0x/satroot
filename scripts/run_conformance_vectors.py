@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "src"))  # the engine in this tree, not an installed one
 
 import satroot1 as sr
 
@@ -40,12 +40,18 @@ def verifier_for(scheme: str):
     raise ValueError(f"unknown scheme in vector: {scheme}")
 
 
-def check_vector(vector: dict) -> list[str]:
+def check_vector(text: str) -> list[str]:
+    """Check one vector from its text: `expect` is read leniently (it may sit
+    beside a NaN or a duplicate member), the replay input strictly."""
     problems: list[str] = []
-    verifier = verifier_for(vector["scheme"])
-    expect = vector["expect"]
+    expect = json.loads(text)["expect"]
     try:
-        state = sr.replay(vector["events"], verifier=verifier)
+        vector = sr.loads_ledger_json(text)
+        verifier = verifier_for(vector["scheme"])
+        options = vector.get("options", {})
+        state = sr.replay(vector["events"], verifier=verifier,
+                          allow_unbound_keys=options.get("allow_unbound_keys") is True,
+                          expected_genesis_event_id=options.get("expected_genesis_event_id"))
     except sr.SatRootError as exc:
         if expect["ok"]:
             problems.append(f"expected success, replay failed: {exc}")
@@ -74,8 +80,9 @@ def main() -> int:
         return 1
     failures = 0
     for path in vector_paths:
-        vector = json.loads(path.read_text(encoding="utf-8"))
-        problems = check_vector(vector)
+        text = path.read_text(encoding="utf-8")
+        vector = json.loads(text)
+        problems = check_vector(text)
         status = "ok" if not problems else "FAIL"
         print(f"{status:4} {vector['name']}")
         for problem in problems:

@@ -1,0 +1,53 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "valid-astral-frozen-order",
+  "description": "frozen_accounts sort by code point too",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "signature_scheme": "demo",
+      "signature": "demo"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:000779113655e0ffda9383f115ae24741fea758d9dd1ddcb2e5f35f573a84f56",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "action": "freeze",
+      "signer": "issuer",
+      "account": "",
+      "frozen": true
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 2,
+      "prev_event_id": "sha256:2c41913560c2d1ebcfeada56ef905d70b735006c331e01e456aa4bdb2a9c767d",
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "action": "freeze",
+      "signer": "issuer",
+      "account": "😀",
+      "frozen": true
+    }
+  ],
+  "expect": {"ok": true, "final_state_hash": "sha256:4317d4fddefa022bf930043359df6299dcd52c1e1707761321f66d26c17d2f45", "balances": {"issuer": "1000"}, "record_count": 3}
+}

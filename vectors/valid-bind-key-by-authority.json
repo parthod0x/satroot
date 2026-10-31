@@ -1,0 +1,49 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "valid-bind-key-by-authority",
+  "description": "the authority binds an account that had no key",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "issuer-key",
+        "alice": "alice-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:c2f5654c259f5aa2928f7faf01425a233b81218b3c1c0584055be5170dea2d3631600ca9aea79d8bbb9131beb7f958724b16dfc9fec14a6401a3ec14bcc3f30a",
+      "event_id": "sha256:f40df7c489c1e59a288e475f2506844c568db1bd59ab791a90be801b3767c06c"
+    },
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 1,
+      "prev_event_id": "sha256:f40df7c489c1e59a288e475f2506844c568db1bd59ab791a90be801b3767c06c",
+      "action": "bind-key",
+      "signer": "issuer",
+      "account": "bob",
+      "key_id": "alice-key",
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:31545ea7fed91333091f466f39ac85dc3fdf49de6bc39cbc3702ce3eecd491ac879cb00dc18b6831f48ebcc5a852be92baa146cc2ef8bb81d968b9fd67f0f001",
+      "event_id": "sha256:055c08285faca9998b9e4902d69e49d405e81690d27f7e30e58264d5d33af5c5"
+    }
+  ],
+  "expect": {"ok": true, "final_state_hash": "sha256:af7b7f9a39bab3f84f3811bf59eae327c55e5c5383f381453ebeb7da6e40beae", "balances": {"alice": "1", "issuer": "1000"}, "record_count": 2}
+}

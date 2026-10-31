@@ -1,0 +1,34 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-stable-lowercase-reference-unit",
+  "description": "the reference-unit pattern is a profile rule",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "PROF1",
+      "name": "Profile vector",
+      "decimals": 2,
+      "max_supply": "1000000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000000"
+      },
+      "nonce": "satroot-scaffold-0000000000000000",
+      "profile": "SATROOT-STABLE-1",
+      "profile_mode": "reference-only",
+      "reference_unit": "usd",
+      "redemption": "none",
+      "reserve_model": "none",
+      "intended_use": "reference-value-accounting",
+      "signature_scheme": "demo",
+      "signature": "demo"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "invalid stable reference_unit: 'usd'"}
+}

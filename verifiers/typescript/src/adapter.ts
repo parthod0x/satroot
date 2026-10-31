@@ -22,6 +22,8 @@ import { readFileSync } from "node:fs";
 
 import {
   replay,
+  parseLedgerJson,
+  compareCodePoints,
   stateHash,
   demoVerifier,
   hmacVerifier,
@@ -66,6 +68,7 @@ function verifierFor(scheme: string): Verifier {
 interface Vector {
   scheme: string;
   events: Event[];
+  options?: { allow_unbound_keys?: boolean; expected_genesis_event_id?: string };
 }
 
 function main(): void {
@@ -75,12 +78,16 @@ function main(): void {
     process.exit(2);
   }
 
-  const vector = JSON.parse(readFileSync(path, "utf8")) as Vector;
-  const verifier = verifierFor(vector.scheme);
-
   let state;
+  let vector: Vector;
   try {
-    state = replay(vector.events, verifier);
+    // Parsed under the input profile, not JSON.parse - SPEC.md section 2.6a.
+    vector = parseLedgerJson(readFileSync(path, "utf8")) as unknown as Vector;
+    const verifier = verifierFor(vector.scheme);
+    state = replay(vector.events, verifier, {
+      allowUnboundKeys: vector.options?.allow_unbound_keys === true,
+      expectedGenesisEventId: vector.options?.expected_genesis_event_id,
+    });
   } catch (err) {
     // Only a protocol rejection means REJECT. Anything else is a fault in
     // this adapter, and reporting it as a rejection would turn a crash into
@@ -93,7 +100,7 @@ function main(): void {
   }
 
   const terms: string[] = [];
-  for (const [account, balance] of [...state.balances.entries()].sort()) {
+  for (const [account, balance] of [...state.balances.entries()].sort((x, y) => compareCodePoints(x[0], y[0]))) {
     if (balance !== 0n) terms.push(`${account}=${balance.toString()}`);
   }
 

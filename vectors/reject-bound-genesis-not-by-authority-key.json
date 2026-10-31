@@ -1,0 +1,34 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-bound-genesis-not-by-authority-key",
+  "description": "a genesis signed by a key the authority is not bound to",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "issuer-key",
+        "alice": "alice-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "alice-key",
+      "signature": "ed25519:f94a969d4e0d8a1089c3314e1856399231b413d211b7c0a827c20e4fca09d8dd849662380034b2a556f36df312f80e822653a6cba4e62fc329f87202a5289902",
+      "event_id": "sha256:a64449bcfc071f817ee1ae1ae0c9c6c4bed9c30362d9a00a33a5ba1acdb0f357"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "event for 'issuer' is not signed by its bound key 'issuer-key'"}
+}

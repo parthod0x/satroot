@@ -1,18 +1,21 @@
 # SATROOT-1 Specification
 
-Status: v1 draft (frozen at v1.0-draft-freeze)
-Date: 2026-08-19
+Status: v3 (satroot 3.0.0). The kernel rules frozen at v1.0-draft-freeze
+changed in 3.0.0 for the first time, to bind signing keys to accounts
+(sections 5, 6.6.2 and 6.7) and to define an input profile (section 2.6a).
+Ledgers written under the earlier rules are version `0.1`; see MIGRATION.md.
+Date: 2026-11-01
 License: Apache-2.0
 
 ## 1. Purpose
 
-SATROOT-1 defines a minimal token primitive in which a single native satoshi UTXO acts as the root witness and authority handle for an arbitrary higher-layer token ledger.
+SATROOT-1 defines a minimal token primitive in which the outpoint of a single native satoshi UTXO names an arbitrary higher-layer token ledger. The name is a label: nothing in this protocol ties the ledger, or its keys, to whoever controls that UTXO (section 2.1).
 
 It is designed to make one idea precise:
 
 > There is no smaller Bitcoin unit below one satoshi, but there can be unbounded protocol-defined semantic state above one satoshi.
 
-Within the broader SATROOT project, this base primitive should also be understood as a root-bound namespace kernel. The root satoshi does not merely anchor one token balance. It anchors a deterministic protocol namespace under which semantic objects can later exist.
+Within the broader SATROOT project, this base primitive should also be understood as a root-named namespace kernel: the root satoshi's outpoint names a deterministic protocol namespace under which semantic objects can later exist.
 
 ## 2. Core concepts
 
@@ -20,7 +23,15 @@ Within the broader SATROOT project, this base primitive should also be understoo
 
 A **root satoshi** is a UTXO with native value exactly `1 satoshi`.
 
-The root satoshi is not divided. It is used as a carrier, anchor, authority witness, or namespace handle.
+The root satoshi is not divided. Its outpoint is a **namespace label** (section 2.2), and that is all it is at this layer:
+
+- an implementation checks `root_id` for form only; nothing checks that a ledger's producer controls the UTXO, so anyone can write a valid ledger naming any outpoint;
+- a commitment (section 4) does not have to spend the root output, and the reference commitment transactions do not;
+- authority over a ledger comes from its genesis and the keys bound there (sections 5 and 6.7), never from the UTXO.
+
+The satoshi is the ledger unit of the chain it lives on, not a floor of value. A one-satoshi output holds less than the fee needed to spend it: the mainnet root `38ff9da0…:0` holds 1 sat, which would cost about 74 sats to spend at the rate its commitment paid (215 sats for 429 bytes).
+
+A design in which commitments must spend and recreate the root output, so that the UTXO's controller is the ledger's authority, is possible and not specified here.
 
 ### 2.2 Root ID
 
@@ -111,6 +122,43 @@ exactly:
 Equivalent to Python's
 `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`.
 
+"By Unicode code point" is not the default sort of every language. JavaScript's
+`Array.prototype.sort` compares UTF-16 code units, which put U+E000 after
+U+1F600, and two implementations hashed one ledger of astral account names
+differently until the TypeScript verifier sorted by code point. Objects must
+also be read and built without prototype behaviour, so a member named
+`__proto__` is an ordinary member.
+
+### 2.6a Input profile
+
+Two JSON readers can read different values from the same text. Every record a
+conforming implementation accepts, and the text it is parsed from, MUST keep
+to this profile, and an implementation MUST reject a ledger that does not:
+
+- **Numbers are integers** written without a fraction or an exponent, within
+  ±(2^53 − 1). `2.0`, `1e0`, `NaN` and `Infinity` are rejected: one reader
+  takes `2.0` as `2` and another as a float that hashes as `2.0`, and readers
+  backed by IEEE-754 round integers past 2^53.
+- **Member names are unique** within an object. Readers keep one of two
+  duplicates silently, and not always the same one.
+- **Nesting is at most 64 levels** of arrays and objects. Readers differ in
+  how deep they will go, and past that one refused while another accepted.
+- **Strings hold no lone surrogate**, escaped or not. One cannot be encoded as
+  UTF-8 for hashing.
+- **Names** (account names and key ids) are non-empty strings with no control
+  character (U+0000–U+001F, U+007F–U+009F), no byte-order mark (U+FEFF) and
+  no lone surrogate, and are not made only of the characters U+0020, U+00A0,
+  U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F and U+3000. The set
+  is explicit because Python's `str.strip` and JavaScript's `String.trim`
+  disagree about U+001C, U+0085 and U+FEFF.
+- **`root_id`** matches `^[0-9a-f]{64}:(0|[1-9][0-9]{0,9})$`: lowercase hex
+  and a vout with no leading zero, so one outpoint has one spelling.
+- **`signature_scheme`**, when present, is a string; absent means `demo`, and
+  an explicit `null` is rejected.
+
+A malformed record is a rejection, never a crash: two implementations may
+then disagree only by accepting, which the conformance corpus can catch.
+
 Protocol amounts, balances and supply values are carried as **digit
 strings**, not JSON numbers, so serialisation never depends on a language's
 floating-point or big-integer formatting. See section 6.1a.
@@ -179,7 +227,7 @@ Required fields — all of the following, and `sequence`, which MUST be `0`:
 ```json
 {
   "protocol": "SATROOT-1",
-  "version": "0.1",
+  "version": "0.2",
   "action": "genesis",
   "root_id": "<txid>:<vout>",
   "symbol": "FLOOR1",
@@ -190,9 +238,22 @@ Required fields — all of the following, and `sequence`, which MUST be `0`:
   "transfer_model": "account-ledger",
   "initial_balances": {
     "issuer": "1000000000"
+  },
+  "account_keys": {
+    "issuer": "issuer-key-1"
   }
 }
 ```
+
+**`version`** is `"0.2"` or `"0.1"`, and every record of a ledger carries its
+genesis's version. A `0.2` genesis under a real signature scheme MUST carry
+`account_keys`, an object mapping each account that may sign to the
+`signature_key_id` it signs with; it MUST bind the mint authority, and the
+genesis MUST be signed with that authority's bound key (section 6.7). A `0.1`
+ledger binds no key to any account. A conforming implementation rejects a
+`0.1` ledger under a real scheme unless the caller explicitly accepts unbound
+keys, and says so in its result. `account_keys` in a `0.1` genesis is
+rejected. A `demo` ledger has no keys, so binding does not apply to it.
 
 `decimals` MUST be a non-negative JSON integer. A JSON boolean is not an
 integer for this purpose, even in languages where `true` compares equal to
@@ -255,7 +316,8 @@ A genesis MAY declare a profile. When it does it carries:
 - `profile_mode` — the mode that registry pairs with that profile, not a
   free choice;
 - the `required_genesis_fields` that registry entry names, each a **non-blank
-  string** — non-empty after trimming whitespace, so `"   "` is rejected.
+  string** under the name rule of section 2.6a, so `"   "` and a string
+  holding a control character are rejected.
 
 A `profile_mode` **without** a `profile` is rejected. The two are a pair:
 either the genesis declares both, or it declares neither and both members
@@ -267,6 +329,18 @@ An unknown profile, a `profile_mode` the registry does not pair with it, or
 a missing or empty required field is rejected (section 8.10). Both members
 are committed to by section 7; a genesis that declares no profile commits
 JSON `null` for each, with the member still present.
+
+Each profile then has its own field rules (compact identifiers, the
+reference-unit pattern, single-unit object profiles), and an implementation
+MUST apply them: a verifier that checks only the registry-level rules
+accepts ledgers the reference rejects.
+
+**`SATROOT-STABLE-1` does not tie `decimals` to the reference unit.** A genesis
+with `reference_unit` `USD` may declare any `decimals` the general rule allows;
+`decimals` is the ledger's own precision, not the ISO 4217 minor unit of the
+reference (2 for USD, 0 for JPY, 3 for KWD). A relying party must not infer
+one from the other: a `USD` ledger with `decimals` 0 counts whole units of the
+reference, and one with 6 counts millionths.
 
 This subsection exists because section 7 referred to "the values carried by
 the genesis record (section 5)" while section 5 named neither field — a
@@ -334,7 +408,10 @@ A `rotate-authority` event changes the active mint authority for the root namesp
 It is valid only if:
 
 - signer matches the current mint authority,
-- `new_mint_authority` is a valid non-empty authority identifier,
+- `new_mint_authority` is a valid name (section 2.6a),
+- in a bound (`0.2`) ledger under a real scheme, `new_mint_authority` already
+  has a bound key, so authority is never handed to an account nobody can sign
+  as,
 - sequence is exactly previous sequence + 1.
 
 This event changes control over future authority-gated actions such as `mint`. It does not move balances by itself and should not be confused with a token transfer.
@@ -395,6 +472,13 @@ a prefixed lowercase-hex string, `demo` as the literal string `demo`:
 | `demo` | the literal string `demo` |
 | `hmac-sha256` | `"hmac-sha256:" + hex(HMAC-SHA256(key, signing_payload))` |
 | `ed25519` | `"ed25519:" + hex(Ed25519-Sign(key, signing_payload))`, 64 bytes |
+
+Each value has exactly one accepted spelling, checked as a whole string:
+`ed25519:` followed by 128 lowercase hex digits, `hmac-sha256:` followed by
+64, and an Ed25519 public key as 64 lowercase hex digits. A decoder that
+stops at the first bad character, or accepts upper case or spaces, lets
+anyone without a key change a record's `event_id` and every state hash after
+it.
 
 In both real schemes the message signed is the **`signing_payload` string of
 section 2.7, UTF-8 encoded** - it is not hashed first, and no length prefix
@@ -521,21 +605,45 @@ The reference engine currently recognizes these signature metadata rules:
 - `hmac-sha256`: `signature_key_id` is required and the signature must use the `hmac-sha256:` prefix.
 - `ed25519`: `signature_key_id` is required and the signature must use the `ed25519:` prefix.
 
-### 6.7 Account control
+### 6.7 Account control and key binding
 
 **A signer controls an account when `signer` equals the account name
-exactly** — byte-for-byte string equality, with no normalisation.
+exactly** — byte-for-byte string equality, with no normalisation — **and, in
+a bound (`0.2`) ledger under a real scheme, the record is signed with the key
+bound to that account.**
 
-That is the whole rule at this layer. Section 9 says binding a cryptographic
-key to an account is an application-level concern, and it remains so: this
-specification checks only that a record's `signer` names the account whose
-balance moves, and that the record's signature verifies under the configured
-verifier for the key it names.
+Before 3.0.0 the first half was the whole rule, and section 9 called binding
+a key to an account an application concern. That left any key the verifier
+held able to sign as any signer: a holder's key could move the issuer's
+balance, mint, rotate the authority, or re-sign an entire ledger. The binding
+rules:
 
-It is stated because "signer controls sender account" was previously left
-undefined. Two independent implementations both had to guess it; both
-guessed equality and the corpus agreed with them, but the document did not
-say so.
+1. **Genesis declares the bindings** (`account_keys`, section 5) and is
+   signed with the mint authority's bound key. The bindings are committed in
+   the state hash (section 7).
+2. **Every later record** must carry `signature_key_id` equal to the key
+   bound to its `signer`. A signer with no bound key cannot sign.
+3. **`bind-key`** (`account`, `key_id`) changes a binding. For an account
+   with no binding, the signer must be the mint authority. For a bound
+   account, the signer must be the account itself, so an account rotates its
+   own key and the authority cannot take it.
+4. **`rotate-authority`** requires the new authority to be bound already
+   (section 6.4).
+5. **Value sits only in bound accounts.** Every account the genesis credits
+   must be in `account_keys`, and the recipient of every `mint` and
+   `transfer` must be bound. Otherwise rule 3 would let the authority bind an
+   unbound account that holds a balance to its own key and empty it; with
+   this rule the authority's power to bind reaches only empty accounts.
+
+**A ledger is its genesis.** Binding stops a key from signing as another
+account inside a ledger. It cannot stop a forger who rewrites the whole
+ledger from a genesis of their own, binding the authority to the forger's
+key: that ledger is valid, and it is a different ledger. A relying party
+distinguishes the two by pinning the genesis `event_id`, kept from an
+earlier copy or carried by an anchor. Implementations SHOULD accept such a
+pin and report whether one was checked. Likewise the key material a verifier
+uses (public keys, or shared secrets) must come from the relying party, not
+from the bundle under examination; a bundle's own key file is unsigned.
 
 ## 7. State commitment
 
@@ -545,7 +653,8 @@ Each event SHOULD include a `state_hash` after application:
 state_hash = "sha256:" + hex(sha256(canonical_json(commitment_snapshot)))
 ```
 
-where `commitment_snapshot` is exactly these thirteen members:
+where `commitment_snapshot` is exactly these thirteen members, plus
+`account_keys` in a bound (`0.2`) ledger:
 
 | member | form |
 |---|---|
@@ -562,6 +671,7 @@ where `commitment_snapshot` is exactly these thirteen members:
 | `supply` | digit string |
 | `sequence` | number |
 | `last_event_id` | the `event_id` of the most recently applied event |
+| `account_keys` | `0.2` only: object of account to bound key id, after every `bind-key`; absent for `0.1`, whose state hashes are unchanged |
 
 Key order in the serialised form is imposed by canonical JSON (section 2.6),
 so the table order above is descriptive rather than normative.
@@ -607,13 +717,19 @@ A SATROOT-1 indexer MUST reject a ledger if:
    record (section 5.1),
 8. canonical JSON hashing does not match the stated event ID,
 9. a stated `state_hash` does not match replayed state,
-10. an unknown profile or invalid profile mode is used.
+10. an unknown profile or invalid profile mode is used,
+11. a record breaks the input profile (section 2.6a),
+12. a record's `version` differs from its genesis's,
+13. in a bound ledger, a record is not signed with its signer's bound key,
+    or a `bind-key` or `rotate-authority` breaks section 6.7,
+14. a `0.1` ledger under a real scheme is replayed without the caller's
+    explicit acceptance of unbound keys.
 
 ## 9. Claim discipline
 
 SATROOT-1 can truthfully say:
 
-- one satoshi anchors the token ledger,
+- one satoshi's outpoint names the token ledger,
 - token units are protocol-defined semantic units,
 - token supply can be arbitrarily large if the protocol permits it,
 - balances are computed by replaying protocol events,
@@ -626,7 +742,11 @@ SATROOT-1 should not say:
 - semantic units are native Bitcoin units,
 - the token has legal/economic rights unless separately documented,
 - wallets or exchanges will recognize it without integration,
-- the frozen kernel binds a signing key to the account it signs for — it checks the `signer` string and a valid signature under some registered key, but key-to-account binding is an application-level responsibility (see `KEY_MANAGEMENT.md`).
+- the root satoshi is a witness or authority for the ledger, or a floor of value (section 2.1),
+- a ledger is authentic without a pinned genesis or pinned keys (section 6.7),
+- a version `0.1` ledger binds keys to accounts: it does not, and is accepted only on explicit request.
+
+Since 3.0.0 it can also say: in a bound (`0.2`) ledger, every record is signed by the key bound to the account it signs as.
 
 ## 10. Stable-value boundary
 
@@ -652,4 +772,4 @@ Symbol: FLOOR1
 Root supply: 1,000,000,000 units
 Root satoshi: one UTXO
 Decimals: 0
-Meaning: proof-of-concept semantic units anchored to one satoshi
+Meaning: proof-of-concept semantic units in a namespace named by one satoshi's outpoint

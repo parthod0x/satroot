@@ -1,0 +1,28 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-profile-integer-beyond-2-53",
+  "description": "an integer past 2^53 is rounded by IEEE-754 readers",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "signature_scheme": "demo",
+      "signature": "demo",
+      "memo": 9007199254740993
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "input profile: ledger holds an integer beyond 2^53 - 1"}
+}

@@ -1,0 +1,29 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-unbound-ed25519-by-default",
+  "description": "version 0.1 under ed25519 binds no key to any account",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:22665dd1a38f7111128f667b72a82dd89b121a7640c3bfb97a08218fc89ef476037aadd8a69162454de04f969d36d4b3f3fc28db6435b583e7bb7a6db4675409",
+      "event_id": "sha256:622d17c4ea0f349d4df9fdbe3160648d6910fe72664157620c2fcc31b034cab9"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "ledger version 0.1 under ed25519 binds no signing key to any account, so any key the verifier holds can sign as any signer; replay it with allow_unbound_keys only if every such key is trusted not to"}
+}

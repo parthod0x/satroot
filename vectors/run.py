@@ -122,13 +122,19 @@ def run_external(command, path):
     (C:\\Users\\Foo Bar\\... is entirely ordinary) would otherwise arrive as
     two arguments and fail on every vector.
     """
+    # UTF-8 explicitly: the adapter contract prints account names, and with
+    # text=True alone Windows decodes them in its ANSI code page, so a correct
+    # implementation printing an astral or private-use name read as a mismatch.
     proc = subprocess.run(
         '%s "%s"' % (command, str(path)),
         shell=True,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
-    lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+    # Newlines only: str.splitlines also breaks on U+2028 and U+0085, which
+    # are legal inside an account name the adapter prints.
+    lines = [ln.rstrip(chr(13)) for ln in proc.stdout.split(chr(10)) if ln.strip()]
     if not lines:
         detail = proc.stderr.strip() or "(no stderr)"
         return None, "printed nothing to stdout; stderr: %s" % detail[:400]
@@ -152,7 +158,13 @@ FIXED_ED25519_PRIVATE = {"issuer-key": "11" * 32, "alice-key": "22" * 32}
 FIXED_HMAC_SECRETS = {"issuer-key": "33" * 32, "alice-key": "44" * 32}
 
 
-def run_reference(sr, vector):
+def run_reference(sr, text):
+    """Replay one vector from its text. The text is parsed under the input
+    profile (SPEC.md section 2.6a): a vector that fails it is a REJECT."""
+    try:
+        vector = sr.loads_ledger_json(text)
+    except sr.SatRootError:
+        return format_result(False), None
     scheme = vector["scheme"]
     if scheme == "demo":
         verifier = sr.demo_signature_verifier
@@ -165,7 +177,10 @@ def run_reference(sr, vector):
     else:
         return None, "unknown scheme in vector: %s" % scheme
     try:
-        state = sr.replay(vector["events"], verifier=verifier)
+        options = vector.get("options", {})
+        state = sr.replay(vector["events"], verifier=verifier,
+                          allow_unbound_keys=options.get("allow_unbound_keys") is True,
+                          expected_genesis_event_id=options.get("expected_genesis_event_id"))
     except sr.SatRootError:
         return format_result(False), None
     return (
@@ -220,7 +235,10 @@ def main():
             pass
 
     paths = vector_paths()
-    vectors = [(p, json.loads(p.read_text(encoding="utf-8"))) for p in paths]
+    # json.loads is lenient (NaN, duplicate members), which is what reading a
+    # vector's declared `expect` needs; replay parses the same text strictly.
+    texts = {p: p.read_text(encoding="utf-8") for p in paths}
+    vectors = [(p, json.loads(texts[p])) for p in paths]
 
     if args.write_expected:
         body = "".join(
@@ -247,7 +265,7 @@ def main():
         if args.impl:
             got, error = run_external(args.impl, path)
         else:
-            got, error = run_reference(sr, vector)
+            got, error = run_reference(sr, texts[path])
 
         if args.emit:
             print("%s %s" % (path.name, got if got is not None else "ERROR"))

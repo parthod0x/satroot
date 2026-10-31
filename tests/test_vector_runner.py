@@ -11,6 +11,7 @@ is the exact defect class this corpus exists to catch.
 """
 
 import shutil
+import os
 import subprocess
 import sys
 import unittest
@@ -28,7 +29,8 @@ def run_runner(*args):
     return subprocess.run(
         [sys.executable, str(RUNNER), *args],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         cwd=str(VECTORS_DIR),
     )
 

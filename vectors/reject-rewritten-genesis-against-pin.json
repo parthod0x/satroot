@@ -1,0 +1,37 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-rewritten-genesis-against-pin",
+  "description": "the same forgery against the genesis a holder kept",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "alice-key",
+        "alice": "alice-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "alice-key",
+      "signature": "ed25519:19f091770ad4f591858d43d9b8113c9a2e0ea6d56f3f8fbbf99e8e021c3c4565486485bcd4237a4877ef2d95dcdb0afa47bf24428d615273314a9024a41f1202",
+      "event_id": "sha256:c7e6bd1702087fcbb83dd71c97ff5bdbaf4324b4e4456f554434211d772174b3"
+    }
+  ],
+  "options": {
+    "expected_genesis_event_id": "sha256:f40df7c489c1e59a288e475f2506844c568db1bd59ab791a90be801b3767c06c"
+  },
+  "expect": {"ok": false, "reference_error": "genesis does not match the pinned genesis event id"}
+}

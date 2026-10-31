@@ -1,0 +1,34 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-signature-hex-uppercase",
+  "description": "one signature, one spelling: a keyless edit must not verify",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "issuer-key",
+        "alice": "alice-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:C2F5654C259F5AA2928F7FAF01425A233B81218B3C1C0584055BE5170DEA2D3631600CA9AEA79D8BBB9131BEB7F958724B16DFC9FEC14A6401A3EC14BCC3F30A",
+      "event_id": "sha256:84c2773951ea347ad8a094057572b963281f65612b414bff14429083776d6fa3"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "signature verification failed"}
+}

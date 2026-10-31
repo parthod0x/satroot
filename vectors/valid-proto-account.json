@@ -1,0 +1,28 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "valid-proto-account",
+  "description": "an account named __proto__ is an account",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "__proto__": "5"
+      },
+      "signature_scheme": "demo",
+      "signature": "demo"
+    }
+  ],
+  "expect": {"ok": true, "final_state_hash": "sha256:d2d51b2bc154cfce2cb3e2812ff5885eb0a36af2d670ad9f7ff8296dc62f08aa", "balances": {"__proto__": "5", "issuer": "1000"}, "record_count": 1}
+}

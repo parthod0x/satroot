@@ -79,7 +79,7 @@ no protocol logic in them).
 ```bash
 git clone https://github.com/parthod0x/satroot.git
 cd satroot/vectors
-python3 run.py            # expect: 68 vectors, 0 failures
+python3 run.py            # expect: 115 vectors, 0 failures
 git rev-parse --short HEAD
 ```
 
@@ -115,11 +115,11 @@ In Python that wrapper is:
 import json
 import sys
 
-with open(sys.argv[1], encoding="utf-8") as f:
-    vector = json.load(f)
-
 try:
-    state = replay(vector["events"], vector["scheme"])   # your work
+    with open(sys.argv[1], encoding="utf-8") as f:
+        vector = parse_under_input_profile(f.read())     # your work: SPEC 2.6a
+    options = vector.get("options", {})
+    state = replay(vector["events"], vector["scheme"], options)   # your work
 except ProtocolRejection:
     print("REJECT")
 else:
@@ -210,7 +210,7 @@ serialiser: if it fails, the runner's `expected:` / `got:` lines tell you
 whether your hash is wrong (hash differs) or your replay is (balances or
 count differ).
 
-59 of the 68 vectors use the `demo` scheme, so real cryptography can wait
+86 of the 115 vectors use the `demo` scheme, so real cryptography can wait
 until the very end.
 
 ---

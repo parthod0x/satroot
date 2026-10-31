@@ -43,16 +43,25 @@ SATROOT  : {"＀":2,"\U0001f600":1}      emoji last
 Two implementations following the two schemes will digest different bytes for
 the same logical record, and therefore disagree on every downstream hash.
 
-## Why it does not affect SATROOT today
+## It affected SATROOT (corrected 1 November 2026)
 
-SATROOT's schema does not permit non-BMP characters in field names — every
-field name in the protocol is drawn from a fixed ASCII vocabulary. The
-divergence is therefore unreachable through any schema-valid SATROOT record.
+This section used to say the divergence was unreachable, because every
+protocol field name is ASCII. That was wrong: **account names are object
+keys** (`initial_balances`, and the committed `balances` and `account_keys`),
+and an account name may contain any character the input profile allows,
+astral ones included. An external review produced a ledger with the account
+names U+E000 and U+1F600 that the Python reference and the TypeScript verifier
+both accepted with different state hashes, because the TypeScript verifier
+sorted with `Array.prototype.sort`, which compares UTF-16 code units.
 
-That is a property of the schema, not of the canonicalisation. **Any profile
-that permits arbitrary user-supplied object keys must choose one scheme
-explicitly**, because the choice is observable and the two answers are both
-defensible.
+SATROOT sorts by code point (SPEC section 2.6), and since 3.0.0 both
+implementations do; the case is in the conformance corpus as
+`valid-astral-account-names`. The divergence from JCS described above is real
+for SATROOT records, which is one reason SATROOT does not claim to be JCS.
+
+The general lesson stands: **any format that permits user-supplied object
+keys must choose one ordering explicitly**, because the choice is observable,
+and SATROOT has always permitted them.
 
 ## Normalisation: neither scheme normalises
 

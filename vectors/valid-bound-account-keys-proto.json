@@ -1,0 +1,35 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "valid-bound-account-keys-proto",
+  "description": "__proto__ in account_keys is a member like any other",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "issuer-key",
+        "alice": "alice-key",
+        "__proto__": "alice-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:7c54719491e00090ddb112abc5a8cbe72d5e66a638e50417795f1f00a4037be598a4b1ada99727ca50dc56bc79aaa7f45ccd740351fd19e41eb7baa86878d808",
+      "event_id": "sha256:72434ce561304d029236daa292627309c7b1ca5bdb3767d51d884c3b46385d68"
+    }
+  ],
+  "expect": {"ok": true, "final_state_hash": "sha256:c1fbe412437572b792fd94544a6c201e032d2b434e2490926dbb1ed0b8c9e9f3", "balances": {"alice": "1", "issuer": "1000"}, "record_count": 1}
+}

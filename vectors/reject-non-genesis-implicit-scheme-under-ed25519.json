@@ -6,7 +6,7 @@
   "events": [
     {
       "protocol": "SATROOT-1",
-      "version": "0.1",
+      "version": "0.2",
       "action": "genesis",
       "root_id": "abababababababababababababababababababababababababababababababab:0",
       "sequence": 0,
@@ -21,24 +21,28 @@
       },
       "nonce": "satroot-scaffold-0000000000000000",
       "signature_scheme": "ed25519",
-      "signature": "ed25519:a3f46794aace6b316d7f9ade3dea57d513b3f2dc17cb96553bd9a2450047d97e31d4bafba0bd55c9089ec2d9ff2b20cec3e74791ec6ba70162f1263c4c229a00",
+      "signature": "ed25519:d0159233b40fcd7d69b81a80e04f88d4898259c6bb957c9bf3f430f8056f8a565213b6d2a1ca1a8bdffda7b6ac88823cbffab14a9d35c231c43709dafbe26d0c",
+      "account_keys": {
+        "issuer": "issuer-key",
+        "alice": "alice-key"
+      },
       "signature_key_id": "issuer-key",
-      "event_id": "sha256:884dda8b9913c85e8df8d0cca9bd21a544914c3c2cd8a2474d1a78b3fd7c0918"
+      "event_id": "sha256:e629c37a276c76f59e5748d7205382772191c38e55a1af13f6b8ed4e34ada421"
     },
     {
       "protocol": "SATROOT-1",
-      "version": "0.1",
+      "version": "0.2",
       "action": "transfer",
       "root_id": "abababababababababababababababababababababababababababababababab:0",
       "sequence": 1,
-      "prev_event_id": "sha256:884dda8b9913c85e8df8d0cca9bd21a544914c3c2cd8a2474d1a78b3fd7c0918",
+      "prev_event_id": "sha256:e629c37a276c76f59e5748d7205382772191c38e55a1af13f6b8ed4e34ada421",
       "signer": "issuer",
       "from": "issuer",
       "to": "alice",
       "amount": "400",
       "signature_key_id": "issuer-key",
-      "signature": "ed25519:dc4363d46d597a12770998fe2fc21af3b324da2a1a7d3670a4fcf48d78e9f581fc0878584f375e0edc1ec1ee1c3b41b97f3df8d70192b694275dcf5a99eeee0c",
-      "event_id": "sha256:8b7a343ceb48023c7dda65cb2ef81d232cca1bda3c859da1deb71095ff7f1b35"
+      "signature": "ed25519:ec7784a6437057017d3574d334cb477805216db8410a8eda86b1d6b907f617dccfaf5cbead4c5910038dae443a3d7e45d11d39031bc7c006cff14d81d5d88b00",
+      "event_id": "sha256:1704793a486288e3db85d491e600b22d6fb97c99e398efbda42c234f4215e39f"
     }
   ],
   "expect": {

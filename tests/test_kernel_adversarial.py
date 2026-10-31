@@ -95,14 +95,12 @@ def test_overlong_amount_raises_protocol_error_not_valueerror():
         replay([signed])
 
 
-def test_key_substitution_is_chain_blocked_except_at_the_tip():
-    """Characterise the signer-key-binding boundary precisely.
-
-    The kernel authorizes on the `signer` string plus a valid signature
-    under any registered key. In a stored ledger, `prev_event_id` binds
-    each event into its successor, so substituting the key on an interior
-    event breaks the chain; only the final event, which has no successor,
-    is genuinely exposed. BOUNDARIES.md states this.
+def test_key_substitution_is_rejected_everywhere_including_the_tip():
+    """Pass 1 pinned the opposite: interior substitution rejected, tip
+    substitution accepted, called a tip-only exposure. It was not tip-only:
+    a holder of any registered key re-signs every record (SECURITY_REVIEW
+    Pass 3). In a bound (0.2) ledger each record must be signed by its
+    signer's bound key, so a substituted key is refused wherever it is.
     """
     if not ed25519_available():
         pytest.skip("ed25519 extra not installed")
@@ -113,6 +111,7 @@ def test_key_substitution_is_chain_blocked_except_at_the_tip():
     )
     bundle = bootstrap_signed_ledger_bundle(ledger["events"], scheme="ed25519")
     events = bundle["signed_events"]
+    assert events[0]["version"] == "0.2" and events[0]["account_keys"]
     private_keys = bundle["material"]["private_keys"]
     verifier = make_ed25519_verifier(bundle["material"]["public_keys"])
 
@@ -126,13 +125,10 @@ def test_key_substitution_is_chain_blocked_except_at_the_tip():
         target["signature"] = ed25519_sign(signing_payload(target), private_keys[other])
         return mutated
 
-    # An interior event: the chain rejects it regardless of the signature.
-    if len(events) > 2:
+    replay(events, verifier=verifier)
+    for index in range(len(events)):
         with pytest.raises(SatRootError):
-            replay(resign(1), verifier=verifier)
-
-    # The tip: accepted, which is exactly the documented boundary.
-    replay(resign(len(events) - 1), verifier=verifier)
+            replay(resign(index), verifier=verifier)
 
 
 def test_parse_decimals_rejects_bool():

@@ -1,5 +1,7 @@
 # A satoshi is the floor of value, not the ceiling of meaning
 
+> **Correction, 1 November 2026.** An external review found that this essay overstated two things. The root satoshi is a namespace label, not a witness or an authority: nothing ties a ledger's keys to whoever controls the UTXO, and a one-satoshi output is worth less than the fee needed to spend it, so it is not a floor of value either. And before satroot 3.0.0 any registered key could sign as any account. 3.0.0 binds keys to accounts; SPEC sections 2.1 and 6.7 state both precisely. The essay is otherwise left as published.
+
 SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — and we anchored one for real, on mainnet, with every step independently verifiable from raw bytes.
 
 ## The idea
@@ -53,7 +55,7 @@ No network access, no trust in us: the verifier parses the bytes, hashes them, f
 - It does not subdivide Bitcoin below one satoshi, and semantic units are not native Bitcoin units.
 - It creates no stablecoin, security, redemption right, or reserve claim; stable-value designs are reference-only profiles with those non-claims stated in the genesis record itself.
 - There is no token sale. The protocol is Apache-2.0, and the anchored satoshi is worth exactly one satoshi.
-- The frozen kernel authorizes on the signer string plus a valid signature under a registered key; binding keys to accounts across trust domains is explicitly an application-layer responsibility, documented rather than hand-waved.
+- Since 3.0.0 the kernel binds each signing key to its account: a version `0.2` ledger declares the bindings at genesis, and every record must be signed with its signer's bound key. Before that, any registered key could sign as any account; this essay originally called that an application-layer responsibility, and an external review showed it was a defect.
 
 ## Where this goes
 

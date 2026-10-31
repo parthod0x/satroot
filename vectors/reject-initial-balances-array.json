@@ -1,0 +1,27 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-initial-balances-array",
+  "description": "initial_balances must be an object; one reader crashed",
+  "scheme": "demo",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.1",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "CX",
+      "name": "cx",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": [
+        "issuer"
+      ],
+      "signature_scheme": "demo",
+      "signature": "demo"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "initial_balances must be an object"}
+}

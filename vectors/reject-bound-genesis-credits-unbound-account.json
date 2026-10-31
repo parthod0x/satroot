@@ -1,0 +1,33 @@
+{
+  "vector_format": "satroot1-conformance/2",
+  "name": "reject-bound-genesis-credits-unbound-account",
+  "description": "value sits only where a key can move it",
+  "scheme": "ed25519",
+  "events": [
+    {
+      "protocol": "SATROOT-1",
+      "version": "0.2",
+      "action": "genesis",
+      "root_id": "abababababababababababababababababababababababababababababababab:0",
+      "sequence": 0,
+      "symbol": "TST",
+      "name": "Test",
+      "decimals": 0,
+      "max_supply": "1000000",
+      "mint_authority": "issuer",
+      "transfer_model": "account-ledger",
+      "initial_balances": {
+        "issuer": "1000",
+        "alice": "1"
+      },
+      "account_keys": {
+        "issuer": "issuer-key"
+      },
+      "signature_scheme": "ed25519",
+      "signature_key_id": "issuer-key",
+      "signature": "ed25519:25ab08f32be2d210ab417e642dc50bd46be9e858be9b5d7fc9a820097bd204c09ba2fe64e5466e277f4eb8d88d06df9e5134054e0ca4ec83b99d21f7fe82830e",
+      "event_id": "sha256:aec4724ec3c3f2659dccdd3ac1eb4524dc15ba82beaf3b61fbac18757cd7e7d6"
+    }
+  ],
+  "expect": {"ok": false, "reference_error": "genesis credits 'alice', which has no bound key"}
+}

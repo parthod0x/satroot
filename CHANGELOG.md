@@ -1,5 +1,46 @@
 # Changelog
 
+## v3.0.0-key-binding - unreleased
+
+**BREAKING.** Real-scheme ledgers must bind signing keys to accounts. An
+external review reproduced, in both implementations, that any registered key
+could sign as any account, and that 18 of 23 hostile inputs split the Python
+reference from the TypeScript verifier. See `SECURITY_REVIEW.md` Pass 3 and
+`MIGRATION.md`.
+
+- **Key binding.** Ledger version `0.2`: genesis declares `account_keys`
+  and is signed with the mint authority's bound key; every record must be
+  signed with its signer's bound key; new `bind-key` action; `rotate-authority`
+  requires a bound new authority; bindings are committed in the state hash.
+  Version `0.1` under a real scheme is refused unless `allow_unbound_keys`.
+- **Pins.** `replay(expected_genesis_event_id=...)`; `verify-bundle
+  --public-keys-json/--secrets-json/--expect-genesis/--allow-unbound-keys`,
+  reporting `keys_bound`, `keys_pinned`, `genesis_pinned`.
+- **Input profile** (SPEC section 2.6a) in both implementations, on the text
+  and the values; one name rule; exact `root_id` and signature encodings;
+  malformed input rejects instead of crashing.
+- **TypeScript verifier:** code-point key sorting, prototype-free objects,
+  own-property key lookups, a strict JSON reader, and the per-profile genesis
+  rules it used to skip.
+- **`satroot_export` and `satroot_tsa`:** the export verifier and its pinned
+  timestamp authorities ship in this package; run
+  `python -I -m satroot_export <export>` from outside the export.
+- **Value only in bound accounts:** genesis may credit, and a mint or
+  transfer may pay, only an account with a bound key, so the authority's
+  power to bind reaches only empty accounts. Nesting is limited to 64 levels.
+  `verify-bundle` refuses a bundle whose claimed scheme differs from the key
+  material you pinned (found by a second, cold review).
+- **Corpus:** 115 vectors (47 new hostile ones), format
+  `satroot1-conformance/2` with optional `options`; every runner parses
+  vectors under the input profile; `run.py` reads adapter output as UTF-8.
+- **Schemas:** genesis no longer requires `rules_hash` (it rejected every
+  valid ledger); version `0.2`, `account_keys` and `bind-key` described.
+- **Conformance scripts** import `src/`, not an installed satroot.
+- **Docs:** the root satoshi is described as a namespace label, not a
+  witness, authority or floor of value (SPEC section 2.1); SPEC, BOUNDARIES,
+  KEY_MANAGEMENT, SECURITY_REVIEW (Finding 2 withdrawn), CANONICALISATION and
+  the launch essay corrected.
+
 ## v2.0.0-genesis-authentication - 2026-09-03
 
 **BREAKING.** A major version, not a patch, because state hashes change and a

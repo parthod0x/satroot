@@ -34,7 +34,7 @@ VECTORS_DIR = REPO_ROOT / "vectors"
 def documented_commitment_members():
     """The members SPEC.md section 7 lists in its commitment table."""
     section = SPEC.split("## 7. State commitment", 1)[1].split("## 8.", 1)[0]
-    table = section.split("thirteen members:", 1)[1]
+    table = section.split("thirteen members", 1)[1]
     members = []
     for line in table.splitlines():
         match = re.match(r"^\|\s*`([a-z_]+)`\s*\|", line)
@@ -49,17 +49,25 @@ class SpecMatchesReferenceTest(unittest.TestCase):
             (VECTORS_DIR / "valid-genesis-only-demo.json").read_text(encoding="utf-8")
         )
         state = sr.replay(genesis["events"], verifier=sr.demo_signature_verifier)
+        documented = documented_commitment_members()
         self.assertEqual(
-            documented_commitment_members(),
+            [m for m in documented if m != "account_keys"],
             list(state.commitment_snapshot().keys()),
             "SPEC.md section 7 no longer describes the real state commitment",
         )
+        # A bound (0.2) ledger commits the fourteenth, account_keys.
+        bound = json.loads((VECTORS_DIR / "valid-bound-genesis-ed25519.json").read_text(encoding="utf-8"))
+        bound_state = sr.replay(bound["events"], verifier=verifier_for(bound["scheme"]))
+        self.assertEqual(sorted(documented), sorted(bound_state.commitment_snapshot().keys()))
 
     def test_the_documented_construction_reproduces_the_corpus(self):
         """Build the hash from SPEC.md's text, not from the reference method."""
         for path in sorted(VECTORS_DIR.glob("valid-*.json")):
             vector = json.loads(path.read_text(encoding="utf-8"))
-            state = sr.replay(vector["events"], verifier=verifier_for(vector["scheme"]))
+            options = vector.get("options", {})
+            state = sr.replay(vector["events"], verifier=verifier_for(vector["scheme"]),
+                              allow_unbound_keys=options.get("allow_unbound_keys") is True,
+                              expected_genesis_event_id=options.get("expected_genesis_event_id"))
 
             snapshot = state.commitment_snapshot()
             # canonical JSON exactly as SPEC.md section 2.6 defines it

@@ -86,6 +86,7 @@
         "supply": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
         "sequence": {"type": "integer", "minimum": 0},
         "last_event_id": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+        "account_keys": {"type": "object", "additionalProperties": {"type": "string"}},
         "transfer_model": {"type": "string", "minLength": 1},
         "genesis_metadata": {
           "anyOf": [
