@@ -14,3 +14,7 @@
 vectors/EXPECTED.txt text eol=lf
 vectors/*.json      text eol=lf
 vectors/*.py        text eol=lf
+
+# The export fixture carries SHA-256 hashes of its own files, so its bytes are
+# fixed: a CRLF checkout would break every hash and the verifier would refuse it.
+tests/fixtures/export_v01/** -text
