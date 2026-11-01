@@ -85,3 +85,59 @@ def test_run_isolated_from_inside_the_export_planted_code_never_runs(export):
 
 def test_exports_no_longer_need_to_carry_code():
     assert not (FIXTURE / "verify_export.py").exists() and not (FIXTURE / "tokenverify.py").exists()
+
+
+# ---- 3.0.2: the order of anchor records is reported, not enforced ---------------------------
+
+def _offline_anchor(export, entries):
+    """An unpublished anchor at event 1 attesting the first `entries` action-log entries."""
+    import satroot1 as sr
+    from satroot_onchain_envelope_smoke import CONTENT_TYPE, build_envelope_payload, build_envelope_script
+
+    events = json.loads((export / "bundle" / "signed_events.json").read_text(encoding="utf-8"))
+    keys = json.loads((export / "bundle" / "public_keys.json").read_text(encoding="utf-8"))
+    state_hash = sr.replay(events[:1], verifier=sr.make_ed25519_verifier(keys), allow_unbound_keys=True).state_hash()
+    log = [json.loads(line) for line in (export / "action_log.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+    payload = build_envelope_payload(events[0]["root_id"], state_hash)
+    return {"content_type": CONTENT_TYPE, "root_id": events[0]["root_id"], "state_hash": state_hash,
+            "envelope_script_hex": build_envelope_script(CONTENT_TYPE, payload).hex(),
+            "payload_json": payload.decode("utf-8"), "event_count": 1, "published": False,
+            "action_log_entries": entries, "action_log_head": log[entries - 1]["entry_hash"] if entries else "genesis"}
+
+
+def _write_anchors(export, anchors):
+    (export / "anchor_commitments.json").write_text(json.dumps(anchors, indent=2) + "\n", encoding="utf-8")
+
+
+def test_anchors_at_one_event_count_verify_when_only_the_action_log_moved(export):
+    """Found on a production ledger: an action recorded between two anchors gives a new
+    checkpoint at the same event_count, and the strictly-rising rule refused the export for good."""
+    _write_anchors(export, [_offline_anchor(export, 0), _offline_anchor(export, 1)])
+    result = sx.verify_export(export)
+    assert result["anchors"]["count"] == 2
+    assert result["anchors"]["in_file_order"] is True and result["anchors"]["repeated_checkpoints"] == 0
+    assert result["anchors_present_pin_to_event"] == 1
+
+
+def test_repeated_and_reordered_anchor_records_are_reported_not_refused(export):
+    first, second = _offline_anchor(export, 0), _offline_anchor(export, 1)
+    _write_anchors(export, [second, second, first])
+    result = sx.verify_export(export)
+    assert result["anchors"]["repeated_checkpoints"] == 1
+    assert result["anchors"]["in_file_order"] is False
+
+
+def test_order_does_not_rescue_a_rewritten_anchor(export):
+    forged = _offline_anchor(export, 1)
+    forged["state_hash"] = "sha256:" + "99" * 32
+    _write_anchors(export, [_offline_anchor(export, 0), forged])
+    with pytest.raises(sx.VerificationError):
+        sx.verify_export(export)
+
+
+def test_an_anchor_event_count_must_be_a_positive_integer(export):
+    bad = _offline_anchor(export, 0)
+    bad["event_count"] = 0
+    _write_anchors(export, [bad])
+    with pytest.raises(sx.VerificationError, match="positive integer"):
+        sx.verify_export(export)

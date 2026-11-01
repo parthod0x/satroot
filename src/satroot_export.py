@@ -290,10 +290,24 @@ def verify_export(
     events = _read_json(export_path / "bundle" / "signed_events.json")
     verifier = sr.make_ed25519_verifier(public_keys)
 
+    # The order of the records is not evidence, so it is reported, not
+    # enforced. Each anchor is checked on its own below: its state hash
+    # against the ledger prefix it names, its action-log head against the log,
+    # its token against its checkpoint - which is what detects rewriting and
+    # truncation, in any order. Requiring a strictly rising event_count made
+    # three honest histories unverifiable for good: two anchors at one
+    # event_count because only the action log had moved (a new checkpoint),
+    # repeated records of one checkpoint written by a scheduler before the
+    # producer stopped re-anchoring unchanged states, and two overlapping
+    # anchor runs whose timestamps returned in the opposite order. A token's
+    # genTime, not a line number, is when a checkpoint existed.
     published = 0
     pinned_count = 0
-    previous_count = -1
     pinned_event_count = 0
+    present_event_count = 0
+    in_order = True
+    repeated = 0
+    previous_position = None
     attestations = []
     for index, anchor in enumerate(anchors):
         for field in ("root_id", "state_hash", "event_count"):
@@ -303,12 +317,16 @@ def verify_export(
             raise VerificationError(f"anchor {index}: root_id does not match")
 
         count = anchor["event_count"]
-        if count <= previous_count:
-            raise VerificationError(
-                f"anchor {index}: event_count {count} does not advance on "
-                f"{previous_count}; the anchor history runs backwards"
-            )
-        previous_count = count
+        if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            raise VerificationError(f"anchor {index}: event_count {count!r} is not a positive integer")
+        position = (count, anchor.get("action_log_entries"), anchor.get("action_log_head"))
+        if previous_position is not None:
+            if position == previous_position:
+                repeated += 1
+            elif (count, position[1] or 0) < (previous_position[0], previous_position[1] or 0):
+                in_order = False
+        previous_position = position
+        present_event_count = max(present_event_count, count)
         if count > len(events):
             raise VerificationError(
                 f"anchor {index} commits to {count} events but the ledger holds "
@@ -460,6 +478,9 @@ def verify_export(
             # itself carries.
             "token_signature_verified": published > 0,
             "signers_pinned": pinned_count,
+            # Reported, not enforced: see the comment above the loop.
+            "in_file_order": in_order,
+            "repeated_checkpoints": repeated,
             # The only field that means third-party evidence.
             "third_party_timestamp_verified": pinned_count == published > 0,
             "attestations": attestations,
@@ -480,7 +501,7 @@ def verify_export(
         "ledger_completeness_checked": False,
         # Only anchors that actually carry a verified signature count.
         "history_pinned_to_event": pinned_event_count,
-        "anchors_present_pin_to_event": previous_count if anchors else 0,
+        "anchors_present_pin_to_event": present_event_count,
     }
 
 

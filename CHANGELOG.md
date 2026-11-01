@@ -1,5 +1,27 @@
 # Changelog
 
+## v3.0.2-anchor-order - 2026-11-01
+
+The export verifier no longer treats the order of anchor records as
+evidence. It required a strictly rising `event_count`, which made three
+honest histories unverifiable for good, and one of them is ordinary use:
+
+- two anchors at one `event_count` because only the action log had moved
+  between them, a new checkpoint the producer rightly anchored;
+- repeated records of one checkpoint, written by a scheduler before the
+  producer stopped re-anchoring unchanged states;
+- two overlapping anchor runs whose timestamps came back in the opposite
+  order, so the earlier snapshot was recorded second.
+
+Each anchor is still checked on its own: its state hash against the ledger
+prefix it names, its action-log head against the log, and its token against
+its checkpoint. Those checks are what detect rewriting and truncation, and
+they do not depend on order. The result now reports `in_file_order` and
+`repeated_checkpoints` instead of refusing, and
+`anchors_present_pin_to_event` is the highest anchored event, not the last
+record's. Found by exporting a production ledger after the 3.0.1 deploy. No
+change to replay, state hashes or the corpus.
+
 ## v3.0.1-unbound-ledger-helpers - 2026-11-01
 
 3.0.0 was tagged but never published to PyPI; 3.0.1 is the first 3.x
