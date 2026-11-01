@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.0.3-plain-wording - 2026-11-01
+
+Wording only: no change to code, replay, state hashes or the corpus. The
+satoshi is described as the smallest amount the chain records, not a minimum
+of value (SPEC section 2.1, BOUNDARIES, README), and "accounting unit" prose
+in the documentation and the STABLE profile's registry summary reads
+"units". Field names and the content of signed vectors are unchanged.
+
 ## v3.0.2-anchor-order - 2026-11-01
 
 The export verifier no longer treats the order of anchor records as

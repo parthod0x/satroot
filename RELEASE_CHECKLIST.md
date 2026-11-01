@@ -2,7 +2,8 @@
 
 Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, `v1.1-event-streams`, `v1.2-event-matrix-promotion`, `v1.3-key-management`, `v1.4-prepublication-hardening`, `v1.5-integration-and-vectors`, `v1.6-mainnet-anchor`, `v1.7-standards-alignment`,
 `v2.0.0-genesis-authentication`, `v3.0.0-key-binding`,
-`v3.0.1-unbound-ledger-helpers`, or `v3.0.2-anchor-order`:
+`v3.0.1-unbound-ledger-helpers`, `v3.0.2-anchor-order`, or
+`v3.0.3-plain-wording`:
 
 - [ ] Confirm this repo contains no private keys, seed phrases, API tokens, or wallet files.
 - [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint. The four anchored lanes (anchored demo, anchored publication, on-chain envelope, and envelope verification) are the only lanes intended to ever carry a real outpoint or transaction id, and only via run-time flags, never in checked-in input files or presets; `ANCHORS.md` is the sole checked-in record of intentional anchored runs.
@@ -58,11 +59,11 @@ else's upload.
 ## Tagging
 
 - [ ] Create the milestone git tag. For the current milestone:
-      `v3.0.2-anchor-order`.
+      `v3.0.3-plain-wording`.
 - [ ] Preserve the release artifact hash after tagging.
 
 Suggested tag message for the current milestone:
 
 ```text
-SATROOT v3.0.2: the export verifier reports the order of anchor records instead of enforcing it. A strictly rising event_count made honest histories unverifiable (action-log-only progress, repeated records of one checkpoint, overlapping anchor runs); each anchor is still verified on its own against the ledger prefix, the action log and its token. No change to replay, state hashes or the corpus.
+SATROOT v3.0.3: wording only. The satoshi is the smallest amount the chain records, not a minimum of value; documentation prose says units, not accounting units. No change to code, replay, state hashes or the corpus.
 ```
