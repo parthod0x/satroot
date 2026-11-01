@@ -1,7 +1,8 @@
 # SATROOT Release Checklist
 
 Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, `v1.1-event-streams`, `v1.2-event-matrix-promotion`, `v1.3-key-management`, `v1.4-prepublication-hardening`, `v1.5-integration-and-vectors`, `v1.6-mainnet-anchor`, `v1.7-standards-alignment`,
-`v2.0.0-genesis-authentication`, or `v3.0.0-key-binding`:
+`v2.0.0-genesis-authentication`, `v3.0.0-key-binding`, or
+`v3.0.1-unbound-ledger-helpers`:
 
 - [ ] Confirm this repo contains no private keys, seed phrases, API tokens, or wallet files.
 - [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint. The four anchored lanes (anchored demo, anchored publication, on-chain envelope, and envelope verification) are the only lanes intended to ever carry a real outpoint or transaction id, and only via run-time flags, never in checked-in input files or presets; `ANCHORS.md` is the sole checked-in record of intentional anchored runs.
@@ -57,11 +58,11 @@ else's upload.
 ## Tagging
 
 - [ ] Create the milestone git tag. For the current milestone:
-      `v3.0.0-key-binding`.
+      `v3.0.1-unbound-ledger-helpers`.
 - [ ] Preserve the release artifact hash after tagging.
 
 Suggested tag message for the current milestone:
 
 ```text
-SATROOT v3.0.0 key binding: signing keys are bound to accounts. Under v2 any key a verifier held could sign as any account; ledger version 0.2 declares each account's key at genesis, changes it only by bind-key, and lets value sit only in bound accounts. An input profile both implementations enforce closes the inputs they disagreed on; conformance corpus grown from 68 vectors to 115. BREAKING for ed25519 and hmac-sha256 ledgers; demo ledgers replay unchanged. See MIGRATION.md.
+SATROOT v3.0.1: the producer helpers (append_signed_event_to_ledger, annotate_ledger_events, scaffold_*) accept allow_unbound_keys as replay does, so a producer can continue an existing version-0.1 ledger whose state hashes others hold anchors over. The first 3.x release on PyPI; 3.0.0 was tagged only. No change to replay, state hashes or the corpus.
 ```

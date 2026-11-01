@@ -2454,12 +2454,13 @@ def scaffold_event_from_ledger(
     new_mint_authority: Optional[str] = None,
     key_id: Optional[str] = None,
     verifier: Optional[SignatureVerifier] = None,
+    allow_unbound_keys: bool = False,
 ) -> Dict[str, Any]:
     if not events:
         raise SatRootError("empty ledger")
     if verifier is None:
         verifier = demo_signature_verifier
-    state = replay(events, verifier=verifier)
+    state = replay(events, verifier=verifier, allow_unbound_keys=allow_unbound_keys)
     last_event = events[-1]
     profile = state.profile
     profile_mode = state.profile_mode
@@ -2503,10 +2504,11 @@ def scaffold_machine_credit_consumption_event(
     amount: str,
     from_account: Optional[str] = None,
     verifier: Optional[SignatureVerifier] = None,
+    allow_unbound_keys: bool = False,
 ) -> Dict[str, Any]:
     if verifier is None:
         verifier = demo_signature_verifier
-    state = replay(events, verifier=verifier)
+    state = replay(events, verifier=verifier, allow_unbound_keys=allow_unbound_keys)
     if state.profile != "SATROOT-MACHINE-1" or state.profile_mode != "prepaid-credit":
         raise SatRootError("machine credit consumption requires a SATROOT-MACHINE-1 prepaid-credit ledger")
     consumption_model = state.genesis_metadata.get("consumption_model")
@@ -2520,6 +2522,7 @@ def scaffold_machine_credit_consumption_event(
         from_account=burner,
         amount=amount,
         verifier=verifier,
+        allow_unbound_keys=allow_unbound_keys,
     )
 
 
@@ -2659,7 +2662,15 @@ def append_signed_event_to_ledger(
     signer: Optional[SignerFunction] = None,
     verifier: Optional[SignatureVerifier] = None,
     include_state_hash: bool = False,
+    allow_unbound_keys: bool = False,
 ) -> list[Dict[str, Any]]:
+    """Sign `event` and append it to `events`.
+
+    allow_unbound_keys, as for replay, admits an existing version-0.1 ledger
+    under a real scheme. It is for a producer that cannot re-sign its history
+    as a bound ledger - because others hold anchors or receipts over the
+    existing state hashes - and continues it knowingly, unbound. A new ledger
+    should be bound instead (bind_genesis_keys)."""
     if not events:
         raise SatRootError("empty ledger")
     if verifier is None:
@@ -2669,7 +2680,7 @@ def append_signed_event_to_ledger(
     unsigned_event = copy.deepcopy(dict(event))
     # An event carries its ledger's version; a scaffold built elsewhere may not.
     unsigned_event["version"] = appended_events[0].get("version", LEDGER_VERSION_UNBOUND)
-    state = replay(appended_events, verifier=verifier)
+    state = replay(appended_events, verifier=verifier, allow_unbound_keys=allow_unbound_keys)
 
     # Value moves only to bound accounts (SPEC.md 6.7 rule 5). A first credit
     # to an account the key map names is preceded by the authority's bind-key
@@ -13013,6 +13024,7 @@ def annotate_ledger_events(
     verifier: SignatureVerifier = demo_signature_verifier,
     include_event_id: bool = True,
     include_state_hash: bool = True,
+    allow_unbound_keys: bool = False,
 ) -> list[Dict[str, Any]]:
     if not events:
         raise SatRootError("empty ledger")
@@ -13021,7 +13033,7 @@ def annotate_ledger_events(
     genesis = annotated_events[0]
     if include_event_id:
         genesis["event_id"] = event_id(genesis)
-    state = apply_genesis(genesis, verifier=verifier)
+    state = apply_genesis(genesis, verifier=verifier, allow_unbound_keys=allow_unbound_keys)
     if include_state_hash:
         genesis["state_hash"] = state.state_hash()
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.0.1-unbound-ledger-helpers - 2026-11-01
+
+3.0.0 was tagged but never published to PyPI; 3.0.1 is the first 3.x
+release there. No change to replay, state hashes or the corpus.
+
+- **The producer helpers accept `allow_unbound_keys`**, as `replay` and
+  `verify_signed_ledger_bundle` already did: `append_signed_event_to_ledger`,
+  `annotate_ledger_events`, `scaffold_event_from_ledger` and
+  `scaffold_machine_credit_consumption_event`. Under 3.0.0 they replayed
+  without it, so a producer could verify an existing version-0.1 ledger but
+  not append to it or export it, and the only way forward was re-signing -
+  which changes every state hash and orphans anchors and receipts other
+  people already hold. Re-signing is still the recommendation where nobody
+  holds those; MIGRATION.md says when continuing unbound is the honest choice.
+
 ## v3.0.0-key-binding - 2026-11-01
 
 **BREAKING.** Real-scheme ledgers must bind signing keys to accounts. An

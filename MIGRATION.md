@@ -47,6 +47,14 @@ entire ledger. An external review demonstrated each. This document and
 - **Existing real-scheme ledgers you produced:** re-sign them as bound
   ledgers. The state hashes change, because the bindings are committed. Keep
   the old ledger and its anchors as the record of what was published under v2.
+- **Existing ledgers others hold anchors or receipts over:** re-signing would
+  orphan those, so you may instead continue the ledger as version `0.1`: pass
+  `allow_unbound_keys=True` to `append_signed_event_to_ledger`,
+  `annotate_ledger_events` and the `scaffold_*` helpers (3.0.1). Its state
+  hashes do not move. Do this only if you alone hold every key the ledger's
+  verifier accepts - then no key can sign as an account it does not belong
+  to except by you - and say so to whoever verifies it: `verify-bundle`
+  reports `keys_bound: false`. Bind every new ledger.
 - **Existing ledgers you only verify:** replay with `allow_unbound_keys=True`
   only if you trust every key your verifier holds not to sign as another
   account, and record that you did.
