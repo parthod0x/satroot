@@ -65,5 +65,5 @@ else's upload.
 Suggested tag message for the current milestone:
 
 ```text
-SATROOT v3.0.3: wording only. The satoshi is the smallest amount the chain records, not a minimum of value; documentation prose says units, not accounting units. No change to code, replay, state hashes or the corpus.
+SATROOT v3.0.3: wording only. The satoshi is the smallest amount the chain records, not a minimum of value; documentation describes reference units in plain words. No change to code, replay, state hashes or the corpus.
 ```
