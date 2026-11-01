@@ -52,7 +52,7 @@ including where that work is better.
 Its base primitive, **SATROOT-1**, names a deterministic protocol state space
 with the outpoint of one native BSV satoshi UTXO. The name is a label: it
 carries no authority, nothing ties a ledger's keys to whoever controls the
-UTXO, and the satoshi is not a floor of value (SPEC section 2.1).
+UTXO, and the satoshi is not a minimum of value (SPEC section 2.1).
 
 > The satoshi is not subdivided. The satoshi anchors a protocol-defined state space.
 

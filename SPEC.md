@@ -29,7 +29,7 @@ The root satoshi is not divided. Its outpoint is a **namespace label** (section 
 - a commitment (section 4) does not have to spend the root output, and the reference commitment transactions do not;
 - authority over a ledger comes from its genesis and the keys bound there (sections 5 and 6.7), never from the UTXO.
 
-The satoshi is the ledger unit of the chain it lives on, not a floor of value. A one-satoshi output holds less than the fee needed to spend it: the mainnet root `38ff9da0…:0` holds 1 sat, which would cost about 74 sats to spend at the rate its commitment paid (215 sats for 429 bytes).
+The satoshi is the smallest amount the chain records, not a minimum of value. A one-satoshi output holds less than the fee needed to spend it: the mainnet root `38ff9da0…:0` holds 1 sat, which would cost about 74 sats to spend at the rate its commitment paid (215 sats for 429 bytes).
 
 A design in which commitments must spend and recreate the root output, so that the UTXO's controller is the ledger's authority, is possible and not specified here.
 
@@ -742,7 +742,7 @@ SATROOT-1 should not say:
 - semantic units are native Bitcoin units,
 - the token has legal/economic rights unless separately documented,
 - wallets or exchanges will recognize it without integration,
-- the root satoshi is a witness or authority for the ledger, or a floor of value (section 2.1),
+- the root satoshi is a witness or authority for the ledger, or a minimum of value (section 2.1),
 - a ledger is authentic without a pinned genesis or pinned keys (section 6.7),
 - a version `0.1` ledger binds keys to accounts: it does not, and is accepted only on explicit request.
 

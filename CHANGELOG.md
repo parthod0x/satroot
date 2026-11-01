@@ -74,7 +74,7 @@ reference from the TypeScript verifier. See `SECURITY_REVIEW.md` Pass 3 and
   valid ledger); version `0.2`, `account_keys` and `bind-key` described.
 - **Conformance scripts** import `src/`, not an installed satroot.
 - **Docs:** the root satoshi is described as a namespace label, not a
-  witness, authority or floor of value (SPEC section 2.1); SPEC, BOUNDARIES,
+  witness, authority or minimum of value (SPEC section 2.1); SPEC, BOUNDARIES,
   KEY_MANAGEMENT, SECURITY_REVIEW (Finding 2 withdrawn), CANONICALISATION and
   the launch essay corrected.
 
