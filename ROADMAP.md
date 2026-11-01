@@ -15,29 +15,23 @@ The project should remain disciplined about this separation:
 
 ## Current deliverable
 
-`v2.0.0-genesis-authentication` is the current release.
+`v3.0.0-key-binding` is the current release.
 
-It is the outcome of seven rounds of independent implementation — someone else
-building a verifier from `SPEC.md` alone — which found **twenty-six
-specification defects** and grew the conformance corpus from 33 vectors to 68.
-
-**It is a breaking release.** Authenticating the genesis record changes its
-`event_id`, and therefore every state hash. A v1 ledger does not replay under
-v2. See `MIGRATION.md`.
-
-The kernel rules are unchanged in shape. What changed is that the
-specification now says what the implementations always did, in the places
-where it previously said nothing or said it wrong. The defect that forced the
-major version: **genesis was never authenticated**, so the record fixing
-`mint_authority`, `max_supply` and the opening allocation was forgeable, and
-every later event was authenticated against a root anyone could author.
-
-Neither that nor the orphan `profile_mode` state-hash leak was findable by
-1,751 tests, two implementations, or twelve review rounds — because all of
-those were written against the code. Both were found by reading the document.
+**It is a breaking release.** Under v2 any key a verifier held could sign as
+any account; an external review demonstrated it against both implementations.
+Ledger version `0.2` binds each account to one key, declared at genesis and
+changed only by `bind-key`, and value may sit only in bound accounts. The same
+review found inputs on which the Python reference and the TypeScript verifier
+disagreed; an input profile both enforce (SPEC section 2.6a) closes them, and
+the corpus grew from 68 vectors to 115. See `MIGRATION.md` and
+`SECURITY_REVIEW.md` Pass 3.
 
 ### Preceding releases
 
+- `v2.0.0-genesis-authentication` — **genesis authenticated.** Seven rounds of
+  independent implementation from `SPEC.md` alone found twenty-six
+  specification defects and grew the corpus from 33 vectors to 68. Genesis had
+  never been authenticated, so its `event_id`, and every state hash, changed.
 - `v1.7.1-review-corrections` and `v1.7-standards-alignment` — field survey
   and standards positioning corrections.
 - `v1.6-mainnet-anchor` — **the anchoring loop repeated on BSV mainnet**, not

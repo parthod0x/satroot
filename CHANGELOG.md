@@ -1,6 +1,6 @@
 # Changelog
 
-## v3.0.0-key-binding - unreleased
+## v3.0.0-key-binding - 2026-11-01
 
 **BREAKING.** Real-scheme ledgers must bind signing keys to accounts. An
 external review reproduced, in both implementations, that any registered key

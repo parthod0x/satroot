@@ -1,7 +1,7 @@
 # SATROOT Release Checklist
 
 Before publishing a milestone tag such as `v0.1-genesis`, `v0.2-stable-profile`, `v0.3-namespace-expansion`, `v0.4-publication-federation`, `v0.5-root-anchoring`, `v0.6-anchored-publication`, `v0.7-onchain-envelope`, `v0.8-envelope-verification`, `v0.9-anchored-operator-proof`, `v1.0-draft-freeze`, `v1.1-event-streams`, `v1.2-event-matrix-promotion`, `v1.3-key-management`, `v1.4-prepublication-hardening`, `v1.5-integration-and-vectors`, `v1.6-mainnet-anchor`, `v1.7-standards-alignment`,
-or `v2.0.0-genesis-authentication`:
+`v2.0.0-genesis-authentication`, or `v3.0.0-key-binding`:
 
 - [ ] Confirm this repo contains no private keys, seed phrases, API tokens, or wallet files.
 - [ ] Confirm `root_id` values in examples are demo placeholders unless replaced with an intentional real outpoint. The four anchored lanes (anchored demo, anchored publication, on-chain envelope, and envelope verification) are the only lanes intended to ever carry a real outpoint or transaction id, and only via run-time flags, never in checked-in input files or presets; `ANCHORS.md` is the sole checked-in record of intentional anchored runs.
@@ -57,11 +57,11 @@ else's upload.
 ## Tagging
 
 - [ ] Create the milestone git tag. For the current milestone:
-      `v2.0.0-genesis-authentication`.
+      `v3.0.0-key-binding`.
 - [ ] Preserve the release artifact hash after tagging.
 
 Suggested tag message for the current milestone:
 
 ```text
-SATROOT v2.0.0 genesis authentication: the genesis record is now signed and verified, closing a forgeable root that every later event was authenticated against. Twenty-six specification defects fixed across seven rounds of independent implementation; conformance corpus grown from 33 vectors to 68. BREAKING: genesis event_id changes, so every state hash changes and a v1 ledger does not replay under v2. See MIGRATION.md.
+SATROOT v3.0.0 key binding: signing keys are bound to accounts. Under v2 any key a verifier held could sign as any account; ledger version 0.2 declares each account's key at genesis, changes it only by bind-key, and lets value sit only in bound accounts. An input profile both implementations enforce closes the inputs they disagreed on; conformance corpus grown from 68 vectors to 115. BREAKING for ed25519 and hmac-sha256 ledgers; demo ledgers replay unchanged. See MIGRATION.md.
 ```

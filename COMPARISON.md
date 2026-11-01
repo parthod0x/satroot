@@ -15,9 +15,10 @@ cross-language conformance corpus, and offline verification from a file.**
 Stated precisely, because an earlier version of this document and the README
 overstated it.
 
-The kernel defines **one reducer**, with five actions — `mint`, `transfer`,
-`burn`, `freeze`, `rotate-authority` — over a fixed state shape: balances,
-supply, mint authority, frozen accounts, sequence, and last event id.
+The kernel defines **one reducer**, with six actions — `mint`, `transfer`,
+`burn`, `freeze`, `rotate-authority`, `bind-key` — over a fixed state shape:
+balances, supply, mint authority, frozen accounts, key bindings, sequence, and
+last event id.
 
 The six "profiles" (stable reference units, machine credits, receipts,
 identities, licenses, event streams) **add required genesis metadata and

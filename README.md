@@ -4,20 +4,20 @@
 [![PyPI](https://img.shields.io/pypi/v/satroot.svg)](https://pypi.org/project/satroot/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> ### v2.0.0 is a breaking release — read this before upgrading
+> ### v3.0.0 is a breaking release — read this before upgrading
 >
-> Genesis records are now authenticated. They never were: a forged, empty or
-> absent signature replayed clean under every scheme, so the record fixing
-> `mint_authority`, `max_supply` and the opening allocation was **forgeable**,
-> and every later event was authenticated against a root anyone could author.
+> Signing keys are now bound to accounts. They never were: any key a verifier
+> held could sign as **any** account, so the holder of one registered key could
+> move the issuer's balance, mint, rotate the authority, or re-sign a whole
+> ledger. An external review demonstrated each, and the security review had
+> called it a tip-only exposure; it was not.
 >
-> Fixing it changes genesis's `event_id`, and therefore **every state hash**. A
-> v1 ledger does not replay under v2. See **[MIGRATION.md](MIGRATION.md)**.
+> A ledger signed under `ed25519` or `hmac-sha256` must now declare its key
+> bindings (ledger version `0.2`), or be replayed knowingly as unbound. `demo`
+> ledgers replay unchanged. See **[MIGRATION.md](MIGRATION.md)**.
 >
-> Found by seven rounds of someone else implementing the spec from scratch —
-> twenty-six defects in all, none of them findable by 1,751 tests, two
-> implementations, or twelve review rounds, because those were written against
-> the code rather than the document.
+> v2.0.0 (genesis authentication) remains installable for anyone who only
+> needs to keep verifying v2 ledgers: `pip install "satroot<3"`.
 
 **SATROOT is a signed, hash-linked, append-only event log with deterministic
 replay to a typed state.**
@@ -26,8 +26,8 @@ Anyone holding the log can recompute the exact state and its hash offline —
 no server, no database. Since 3.0.0 every record is signed by the key bound to
 the account it acts for, so with the public keys and the genesis you trust
 pinned on your side, you need not trust whoever handed you the copy.
-Two independent implementations (Python and TypeScript) reproduce every state
-hash byte for byte against a shared conformance corpus.
+Two implementations (Python and TypeScript, by the same author) reproduce
+every state hash byte for byte against a shared conformance corpus.
 
 Ledger state can *optionally* be committed to an external timestamping
 backend, so a third party can attest that a given state existed at a given
@@ -36,9 +36,9 @@ involved) and a **Bitcoin SV** `OP_RETURN` transaction. Both are optional and
 interchangeable — they commit byte-identical documents — and **verifying a
 ledger never requires either.**
 
-The kernel defines **one reducer**: five actions (`mint`, `transfer`, `burn`,
-`freeze`, `rotate-authority`) over balances, supply, mint authority and frozen
-accounts. Six **profiles** — stable reference units, machine credits,
+The kernel defines **one reducer**: six actions (`mint`, `transfer`, `burn`,
+`freeze`, `rotate-authority`, `bind-key`) over balances, supply, mint
+authority, frozen accounts and key bindings. Six **profiles** — stable reference units, machine credits,
 receipts, identities, licenses, and event-stream custody — add required
 genesis metadata and validation on top of that single reducer; they do not
 define their own state or transitions. SATROOT is therefore a typed
