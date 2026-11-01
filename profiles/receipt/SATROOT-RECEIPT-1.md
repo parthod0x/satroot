@@ -34,7 +34,7 @@ The draft receipt profile uses these optional genesis fields:
 - `reference_id`: application-level document identifier
 - `issuer_entity`: the party creating the receipt object
 - `counterparty_entity`: the intended recipient or counterparty
-- `settlement_unit`: external accounting unit such as `USD`
+- `settlement_unit`: the external currency the receipt is stated in, such as `USD`
 - `intended_use`: short machine-readable description of the receipt ledger
 
 These fields describe business meaning. They do not change the underlying SATROOT-1 replay model.
@@ -51,7 +51,7 @@ Document type: invoice-receipt
 Reference ID: INV-2026-0001
 Issuer entity: issuer-co
 Counterparty entity: buyer-co
-Settlement unit: USD
+Settlement currency: USD
 Intended use: invoice-receipt-ledger
 ```
 

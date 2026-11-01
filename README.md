@@ -328,7 +328,7 @@ The base protocol stays intentionally small. Expansion belongs in separate profi
 
 This repo includes the stable-value profile:
 
-- `SATROOT-STABLE-1` for reference-value accounting units,
+- `SATROOT-STABLE-1` for reference-value units,
 - `examples/genesis_usdroot1.json` for a `USDROOT1` genesis record,
 - `examples/events_usdroot1.json` for a runnable reference-only ledger flow,
 - `satroot1 bootstrap-stable-demo` for generating new reference-only demo ledgers on demand, with optional stable-only preset defaults,

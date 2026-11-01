@@ -752,7 +752,7 @@ Since 3.0.0 it can also say: in a bound (`0.2`) ledger, every record is signed b
 
 Stable-value, fiat-reference, or stablecoin-like designs MUST be implemented as separate profiles. The SATROOT-1 base primitive does not create a stablecoin, redemption right, reserve claim, bank deposit, e-money token, or investment instrument.
 
-The released `SATROOT-STABLE-1` profile defines reference-only accounting units such as `USDROOT1`, but the base protocol remains only a one-satoshi-root semantic ledger primitive.
+The released `SATROOT-STABLE-1` profile defines reference-only units such as `USDROOT1`, but the base protocol remains only a one-satoshi-root semantic ledger primitive.
 
 ## 11. Namespace expansion boundary
 

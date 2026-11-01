@@ -1,6 +1,6 @@
 # A satoshi is the floor of value, not the ceiling of meaning
 
-> **Correction, 1 November 2026.** An external review found that this essay overstated two things. The root satoshi is a namespace label, not a witness or an authority: nothing ties a ledger's keys to whoever controls the UTXO, and a one-satoshi output is worth less than the fee needed to spend it, so it is not a floor of value either. And before satroot 3.0.0 any registered key could sign as any account. 3.0.0 binds keys to accounts; SPEC sections 2.1 and 6.7 state both precisely. The essay is otherwise left as published.
+> **Correction, 1 November 2026.** An external review found that this essay overstated two things. The root satoshi is a namespace label, not a witness or an authority: nothing ties a ledger's keys to whoever controls the UTXO, and a one-satoshi output is worth less than the fee needed to spend it, so it is not a minimum of value either. And before satroot 3.0.0 any registered key could sign as any account. 3.0.0 binds keys to accounts; SPEC sections 2.1 and 6.7 state both precisely. The essay is otherwise left as published.
 
 SATROOT turns one native BSV satoshi into the root of a deterministic, replayable semantic ledger — and we anchored one for real, on mainnet, with every step independently verifiable from raw bytes.
 

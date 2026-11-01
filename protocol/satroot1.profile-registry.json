@@ -11,7 +11,7 @@
         "reserve_model",
         "intended_use"
       ],
-      "summary": "Reference-value accounting units anchored to a SATROOT-1 root."
+      "summary": "Reference-value units anchored to a SATROOT-1 root."
     },
     {
       "profile": "SATROOT-MACHINE-1",

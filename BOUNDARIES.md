@@ -4,7 +4,7 @@ SATROOT-1 is a protocol primitive, not a financial product.
 
 ## What SATROOT-1 claims
 
-- A native Bitcoin/BSV satoshi is the smallest native accounting unit.
+- A native Bitcoin/BSV satoshi is the smallest amount the chain records.
 - A specific one-satoshi UTXO's outpoint can name a namespace. The name is a label: SATROOT-1 checks `root_id` for form only, does not tie a ledger or its keys to whoever controls the UTXO, and does not require commitments to spend it. Authority over a ledger comes from its genesis and the keys bound there.
 - Protocol-defined token balances can be computed above that root by replaying events.
 - The semantic token supply can be arbitrary if the protocol rules permit it.
@@ -27,7 +27,7 @@ SATROOT-1 is a protocol primitive, not a financial product.
 
 Stable-value or fiat-reference designs are implemented as separate profiles; `SATROOT-STABLE-1` is the released reference-only example. The clear distinction stays between:
 
-- reference-only accounting units,
+- reference-only units,
 - externally wrapped stablecoin receipts,
 - fiat-backed regulated issuer tokens,
 - bank/CBDC receipt bridges.
